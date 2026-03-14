@@ -547,7 +547,7 @@
                                 <div v-if="quotaLoading" class="text-gray-500">查询中...</div>
                                 <div v-else-if="quotaError" class="text-red-500">查询失败,请检查VPN连接</div>
                                 <div v-else :class="quotaAvailable ? 'text-green-600' : 'text-red-500'">
-                                    <div class="font-bold mb-0.5 text-left md:text-right">生图额度(会及时补充)</div>
+                                    <div class="font-bold mb-0.5 text-left md:text-right">生图额度</div>
                                     <div class="text-left md:text-right">{{ (quotaValue / 10).toFixed(1) }}%</div>
                                 </div>
                             </div>
