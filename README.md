@@ -5,7 +5,7 @@
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-38B2AC?logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
 [![DaisyUI](https://img.shields.io/badge/DaisyUI-5A0EF8?logo=daisyui&logoColor=white)](https://daisyui.com/)
 
-> **一款纯前端运行的本地角色扮演（Roleplay）对话和角色卡管理工具。**
+> **一款纯前端运行的本地角色扮演（Roleplay）应用。**
 
 **【免责与授权声明】**  
 本项目基于 **[CC BY-NC 4.0（知识共享-署名-非商业性使用 4.0 国际许可协议）](./LICENSE)** 开源。**明确禁止任何形式的商业化使用（包括但不限于：作为收费服务提供、打包在付费产品中售卖、在产品内植入广告盈利等）。** 任何使用者必须遵守该协议，尊重原作者的署名权。对于违反协议的商业行为，保留追究法律责任的权利。
@@ -14,12 +14,12 @@
 
 ## 核心特性 (Features)
 
-Roleplay Hub 致力于提供流畅、私密且功能强大的本地化 Roleplay 体验：
+Roleplay Hub 致力于提供流畅、私密且功能强大的本地化AI Roleplay 体验：
 
 
 ## 快速开始 (Quick Start)
 
-本项目无需复杂的 Node.js 环境或依赖安装，即开即用！
+本项目无需复杂的 Node.js 环境或依赖安装，即开即用。
 
 ### 1. 下载与运行
 1. 点击项目主页绿色的 `Code` 按钮，选择 `Download ZIP`。
@@ -32,7 +32,7 @@ Roleplay Hub 致力于提供流畅、私密且功能强大的本地化 Roleplay 
 1. 打开应用后，点击侧边栏（或顶部菜单）的**设置 (Settings)** 选项。
 2. 关闭自动恢复默认配置
 3. 填入您自己的或第三方提供的 API 节点 (`API URL`)。
-4. 填入对应的 `API Key`，并输入或选择您想使用的 `模型名称 (Model)`。
+4. 填入对应的 `API Key`，并配置您想使用的 `模型名称 (Model)`。
 5. 在**角色管理**界面，导入您的角色卡文件（或点击新建角色并手动填写设定）。
 6. 回到对话界面，开始属于您的 Roleplay 旅程。
 
