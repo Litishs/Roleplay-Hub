@@ -202,7 +202,7 @@
 
                             <div class="flex flex-row md:flex-col items-center md:items-center mb-6 gap-4 md:gap-0">
                                 <!-- Avatar Container with Glow -->
-                                <div class="relative group cursor-pointer flex-shrink-0 mb-0 md:mb-4" @click="showCharacterEditor = true; editingCharacter.id = currentCharacterIndex; editingCharacter.data = JSON.parse(JSON.stringify(currentCharacter))">
+                                <div class="relative group cursor-pointer flex-shrink-0 mb-0 md:mb-4" @click="editCharacter(currentCharacterIndex)">
                                     <div class="absolute -inset-1 bg-gradient-to-r from-primary-400 to-purple-400 rounded-full opacity-30 blur group-hover:opacity-50 transition-opacity duration-500"></div>
                                     <div class="relative w-20 h-20 md:w-24 md:h-24 rounded-full p-1 bg-white shadow-lg ring-1 ring-black/5">
                                         <img :src="currentCharacter?.avatar" class="w-full h-full rounded-full object-cover transition-transform duration-500 group-hover:scale-[1.02]">
@@ -213,8 +213,8 @@
                                 </div>
                                 
                                 <!-- Name & Badges -->
-                                <div class="flex flex-col items-start md:items-center min-w-0 flex-1">
-                                    <h3 class="font-bold text-gray-900 text-xl leading-tight mb-2 tracking-tight truncate w-full md:w-auto md:text-center">{{ currentCharacter.name }}</h3>
+                                <div class="flex flex-col items-start md:items-center min-w-0 flex-1 w-full">
+                                    <h3 class="font-bold text-gray-900 text-xl leading-tight mb-2 tracking-tight truncate w-full md:text-center">{{ currentCharacter.name }}</h3>
                                     <div class="flex flex-wrap justify-start md:justify-center gap-2">
                                         <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wide uppercase bg-primary-50 text-primary-600 border border-primary-100 shadow-sm">Character Info</span>
                                     </div>
@@ -552,7 +552,7 @@
                                 </div>
                             </div>
                         </transition>
-                        <button @click="showQuotaPanel = !showQuotaPanel"
+                        <button @click="showQuotaPanel = !showQuotaPanel; if(showQuotaPanel) fetchQuota()"
                                 class="p-1.5 md:p-2 bg-white/70 md:hover:bg-white backdrop-blur-[2px] shadow-sm rounded-full transition-all border border-white/20 md:hover:shadow-sm md:hover:scale-110 active:scale-95 group"
                                 :class="{'text-green-500 border-green-200': quotaAvailable && !quotaLoading && !quotaError, 'text-red-500 border-red-200': (!quotaAvailable || quotaError) && !quotaLoading, 'text-gray-400': quotaLoading}"
                                 title="生图额度">
@@ -1098,10 +1098,16 @@
                                         </div>
                                         <input v-model.number="settings.maxRetries" type="range" min="0" max="5" step="1" class="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-teal-500 hover:accent-teal-400 transition-all">
                                     </div>
+                                    
+                                    <!-- Image Key -->
+                                    <div class="bg-gray-50 p-4 rounded-xl border border-gray-100 hover:bg-white hover:border-gray-200 hover:shadow-sm transition-all duration-200 flex flex-col justify-center">
+                                        <label class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">自动生图密钥</label>
+                                        <input v-model="settings.imageGenKey" type="password" class="w-full bg-white border border-gray-200 rounded-lg px-3 py-1.5 text-gray-700 text-sm focus:ring-2 focus:ring-teal-100 focus:border-teal-400 focus:outline-none transition-all shadow-sm" placeholder="STD-...">
+                                    </div>
 
                                     <!-- Image Style -->
                                     <div class="bg-gray-50 p-4 rounded-xl border border-gray-100 hover:bg-white hover:border-gray-200 hover:shadow-sm transition-all duration-200 flex flex-col justify-center">
-                                        <label class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">生图风格 (配合自动生图)</label>
+                                        <label class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">生图风格</label>
                                         <select v-model="settings.imageStyle" class="w-full bg-white border border-gray-200 rounded-lg px-3 py-1.5 text-gray-700 text-sm focus:ring-2 focus:ring-teal-100 focus:border-teal-400 focus:outline-none transition-all shadow-sm">
                                             <option value="vertical">默认</option>
                                             <option value="r18">本子风</option>
@@ -1131,7 +1137,7 @@
                                         <input type="checkbox" v-model="settings.autoRestoreDefaultAPI" class="sr-only peer">
                                         <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-teal-500"></div>
                                     </div>
-                                    <span class="text-sm font-medium text-gray-600 group-hover:text-gray-900 transition-colors">自动恢复默认设置</span>
+                                    <span class="text-sm font-medium text-gray-600 group-hover:text-gray-900 transition-colors">自动恢复公益配置</span>
                                 </label>
                                 <label class="flex items-center p-3 rounded-xl border-2 border-transparent hover:border-gray-100 hover:bg-gray-50 transition-all cursor-pointer group">
                                     <div class="relative inline-flex items-center mr-2.5">

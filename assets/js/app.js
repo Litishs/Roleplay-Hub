@@ -86,10 +86,11 @@ const { createApp, ref, reactive, computed, onMounted, watch, nextTick } = Vue;
                     quotaLoading.value = true;
                     quotaError.value = false;
                     try {
+                        const imageGenToken = settings.imageGenKey ? settings.imageGenKey : 'STD-QMqT4lxiWqWMVneiePiE';
                         const response = await fetch('https://std.loliyc.com/api/api/getUser', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ toUserId: 'STD-QMqT4lxiWqWMVneiePiE' })
+                            body: JSON.stringify({ toUserId: imageGenToken })
                         });
                         const data = await response.json();
                         if (data.status === 'ok' && data.type === 'std') {
@@ -225,6 +226,7 @@ const { createApp, ref, reactive, computed, onMounted, watch, nextTick } = Vue;
                     useCharacterBackground: true,
                     autoScroll: true,
                     maxRetries: 2,
+                    imageGenKey: '',
                     imageStyle: 'vertical',
                     qualityModel: DEFAULT_API_CONFIG.qualityModel,
                     balancedModel: DEFAULT_API_CONFIG.balancedModel,
@@ -584,6 +586,12 @@ const { createApp, ref, reactive, computed, onMounted, watch, nextTick } = Vue;
                         return entry ? entry.enabled : false;
                     },
                     set: (val) => {
+                        // 如果要开启生图，必须先检查密钥
+                        if (val && (!settings.imageGenKey || settings.imageGenKey.trim() === '')) {
+                            showToast('缺少生图密钥，请前往设置中配置', 'error');
+                            return; 
+                        }
+
                         const entry = worldInfo.value.find(w => w.comment === '自动生图');
                         if (entry) {
                             entry.enabled = val;
@@ -2479,8 +2487,13 @@ ${rawHtml}
                 };
 
                 const editCharacter = (index) => {
+                    const char = characters.value[index];
+                    if (!char) {
+                        console.error('Invalid character index:', index);
+                        return;
+                    }
                     editingCharacter.id = index;
-                    editingCharacter.data = JSON.parse(JSON.stringify(characters.value[index]));
+                    editingCharacter.data = JSON.parse(JSON.stringify(char));
                     editorTab.value = 'basic';
                     showCharacterEditor.value = true;
                 };
@@ -2565,12 +2578,13 @@ ${rawHtml}
                 };
 
                 const enforceSpecialRules = () => {
+                    const imageGenToken = settings.imageGenKey ? settings.imageGenKey : 'STD-QMqT4lxiWqWMVneiePiE';
                     // 1. Nai画图正则
                     const imageGenRegexName = 'Nai画图正则-本子风';
                     const imageGenRegexContent = {
                         name: imageGenRegexName,
                         regex: '/image###([^>]+)###/g',
-                        replacement: '<div style="width: auto; height: auto; max-width: 100%; border: 8px solid transparent; background-image: linear-gradient(45deg, #FFC9D9, #CCE5FF); position: relative; border-radius: 16px; overflow: hidden; display: flex; justify-content: center; align-items: center; animation: gradientBG 3s ease infinite; box-shadow: 0 4px 15px rgba(204,229,255,0.3);"><div style="background: rgba(255,255,255,0.85); backdrop-filter: blur(5px); width: 100%; height: 100%; position: absolute; top: 0; left: 0;"></div><img src="https://std.loliyc.com/generate?tag=$1&token=STD-QMqT4lxiWqWMVneiePiE&model=nai-diffusion-4-5-full&artist={{artist:yd_(orange maru)}}, nixeu, {ikuchan kaoru}, cutesexyrobutts, redrop, [[artist:kojima saya]], lam_(ramdayo), oekakizuki, qiandaiyiyu,&size=竖图&steps=40&scale=6&cfg=0&sampler=k_dpmpp_2m_sde&negative=pixelate&nocache=0&noise_schedule=karras"  alt="生成图片" style="max-width: 100%; height: auto; width: auto; display: block; object-fit: contain; transition: transform 0.3s ease; position: relative; z-index: 1;"></div><style>@keyframes gradientBG {0% {background-image: linear-gradient(45deg, #FFC9D9, #CCE5FF);}50% {background-image: linear-gradient(225deg, #FFC9D9, #CCE5FF);}100% {background-image: linear-gradient(45deg, #FFC9D9, #CCE5FF);}}</style>',
+                        replacement: '<div style="width: auto; height: auto; max-width: 100%; border: 8px solid transparent; background-image: linear-gradient(45deg, #FFC9D9, #CCE5FF); position: relative; border-radius: 16px; overflow: hidden; display: flex; justify-content: center; align-items: center; animation: gradientBG 3s ease infinite; box-shadow: 0 4px 15px rgba(204,229,255,0.3);"><div style="background: rgba(255,255,255,0.85); backdrop-filter: blur(5px); width: 100%; height: 100%; position: absolute; top: 0; left: 0;"></div><img src="https://std.loliyc.com/generate?tag=$1&token=' + imageGenToken + '&model=nai-diffusion-4-5-full&artist={{artist:yd_(orange maru)}}, nixeu, {ikuchan kaoru}, cutesexyrobutts, redrop, [[artist:kojima saya]], lam_(ramdayo), oekakizuki, qiandaiyiyu,&size=竖图&steps=40&scale=6&cfg=0&sampler=k_dpmpp_2m_sde&negative=pixelate&nocache=0&noise_schedule=karras"  alt="生成图片" style="max-width: 100%; height: auto; width: auto; display: block; object-fit: contain; transition: transform 0.3s ease; position: relative; z-index: 1;"></div><style>@keyframes gradientBG {0% {background-image: linear-gradient(45deg, #FFC9D9, #CCE5FF);}50% {background-image: linear-gradient(225deg, #FFC9D9, #CCE5FF);}100% {background-image: linear-gradient(45deg, #FFC9D9, #CCE5FF);}}</style>',
                         placement: [2],
                         markdownOnly: true,
                         promptOnly: false,
@@ -2591,7 +2605,7 @@ ${rawHtml}
                     const nai3RegexContent = {
                         name: nai3RegexName,
                         regex: '/image###([^>]+)###/g',
-                        replacement: '<div style="width: auto; height: auto; max-width: 100%; border: 8px solid transparent; background-image: linear-gradient(45deg, #FFC9D9, #CCE5FF); position: relative; border-radius: 16px; overflow: hidden; display: flex; justify-content: center; align-items: center; animation: gradientBG 3s ease infinite; box-shadow: 0 4px 15px rgba(204,229,255,0.3);"><div style="background: rgba(255,255,255,0.85); backdrop-filter: blur(5px); width: 100%; height: 100%; position: absolute; top: 0; left: 0;"></div><img src="https://std.loliyc.com/generate?tag=$1&token=STD-QMqT4lxiWqWMVneiePiE&model=nai-diffusion-4-5-full&artist=[[[artist:dishwasher1910]]], {{yd_(orange_maru)}}, [artist:ciloranko], [artist:sho_(sho_lwlw)], [ningen mame], year 2024,&size=竖图&steps=40&scale=6&cfg=0&sampler=k_dpmpp_2m_sde&negative=pixelate&nocache=0&noise_schedule=karras"  alt="生成图片" style="max-width: 100%; height: auto; width: auto; display: block; object-fit: contain; transition: transform 0.3s ease; position: relative; z-index: 1;"></div><style>@keyframes gradientBG {0% {background-image: linear-gradient(45deg, #FFC9D9, #CCE5FF);}50% {background-image: linear-gradient(225deg, #FFC9D9, #CCE5FF);}100% {background-image: linear-gradient(45deg, #FFC9D9, #CCE5FF);}}</style>',
+                        replacement: '<div style="width: auto; height: auto; max-width: 100%; border: 8px solid transparent; background-image: linear-gradient(45deg, #FFC9D9, #CCE5FF); position: relative; border-radius: 16px; overflow: hidden; display: flex; justify-content: center; align-items: center; animation: gradientBG 3s ease infinite; box-shadow: 0 4px 15px rgba(204,229,255,0.3);"><div style="background: rgba(255,255,255,0.85); backdrop-filter: blur(5px); width: 100%; height: 100%; position: absolute; top: 0; left: 0;"></div><img src="https://std.loliyc.com/generate?tag=$1&token=' + imageGenToken + '&model=nai-diffusion-4-5-full&artist=[[[artist:dishwasher1910]]], {{yd_(orange_maru)}}, [artist:ciloranko], [artist:sho_(sho_lwlw)], [ningen mame], year 2024,&size=竖图&steps=40&scale=6&cfg=0&sampler=k_dpmpp_2m_sde&negative=pixelate&nocache=0&noise_schedule=karras"  alt="生成图片" style="max-width: 100%; height: auto; width: auto; display: block; object-fit: contain; transition: transform 0.3s ease; position: relative; z-index: 1;"></div><style>@keyframes gradientBG {0% {background-image: linear-gradient(45deg, #FFC9D9, #CCE5FF);}50% {background-image: linear-gradient(225deg, #FFC9D9, #CCE5FF);}100% {background-image: linear-gradient(45deg, #FFC9D9, #CCE5FF);}}</style>',
                         placement: [2],
                         markdownOnly: true,
                         promptOnly: false,
@@ -2709,6 +2723,12 @@ ${rawHtml}
                     worldInfo.value.unshift(autoImageGenWIContent);
 
                 };
+
+                watch(() => settings.imageGenKey, () => {
+                    enforceSpecialRules();
+                    saveData();
+                    fetchQuota();
+                });
                 const selectCharacter = async (index, isNewImport = false) => {
                     currentCharacterIndex.value = index;
                     const char = characters.value[index];
@@ -3996,7 +4016,7 @@ ${rawHtml}
                     showUpdateModal, updateCountdown, latestUpdate, closeUpdateModal, // Update Modal
                     showConfirmModal, confirmMessage, modelMode, // Export for template
                     isGenerating, isRemoteGenerating, remoteEstimatedTime, isReceiving, userInput, modelSearchQuery, characterSearchQuery, availableModels, filteredModels, filteredCharacters,
-                    user, settings, characters, currentCharacter, chatHistory, presets, regexScripts, worldInfo,
+                    user, settings, characters, currentCharacter, currentCharacterIndex, chatHistory, presets, regexScripts, worldInfo,
                     activeRegexCount, activeWorldInfoCount, totalContextLength,
                     editingCharacter, editingPreset, toasts, chatContainer, inputBox, messageElements,
                     lastUserMessageIndex, // Expose to template

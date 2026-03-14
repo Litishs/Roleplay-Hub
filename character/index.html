@@ -264,6 +264,10 @@
                     </div>
                 </div>
                 <div class="form-control w-full">
+                    <label class="label"><span class="label-text font-medium">生图密钥</span></label>
+                    <input type="password" v-model="options.imageGenKey" class="input input-bordered w-full bg-base-200/50" placeholder="STD-..." />
+                </div>
+                <div class="form-control w-full mt-2">
                     <label class="label"><span class="label-text font-medium">头像生成风格</span></label>
                     <div class="grid grid-cols-2 gap-3">
                         <div
@@ -289,7 +293,7 @@
                         <label class="label cursor-pointer justify-between p-0">
                             <span class="label-text font-medium flex items-center gap-2">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-base-content/70"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
-                                恢复默认配置
+                                自动恢复公益配置
                             </span>
                             <input type="checkbox" v-model="options.resetOnLoad" class="toggle toggle-primary toggle-sm" />
                         </label>
@@ -1168,6 +1172,7 @@
             const defaultOptions = {
                 generateExtra: true, // Default to true as requested
                 avatarStyle: 'default',
+                imageGenKey: '',
                 resetOnLoad: true, // 新增默认选项：重置加载
                 customModels: {
                     quality: 'gemini-3.1-pro-preview-high',
@@ -2196,10 +2201,11 @@
             // Avatar Helpers
             const generateAvatarUrl = (tag) => {
                 let url;
+                const tokenParam = options.imageGenKey ? options.imageGenKey : 'STD-QMqT4lxiWqWMVneiePiE';
                 if (options.avatarStyle === 'hentai') {
-                    url = `https://std.loliyc.com/generate?tag=${encodeURIComponent(tag)}&token=STD-QMqT4lxiWqWMVneiePiE&model=nai-diffusion-4-5-full&artist={{artist:yd_(orange maru)}}, nixeu, {ikuchan kaoru}, cutesexyrobutts, redrop, [[artist:kojima saya]], lam_(ramdayo), oekakizuki, qiandaiyiyu, &size=竖图&steps=40&scale=6&cfg=0&sampler=k_dpmpp_2m_sde&nocache=0&noise_schedule=karras`;
+                    url = `https://std.loliyc.com/generate?tag=${encodeURIComponent(tag)}&token=${tokenParam}&model=nai-diffusion-4-5-full&artist={{artist:yd_(orange maru)}}, nixeu, {ikuchan kaoru}, cutesexyrobutts, redrop, [[artist:kojima saya]], lam_(ramdayo), oekakizuki, qiandaiyiyu, &size=竖图&steps=40&scale=6&cfg=0&sampler=k_dpmpp_2m_sde&nocache=0&noise_schedule=karras`;
                 } else {
-                    url = `https://std.loliyc.com/generate?tag=${encodeURIComponent(tag)}&token=STD-QMqT4lxiWqWMVneiePiE&model=nai-diffusion-4-5-full&artist=[[[artist:dishwasher1910]]], {{yd_(orange_maru)}}, [artist:ciloranko], [artist:sho_(sho_lwlw)], [ningen mame], year 2024,&size=竖图&steps=40&scale=6&cfg=0&sampler=k_dpmpp_2m_sde&negative=pixelate&nocache=0&noise_schedule=karras`;
+                    url = `https://std.loliyc.com/generate?tag=${encodeURIComponent(tag)}&token=${tokenParam}&model=nai-diffusion-4-5-full&artist=[[[artist:dishwasher1910]]], {{yd_(orange_maru)}}, [artist:ciloranko], [artist:sho_(sho_lwlw)], [ningen mame], year 2024,&size=竖图&steps=40&scale=6&cfg=0&sampler=k_dpmpp_2m_sde&negative=pixelate&nocache=0&noise_schedule=karras`;
                 }
                 return url;
             };
