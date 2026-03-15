@@ -1487,6 +1487,15 @@ ${rawHtml}
 
                 const selectModel = (modelId) => {
                     settings[modelSelectionTarget.value] = modelId;
+                    
+                    if (
+                        (modelSelectionTarget.value === 'qualityModel' && currentModelMode.value === 'quality') ||
+                        (modelSelectionTarget.value === 'balancedModel' && currentModelMode.value === 'balanced') ||
+                        (modelSelectionTarget.value === 'fastModel' && currentModelMode.value === 'fast')
+                    ) {
+                        settings.model = modelId;
+                    }
+                    
                     showModelSelector.value = false;
                 };
 
