@@ -124,9 +124,13 @@ const { createApp, ref, reactive, computed, onMounted, watch, nextTick } = Vue;
                     content: `
 ### Roleplay Hub 
 
+- 新增角色卡聊天数据导入/导出功能
+- 修复了自定义模型名称同步不及时的问题
+- 去除了冗余选项
+
 本项目为全开源公益项目，严禁倒卖源码，二改需经作者授权，Q群1015293774
 
-#### 更新时间：03/14
+#### 更新时间：03/15/23:54
                     `
                 });
 
@@ -310,7 +314,6 @@ const { createApp, ref, reactive, computed, onMounted, watch, nextTick } = Vue;
                     minActivations: 0,
                     maxDepth: 0,
                     maxRecursion: 0,
-                    insertionStrategy: 'character_first',
                     includeNames: true,
                     recursiveScan: true,
                     caseSensitive: false,
@@ -333,6 +336,23 @@ const { createApp, ref, reactive, computed, onMounted, watch, nextTick } = Vue;
                 const exportType = ref(null); // 'presets', 'regex', 'worldinfo'
                 const exportItems = ref([]);
                 const selectedExportIndices = ref(new Set());
+
+                // Character Export Modal State
+                const showCharacterExportModal = ref(false);
+                const characterToExportIndex = ref(null);
+
+                const openCharacterExportModal = (index) => {
+                    characterToExportIndex.value = index;
+                    showCharacterExportModal.value = true;
+                };
+
+                const confirmCharacterExport = (includeChat) => {
+                    showCharacterExportModal.value = false;
+                    if (characterToExportIndex.value !== null) {
+                        exportCharacter(characterToExportIndex.value, includeChat);
+                        characterToExportIndex.value = null;
+                    }
+                };
 
                 // Generator State
                 const isGeneratorLoading = ref(true);
@@ -3356,6 +3376,41 @@ ${rawHtml}
                             }
                         };
                         reader.readAsArrayBuffer(file);
+                    } else if (file.name.endsWith('.jsonl')) {
+                        const reader = new FileReader();
+                        reader.onload = async (e) => {
+                            try {
+                                const text = e.target.result;
+                                const lines = text.split('\n').filter(line => line.trim() !== '');
+                                const importedChat = lines.map(line => JSON.parse(line));
+                                
+                                if (importedChat.length > 0) {
+                                    if (currentCharacterIndex.value >= 0) {
+                                        const char = characters.value[currentCharacterIndex.value];
+                                        chatHistory.value = importedChat;
+                                        
+                                        // Save to DB
+                                        if (char.uuid) {
+                                            await dbSet(`silly_tavern_chat_${char.uuid}`, chatHistory.value);
+                                        } else {
+                                            await dbSet(`silly_tavern_chat_${currentCharacterIndex.value}`, chatHistory.value);
+                                        }
+                                        
+                                        showToast(`成功为 ${char.name} 导入 ${importedChat.length} 条聊天记录`, 'success');
+                                        await nextTick();
+                                        scrollToBottom();
+                                    } else {
+                                        showToast('请先选择一个角色才能导入聊天记录', 'warning');
+                                    }
+                                } else {
+                                    showToast('文件中没有有效的聊天记录', 'warning');
+                                }
+                            } catch (err) {
+                                console.error('Chat import error:', err);
+                                showToast('聊天记录解析失败: ' + err.message, 'error');
+                            }
+                        };
+                        reader.readAsText(file);
                     } else {
                         showToast('不支持的文件格式', 'error');
                     }
@@ -3379,7 +3434,7 @@ ${rawHtml}
                     return (crc ^ 0xFFFFFFFF) >>> 0;
                 };
 
-                const exportCharacter = (index) => {
+                const exportCharacter = async (index, includeChat = false) => {
                     const char = characters.value[index];
                     
                     // Construct SillyTavern/V2 Card Data
@@ -3510,6 +3565,38 @@ ${rawHtml}
                                 document.body.removeChild(a);
                                 URL.revokeObjectURL(url);
                                 showToast('角色卡导出成功', 'success');
+                                
+                                // Export Chat History if requested
+                                if (includeChat) {
+                                    try {
+                                        let savedChat = null;
+                                        if (char.uuid) {
+                                            savedChat = await dbGet(`silly_tavern_chat_${char.uuid}`);
+                                        }
+                                        if (!savedChat) {
+                                            savedChat = await dbGet(`silly_tavern_chat_${index}`);
+                                        }
+                                        
+                                        if (savedChat && Array.isArray(savedChat) && savedChat.length > 0) {
+                                            const chatLines = savedChat.map(msg => JSON.stringify(msg)).join('\n');
+                                            const chatBlob = new Blob([chatLines], { type: 'application/json lines' });
+                                            const chatUrl = URL.createObjectURL(chatBlob);
+                                            const chatA = document.createElement('a');
+                                            chatA.href = chatUrl;
+                                            chatA.download = (char.name || 'character') + '_chat.jsonl';
+                                            document.body.appendChild(chatA);
+                                            chatA.click();
+                                            document.body.removeChild(chatA);
+                                            URL.revokeObjectURL(chatUrl);
+                                            showToast('聊天记录导出成功', 'success');
+                                        } else {
+                                            showToast('当前角色没有可导出的聊天记录', 'warning');
+                                        }
+                                    } catch (chatExpError) {
+                                        console.error('Chat export error:', chatExpError);
+                                        showToast('聊天记录导出失败', 'error');
+                                    }
+                                }
                                 
                             } catch (e) {
                                 console.error('Export error:', e);
@@ -4022,6 +4109,7 @@ ${rawHtml}
                 return {
                     currentView, showMobileMenu, showDescriptionPanel, showModelSelector, modelSelectionTarget, showChatModelSelector, showCharacterEditor, showAddCharacterMenu, showPresetEditor,
                     showExportModal, exportType, exportItems, selectedExportIndices, // Export Modal
+                    showCharacterExportModal, characterToExportIndex, openCharacterExportModal, confirmCharacterExport, // Character Export Modal
                     showUpdateModal, updateCountdown, latestUpdate, closeUpdateModal, // Update Modal
                     showConfirmModal, confirmMessage, modelMode, // Export for template
                     isGenerating, isRemoteGenerating, remoteEstimatedTime, isReceiving, userInput, modelSearchQuery, characterSearchQuery, availableModels, filteredModels, filteredCharacters,
