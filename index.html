@@ -687,7 +687,7 @@
                             <button @click.stop="editCharacter(char.originalIndex)" class="p-2 bg-white/20 backdrop-blur-md text-white rounded-full border border-white/20 active:bg-white/40 shadow-lg">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
                             </button>
-                            <button @click.stop="exportCharacter(char.originalIndex)" class="p-2 bg-white/20 backdrop-blur-md text-white rounded-full border border-white/20 active:bg-white/40 shadow-lg">
+                            <button @click.stop="openCharacterExportModal(char.originalIndex)" class="p-2 bg-white/20 backdrop-blur-md text-white rounded-full border border-white/20 active:bg-white/40 shadow-lg">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
                             </button>
 
@@ -737,7 +737,7 @@
                                 <button @click.stop="editCharacter(char.originalIndex)" class="p-2 bg-white/90 backdrop-blur-sm text-gray-700 hover:text-primary-600 rounded-full shadow-lg transition-all hover:scale-110" title="编辑角色">
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
                                 </button>
-                                <button @click.stop="exportCharacter(char.originalIndex)" class="p-2 bg-white/90 backdrop-blur-sm text-gray-700 hover:text-primary-600 rounded-full shadow-lg transition-all hover:scale-110" title="导出角色">
+                                <button @click.stop="openCharacterExportModal(char.originalIndex)" class="p-2 bg-white/90 backdrop-blur-sm text-gray-700 hover:text-primary-600 rounded-full shadow-lg transition-all hover:scale-110" title="导出角色">
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
                                 </button>
 
@@ -1365,14 +1365,6 @@
                             </div>
                         </div>
                         <div class="mt-6 pt-4 border-t border-gray-100">
-                            <div class="mb-3">
-                                <label class="block text-sm font-medium text-gray-600 mb-1">插入策略</label>
-                                <select v-model="worldInfoSettings.insertionStrategy" class="w-full bg-gray-50 border border-gray-300 rounded-lg px-3 py-2 text-gray-800 focus:ring-2 focus:ring-primary-500 focus:outline-none text-sm">
-                                    <option value="uniform">均匀排序</option>
-                                    <option value="character_first">角色世界书优先</option>
-                                    <option value="global_first">全局设定优先</option>
-                                </select>
-                            </div>
                             <div class="grid grid-cols-2 gap-3 text-sm">
                                 <label v-for="(label, key) in {includeNames: '包括名称', recursiveScan: '递归扫描', caseSensitive: '区分大小写', matchWholeWords: '匹配整个单词', useGroupScoring: '使用群组评分', overflowWarning: '溢出警报'}"
                                        :key="key"
@@ -1575,6 +1567,17 @@
                                 <div class="text-xs text-gray-500">导入 .png 或 .json 文件</div>
                             </div>
                             <input type="file" accept=".png,.json" @change="importCharacter($event); showAddCharacterMenu = false" class="hidden">
+                        </label>
+                        
+                        <label class="flex items-center p-4 bg-gray-50 hover:bg-primary-50 text-gray-700 hover:text-primary-700 rounded-xl transition-all group border border-gray-100 hover:border-primary-200 cursor-pointer">
+                            <div class="w-10 h-10 bg-white rounded-lg shadow-sm flex items-center justify-center mr-4 group-hover:scale-110 transition-transform">
+                                <svg class="w-6 h-6 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"></path></svg>
+                            </div>
+                            <div class="text-left flex-1">
+                                <div class="font-bold">导入聊天记录</div>
+                                <div class="text-xs text-gray-500">导入 .jsonl 格式的聊天数据</div>
+                            </div>
+                            <input type="file" accept=".jsonl" @change="importCharacter($event); showAddCharacterMenu = false" class="hidden">
                         </label>
                     </div>
                     
@@ -1917,6 +1920,45 @@
                     <button @click="confirmExport" :disabled="selectedExportIndices.size === 0" class="px-6 py-2.5 bg-primary-600 hover:bg-primary-700 text-white rounded-xl transition-all shadow-md hover:shadow-lg font-bold text-sm active:scale-95 flex items-center disabled:opacity-50 disabled:cursor-not-allowed">
                         <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
                         导出选中 ({{ selectedExportIndices.size }})
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Character Export Selection Modal -->
+        <div v-if="showCharacterExportModal" class="fixed inset-0 z-[90] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fade-in">
+            <div class="fixed inset-0" @click="showCharacterExportModal = false"></div>
+            <div class="bg-white rounded-xl border border-gray-200 w-full max-w-sm flex flex-col shadow-2xl transform transition-all scale-100 relative z-10 overflow-hidden">
+                <div class="p-6">
+                    <h3 class="text-xl font-bold text-gray-900 mb-6 flex items-center">
+                        <svg class="w-6 h-6 mr-2 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+                        导出选项
+                    </h3>
+                    
+                    <div class="grid grid-cols-1 gap-3">
+                        <button @click="confirmCharacterExport(false)" class="flex items-center p-4 bg-gray-50 hover:bg-primary-50 text-gray-700 hover:text-primary-700 rounded-xl transition-all group border border-gray-100 hover:border-primary-200 text-left">
+                            <div class="w-10 h-10 bg-white rounded-lg shadow-sm flex items-center justify-center mr-4 group-hover:scale-110 transition-transform flex-shrink-0">
+                                <svg class="w-6 h-6 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+                            </div>
+                            <div class="flex-1">
+                                <div class="font-bold text-base mb-0.5">仅导出角色卡</div>
+                                <div class="text-[11px] text-gray-500">仅导出包含角色设定的 .png 图片</div>
+                            </div>
+                        </button>
+                        
+                        <button @click="confirmCharacterExport(true)" class="flex items-center p-4 bg-gray-50 hover:bg-primary-50 text-gray-700 hover:text-primary-700 rounded-xl transition-all group border border-gray-100 hover:border-primary-200 text-left">
+                            <div class="w-10 h-10 bg-white rounded-lg shadow-sm flex items-center justify-center mr-4 group-hover:scale-110 transition-transform flex-shrink-0">
+                                <svg class="w-6 h-6 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                            </div>
+                            <div class="flex-1">
+                                <div class="font-bold text-base mb-0.5">连带聊天数据导出</div>
+                                <div class="text-[11px] text-gray-500">一并导出对应的聊天记录 .jsonl</div>
+                            </div>
+                        </button>
+                    </div>
+                    
+                    <button @click="showCharacterExportModal = false" class="mt-6 w-full py-3 text-red-500 font-medium hover:text-red-600 transition-colors">
+                        取消
                     </button>
                 </div>
             </div>
