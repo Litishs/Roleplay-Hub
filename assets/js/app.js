@@ -45,7 +45,7 @@ const { createApp, ref, reactive, computed, onMounted, watch, nextTick } = Vue;
                 };
 
                 // --- Constants ---
-                const systemRegexNames = ['Auto Replace {{user}}', '隐藏正文的thinking', 'Nai画图正则-本子风', 'Nai画图正则-竖图'];
+                const systemRegexNames = ['Auto Replace {{user}}', 'NAI画图正则'];
                 const systemWorldInfoNames = ['自动生图'];
 
                 // --- Default API Configuration ---
@@ -118,19 +118,27 @@ const { createApp, ref, reactive, computed, onMounted, watch, nextTick } = Vue;
                 const updateCountdown = ref(0);
                 let updateCountdownTimer = null;
                 const latestUpdate = reactive({
-                    id: 10098, // 确保这是一个五位数ID，每次更新内容时增加这个数字
+                    id: 10099, // 确保这是一个五位数ID，每次更新内容时增加这个数字
                     date: new Date().toISOString().split('T')[0],
                     title: '网站公告',
                     content: `
-### Roleplay Hub 1.1.0
+### RP-Hub 1.2.0 更新
 
-- 新增角色卡聊天数据导入/导出功能
-- 修复了自定义模型名称同步不及时的问题
-- 去除了冗余选项
+- 新增公益/自定义配置独立选项
+- 新增生图比例选项
+- 新增模型响应进度查看功能
+- 支持了API配置在角色卡工坊上的同步互通
+- 大幅改善了生图模式下模型空回的现象
+- 提升了角色卡智能修改模式的匹配成功率
+- 优化了个性化记忆录入的提示词
+- 优化了部分界面的UI样式与动画
+- 优化了聊天气泡的入场动画
+- 修复了预设导入时清除原有预设的问题
+- 为部分场景新增了引导toast通知
 
 本项目为全开源公益项目，严禁倒卖源码，二改需经作者授权，Q群1015293774
 
-#### 更新时间：03/15/23:54
+#### 更新时间：03/17/04:36
                     `
                 });
 
@@ -146,7 +154,7 @@ const { createApp, ref, reactive, computed, onMounted, watch, nextTick } = Vue;
                 };
 
                 const startUpdateCountdown = () => {
-                    updateCountdown.value = 5;
+                    updateCountdown.value = 8;
                     if (updateCountdownTimer) clearInterval(updateCountdownTimer);
                     updateCountdownTimer = setInterval(() => {
                         if (updateCountdown.value > 0) {
@@ -174,6 +182,7 @@ const { createApp, ref, reactive, computed, onMounted, watch, nextTick } = Vue;
                 const isRemoteGenerating = ref(false); // 新增：远程生成状态
                 const remoteEstimatedTime = ref(null); // 新增：远程预计时间
                 const isReceiving = ref(false);
+                const isThinking = ref(false);
                 const abortController = ref(null);
                 const userInput = ref('');
                 const modelSearchQuery = ref('');
@@ -226,16 +235,46 @@ const { createApp, ref, reactive, computed, onMounted, watch, nextTick } = Vue;
                     temperature: 1.0,
                     autoFetchModels: true,
                     stream: true,
-                    autoRestoreDefaultAPI: true,
+                    apiMode: 'public', // 'public' or 'custom'
+                    customApiUrl: '',
+                    customApiKey: '',
+                    customModel: '',
+                    customQualityModel: '',
+                    customBalancedModel: '',
+                    customFastModel: '',
+                    customSuggestionModel: '',
                     useCharacterBackground: true,
                     autoScroll: true,
                     maxRetries: 2,
                     imageGenKey: '',
                     imageStyle: 'vertical',
+                    imageSize: '竖图',
                     qualityModel: DEFAULT_API_CONFIG.qualityModel,
                     balancedModel: DEFAULT_API_CONFIG.balancedModel,
                     fastModel: DEFAULT_API_CONFIG.fastModel,
                     suggestionModel: DEFAULT_API_CONFIG.suggestionModel
+                });
+
+                const syncSettingsToGenerator = () => {
+                    const iframe = document.querySelector('iframe[src*="character"]');
+                    if (iframe && iframe.contentWindow) {
+                        try {
+                            const syncData = {
+                                type: 'SYNC_SETTINGS',
+                                settings: JSON.parse(JSON.stringify(settings))
+                            };
+                            iframe.contentWindow.postMessage(syncData, '*');
+                        } catch (e) {
+                            console.error('Settings sync failed:', e);
+                        }
+                    }
+                };
+
+                // Listen for workshop ready message to trigger sync
+                window.addEventListener('message', (event) => {
+                    if (event.data && event.data.type === 'WORKSHOP_READY') {
+                        syncSettingsToGenerator();
+                    }
                 });
 
                 const isBackupRetrying = ref(false);
@@ -248,6 +287,16 @@ const { createApp, ref, reactive, computed, onMounted, watch, nextTick } = Vue;
                         settings.qualityModel = newModel; // 确保 qualityModel 也同步更新
                     }
                     
+                    if (settings.apiMode === 'custom') {
+                        settings.customApiUrl = newUrl;
+                        settings.customApiKey = newKey;
+                        settings.customQualityModel = settings.qualityModel;
+                        settings.customBalancedModel = settings.balancedModel;
+                        settings.customFastModel = settings.fastModel;
+                        settings.customSuggestionModel = settings.suggestionModel;
+                        settings.customModel = newModel;
+                    }
+
                     // Update currentModelMode based on the actual selected model
                     if (newModel === settings.fastModel) {
                         currentModelMode.value = 'fast';
@@ -256,6 +305,12 @@ const { createApp, ref, reactive, computed, onMounted, watch, nextTick } = Vue;
                     } else {
                         currentModelMode.value = 'quality';
                     }
+                    syncSettingsToGenerator();
+                }, { deep: true });
+
+                // Watch image gen and model settings for sync
+                watch(() => [settings.imageGenKey, settings.imageStyle, settings.qualityModel, settings.balancedModel, settings.fastModel, settings.suggestionModel], () => {
+                   syncSettingsToGenerator();
                 });
 
                 const currentModelMode = ref('quality');
@@ -360,6 +415,8 @@ const { createApp, ref, reactive, computed, onMounted, watch, nextTick } = Vue;
 
                 const onGeneratorLoad = () => {
                     isGeneratorLoading.value = false;
+                    console.log('%c[Generator] Character Workshop Iframe Loaded', 'color: #10b981; font-weight: bold;');
+                    syncSettingsToGenerator();
                 };
 
                 // Watch view change to refresh generator/plaza
@@ -684,34 +741,39 @@ const { createApp, ref, reactive, computed, onMounted, watch, nextTick } = Vue;
                 const updateImageGenRegexState = () => {
                     if (!isAutoImageGenEnabled.value) return;
 
-                    const verticalRegexName = 'Nai画图正则-竖图';
-                    const r18RegexName = 'Nai画图正则-本子风';
-                    
-                    const verticalRegex = regexScripts.value.find(r => r.name === verticalRegexName);
-                    const r18Regex = regexScripts.value.find(r => r.name === r18RegexName);
-                    
-                    let messages = [];
+                    const imageGenRegexName = 'NAI画图正则';
+                    const regex = regexScripts.value.find(r => r.name === imageGenRegexName);
+                    if (!regex) return;
 
-                    if (settings.imageStyle === 'r18') {
-                        // Enable R18, Disable Vertical
-                        if (r18Regex && !r18Regex.enabled) {
-                            r18Regex.enabled = true;
-                            messages.push(`${r18RegexName} 已启用`);
-                        }
-                        if (verticalRegex && verticalRegex.enabled) {
-                            verticalRegex.enabled = false;
-                        }
-                    } else {
-                        // Enable Vertical, Disable R18
-                        if (verticalRegex && !verticalRegex.enabled) {
-                            verticalRegex.enabled = true;
-                            messages.push(`${verticalRegexName} 已启用`);
-                        }
-                        if (r18Regex && r18Regex.enabled) {
-                            r18Regex.enabled = false;
-                        }
+                    const defaultArtists = '[[[artist:dishwasher1910]]], {{yd_(orange_maru)}}, [artist:ciloranko], [artist:sho_(sho_lwlw)], [ningen mame], year 2024,';
+                    const r18Artists = '{{artist:yd_(orange maru)}}, nixeu, {ikuchan kaoru}, cutesexyrobutts, redrop, [[artist:kojima saya]], lam_(ramdayo), oekakizuki, qiandaiyiyu,';
+
+                    const targetArtists = settings.imageStyle === 'r18' ? r18Artists : defaultArtists;
+                    const styleName = settings.imageStyle === 'r18' ? '本子风' : '默认风格';
+
+                    // 动态替换 URL 中的 artist 和 size 参数
+                    const oldReplacement = regex.replacement;
+                    let newReplacement = oldReplacement.replace(/artist=[^&]+/, 'artist=' + targetArtists);
+                    newReplacement = newReplacement.replace(/size=[^&]+/, 'size=' + settings.imageSize);
+                    regex.replacement = newReplacement;
+
+                    let messages = [];
+                    // 检查 Artist 变化
+                    const oldArtist = oldReplacement.match(/artist=([^&]+)/)?.[1];
+                    if (oldArtist !== targetArtists) {
+                        messages.push(`画风: ${styleName}`);
+                    }
+                    // 检查 Size 变化
+                    const oldSize = oldReplacement.match(/size=([^&]+)/)?.[1];
+                    if (oldSize !== settings.imageSize) {
+                        messages.push(`比例: ${settings.imageSize}`);
                     }
                     
+                    if (!regex.enabled) {
+                        regex.enabled = true;
+                        messages.push(`${imageGenRegexName} 已启用`);
+                    }
+
                     return messages;
                 };
 
@@ -744,6 +806,15 @@ const { createApp, ref, reactive, computed, onMounted, watch, nextTick } = Vue;
                         const messages = updateImageGenRegexState();
                         if (messages && messages.length > 0) {
                             showToast('生图风格已切换：' + messages.join('，'), 'success');
+                        }
+                    }
+                });
+
+                watch(() => settings.imageSize, () => {
+                    if (isAutoImageGenEnabled.value) {
+                        const messages = updateImageGenRegexState();
+                        if (messages && messages.length > 0) {
+                            showToast('生图比例已切换：' + messages.join('，'), 'success');
                         }
                     }
                 });
@@ -1633,7 +1704,9 @@ ${rawHtml}
                             // The scrollHeight might not be final right after DOM update due to rendering.
                             // A small timeout gives the browser time to calculate the final layout.
                             setTimeout(() => {
-                                chatContainer.value.scrollTop = chatContainer.value.scrollHeight;
+                                if (chatContainer.value) {
+                                    chatContainer.value.scrollTop = chatContainer.value.scrollHeight;
+                                }
                             }, 50);
                         }
                     });
@@ -1743,6 +1816,7 @@ ${rawHtml}
 
                     isGenerating.value = true;
                     isReceiving.value = false;
+                    isThinking.value = false;
                     abortController.value = new AbortController();
                     let generationStartTime = startTime || Date.now();
                     
@@ -1755,7 +1829,7 @@ ${rawHtml}
                             currentWaitTime.value = ((now - generationStartTime) / 1000).toFixed(1);
                         }, 100);
                     };
-                    startTimer();
+                    // REMOVED: startTimer() is now called when first content/reasoning arrives
 
                     
                     // --- Advanced World Info Processing ---
@@ -2037,7 +2111,12 @@ ${rawHtml}
                     }
 
                     // 添加个性化记忆指令到 System Prompt
-                    const memoryInstruction = `\n\n[个性化记忆指令]\n如果用户表达了新的偏好、习惯或个人细节，或你认为用户有隐性偏好，为了在未来的互动中记住这些信息，请将其输出在 <bio> 标签内。例如：<bio>用户更喜欢咖啡而不是茶。</bio>......<bio> 标签内的内容将被静默添加到用户的个性化记忆中。请注意：对于已经记录在[用户个性化记忆]中的信息，不要重复输出，只输出新的或变更的信息。请勿使用 <bio> 标签记录临时信息。`;
+                    const memoryInstruction = `\n\n[个性化记忆指令]
+1. 目标：识别并记录用户的长期习惯、个人细节、沟通偏好或价值观。
+2. 禁令：严禁记录特定于当前角色扮演剧本的临时信息。例如：不要记录用户的临时身份（如“用户是帝国将军”）、剧情进展（如“用户刚才买了一把剑”）或针对特定角色的互动（如“用户喜欢摸这个角色的狐狸尾巴”）。
+3. 重点：关注跨场景的特征。例如：用户喜欢的文学/艺术风格、对 AI 输出的具体要求（如“喜欢细腻的心理描写”）、生活习惯（如“用户习惯晚睡”）、称呼偏好等。
+4. 格式：将新发现的信息输出在 <bio> 标签内。例如：<bio>用户在交流中倾向于温和、理性的讨论方式。</bio>
+5. 限制：不要重复记录已存在的信息。请勿使用 <bio> 记录任何临时或剧本特定的状态。`;
                     
                     // Helper to join content with comments
                     const joinContent = (entries) => entries.map(e => `[${e.comment || 'Entry'}]\n${e.content}`).join('\n\n');
@@ -2266,23 +2345,40 @@ ${rawHtml}
                                                 try {
                                                     const data = JSON.parse(dataStr);
                                                     const content = data.choices[0]?.delta?.content || '';
+                                                    const reasoning = data.choices[0]?.delta?.reasoning_content || '';
                                                     
-                                                    if (content) {
+                                                    if (content || reasoning) {
                                                         if (!assistantMessage) {
                                                             assistantMessage = reactive({
                                                                 role: 'assistant',
                                                                 name: currentCharacter.value.name,
                                                                 content: '',
+                                                                reasoning: '',
                                                                 id: generateUUID(), // Assign ID
                                                                 shouldAnimate: true, // Enable animation for new stream
                                                                 isCotOpen: false // Default collapsed for CoT
                                                             });
                                                             chatHistory.value.push(assistantMessage);
                                                             isReceiving.value = true;
+                                                            
+                                                            // Start timer only when first response chunk arrives
+                                                            generationStartTime = Date.now();
+                                                            startTimer();
+                                                            
                                                             await nextTick();
                                                         }
-                                                        assistantMessage.content += content;
-                                                        responseContent += content;
+
+                                                        if (reasoning) {
+                                                            assistantMessage.reasoning += reasoning;
+                                                            isThinking.value = true;
+                                                        }
+                                                        
+                                                        if (content) {
+                                                            assistantMessage.content += content;
+                                                            responseContent += content;
+                                                            isThinking.value = false;
+                                                        }
+                                                        
                                                         scrollToBottom();
                                                     }
                                                 } catch (e) {
@@ -2301,12 +2397,42 @@ ${rawHtml}
                                     try {
                                         // 1. Try parsing as standard JSON
                                         const data = JSON.parse(rawText);
-                                        content = data.choices[0]?.message?.content || '';
+                                        const msg = data.choices[0]?.message || {};
+                                        content = msg.content || '';
+                                        const reasoning = msg.reasoning_content || '';
+                                        
+                                        if (reasoning && !content) {
+                                            isThinking.value = true;
+                                        } else {
+                                            isThinking.value = false;
+                                        }
+
+                                        if (content || reasoning) {
+                                            assistantMessage = reactive({
+                                                role: 'assistant',
+                                                name: currentCharacter.value.name,
+                                                content: content,
+                                                reasoning: reasoning,
+                                                id: generateUUID(),
+                                                shouldAnimate: true,
+                                                isCotOpen: false
+                                            });
+                                            chatHistory.value.push(assistantMessage);
+                                            responseContent = content;
+                                            
+                                            // Start/Update timer for non-streaming response
+                                            generationStartTime = Date.now();
+                                            startTimer();
+                                            
+                                            await nextTick();
+                                            scrollToBottom();
+                                        }
                                     } catch (e) {
                                         // 2. If JSON fails, try parsing as SSE text (data: {...})
                                         // This handles cases where API returns stream format even if stream=false
                                         console.log('Non-standard JSON response detected, attempting manual SSE parsing...');
                                         const lines = rawText.split('\n');
+                                        let finalReasoning = '';
                                         for (const line of lines) {
                                             const trimmedLine = line.trim();
                                             if (trimmedLine.startsWith('data:')) {
@@ -2314,29 +2440,39 @@ ${rawHtml}
                                                 if (dataStr === '[DONE]') continue;
                                                 try {
                                                     const chunk = JSON.parse(dataStr);
-                                                    const chunkContent = chunk.choices[0]?.delta?.content || chunk.choices[0]?.message?.content || '';
+                                                    const delta = chunk.choices[0]?.delta || chunk.choices[0]?.message || {};
+                                                    const chunkContent = delta.content || '';
+                                                    const chunkReasoning = delta.reasoning_content || '';
+                                                    
                                                     if (chunkContent) content += chunkContent;
+                                                    if (chunkReasoning) finalReasoning += chunkReasoning;
                                                 } catch (err) {
                                                     // Ignore invalid chunks
                                                 }
                                             }
                                         }
-                                    }
-                                    
-                                    responseContent = content;
-                                    
-                                    if (content) {
-                                        assistantMessage = reactive({
-                                            role: 'assistant',
-                                            name: currentCharacter.value.name,
-                                            content: content,
-                                            id: generateUUID(), // Assign ID
-                                            shouldAnimate: true, // Enable animation for new messages
-                                            isCotOpen: false // Default collapsed for completed messages
-                                        });
-                                        chatHistory.value.push(assistantMessage);
-                                        await nextTick();
-                                        scrollToBottom();
+                                        
+                                        responseContent = content;
+                                        
+                                        if (content || finalReasoning) {
+                                            assistantMessage = reactive({
+                                                role: 'assistant',
+                                                name: currentCharacter.value.name,
+                                                content: content,
+                                                reasoning: finalReasoning,
+                                                id: generateUUID(),
+                                                shouldAnimate: true,
+                                                isCotOpen: false
+                                            });
+                                            chatHistory.value.push(assistantMessage);
+                                            
+                                            // Start/Update timer for non-standard streaming response
+                                            generationStartTime = Date.now();
+                                            startTimer();
+                                            
+                                            await nextTick();
+                                            scrollToBottom();
+                                        }
                                     }
                                 }
 
@@ -2482,6 +2618,8 @@ ${rawHtml}
                         }
                     } finally {
                         isGenerating.value = false;
+                        isReceiving.value = false;
+                        isThinking.value = false;
                         abortController.value = null;
                         if (waitTimer) {
                             clearInterval(waitTimer);
@@ -2608,47 +2746,35 @@ ${rawHtml}
 
                 const enforceSpecialRules = () => {
                     const imageGenToken = settings.imageGenKey ? settings.imageGenKey : 'STD-QMqT4lxiWqWMVneiePiE';
-                    // 1. Nai画图正则
-                    const imageGenRegexName = 'Nai画图正则-本子风';
+                    
+                    // 1. NAI画图正则 (统一版本)
+                    const imageGenRegexName = 'NAI画图正则';
+                    const defaultArtists = '[[[artist:dishwasher1910]]], {{yd_(orange_maru)}}, [artist:ciloranko], [artist:sho_(sho_lwlw)], [ningen mame], year 2024,';
+                    const r18Artists = '{{artist:yd_(orange maru)}}, nixeu, {ikuchan kaoru}, cutesexyrobutts, redrop, [[artist:kojima saya]], lam_(ramdayo), oekakizuki, qiandaiyiyu,';
+                    
+                    const targetArtists = settings.imageStyle === 'r18' ? r18Artists : defaultArtists;
+                    
                     const imageGenRegexContent = {
                         name: imageGenRegexName,
                         regex: '/image###([^>]+)###/g',
-                        replacement: '<div style="width: auto; height: auto; max-width: 100%; border: 8px solid transparent; background-image: linear-gradient(45deg, #FFC9D9, #CCE5FF); position: relative; border-radius: 16px; overflow: hidden; display: flex; justify-content: center; align-items: center; animation: gradientBG 3s ease infinite; box-shadow: 0 4px 15px rgba(204,229,255,0.3);"><div style="background: rgba(255,255,255,0.85); backdrop-filter: blur(5px); width: 100%; height: 100%; position: absolute; top: 0; left: 0;"></div><img src="https://std.loliyc.com/generate?tag=$1&token=' + imageGenToken + '&model=nai-diffusion-4-5-full&artist={{artist:yd_(orange maru)}}, nixeu, {ikuchan kaoru}, cutesexyrobutts, redrop, [[artist:kojima saya]], lam_(ramdayo), oekakizuki, qiandaiyiyu,&size=竖图&steps=40&scale=6&cfg=0&sampler=k_dpmpp_2m_sde&negative=pixelate&nocache=0&noise_schedule=karras"  alt="生成图片" style="max-width: 100%; height: auto; width: auto; display: block; object-fit: contain; transition: transform 0.3s ease; position: relative; z-index: 1;"></div><style>@keyframes gradientBG {0% {background-image: linear-gradient(45deg, #FFC9D9, #CCE5FF);}50% {background-image: linear-gradient(225deg, #FFC9D9, #CCE5FF);}100% {background-image: linear-gradient(45deg, #FFC9D9, #CCE5FF);}}</style>',
+                        replacement: '<div style="width: auto; height: auto; max-width: 100%; border: 8px solid transparent; background-image: linear-gradient(45deg, #FFC9D9, #CCE5FF); position: relative; border-radius: 16px; overflow: hidden; display: flex; justify-content: center; align-items: center; animation: gradientBG 3s ease infinite; box-shadow: 0 4px 15px rgba(204,229,255,0.3);"><div style="background: rgba(255,255,255,0.85); backdrop-filter: blur(5px); width: 100%; height: 100%; position: absolute; top: 0; left: 0;"></div><img src="https://std.loliyc.com/generate?tag=$1&token=' + imageGenToken + '&model=nai-diffusion-4-5-full&artist=' + targetArtists + '&size=' + settings.imageSize + '&steps=40&scale=6&cfg=0&sampler=k_dpmpp_2m_sde&negative=pixelate&nocache=0&noise_schedule=karras"  alt="生成图片" style="max-width: 100%; height: auto; width: auto; display: block; object-fit: contain; transition: transform 0.3s ease; position: relative; z-index: 1;"></div><style>@keyframes gradientBG {0% {background-image: linear-gradient(45deg, #FFC9D9, #CCE5FF);}50% {background-image: linear-gradient(225deg, #FFC9D9, #CCE5FF);}100% {background-image: linear-gradient(45deg, #FFC9D9, #CCE5FF);}}</style>',
                         placement: [2],
                         markdownOnly: true,
                         promptOnly: false,
                         enabled: false // Default closed
                     };
 
-                    const regexIndex = regexScripts.value.findIndex(r => r.name === imageGenRegexName);
-                    if (regexIndex !== -1) {
-                        // 存在，保留启用状态并更新内容
-                        imageGenRegexContent.enabled = regexScripts.value[regexIndex].enabled;
-                        regexScripts.value.splice(regexIndex, 1);
+                    // 查找当前是否已存在新命名的正则
+                    const newRegexIndex = regexScripts.value.findIndex(r => r.name === imageGenRegexName);
+                    
+                    if (newRegexIndex !== -1) {
+                        // 如果已存在，保留目前的启用状态并更新内容
+                        imageGenRegexContent.enabled = regexScripts.value[newRegexIndex].enabled;
+                        regexScripts.value.splice(newRegexIndex, 1);
                     }
+
                     // 添加新的到首位
                     regexScripts.value.unshift(imageGenRegexContent);
-
-                    // 1.5 Nai画图正则竖图
-                    const nai3RegexName = 'Nai画图正则-竖图';
-                    const nai3RegexContent = {
-                        name: nai3RegexName,
-                        regex: '/image###([^>]+)###/g',
-                        replacement: '<div style="width: auto; height: auto; max-width: 100%; border: 8px solid transparent; background-image: linear-gradient(45deg, #FFC9D9, #CCE5FF); position: relative; border-radius: 16px; overflow: hidden; display: flex; justify-content: center; align-items: center; animation: gradientBG 3s ease infinite; box-shadow: 0 4px 15px rgba(204,229,255,0.3);"><div style="background: rgba(255,255,255,0.85); backdrop-filter: blur(5px); width: 100%; height: 100%; position: absolute; top: 0; left: 0;"></div><img src="https://std.loliyc.com/generate?tag=$1&token=' + imageGenToken + '&model=nai-diffusion-4-5-full&artist=[[[artist:dishwasher1910]]], {{yd_(orange_maru)}}, [artist:ciloranko], [artist:sho_(sho_lwlw)], [ningen mame], year 2024,&size=竖图&steps=40&scale=6&cfg=0&sampler=k_dpmpp_2m_sde&negative=pixelate&nocache=0&noise_schedule=karras"  alt="生成图片" style="max-width: 100%; height: auto; width: auto; display: block; object-fit: contain; transition: transform 0.3s ease; position: relative; z-index: 1;"></div><style>@keyframes gradientBG {0% {background-image: linear-gradient(45deg, #FFC9D9, #CCE5FF);}50% {background-image: linear-gradient(225deg, #FFC9D9, #CCE5FF);}100% {background-image: linear-gradient(45deg, #FFC9D9, #CCE5FF);}}</style>',
-                        placement: [2],
-                        markdownOnly: true,
-                        promptOnly: false,
-                        enabled: false // Default closed
-                    };
-
-                    const nai3RegexIndex = regexScripts.value.findIndex(r => r.name === nai3RegexName);
-                    if (nai3RegexIndex !== -1) {
-                        // 存在，保留启用状态并更新内容
-                        nai3RegexContent.enabled = regexScripts.value[nai3RegexIndex].enabled;
-                        regexScripts.value.splice(nai3RegexIndex, 1);
-                    }
-                    // 添加新的到首位
-                    regexScripts.value.unshift(nai3RegexContent);
 
                     // 2. 自动生图世界书
                     const autoImageGenWIName = '自动生图';
@@ -2703,13 +2829,6 @@ ${rawHtml}
  - 表情：【如：smile、blush】
  - 生理反应：【wet、pussy juice、cum、dripping】
 
-相对位置:
- - 方位标识：“|centers:?”表示角色所在的相对中心位置【如：|centers:C3】
-**划分相片均分的25等份1、2、3、4、5行数,A、B、C、D、E列数,即C3为正中心，B3左半边中间，D3在画面右半边中间，且1个角色描述仅可使用1个方位标识，但人物的位置可以重叠【如：亲吻、拥抱】**
-
-是否还有其他角色：是，则注意相对位置
-【如：2boys→Character 2 Prompt:boy...|centers:B2;Character 3 Prompt:boy...|centers:D4;】
-
 <Tag_智能调整>
 # 个数分配：按”画面视觉占比及焦点”分配动态不同分类的Tag个数
 
@@ -2725,11 +2844,7 @@ ${rawHtml}
  - 分配优先级：调整幅度【如：背景有 “花瓶”→但无需突出→[vase]】
 
 <生成格式>
-<image>image###Scene Composition:(nsfw/sfw),(画面通用),(背景),(构图);Character 1 Prompt:(第1个角色描述/动作/权重提示词)|centers:?;Character 2 Prompt:(第2个角色描述/动作/权重提示词)|centers:?;Character 3 Prompt:(第3个角色描述/动作/权重提示词)|centers:?;###</image>
-
-示例：
-<示例>
-</image>image###Scene Composition:nsfw,1girl,1boy,face focus,.......;Character 1 Prompt:girl,original,{{long hair}},{{blonde hair}},blue eyes,medium breasts,{{{shirt,white shirt, plaid shirt}}},open clothes,button,no bra,breasts,kneeling,{{female kneeling on floor}},hands,{grabbing  penis},handjob,looking up,blush,cum,{{cum in mouth}},overflow,splashing fluids,speed line|centers:C3;Character 2 Prompt:boy,{{getglobalvar::male}},clothed male nude female,pants down,big penis,sitting,{{{sitting on sofa}}},pov hand,hand on another's head,ejaculation|centers:C4;###</image>
+<image>image###生成的提示词###</image>
 
 特别提示：出现user或主角参与的情况(如被口、手交），禁止出现主角的人物形象(脸部，头部）！必须使用第一视角(POV）相关提示词！且要作为Character  Prompt添加，禁止出现角色卡和角色名字(包括英文和拼音），中文和{{user}}是明令禁止的，且一定要保持同一人物在上下文中的形象一致性，不要丢失人物特性(如有异色瞳特征人物），涉及人物常见特征(如发色，瞳孔颜色等）的提示词请增加权重\n</auto_image_gen>`,
                         constant: true,
@@ -2832,21 +2947,7 @@ ${rawHtml}
                         }
                     }
 
-                    // Ensure default "Hide Thinking" regex exists
-                    const hideThinkingName = '隐藏正文的thinking';
-                    const hasHideThinking = regexScripts.value.some(r => r.name === hideThinkingName);
 
-                    if (!hasHideThinking) {
-                        regexScripts.value.push({
-                            name: hideThinkingName,
-                            regex: '/(<Thinking>.*?<\\/Thinking>)|(<thinking>.*?<\\/thinking>)|(<think>.*?<\\/think>)/gs',
-                            replacement: '',
-                            placement: [2], // AI Only
-                            markdownOnly: true, // Only hide in display
-                            promptOnly: false,
-                            enabled: true
-                        });
-                    }
 
                     // Enforce special rules (Nai画图正则 & 自动生图)
                     enforceSpecialRules();
@@ -3700,6 +3801,25 @@ ${rawHtml}
 
                     await loadData();
 
+                    // --- 全局清理废弃正则 (思维隐藏及旧版画图迁移项已清理完毕，保留基础结构) ---
+                    const obsoleteRegexNames = ['隐藏正文的thinking', 'Nai画图正则-本子风', 'Nai画图正则-竖图'];
+                    let cleanedCount = 0;
+                    characters.value.forEach(char => {
+                        if (char.regexScripts) {
+                            const originalLength = char.regexScripts.length;
+                            char.regexScripts = char.regexScripts.filter(r => !obsoleteRegexNames.includes(r.name));
+                            if (char.regexScripts.length < originalLength) cleanedCount++;
+                        }
+                    });
+                    // 同时清理当前活动的状态
+                    const currentOriginalLength = regexScripts.value.length;
+                    regexScripts.value = regexScripts.value.filter(r => !obsoleteRegexNames.includes(r.name));
+                    
+                    if (cleanedCount > 0 || regexScripts.value.length < currentOriginalLength) {
+                        console.log(`[Cleanup] 已完成系统清理: ${obsoleteRegexNames.join(', ')}`);
+                        saveData(); // 持久化清理结果
+                    }
+
                     // 每次刷新检查有无名为“默认”的预设，如果有则去除
                     const defaultPresetIndex = presets.value.findIndex(p => p.name === '默认');
                     if (defaultPresetIndex !== -1) {
@@ -3718,7 +3838,7 @@ ${rawHtml}
                     settings.temperature = 1.0;
 
                     // --- Restore Default API Settings if enabled ---
-                    if (settings.autoRestoreDefaultAPI) {
+                    if (settings.apiMode === 'public') {
                         settings.apiUrl = DEFAULT_API_CONFIG.apiUrl;
                         settings.apiKey = DEFAULT_API_CONFIG.apiKey;
                         settings.model = DEFAULT_API_CONFIG.model;
@@ -3727,6 +3847,27 @@ ${rawHtml}
                         settings.fastModel = DEFAULT_API_CONFIG.fastModel;
                         settings.suggestionModel = DEFAULT_API_CONFIG.suggestionModel;
                         // showToast('已自动恢复默认 API 设置', 'info');
+                    } else if (settings.apiMode === undefined && settings.autoRestoreDefaultAPI) {
+                        // Legacy support for older configurations
+                        settings.apiMode = 'public';
+                        delete settings.autoRestoreDefaultAPI;
+                        settings.apiUrl = DEFAULT_API_CONFIG.apiUrl;
+                        settings.apiKey = DEFAULT_API_CONFIG.apiKey;
+                        settings.model = DEFAULT_API_CONFIG.model;
+                        settings.qualityModel = DEFAULT_API_CONFIG.qualityModel;
+                        settings.balancedModel = DEFAULT_API_CONFIG.balancedModel;
+                        settings.fastModel = DEFAULT_API_CONFIG.fastModel;
+                        settings.suggestionModel = DEFAULT_API_CONFIG.suggestionModel;
+                    } else if (settings.apiMode === undefined && settings.autoRestoreDefaultAPI === false) {
+                        settings.apiMode = 'custom';
+                        delete settings.autoRestoreDefaultAPI;
+                        settings.customApiUrl = settings.apiUrl;
+                        settings.customApiKey = settings.apiKey;
+                        settings.customModel = settings.model;
+                        settings.customQualityModel = settings.qualityModel;
+                        settings.customBalancedModel = settings.balancedModel;
+                        settings.customFastModel = settings.fastModel;
+                        settings.customSuggestionModel = settings.suggestionModel;
                     }
 
                     // --- Enforce Defaults ---
@@ -3944,22 +4085,7 @@ ${rawHtml}
                         if (!existingRegex.placement) existingRegex.placement = [1, 2];
                     }
 
-                    // 2.1 Enforce Default Regex (Hide Thinking)
-                    const hideThinkingName = '隐藏正文的thinking';
-                    const existingHideThinking = regexScripts.value.find(r => r.name === hideThinkingName);
 
-                    if (!existingHideThinking) {
-                        regexScripts.value.push({
-                            name: hideThinkingName,
-                            regex: '/(<Thinking>.*?<\\/Thinking>)|(<thinking>.*?<\\/thinking>)|(<think>.*?<\\/think>)/gs',
-                            replacement: '',
-                            placement: [2], // AI Only
-                            markdownOnly: true, // Only hide in display
-                            promptOnly: false,
-                            enabled: true
-                        });
-                        // showToast('已添加隐藏思考过程正则', 'info');
-                    }
 
                     // Save enforced defaults immediately
                     saveData();
@@ -4038,20 +4164,7 @@ ${rawHtml}
                              }
                        }
 
-                       // Ensure Hide Thinking regex
-                       const hideThinkingName = '隐藏正文的thinking';
-                       const hasHideThinking = regexScripts.value.some(r => r.name === hideThinkingName);
-                       if (!hasHideThinking) {
-                           regexScripts.value.push({
-                               name: hideThinkingName,
-                               regex: '/(<Thinking>.*?<\\/Thinking>)|(<thinking>.*?<\\/thinking>)|(<think>.*?<\\/think>)/gs',
-                               replacement: '',
-                               placement: [2],
-                               markdownOnly: true,
-                               promptOnly: false,
-                               enabled: true
-                           });
-                       }
+
 
                        // Enforce special rules (Nai画图正则 & 自动生图)
                        enforceSpecialRules();
@@ -4112,12 +4225,12 @@ ${rawHtml}
                     showCharacterExportModal, characterToExportIndex, openCharacterExportModal, confirmCharacterExport, // Character Export Modal
                     showUpdateModal, updateCountdown, latestUpdate, closeUpdateModal, // Update Modal
                     showConfirmModal, confirmMessage, modelMode, // Export for template
-                    isGenerating, isRemoteGenerating, remoteEstimatedTime, isReceiving, userInput, modelSearchQuery, characterSearchQuery, availableModels, filteredModels, filteredCharacters,
+                    isGenerating, isRemoteGenerating, remoteEstimatedTime, isReceiving, isThinking, userInput, modelSearchQuery, characterSearchQuery, availableModels, filteredModels, filteredCharacters,
                     user, settings, characters, currentCharacter, currentCharacterIndex, chatHistory, presets, regexScripts, worldInfo,
                     activeRegexCount, activeWorldInfoCount, totalContextLength,
                     editingCharacter, editingPreset, toasts, chatContainer, inputBox, messageElements,
                     lastUserMessageIndex, // Expose to template
-                    isGeneratorLoading, generatorUrl, onGeneratorLoad, // Generator exports
+                    isGeneratorLoading, generatorUrl, onGeneratorLoad, syncSettingsToGenerator, // Generator exports
                     editorTab, characterDisplayLimit, displayedCharacters, loadMoreCharacters,
                     isAutoImageGenEnabled,
                     isGeneratingSuggestions, suggestedReplies, generateSuggestions,
@@ -4217,13 +4330,21 @@ ${rawHtml}
                         const reader = new FileReader();
                         reader.onload = (e) => {
                             try {
-                                const data = JSON.parse(e.target.result);
-                                if (Array.isArray(data)) {
-                                    presets.value = data;
-                                    showToast('预设导入成功', 'success');
+                                let data = JSON.parse(e.target.result);
+                                // Support single object import
+                                if (!Array.isArray(data)) {
+                                    data = [data];
                                 }
+                                
+                                if (data.length > 0) {
+                                    presets.value = [...presets.value, ...data];
+                                    showToast(`成功导入 ${data.length} 条预设`, 'success');
+                                }
+                                // Reset file input
+                                event.target.value = '';
                             } catch (err) {
-                                showToast('导入失败', 'error');
+                                showToast('导入失败: 格式错误', 'error');
+                                event.target.value = '';
                             }
                         };
                         reader.readAsText(file);
@@ -4314,7 +4435,6 @@ ${rawHtml}
                                 console.error('Import error:', err);
                                 showToast('导入失败: ' + err.message, 'error');
                             } finally {
-                                // Reset input value here to ensure it's cleared
                                 event.target.value = '';
                             }
                         };
@@ -4398,8 +4518,11 @@ ${rawHtml}
                                     }
                                     showToast('世界书导入成功', 'success');
                                 }
+                                // Reset file input
+                                event.target.value = '';
                             } catch (err) {
-                                showToast('导入失败', 'error');
+                                showToast('导入失败: 格式错误', 'error');
+                                event.target.value = '';
                             }
                         };
                         reader.readAsText(file);
@@ -4582,6 +4705,43 @@ ${rawHtml}
 
                     // Auto Image Gen Inquiry
                     showAutoImageGenModal,
+                    toggleApiMode: (mode) => {
+                        if (settings.apiMode === mode) return;
+                        
+                        settings.apiMode = mode;
+                        
+                        if (mode === 'public') {
+                            // Copy current to custom
+                            settings.customApiUrl = settings.apiUrl;
+                            settings.customApiKey = settings.apiKey;
+                            settings.customModel = settings.model;
+                            settings.customQualityModel = settings.qualityModel;
+                            settings.customBalancedModel = settings.balancedModel;
+                            settings.customFastModel = settings.fastModel;
+                            settings.customSuggestionModel = settings.suggestionModel;
+                            
+                            // Apply public defaults
+                            settings.apiUrl = DEFAULT_API_CONFIG.apiUrl;
+                            settings.apiKey = DEFAULT_API_CONFIG.apiKey;
+                            settings.qualityModel = DEFAULT_API_CONFIG.qualityModel;
+                            settings.balancedModel = DEFAULT_API_CONFIG.balancedModel;
+                            settings.fastModel = DEFAULT_API_CONFIG.fastModel;
+                            settings.suggestionModel = DEFAULT_API_CONFIG.suggestionModel;
+                            settings.model = DEFAULT_API_CONFIG.model;
+                            
+                        } else if (mode === 'custom') {
+                            // Restore custom
+                            if (settings.customApiUrl) settings.apiUrl = settings.customApiUrl;
+                            if (settings.customApiKey) settings.apiKey = settings.customApiKey;
+                            if (settings.customQualityModel) settings.qualityModel = settings.customQualityModel;
+                            if (settings.customBalancedModel) settings.balancedModel = settings.customBalancedModel;
+                            if (settings.customFastModel) settings.fastModel = settings.customFastModel;
+                            if (settings.customSuggestionModel) settings.suggestionModel = settings.customSuggestionModel;
+                            if (settings.customModel) settings.model = settings.customModel;
+                        }
+                        
+                        saveData();
+                    },
                     setAutoImageGen: (enabled) => {
                         const autoImageGenWIName = '自动生图';
                         const entry = worldInfo.value.find(w => w.comment === autoImageGenWIName);

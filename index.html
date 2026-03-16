@@ -47,16 +47,11 @@
                         'slide-up': 'slideUp 0.3s ease-out',
                         'slide-down': 'slideDown 0.3s ease-out',
                         'bounce-slow': 'bounce 1.5s infinite',
-                        'message-in': 'messageIn 0.4s ease-out backwards',
                     },
                     keyframes: {
                         fadeIn: {
                             '0%': { opacity: '0' },
                             '100%': { opacity: '1' },
-                        },
-                        messageIn: {
-                            '0%': { opacity: '0', transform: 'translateY(10px)' },
-                            '100%': { opacity: '1', transform: 'translateY(0)' },
                         },
                         slideUp: {
                             '0%': { transform: 'translateY(20px)', opacity: '0' },
@@ -305,6 +300,7 @@
                     </div>
                     
                     <div v-else v-for="(msg, index) in chatHistory" :key="index" ref="messageElements" :data-role="msg.role"
+                         v-show="!(msg.role === 'assistant' && index === chatHistory.length - 1 && isThinking && !msg.content)"
                          :class="['flex w-full', msg.shouldAnimate ? 'animate-message-in' : '', msg.isSelf ? 'justify-end' : 'justify-start']"
                          :style="{ animationDelay: msg.isSelf ? '0ms' : '0ms' }">
                         <div :class="['flex max-w-[99%] md:max-w-[75%] lg:max-w-[70%]', (parseCot(msg.content).cot) ? 'w-full' : '', msg.isSelf ? 'flex-row-reverse' : 'flex-row']">
@@ -332,9 +328,9 @@
                                 <div class="group relative" :class="{'w-full': parseCot(msg.content).cot}">
                                     <div :class="['p-0 rounded-2xl shadow-sm text-sm md:text-base leading-relaxed overflow-hidden',
                                         (parseCot(msg.content).cot) ? 'w-full' : '',
-                                        msg.role === 'user' ? (msg.isSelf ? 'bg-primary-100 text-gray-900 rounded-tr-none shadow-sm border border-primary-200' : 'bg-white text-gray-800 rounded-tl-none border border-gray-100 shadow-card') :
-                                        msg.role === 'system' ? 'bg-red-50 text-red-800 border border-red-200' :
-                                        'bg-white text-gray-800 border border-gray-100 shadow-card']">
+                                        msg.role === 'user' ? (msg.isSelf ? 'bg-blue-50/85 backdrop-blur-md glass-stabilize text-gray-900 rounded-tr-none shadow-[0_4px_12px_rgba(59,130,246,0.1)] border border-primary-300/50' : 'bg-white/70 backdrop-blur-md glass-stabilize text-gray-800 rounded-tl-none border border-white/40 shadow-card') :
+                                        msg.role === 'system' ? 'bg-red-50/70 backdrop-blur-md glass-stabilize text-red-800 border border-red-200/40' :
+                                        'bg-white/70 backdrop-blur-md glass-stabilize text-gray-800 border border-white/40 shadow-card']">
                                         
 
                                         <div v-if="msg.isTriggered && !msg.showRaw" @click="msg.showRaw = true" class="px-4 py-3 flex items-center space-x-2 text-primary-800/80 select-none cursor-pointer hover:bg-primary-50 transition-colors" :title="msg.content">
@@ -354,7 +350,7 @@
                                                                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                                                                 <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                                                             </svg>
-                                                            <span class="text-xs font-bold">正在分析...</span>
+                                                            <span class="text-xs font-bold">{{ isThinking ? '已响应，等待思考...' : '正在分析...' }}</span>
                                                         </div>
                                                         <div v-else class="flex items-center">
                                                             <svg class="w-3.5 h-3.5 mr-2 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path></svg>
@@ -394,7 +390,7 @@
                     </div>
 
                     <!-- Typing Indicator -->
-                    <div v-if="(isGenerating || isRemoteGenerating) && !isReceiving" class="flex w-full justify-start animate-message-in" style="animation-delay: 200ms;">
+                    <div v-if="(isGenerating || isRemoteGenerating) && (!isReceiving || isThinking)" class="flex w-full justify-start animate-message-in" style="animation-delay: 200ms;">
                         <div class="flex max-w-[99%] md:max-w-[75%] lg:max-w-[70%] flex-row">
                             <div class="flex-shrink-0">
                                 <img :src="currentCharacter?.avatar" class="w-9 h-9 rounded-full object-cover mr-1.5 border border-gray-200 shadow-sm">
@@ -403,11 +399,12 @@
                                 <div class="text-[10px] font-bold text-gray-600 mb-1 select-none px-1.5 py-0.5 rounded-md bg-white/50 backdrop-blur-sm border border-white/20 w-fit shadow-sm mr-auto ml-1 truncate max-w-[150px] md:max-w-[250px]">
                                     {{ currentCharacter.name }}
                                 </div>
-                                <div class="min-w-[4rem] min-h-[4rem] px-3 py-3 rounded-2xl bg-white border border-gray-100 shadow-card flex flex-col items-center justify-center gap-2">
-                                    <div class="typing-indicator scale-125">
-                                        <span class="bg-primary-400"></span><span class="bg-primary-400"></span><span class="bg-primary-400"></span>
+                                <div class="min-w-[150px] min-h-[4.5rem] px-6 py-4 rounded-2xl rounded-tl-none bg-white/70 backdrop-blur-md glass-stabilize border border-white/40 shadow-card flex flex-col items-center justify-center gap-2 transition-all duration-500">
+                                    <div class="typing-indicator scale-125" :class="{ 'thinking-mode': isThinking }">
+                                        <span></span><span></span><span></span>
                                     </div>
-                                    <div class="flex items-center gap-1.5 text-[11px] text-gray-400 font-mono bg-gray-50 px-2 py-0.5 rounded-full border border-gray-100 animate-pulse mt-0.5">
+                                    <div v-if="isThinking" class="text-[10px] text-purple-600 font-bold tracking-wider">已响应，等待思考...</div>
+                                    <div v-if="isReceiving" class="flex items-center gap-1.5 text-[11px] text-gray-500 font-mono bg-white/50 backdrop-blur-sm px-2.5 py-1 rounded-full border border-white/50 animate-fade-in mt-1 shadow-sm">
                                         <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
                                         <span class="whitespace-nowrap">
                                             {{ currentWaitTime }}s
@@ -879,12 +876,16 @@
                                         <!-- Perspective -->
                                         <div>
                                             <label class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 ml-1">叙事视角</label>
-                                            <div class="bg-gray-100 p-1 rounded-xl flex shadow-inner">
-                                                <button @click="togglePerson('second')" :class="['flex-1 py-2 text-sm font-bold rounded-lg transition-all duration-200 flex items-center justify-center gap-2', isSecondPerson ? 'bg-white text-primary-600 shadow-sm ring-1 ring-black/5' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200/50']">
+                                            <div class="bg-gray-100 p-1 rounded-xl flex shadow-inner relative">
+                                                <!-- Sliding Indicator -->
+                                                <div class="absolute inset-y-1 w-[calc(50%-4px)] bg-white rounded-lg shadow-sm ring-1 ring-black/5 transition-all duration-300 ease-out z-0"
+                                                     :class="isSecondPerson ? 'left-1' : 'left-[calc(50%+2px)]'"></div>
+                                                
+                                                <button @click="togglePerson('second')" :class="['relative z-10 flex-1 py-2 text-sm font-bold rounded-lg transition-colors duration-200 flex items-center justify-center gap-2', isSecondPerson ? 'text-primary-600' : 'text-gray-500 hover:text-gray-700']">
                                                     <span>第二人称</span>
                                                     <span class="text-xs font-normal opacity-80">(你)</span>
                                                 </button>
-                                                <button @click="togglePerson('third')" :class="['flex-1 py-2 text-sm font-bold rounded-lg transition-all duration-200 flex items-center justify-center gap-2', !isSecondPerson ? 'bg-white text-primary-600 shadow-sm ring-1 ring-black/5' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200/50']">
+                                                <button @click="togglePerson('third')" :class="['relative z-10 flex-1 py-2 text-sm font-bold rounded-lg transition-colors duration-200 flex items-center justify-center gap-2', !isSecondPerson ? 'text-primary-600' : 'text-gray-500 hover:text-gray-700']">
                                                     <span>第三人称</span>
                                                     <span class="text-xs font-normal opacity-80">({{ user.name || '他/她' }})</span>
                                                 </button>
@@ -981,6 +982,25 @@
                                             </div>
                                         </div>
                                     </div>
+                                </div>
+                            </div>
+
+                            <!-- Toggle API Mode -->
+                            <div class="mb-6">
+                                <h4 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4">配置模式</h4>
+                                <div class="bg-gray-100 p-1 rounded-xl flex shadow-inner relative">
+                                    <!-- Sliding Indicator -->
+                                    <div class="absolute inset-y-1 w-[calc(50%-4px)] bg-white rounded-lg shadow-sm ring-1 ring-black/5 transition-all duration-300 ease-out z-0"
+                                         :class="settings.apiMode === 'public' ? 'left-1' : 'left-[calc(50%+2px)]'"></div>
+                                         
+                                    <button @click="toggleApiMode('public')" :class="['relative z-10 flex-1 py-2 text-sm font-bold rounded-lg transition-colors duration-200 flex items-center justify-center gap-2', settings.apiMode === 'public' ? 'text-teal-600' : 'text-gray-500 hover:text-gray-700']">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"></path></svg>
+                                        公益配置
+                                    </button>
+                                    <button @click="toggleApiMode('custom')" :class="['relative z-10 flex-1 py-2 text-sm font-bold rounded-lg transition-colors duration-200 flex items-center justify-center gap-2', settings.apiMode !== 'public' ? 'text-teal-600' : 'text-gray-500 hover:text-gray-700']">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                                        自定义配置
+                                    </button>
                                 </div>
                             </div>
 
@@ -1113,6 +1133,16 @@
                                             <option value="r18">本子风</option>
                                         </select>
                                     </div>
+                                    
+                                    <!-- Image Size -->
+                                    <div class="bg-gray-50 p-4 rounded-xl border border-gray-100 hover:bg-white hover:border-gray-200 hover:shadow-sm transition-all duration-200 flex flex-col justify-center">
+                                        <label class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">生图比例</label>
+                                        <select v-model="settings.imageSize" class="w-full bg-white border border-gray-200 rounded-lg px-3 py-1.5 text-gray-700 text-sm focus:ring-2 focus:ring-teal-100 focus:border-teal-400 focus:outline-none transition-all shadow-sm">
+                                            <option value="竖图">竖图</option>
+                                            <option value="横图">横图</option>
+                                            <option value="方图">方图</option>
+                                        </select>
+                                    </div>
                                 </div>
                             </div>
 
@@ -1131,13 +1161,6 @@
                                         <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-teal-500"></div>
                                     </div>
                                     <span class="text-sm font-medium text-gray-600 group-hover:text-gray-900 transition-colors">启用流式传输 (Stream)</span>
-                                </label>
-                                <label class="flex items-center p-3 rounded-xl border-2 border-transparent hover:border-gray-100 hover:bg-gray-50 transition-all cursor-pointer group">
-                                    <div class="relative inline-flex items-center mr-2.5">
-                                        <input type="checkbox" v-model="settings.autoRestoreDefaultAPI" class="sr-only peer">
-                                        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-teal-500"></div>
-                                    </div>
-                                    <span class="text-sm font-medium text-gray-600 group-hover:text-gray-900 transition-colors">自动恢复公益配置</span>
                                 </label>
                                 <label class="flex items-center p-3 rounded-xl border-2 border-transparent hover:border-gray-100 hover:bg-gray-50 transition-all cursor-pointer group">
                                     <div class="relative inline-flex items-center mr-2.5">
@@ -1863,7 +1886,7 @@
                         </div>
                         <ul class="list-disc list-outside ml-9 space-y-1.5 text-sm text-yellow-700">
                             <li>开启后，将<strong>自动关闭流式输出</strong>（不影响生成速度）。</li>
-                            <li>此功能有概率触发模型 <strong>“截断”</strong> 现象（内容不完整），如遇到请尝试重新生成。</li>
+                            <li>此功能有概率触发模型 <strong>“空回”</strong> 现象，如遇到请尝试重新生成或更换模型。</li>
                             <li>您可以在 “世界书 -> 自动生图” 手动管理此功能。</li>
                             <li>前往 “设置” 可以切换生图风格。</li>
                         </ul>

@@ -198,6 +198,7 @@
 
             </div>
         </div>
+        <!-- Settings button restored -->
         <div class="flex-none">
             <button class="btn btn-ghost btn-circle btn-md h-11 w-11" @click="showSettings = true">
                 <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
@@ -219,55 +220,8 @@
                 API 设置
             </h3>
             <div class="flex flex-col gap-4">
+                <!-- 仅保留风格和流式输出设定 -->
                 <div class="form-control w-full">
-                    <label class="label"><span class="label-text font-medium">API 地址</span></label>
-                    <input type="text" v-model="api.url" class="input input-bordered w-full bg-base-200/50" placeholder="https://..." />
-                </div>
-                <div class="form-control w-full">
-                    <label class="label"><span class="label-text font-medium">API Key</span></label>
-                    <input type="password" v-model="api.key" class="input input-bordered w-full bg-base-200/50" placeholder="sk-..." />
-                </div>
-                <!-- 自定义模型配置区 -->
-                <div class="form-control w-full mt-2">
-                    <div class="flex items-center justify-between pb-1">
-                        <label class="label p-0"><span class="label-text font-medium text-base-content">自定义快捷模型</span></label>
-                        <button class="btn btn-xs btn-outline btn-primary gap-1" @click="fetchModels" :disabled="isFetchingModels">
-                            <span v-if="isFetchingModels" class="loading loading-spinner loading-xs"></span>
-                            <svg v-else xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 21v-5h5"/></svg>
-                            刷新模型列表
-                        </button>
-                    </div>
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-                        <button class="btn btn-outline h-14 border-base-300 hover:border-secondary hover:bg-secondary/10 hover:text-secondary justify-between group overflow-hidden rounded-2xl" @click="openModelSelector('quality')">
-                            <div class="flex flex-col items-start min-w-0 pr-2">
-                                <span class="text-[10px] uppercase font-bold opacity-60 mb-0.5 group-hover:opacity-100 flex items-center gap-1.5"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L14.4 9.6L22 12L14.4 14.4L12 22L9.6 14.4L2 12L9.6 9.6L12 2Z"/><path d="M20 2L20.8 4.4L23.2 5.2L20.8 6L20 8.4L19.2 6L16.8 5.2L19.2 4.4L20 2Z"/></svg>质量模型</span>
-                                <span class="text-xs truncate w-full text-left font-mono leading-tight">{{ options.customModels.quality || 'gemini-3.1-pro-preview-high' }}</span>
-                            </div>
-                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="shrink-0 opacity-40 group-hover:opacity-100"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
-                        </button>
-
-                        <button class="btn btn-outline h-14 border-base-300 hover:border-accent hover:bg-accent/10 hover:text-accent justify-between group overflow-hidden rounded-2xl" @click="openModelSelector('balanced')">
-                            <div class="flex flex-col items-start min-w-0 pr-2">
-                                <span class="text-[10px] uppercase font-bold opacity-60 mb-0.5 group-hover:opacity-100 flex items-center gap-1.5"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3"/></svg>均衡模型</span>
-                                <span class="text-xs truncate w-full text-left font-mono leading-tight">{{ options.customModels.balanced || 'gemini-3-flash-preview-high' }}</span>
-                            </div>
-                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="shrink-0 opacity-40 group-hover:opacity-100"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
-                        </button>
-                        
-                        <button class="btn btn-outline h-14 border-base-300 hover:border-primary hover:bg-primary/10 hover:text-primary justify-between group overflow-hidden rounded-2xl" @click="openModelSelector('fast')">
-                            <div class="flex flex-col items-start min-w-0 pr-2">
-                                <span class="text-[10px] uppercase font-bold opacity-60 mb-0.5 group-hover:opacity-100 flex items-center gap-1.5"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>快速模型</span>
-                                <span class="text-xs truncate w-full text-left font-mono leading-tight">{{ options.customModels.fast || 'gemini-3.1-flash-lite-preview-thinking' }}</span>
-                            </div>
-                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="shrink-0 opacity-40 group-hover:opacity-100"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
-                        </button>
-                    </div>
-                </div>
-                <div class="form-control w-full">
-                    <label class="label"><span class="label-text font-medium">生图密钥</span></label>
-                    <input type="password" v-model="options.imageGenKey" class="input input-bordered w-full bg-base-200/50" placeholder="STD-..." />
-                </div>
-                <div class="form-control w-full mt-2">
                     <label class="label"><span class="label-text font-medium">头像生成风格</span></label>
                     <div class="grid grid-cols-2 gap-3">
                         <div
@@ -288,16 +242,7 @@
                         </div>
                     </div>
                 </div>
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
-                    <div class="form-control w-full bg-base-200/40 rounded-xl border border-base-300/60 p-3 hover:border-primary/40 transition-colors">
-                        <label class="label cursor-pointer justify-between p-0">
-                            <span class="label-text font-medium flex items-center gap-2">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-base-content/70"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
-                                自动恢复公益配置
-                            </span>
-                            <input type="checkbox" v-model="options.resetOnLoad" class="toggle toggle-primary toggle-sm" />
-                        </label>
-                    </div>
+                <div class="grid grid-cols-1 gap-3 mt-2">
                     <div class="form-control w-full bg-base-200/40 rounded-xl border border-base-300/60 p-3 hover:border-primary/40 transition-colors">
                         <label class="label cursor-pointer justify-between p-0">
                             <span class="label-text font-medium flex items-center gap-2">
@@ -311,44 +256,11 @@
             </div>
             <div class="modal-action">
                 <button class="btn btn-ghost" @click="showSettings = false">取消</button>
-                <button class="btn btn-primary text-white px-8" @click="showSettings = false">保存</button>
+                <button class="btn btn-primary text-white px-8" @click="showSettings = false">确认</button>
             </div>
         </div>
         <form method="dialog" class="modal-backdrop">
             <button @click="showSettings = false">close</button>
-        </form>
-    </dialog>
-
-    <!-- Model Selector Modal -->
-    <dialog class="modal modal-bottom sm:modal-middle" :class="{ 'modal-open': showModelSelector }">
-        <div class="modal-box bg-base-100 max-h-[80vh] flex flex-col">
-            <h3 class="font-bold text-lg mb-4 flex items-center justify-between">
-                <span class="flex items-center gap-2">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-primary"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
-                    可用模型 ({{ targetModelSetting === 'quality' ? '质量' : targetModelSetting === 'balanced' ? '均衡' : '快速' }})
-                </span>
-            </h3>
-            
-            <div class="flex-1 overflow-y-auto pr-2 custom-scrollbar">
-                <div v-for="(models, category) in availableModels" :key="category" class="mb-6" v-show="models && models.length > 0">
-                    <h4 class="text-xs font-bold text-base-content/50 uppercase tracking-wider mb-3 px-1">{{ category }}</h4>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
-                        <button v-for="model in models" :key="model" 
-                                class="btn justify-start font-mono text-xs border border-base-200 hover:border-primary hover:bg-primary/5 h-12 px-3 break-all text-left rounded-xl"
-                                :class="{ 'border-primary bg-primary/10 text-primary': options.customModels[targetModelSetting] === model }"
-                                @click="selectModel(model)">
-                            {{ model }}
-                        </button>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="modal-action mt-4 pt-4 border-t border-base-200">
-                <button class="btn btn-ghost" @click="showModelSelector = false">关闭</button>
-            </div>
-        </div>
-        <form method="dialog" class="modal-backdrop">
-            <button @click="showModelSelector = false">close</button>
         </form>
     </dialog>
 
@@ -1081,11 +993,6 @@
                     updateGlider();
                     window.addEventListener('resize', updateGlider);
                 });
-                
-                // 尝试静默在后台加载一次列表
-                if (api.url && api.key) {
-                    fetchModels(true);
-                }
             });
 
             // Persist active index
@@ -1100,72 +1007,53 @@
             // Active Model Type
             const activeModelType = ref('balanced'); // 'quality', 'balanced', 'fast'
 
-            const showModelSelector = ref(false);
-            const targetModelSetting = ref('quality');
-            const customModelInput = ref('');
-            
-            const availableModels = reactive({
-                '获取到的模型': []
-            });
-
-            const isFetchingModels = ref(false);
-
-            const fetchModels = async (silent = false) => {
-                if (!api.url || !api.key) {
-                    if (!silent) showToast('请先填写API地址和Key', 'error');
-                    return;
-                }
-                isFetchingModels.value = true;
-                try {
-                    let baseUrl = api.url.replace(/\/chat\/completions$/, '');
-                    if (!baseUrl.endsWith('/v1') && !baseUrl.includes('/v1/')) {
-                        if (!baseUrl.endsWith('/')) baseUrl += '/';
-                        baseUrl += 'v1';
-                    }
-                    
-                    const response = await fetch(`${baseUrl}/models`, {
-                        headers: {
-                            'Authorization': `Bearer ${api.key}`,
-                            'Content-Type': 'application/json'
-                        }
-                    });
-                    if (!response.ok) throw new Error('网络请求失败');
-                    const data = await response.json();
-                    if (data && data.data && Array.isArray(data.data)) {
-                        availableModels['获取到的模型'] = data.data.map(m => m.id);
-                        if (!silent) showToast('模型列表获取成功', 'success');
-                    } else {
-                        throw new Error('无效的响应格式');
-                    }
-                } catch (err) {
-                    console.error('Fetch Models Error:', err);
-                    if (!silent) showToast('获取模型列表失败: ' + err.message, 'error');
-                } finally {
-                    isFetchingModels.value = false;
-                }
-            };
-
-            const openModelSelector = (type) => {
-                targetModelSetting.value = type;
-                customModelInput.value = options.customModels[type] || '';
-                showModelSelector.value = true;
-            };
-
-            const selectModel = (model) => {
-                if (!model) return;
-                options.customModels[targetModelSetting.value] = model;
-                // Update current active api.model if it corresponds to the changed type
-                if (activeModelType.value === targetModelSetting.value) {
-                    api.model = model;
-                }
-                showModelSelector.value = false;
-            };
-
             const setActiveModel = (type) => {
                 activeModelType.value = type;
                 api.model = options.customModels[type];
                 api.stream = true;
+                // Force inform sync if needed (though watch handles it)
             };
+
+            // Main Settings Sync Listener
+            const setupSyncListener = () => {
+                window.addEventListener('message', (event) => {
+                    const { type, settings: mainSettings } = event.data;
+                    if (type === 'SYNC_SETTINGS' && mainSettings) {
+                        console.log('%c[Settings Sync Received]', 'color: #10b981; font-weight: bold;', mainSettings);
+                        
+                        // Sync API
+                        if (mainSettings.apiUrl) api.url = mainSettings.apiUrl;
+                        if (mainSettings.apiKey) api.key = mainSettings.apiKey;
+                        
+                        // Sync Image Gen
+                        // Always sync key even if empty to ensure reset
+                        options.imageGenKey = mainSettings.imageGenKey || '';
+                        
+                        // Map imageStyle to avatarStyle (vertical -> default, r18 -> hentai)
+                        if (mainSettings.imageStyle === 'r18') {
+                            options.avatarStyle = 'hentai';
+                        } else if (mainSettings.imageStyle === 'vertical') {
+                            options.avatarStyle = 'default';
+                        }
+                        
+                        // Sync Models
+                        if (mainSettings.qualityModel) options.customModels.quality = mainSettings.qualityModel;
+                        if (mainSettings.balancedModel) options.customModels.balanced = mainSettings.balancedModel;
+                        if (mainSettings.fastModel) options.customModels.fast = mainSettings.fastModel;
+                        
+                        // Update current active api.model
+                        api.model = options.customModels[activeModelType.value] || api.model;
+                    }
+                });
+
+                // Inform parent that workshop is ready to receive sync
+                if (window.parent && window.parent !== window) {
+                    window.parent.postMessage({ type: 'WORKSHOP_READY' }, '*');
+                }
+            };
+            
+            // Call sync setup
+            setupSyncListener();
 
             // Options with persistence
             const savedOptions = localStorage.getItem('ai_chargen_options');
@@ -1173,7 +1061,6 @@
                 generateExtra: true, // Default to true as requested
                 avatarStyle: 'default',
                 imageGenKey: '',
-                resetOnLoad: true, // 新增默认选项：重置加载
                 customModels: {
                     quality: 'gemini-3.1-pro-preview-high',
                     balanced: 'gemini-3-flash-preview-high',
@@ -1189,14 +1076,9 @@
             if (!options.customModels.quality) options.customModels.quality = defaultOptions.customModels.quality;
             if (!options.customModels.balanced) options.customModels.balanced = defaultOptions.customModels.balanced;
             if (!options.customModels.fast) options.customModels.fast = defaultOptions.customModels.fast;
-            if (typeof options.resetOnLoad === 'undefined') options.resetOnLoad = true;
+            if (typeof options.resetOnLoad === 'undefined') options.resetOnLoad = false;
             
-            // Effect check for Reset On Load
-            if (options.resetOnLoad) {
-                // If reset is enabled, we overwrite current options with defaults.
-                options.customModels = { ...defaultOptions.customModels };
-                options.avatarStyle = defaultOptions.avatarStyle;
-            }
+
 
             // Ensure generateExtra is always true if loaded from old save where it might be false
             options.generateExtra = true;
@@ -1217,11 +1099,7 @@
             const savedApi = localStorage.getItem('ai_chargen_api');
             const parsedSavedApi = savedApi ? JSON.parse(savedApi) : {};
             
-            const api = reactive(
-                options.resetOnLoad 
-                ? { ...defaultApi } 
-                : { ...defaultApi, ...parsedSavedApi }
-            );
+            const api = reactive({ ...defaultApi, ...parsedSavedApi });
             
             // Make sure activeModelType mapping updates correctly
             api.model = options.customModels[activeModelType.value] || api.model;
@@ -1762,6 +1640,7 @@
                     // Or stream and buffer. Stream gives better feedback.
                     // Let's use the existing stream logic structure but adapted.
                     
+                    console.log('%c[Workshop AI Request]', 'color: #3b82f6; font-weight: bold;', { url: api.url, model: api.model });
                     const response = await fetch(`${api.url}/chat/completions`, {
                         method: 'POST',
                         headers: {
@@ -1957,33 +1836,47 @@
                             break;
                         }
                         
-                        // 2. 尝试宽松匹配 (忽略空行和空白字符的差异)
-                        // 将搜索文本按空白字符分割，重新构建正则，允许任意空白间隔
-                        const parts = findText.split(/\s+/).filter(p => p);
-                        if (parts.length > 0) {
-                            // 构建正则：part1[\s\r\n]*part2[\s\r\n]*part3...
-                            // 修改：使用 * 而不是 +，因为 AI 可能会丢失某些空白
-                            // 同时，为了防止匹配到完全不相关的内容，我们还是建议保留 +，或者...
-                            // 更好的策略：
-                            // 如果是Markdown，**加粗** 可能会被解析成文本。
-                            // 让我们尝试更鲁棒的正则：忽略所有空白字符进行比对
+                        // 2. 尝试基于纯文本的模糊匹配 (Fuzzy Match，忽略所有空格和标点)
+                        // This handles AI adding/removing punctuation, markdown tags, or newlines
+                        const getPureTextIndices = (str) => {
+                            const pure = [];
+                            const indices = [];
+                            for (let i = 0; i < str.length; i++) {
+                                const char = str[i];
+                                // Check if character is alphanumeric or CJK (excluding whitespace and common punctuations)
+                                // This regex is a broad catch for "meaningful" characters
+                                if (/[^\s!"#$%&'()*+,\-.\/:;<=>?@[\\\]^_`{|}~，。！？【】（）、；：“”‘’《》…—]/i.test(char)) {
+                                    pure.push(char.toLowerCase());
+                                    indices.push(i);
+                                }
+                            }
+                            return { pureStr: pure.join(''), indices };
+                        };
+
+                        const { pureStr: pureFind } = getPureTextIndices(findText);
+                        const { pureStr: pureContent, indices: contentIndices } = getPureTextIndices(content);
+
+                        if (pureFind.length > 5 && pureContent.includes(pureFind)) {
+                            // Find where it matches in the pure string
+                            const startIndexInPure = pureContent.indexOf(pureFind);
+                            const endIndexInPure = startIndexInPure + pureFind.length - 1;
+
+                            // Map back to original string indices
+                            const actualStartIndex = contentIndices[startIndexInPure];
+                            const actualEndIndex = contentIndices[endIndexInPure];
+
+                            // Extract the actual text from the original content
+                            actualFindText = content.substring(actualStartIndex, actualEndIndex + 1);
+                            foundField = key;
+                            break;
                             
-                            // 方案 A: 归一化后比对
-                            const normalize = (str) => str.replace(/\s+/g, '').replace(/\r/g, '').replace(/\n/g, '');
-                            const normalizedFind = normalize(findText);
-                            const normalizedContent = normalize(content);
-                            
-                            if (normalizedContent.includes(normalizedFind) && normalizedFind.length > 10) {
-                                // 找到了！现在需要反向定位原文中的 actualFindText
-                                // 这是一个难点。我们可以尝试用 fuzzy search 或者还是回退到正则。
-                                // 让我们改进正则构建逻辑
-                                
-                                // 转义特殊字符，并将连续空白替换为 \s* (允许空白丢失或增加，增强容错)
-                                // 另外，某些Markdown编辑器可能会把 ** text ** 处理成 **text**，所以我们允许 * 号周围有空白变化?
-                                // 暂时只处理空白字符的容错。
+                        } else {
+                            // Fallback: Extremely Loose RegExp Match (Old Approach)
+                            const parts = findText.split(/\s+/).filter(p => p);
+                            if (parts.length > 0) {
                                 const patternString = parts.map(escapeRegExp).join('[\\s\\r\\n]*');
                                 try {
-                                    const looseRegex = new RegExp(patternString);
+                                    const looseRegex = new RegExp(patternString, 'i'); // Add ignore case
                                     const looseMatch = looseRegex.exec(content);
                                     if (looseMatch) {
                                         foundField = key;
@@ -2201,6 +2094,7 @@
             // Avatar Helpers
             const generateAvatarUrl = (tag) => {
                 let url;
+                console.log('%c[Workshop Image Request]', 'color: #ec4899; font-weight: bold;', { style: options.avatarStyle, tag: tag });
                 const tokenParam = options.imageGenKey ? options.imageGenKey : 'STD-QMqT4lxiWqWMVneiePiE';
                 if (options.avatarStyle === 'hentai') {
                     url = `https://std.loliyc.com/generate?tag=${encodeURIComponent(tag)}&token=${tokenParam}&model=nai-diffusion-4-5-full&artist={{artist:yd_(orange maru)}}, nixeu, {ikuchan kaoru}, cutesexyrobutts, redrop, [[artist:kojima saya]], lam_(ramdayo), oekakizuki, qiandaiyiyu, &size=竖图&steps=40&scale=6&cfg=0&sampler=k_dpmpp_2m_sde&nocache=0&noise_schedule=karras`;
@@ -2390,7 +2284,11 @@ ${options.generateExtra ? `### World Info
                     }
 
                     try {
-                        const response = await fetch(`${api.url}/chat/completions`, {
+                        const baseUrl = api.url.replace(/\/+$/, '');
+                        const apiUrl = baseUrl.endsWith('/v1') ? baseUrl : `${baseUrl}/v1`;
+                        
+                        console.log('%c[Workshop AI Request]', 'color: #3b82f6; font-weight: bold;', { url: apiUrl, model: api.model });
+                        const response = await fetch(`${apiUrl}/chat/completions`, {
                             method: 'POST',
                             headers: {
                                 'Content-Type': 'application/json',
@@ -2408,7 +2306,16 @@ ${options.generateExtra ? `### World Info
                             signal: abortController.value.signal
                         });
 
-                        if (!response.ok) throw new Error('API Request Failed');
+                        if (!response.ok) {
+                            let errorDetail = '';
+                            try {
+                                const errorData = await response.json();
+                                errorDetail = errorData.error?.message || JSON.stringify(errorData);
+                            } catch (e) {
+                                errorDetail = await response.text();
+                            }
+                            throw new Error(`API 请求失败 (状态码 ${response.status}): ${errorDetail}`);
+                        }
 
                         if (api.stream) {
                             const reader = response.body.getReader();
@@ -2477,6 +2384,12 @@ ${options.generateExtra ? `### World Info
                         if (currentCharacter.value.first_mes) {
                             currentCharacter.value.first_mes = currentCharacter.value.first_mes.replace(/\*\*/g, '');
                         }
+                        
+                        // 提示密钥未配置
+                        if (!options.imageGenKey && currentCharacter.value.avatar_prompt) {
+                            showToast('生图密钥未配置，已跳过图片生成', 'info');
+                        }
+
                         showToast('角色卡生成完成！', 'success');
                     } catch (error) {
                         throw error;
@@ -2487,7 +2400,9 @@ ${options.generateExtra ? `### World Info
                     await performGeneration();
                 } catch (error) {
                     if (error.name !== 'AbortError') {
-                        alert('生成失败: ' + error.message);
+                        // 使用更友好的方式展示详细错误
+                        console.error('Generation Error Detail:', error);
+                        alert(`生成失败\n\n原因: ${error.message}\n\n请检查 API 地址、Key 或模型配置是否正确。`);
                         generationStatus.value = '生成失败';
                     }
                 } finally {
@@ -2682,9 +2597,14 @@ ${options.generateExtra ? `### World Info
                                 
                                 // 只有当 Prompt 发生实质变化时才重新生成 URL，防止已缓存的 Base64 被重置为 URL 导致循环加载
                                 if (currentCharacter.value.avatar_prompt !== tag) {
-                                    let url = generateAvatarUrl(tag);
-                                    currentCharacter.value.avatar = url;
                                     currentCharacter.value.avatar_prompt = tag;
+                                    // 仅在配置了密钥时才生成图片 URL 并赋值，否则保持为空或旧数据，直到最后提示用户
+                                    if (options.imageGenKey) {
+                                        let url = generateAvatarUrl(tag);
+                                        currentCharacter.value.avatar = url;
+                                    } else {
+                                        console.log('Image Generation Key is empty, skipping image request.');
+                                    }
                                 }
                             }
                         } else {
@@ -2963,14 +2883,6 @@ ${options.generateExtra ? `### World Info
                 options,
                 activeModelType,
                 setActiveModel,
-                showModelSelector,
-                targetModelSetting,
-                customModelInput,
-                availableModels,
-                isFetchingModels,
-                fetchModels,
-                openModelSelector,
-                selectModel,
                 characters,
                 currentCharacterIndex,
                 currentCharacter,

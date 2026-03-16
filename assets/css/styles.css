@@ -149,25 +149,62 @@ html {
             }
         }
         
+        /* Glassmorphism Stabilization */
+        .glass-stabilize {
+            will-change: backdrop-filter, transform, opacity;
+            transform: translateZ(0);
+            backface-visibility: hidden;
+            perspective: 1000;
+            -webkit-font-smoothing: subpixel-antialiased;
+        }
+
+        /* Elegant Message Entrance Animation */
+        .animate-message-in {
+            animation: message-in-elegant 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+        }
+
+        @keyframes message-in-elegant {
+            0% {
+                opacity: 0;
+                transform: translateY(20px) scale(0.95);
+            }
+            100% {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+        
         .typing-indicator {
             display: flex;
             align-items: center;
-            gap: 6px;
+            gap: 8px;
+            padding: 4px 8px;
         }
         .typing-indicator span {
             display: block;
             width: 10px;
             height: 10px;
-            /* background-color set via utility classes in HTML */
             border-radius: 50%;
+            background: linear-gradient(135deg, #60a5fa, #3b82f6);
+            opacity: 0.6;
             animation: typing 1.4s infinite ease-in-out both;
+            box-shadow: 0 0 8px rgba(59, 130, 246, 0.2);
+            transition: all 0.5s ease;
         }
+        
+        .typing-indicator.thinking-mode span {
+            background: linear-gradient(135deg, #a855f7, #7c3aed);
+            box-shadow: 0 0 10px rgba(168, 85, 247, 0.3);
+            animation-duration: 2s;
+        }
+
         .typing-indicator span:nth-child(1) { animation-delay: -0.32s; }
         .typing-indicator span:nth-child(2) { animation-delay: -0.16s; }
+        .typing-indicator span:nth-child(3) { animation-delay: 0s; }
         
         @keyframes typing {
-            0%, 80%, 100% { transform: scale(0); opacity: 0.5; }
-            40% { transform: scale(1); opacity: 1; }
+            0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+            40% { transform: scale(1.1); opacity: 1; filter: brightness(1.1); }
         }
 
         /* Toast Transitions */
