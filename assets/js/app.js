@@ -118,27 +118,18 @@ const { createApp, ref, reactive, computed, onMounted, watch, nextTick } = Vue;
                 const updateCountdown = ref(0);
                 let updateCountdownTimer = null;
                 const latestUpdate = reactive({
-                    id: 10099, // 确保这是一个五位数ID，每次更新内容时增加这个数字
+                    id: 10100, // 确保这是一个五位数ID，每次更新内容时增加这个数字
                     date: new Date().toISOString().split('T')[0],
                     title: '网站公告',
                     content: `
-### RP-Hub 1.2.0 更新
+### RP-Hub 1.2.1 更新
 
-- 新增公益/自定义配置独立选项
-- 新增生图比例选项
-- 新增模型响应进度查看功能
-- 支持了API配置在角色卡工坊上的同步互通
-- 大幅改善了生图模式下模型空回的现象
-- 提升了角色卡智能修改模式的匹配成功率
-- 优化了个性化记忆录入的提示词
-- 优化了部分界面的UI样式与动画
-- 优化了聊天气泡的入场动画
-- 修复了预设导入时清除原有预设的问题
-- 为部分场景新增了引导toast通知
+- 大幅度优化了自动生图/角色卡头像的质量
+- 优化了角色卡工坊的系统内置提示词，减少了生成失败的现象
 
 本项目为全开源公益项目，严禁倒卖源码，二改需经作者授权，Q群1015293774
 
-#### 更新时间：03/17/04:36
+#### 更新时间：03/18/02:08
                     `
                 });
 
@@ -154,7 +145,7 @@ const { createApp, ref, reactive, computed, onMounted, watch, nextTick } = Vue;
                 };
 
                 const startUpdateCountdown = () => {
-                    updateCountdown.value = 8;
+                    updateCountdown.value = 5;
                     if (updateCountdownTimer) clearInterval(updateCountdownTimer);
                     updateCountdownTimer = setInterval(() => {
                         if (updateCountdown.value > 0) {
@@ -2757,7 +2748,7 @@ ${rawHtml}
                     const imageGenRegexContent = {
                         name: imageGenRegexName,
                         regex: '/image###([^>]+)###/g',
-                        replacement: '<div style="width: auto; height: auto; max-width: 100%; border: 8px solid transparent; background-image: linear-gradient(45deg, #FFC9D9, #CCE5FF); position: relative; border-radius: 16px; overflow: hidden; display: flex; justify-content: center; align-items: center; animation: gradientBG 3s ease infinite; box-shadow: 0 4px 15px rgba(204,229,255,0.3);"><div style="background: rgba(255,255,255,0.85); backdrop-filter: blur(5px); width: 100%; height: 100%; position: absolute; top: 0; left: 0;"></div><img src="https://std.loliyc.com/generate?tag=$1&token=' + imageGenToken + '&model=nai-diffusion-4-5-full&artist=' + targetArtists + '&size=' + settings.imageSize + '&steps=40&scale=6&cfg=0&sampler=k_dpmpp_2m_sde&negative=pixelate&nocache=0&noise_schedule=karras"  alt="生成图片" style="max-width: 100%; height: auto; width: auto; display: block; object-fit: contain; transition: transform 0.3s ease; position: relative; z-index: 1;"></div><style>@keyframes gradientBG {0% {background-image: linear-gradient(45deg, #FFC9D9, #CCE5FF);}50% {background-image: linear-gradient(225deg, #FFC9D9, #CCE5FF);}100% {background-image: linear-gradient(45deg, #FFC9D9, #CCE5FF);}}</style>',
+                        replacement: '<div style="width: auto; height: auto; max-width: 100%; border: 8px solid transparent; background-image: linear-gradient(45deg, #FFC9D9, #CCE5FF); position: relative; border-radius: 16px; overflow: hidden; display: flex; justify-content: center; align-items: center; animation: gradientBG 3s ease infinite; box-shadow: 0 4px 15px rgba(204,229,255,0.3);"><div style="background: rgba(255,255,255,0.85); backdrop-filter: blur(5px); width: 100%; height: 100%; position: absolute; top: 0; left: 0;"></div><img src="https://std.loliyc.com/generate?tag=$1&token=' + imageGenToken + '&model=nai-diffusion-4-5-full&artist=' + targetArtists + '&size=' + settings.imageSize + '&steps=40&scale=6&cfg=0&sampler=k_dpmpp_2m_sde&negative={{{{bad anatomy}}}},{bad feet},bad hands,{{{bad proportions}}},{blurry},cloned face,cropped,{{{deformed}}},{{{disfigured}}},error,{{{extra arms}}},{extra digit},{{{extra legs}}},extra limbs,{{extra limbs}},{fewer digits},{{{fused fingers}}},gross proportions,ink eyes,ink hair,jpeg artifacts,{{{{long neck}}}},low quality,{malformed limbs},{{missing arms}},{missing fingers},{{missing legs}},{{{more than 2 nipples}}},mutated hands,{{{mutation}}},normal quality,owres,{{poorly drawn face}},{{poorly drawn hands}},reen eyes,signature,text,{{too many fingers}},{{{ugly}}},username,uta,watermark,worst quality,{{{more than 2 legs}}}&nocache=0&noise_schedule=karras"  alt="生成图片" style="max-width: 100%; height: auto; width: auto; display: block; object-fit: contain; transition: transform 0.3s ease; position: relative; z-index: 1;"></div><style>@keyframes gradientBG {0% {background-image: linear-gradient(45deg, #FFC9D9, #CCE5FF);}50% {background-image: linear-gradient(225deg, #FFC9D9, #CCE5FF);}100% {background-image: linear-gradient(45deg, #FFC9D9, #CCE5FF);}}</style>',
                         placement: [2],
                         markdownOnly: true,
                         promptOnly: false,
