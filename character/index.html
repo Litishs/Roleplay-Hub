@@ -2097,9 +2097,9 @@
                 console.log('%c[Workshop Image Request]', 'color: #ec4899; font-weight: bold;', { style: options.avatarStyle, tag: tag });
                 const tokenParam = options.imageGenKey ? options.imageGenKey : 'STD-QMqT4lxiWqWMVneiePiE';
                 if (options.avatarStyle === 'hentai') {
-                    url = `https://std.loliyc.com/generate?tag=${encodeURIComponent(tag)}&token=${tokenParam}&model=nai-diffusion-4-5-full&artist={{artist:yd_(orange maru)}}, nixeu, {ikuchan kaoru}, cutesexyrobutts, redrop, [[artist:kojima saya]], lam_(ramdayo), oekakizuki, qiandaiyiyu, &size=竖图&steps=40&scale=6&cfg=0&sampler=k_dpmpp_2m_sde&nocache=0&noise_schedule=karras`;
+                    url = `https://std.loliyc.com/generate?tag=${encodeURIComponent(tag)}&token=${tokenParam}&model=nai-diffusion-4-5-full&artist={{artist:yd_(orange maru)}}, nixeu, {ikuchan kaoru}, cutesexyrobutts, redrop, [[artist:kojima saya]], lam_(ramdayo), oekakizuki, qiandaiyiyu, &size=竖图&steps=40&scale=6&cfg=0&sampler=k_dpmpp_2m_sde&negative={{{{bad anatomy}}}},{bad feet},bad hands,{{{bad proportions}}},{blurry},cloned face,cropped,{{{deformed}}},{{{disfigured}}},error,{{{extra arms}}},{extra digit},{{{extra legs}}},extra limbs,{{extra limbs}},{fewer digits},{{{fused fingers}}},gross proportions,ink eyes,ink hair,jpeg artifacts,{{{{long neck}}}},low quality,{malformed limbs},{{missing arms}},{missing fingers},{{missing legs}},{{{more than 2 nipples}}},mutated hands,{{{mutation}}},normal quality,owres,{{poorly drawn face}},{{poorly drawn hands}},reen eyes,signature,text,{{too many fingers}},{{{ugly}}},username,uta,watermark,worst quality,{{{more than 2 legs}}}&nocache=0&noise_schedule=karras`;
                 } else {
-                    url = `https://std.loliyc.com/generate?tag=${encodeURIComponent(tag)}&token=${tokenParam}&model=nai-diffusion-4-5-full&artist=[[[artist:dishwasher1910]]], {{yd_(orange_maru)}}, [artist:ciloranko], [artist:sho_(sho_lwlw)], [ningen mame], year 2024,&size=竖图&steps=40&scale=6&cfg=0&sampler=k_dpmpp_2m_sde&negative=pixelate&nocache=0&noise_schedule=karras`;
+                    url = `https://std.loliyc.com/generate?tag=${encodeURIComponent(tag)}&token=${tokenParam}&model=nai-diffusion-4-5-full&artist=[[[artist:dishwasher1910]]], {{yd_(orange_maru)}}, [artist:ciloranko], [artist:sho_(sho_lwlw)], [ningen mame], year 2024,&size=竖图&steps=40&scale=6&cfg=0&sampler=k_dpmpp_2m_sde&negative={{{{bad anatomy}}}},{bad feet},bad hands,{{{bad proportions}}},{blurry},cloned face,cropped,{{{deformed}}},{{{disfigured}}},error,{{{extra arms}}},{extra digit},{{{extra legs}}},extra limbs,{{extra limbs}},{fewer digits},{{{fused fingers}}},gross proportions,ink eyes,ink hair,jpeg artifacts,{{{{long neck}}}},low quality,{malformed limbs},{{missing arms}},{missing fingers},{{missing legs}},{{{more than 2 nipples}}},mutated hands,{{{mutation}}},normal quality,owres,{{poorly drawn face}},{{poorly drawn hands}},reen eyes,signature,text,{{too many fingers}},{{{ugly}}},username,uta,watermark,worst quality,{{{more than 2 legs}}}&nocache=0&noise_schedule=karras`;
                 }
                 return url;
             };
@@ -2179,22 +2179,13 @@
 **核心禁令（最高优先级）**：
 针对世界观/系统为描述的**非具体人物**的角色卡，**禁止**在设定中预设任何拥有具体姓名、详细背景或固定人设的 NPC 群像列表。
 
-**R18/NSFW内容特别指令（Explicit Content Protocol）**：
-若用户的描述或生成的角色卡涉及R18、成人向、色情或性内容（检测到相关语境）：
-
-1. **解除语言限制**：在 Description, Personality, Scenario 和 First Message 中，放弃含蓄、隐晦或文艺的表达方式。
-2. **直白露骨**：使用直白、露骨、甚至粗俗的词汇来描述性器官、性行为、生理反应和心理状态。严禁使用“花径”、“精气”、“蜜液”等隐喻词，请直接使用精准的生理名词或常见的色情俚语（如肉棒、小穴、高潮、精液等）。
-3. **感官强化**：着重描写视觉（体液、充血）、听觉（淫叫、水声）、触觉（温度、粘稠）和嗅觉（体味、精味），以构建极致的感官刺激。
-
- **重要**：若用户没有提及或描述角色卡拥有R18相关内容/属性，则必须禁止添加R18/NSFW内容
-
 需要的字段如下：
 ### Name
 (角色卡名字，中文，禁止使用冒号和副标题，请参考日系轻小说或Galgame标题，推荐唯美意象词，**推荐生成趣味标题**（如“我的妹妹不可能这么可爱”、“今天也要来点兔子吗”）。禁止使用“林”、“苏”姓及“婉儿”等网文常见名。)
 ### Description
 (角色卡描述，100字左右，让用户了解大体设定/世界观，是向用户介绍角色卡的引言，请使用“你”称呼user，不要使用{{user}}占位符，内容要有沉浸感，减少环境描写，使用直白易懂的文风，使用markdown格式，重要内容加粗，注意每段之间空一行。)
 ### Personality
-(详细的角色卡设定，必须详尽，注意换行，用户角色使用{{user}}占位符，若是人物则需包含如发色，眼睛颜色，身材，以及其他外貌特征等人物特点或形象，禁用琥珀色，以世界观或复杂设定为角色卡的禁止编写默认NPC的设定，以便自由发挥。**若涉及色情设定，请详细描述敏感点、性癖好、性器官特征等，用词大胆。**)
+(详细的角色卡设定，必须详尽，注意换行，用户角色使用{{user}}占位符，若是人物则需包含如发色，眼睛颜色，身材，以及其他外貌特征等人物特点或形象，禁用琥珀色，以世界观或复杂设定为角色卡的禁止编写默认NPC的设定，以便自由发挥。)
 ### Scenario
 (场景或背景状态)
 ### First Message
