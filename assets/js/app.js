@@ -419,6 +419,21 @@ const { createApp, ref, reactive, computed, onMounted, watch, nextTick } = Vue;
                     } else if (newView === 'chat') {
                         // When switching back to chat, scroll to bottom
                         scrollToBottom();
+                    } else if (newView === 'presets') {
+                        nextTick(() => {
+                            const el = document.getElementById('presets-list');
+                            if (el && typeof Sortable !== 'undefined') {
+                                new Sortable(el, {
+                                    handle: '.cursor-move',
+                                    animation: 150,
+                                    onEnd: function (evt) {
+                                        const item = presets.value.splice(evt.oldIndex, 1)[0];
+                                        presets.value.splice(evt.newIndex, 0, item);
+                                        saveData();
+                                    }
+                                });
+                            }
+                        });
                     }
                 });
 
@@ -3740,27 +3755,8 @@ ${rawHtml}
                     }
                 };
 
-                // Preset Drag & Drop
-                const draggedPresetIndex = ref(null);
-
-                const handleDragStart = (index, event) => {
-                    draggedPresetIndex.value = index;
-                    event.dataTransfer.effectAllowed = 'move';
-                    event.dataTransfer.dropEffect = 'move';
-                };
-
-                const handleDrop = (index) => {
-                    if (draggedPresetIndex.value === null || draggedPresetIndex.value === index) return;
-                    
-                    const item = presets.value.splice(draggedPresetIndex.value, 1)[0];
-                    presets.value.splice(index, 0, item);
-                    
-                    draggedPresetIndex.value = null;
-                };
-
-                const handleDragEnd = () => {
-                    draggedPresetIndex.value = null;
-                };
+                // Preset Drag & Drop via SortableJS
+                // Handled in watch(currentView)
 
                 // Expose triggerSlash for character cards (Defined early)
                 window.triggerSlash = async (text) => {
@@ -4238,7 +4234,7 @@ ${rawHtml}
                     getCharacterWICount, getCharacterRegexCount,
                     handleAvatarUpload, importCharacter, exportCharacter,
                     createPreset, editPreset, savePreset, deletePreset, movePreset,
-                    draggedPresetIndex, handleDragStart, handleDrop, handleDragEnd,
+
                     renderMarkdown, parseCot, formatTimeAgo, closeCharacterEditor: () => showCharacterEditor.value = false,
                     openExportModal: (type) => {
                         exportType.value = type;
