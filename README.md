@@ -14,7 +14,7 @@
 
 ## 核心特性 (Features)
 
-Roleplay Hub 致力于提供流畅、私密且功能强大的本地化 
+Roleplay Hub 致力于提供流畅、私密且功能强大的本地化AI Roleplay体验。
 
 ## 快速开始 (Quick Start)
 
