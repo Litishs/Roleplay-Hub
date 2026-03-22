@@ -45,6 +45,21 @@ html {
             -ms-overflow-style: none;
             scrollbar-width: none;
         }
+
+        .chat-input-scrollbar::-webkit-scrollbar {
+            width: 4px;
+        }
+        .chat-input-scrollbar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .chat-input-scrollbar::-webkit-scrollbar-thumb {
+            background: transparent;
+            border-radius: 10px;
+        }
+        .chat-input-scrollbar:hover::-webkit-scrollbar-thumb,
+        .chat-input-scrollbar:focus::-webkit-scrollbar-thumb {
+            background: #e5e7eb;
+        }
         
         body {
             height: 100%;

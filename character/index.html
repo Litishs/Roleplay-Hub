@@ -1329,31 +1329,34 @@
                         </button>
                     </div>
 
-                    <ul class="flex-1 overflow-y-auto space-y-2 pr-1 custom-scrollbar overflow-x-hidden">
-                        <li v-for="(char, index) in characters" :key="index">
-                            <a @click="switchCharacter(index)" :title="char.name"
+                    <ul ref="sidebarList" @scroll="handleSidebarScroll" class="flex-1 overflow-y-auto space-y-2 pr-1 custom-scrollbar overflow-x-hidden relative">
+                        <!-- Top Spacer -->
+                        <div :style="{ height: sidebarPaddingTop + 'px' }" class="w-full shrink-0"></div>
+                        
+                        <li v-for="char in virtualCharacters" :key="char.id">
+                            <a @click="switchCharacter(char._index)" :title="char.name"
                                 class="flex items-center gap-3 py-3 px-3 rounded-xl transition-all border border-transparent w-full max-w-full overflow-hidden relative"
-                                :class="{ 'bg-base-200 border-base-300 shadow-sm': currentCharacterIndex === index, 'hover:bg-base-100 hover:border-base-200': currentCharacterIndex !== index }">
+                                :class="{ 'bg-base-200 border-base-300 shadow-sm': currentCharacterIndex === char._index, 'hover:bg-base-100 hover:border-base-200': currentCharacterIndex !== char._index }">
                                 <!-- Active Indicator -->
-                                <div v-if="currentCharacterIndex === index"
+                                <div v-if="currentCharacterIndex === char._index"
                                     class="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-primary rounded-r-full">
                                 </div>
-
+    
                                 <div class="avatar placeholder shrink-0">
                                     <div
                                         class="bg-gradient-to-br from-neutral to-neutral-focus text-neutral-content rounded-xl w-10 h-10 shadow-sm ring-1 ring-base-content/5">
                                         <img v-if="char.avatar" :src="char.avatar" :key="char.avatar"
-                                            class="w-full h-full object-cover rounded-xl" />
+                                            class="w-full h-full object-cover rounded-xl" loading="lazy" />
                                         <span v-else class="text-lg font-bold">{{ (char.name ||
                                             'A').charAt(0).toUpperCase() }}</span>
                                     </div>
                                 </div>
                                 <div class="flex-1 w-0 flex flex-col justify-center min-h-[2.5rem]">
                                     <div class="font-bold text-sm break-words line-clamp-2 leading-tight"
-                                        :class="{ 'text-primary': currentCharacterIndex === index }">{{ char.name ||
+                                        :class="{ 'text-primary': currentCharacterIndex === char._index }">{{ char.name ||
                                         '未命名角色' }}</div>
                                 </div>
-                                <button @click.stop="requestDeleteCharacter(index)"
+                                <button @click.stop="requestDeleteCharacter(char._index)"
                                     class="btn btn-ghost btn-xs btn-square text-base-content/20 hover:text-error hover:bg-error/10 shrink-0 self-center">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
                                         fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
@@ -1364,7 +1367,11 @@
                                 </button>
                             </a>
                         </li>
+
+                        <!-- Bottom Spacer -->
+                        <div :style="{ height: sidebarBottomHeight + 'px' }" class="w-full shrink-0"></div>
                     </ul>
+
 
                     <div class="divider my-2 opacity-50"></div>
                     <div class="px-4 pb-2 lg:pb-24 mt-auto">
@@ -1415,10 +1422,30 @@
     </div>
 
     <script>
-        const { createApp, ref, reactive, computed, watch, onMounted } = Vue;
+        const { createApp, ref, reactive, computed, watch, onMounted, nextTick } = Vue;
 
         createApp({
             setup() {
+                // Utility: Debounce
+                const debounce = (fn, delay) => {
+                    let timeout;
+                    return (...args) => {
+                        clearTimeout(timeout);
+                        timeout = setTimeout(() => fn(...args), delay);
+                    };
+                };
+
+                // UUID Generator
+                const generateUUID = () => {
+                    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+                        return crypto.randomUUID();
+                    }
+                    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+                        var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+                        return v.toString(16);
+                    });
+                };
+
                 onMounted(() => {
                     // 模拟主站的 triggerSlash 功能，用于预览调试
                     window.triggerSlash = (text) => {
@@ -1480,6 +1507,46 @@
                 watch(currentCharacterIndex, (newVal) => {
                     localStorage.setItem('ai_chargen_active_index', newVal);
                 });
+
+                // Virtual List State
+                const sidebarScrollTop = ref(0);
+                const sidebarVisibleHeight = ref(0);
+                const sidebarList = ref(null);
+                const itemHeight = 72; // Avg height of item + gap
+
+                const handleSidebarScroll = (e) => {
+                    sidebarScrollTop.value = e.target.scrollTop;
+                    sidebarVisibleHeight.value = e.target.clientHeight;
+                };
+
+                const virtualCharacters = computed(() => {
+                    if (!characters.value) return [];
+                    const start = Math.floor(sidebarScrollTop.value / itemHeight);
+                    const count = Math.ceil(sidebarVisibleHeight.value / itemHeight) + 4;
+                    const offset = Math.max(0, start - 2);
+                    
+                    return characters.value
+                        .slice(offset, Math.min(characters.value.length, start + count))
+                        .map((char, i) => ({
+                            ...char,
+                            _index: offset + i
+                        }));
+                });
+
+                const sidebarPaddingTop = computed(() => {
+                    const start = Math.floor(sidebarScrollTop.value / itemHeight);
+                    return Math.max(0, start - 2) * itemHeight;
+                });
+
+                const sidebarTotalHeight = computed(() => characters.value.length * itemHeight);
+
+                const sidebarBottomHeight = computed(() => {
+                    const renderedCount = virtualCharacters.value.length;
+                    const start = Math.floor(sidebarScrollTop.value / itemHeight);
+                    const offset = Math.max(0, start - 2);
+                    return Math.max(0, (characters.value.length - offset - renderedCount) * itemHeight);
+                });
+
 
                 // Progress State
                 const generationProgress = ref(0);
@@ -1612,6 +1679,7 @@
 
                 // Default Character Template
                 const createEmptyCharacter = () => ({
+                    id: generateUUID(),
                     name: '',
                     description: '',
                     personality: '',
@@ -1635,6 +1703,7 @@
                     regexScripts: []
                 });
 
+
                 // Storage Logic (IndexedDB via localforage)
                 const characters = ref([createEmptyCharacter()]);
                 const isLoaded = ref(false);
@@ -1648,8 +1717,12 @@
                         // 1. Try to load from IndexedDB
                         const saved = await localforage.getItem('ai_chargen_characters');
                         if (saved) {
-                            characters.value = JSON.parse(saved);
+                            const parsed = JSON.parse(saved);
+                            // Ensure every character has an ID for virtualization keys
+                            parsed.forEach(c => { if (!c.id) c.id = generateUUID(); });
+                            characters.value = parsed;
                         } else {
+
                             // 2. Migration: Try to load from localStorage
                             const lsSaved = localStorage.getItem('ai_chargen_characters');
                             if (lsSaved) {
@@ -1689,13 +1762,16 @@
                 // Trigger load
                 loadData();
 
-                // Save to localforage whenever characters change
-                watch(characters, async (newVal) => {
-                    if (!isLoaded.value) return; // Don't save before initial load
-
+                // Save to localforage whenever characters change (Debounced)
+                const debouncedSave = debounce(async (newVal) => {
                     try {
-                        // Use standard JSON string to keep consistency
-                        await localforage.setItem('ai_chargen_characters', JSON.stringify(newVal));
+                        const start = performance.now();
+                        const json = JSON.stringify(newVal);
+                        await localforage.setItem('ai_chargen_characters', json);
+                        const end = performance.now();
+                        if (end - start > 100) {
+                            console.log(`%c[Performance] Data save took ${Math.round(end - start)}ms`, 'color: #f59e0b');
+                        }
                         if (storageQuotaExceeded.value) {
                             storageQuotaExceeded.value = false;
                         }
@@ -1706,7 +1782,13 @@
                             showToast('存储空间仍然不足', 'error');
                         }
                     }
+                }, 800);
+
+                watch(characters, (newVal) => {
+                    if (!isLoaded.value) return; 
+                    debouncedSave(newVal);
                 }, { deep: true });
+
 
                 // Computed
                 const currentCharacter = computed(() => characters.value[currentCharacterIndex.value]);
@@ -2402,6 +2484,11 @@
                             // 为了避免上面的 JSON 解析逻辑误报（没进入 if），我们可以在这里再做个简单的检查，但这已经足够复杂了
                             console.warn('Diff match failed for:', findText);
                         }
+                    }
+
+                    if (!fullText || !fullText.trim()) {
+                        showToast('回复为空', 'warning');
+                        return;
                     }
 
                     if (newPendingDiffs.length > 0) {
@@ -3152,19 +3239,8 @@ ${options.generateExtra ? `### World Info
                     };
                 };
 
-                // UUID Fallback for non-secure contexts
-                const generateUUID = () => {
-                    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-                        return crypto.randomUUID();
-                    }
-                    // Fallback implementation
-                    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
-                        var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
-                        return v.toString(16);
-                    });
-                };
-
                 // 文件名净化函数
+
                 const sanitizeFilename = (name, defaultName = 'character') => {
                     if (!name) return defaultName;
                     // 替换 Windows/Unix 文件系统非法字符
@@ -3403,7 +3479,13 @@ ${options.generateExtra ? `### World Info
                     storageQuotaExceeded,
                     generationProgress,
                     generationStatus,
+                    virtualCharacters,
+                    sidebarPaddingTop,
+                    sidebarBottomHeight,
+                    sidebarList,
+                    handleSidebarScroll,
                     promptInput,
+
                     autoResize,
                     isAvatarLoading,
                     onAvatarLoad,
