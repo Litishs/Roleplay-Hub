@@ -2208,8 +2208,11 @@
                         // Or stream and buffer. Stream gives better feedback.
                         // Let's use the existing stream logic structure but adapted.
 
-                        console.log('%c[Workshop AI Request]', 'color: #3b82f6; font-weight: bold;', { url: api.url, model: api.model });
-                        const response = await fetch(`${api.url}/chat/completions`, {
+                        const baseUrl = api.url.replace(/\/+$/, '');
+                        const apiUrl = baseUrl.endsWith('/v1') ? baseUrl : `${baseUrl}/v1`;
+
+                        console.log('%c[Workshop AI Request]', 'color: #3b82f6; font-weight: bold;', { url: apiUrl, model: api.model });
+                        const response = await fetch(`${apiUrl}/chat/completions`, {
                             method: 'POST',
                             headers: {
                                 'Content-Type': 'application/json',
