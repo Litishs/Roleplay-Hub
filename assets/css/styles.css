@@ -271,8 +271,8 @@ html {
                 background-color: rgba(255, 255, 255, 0.98) !important;
             }
 
-            /* Toolbar action buttons (suggest, auto-image, summarize) */
-            .toolbar-btn {
+            /* Toolbar action buttons - only apply solid white default if not active/highlighted */
+            .toolbar-btn:not(.bg-primary-500) {
                 background-color: rgba(255, 255, 255, 0.95) !important;
             }
 
