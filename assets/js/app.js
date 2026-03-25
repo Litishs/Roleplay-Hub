@@ -119,7 +119,7 @@ createApp({
         const updateCountdown = ref(0);
         let updateCountdownTimer = null;
         const latestUpdate = reactive({
-            id: 10102, // 确保这是一个五位数ID，每次更新内容时增加这个数字
+            id: 10103, // 确保这是一个五位数ID，每次更新内容时增加这个数字
             date: new Date().toISOString().split('T')[0],
             title: '网站公告',
             content: `
@@ -128,6 +128,8 @@ createApp({
 - 优化了默认预设，大幅度减少了空回现象的发生
 - 优化了角色卡工坊的系统提示词，使其更符合Gemini的特性
 - 以极低的视觉代价，换取了极大的性能节省，减少了移动端发热掉帧的现象
+- 优化了非Gemini模型的生图体验
+- 支持了总结功能的流式输出
 
 本项目为全开源公益项目，严禁倒卖源码，二改需经作者授权，Q群1015293774
 
@@ -299,6 +301,23 @@ createApp({
             } else {
                 currentModelMode.value = 'quality';
             }
+
+            // Sync Stream Status for Image Gen
+            if (isAutoImageGenEnabled.value) {
+                const isGemini = newModel.toLowerCase().includes('gemini');
+                if (isGemini) {
+                    if (settings.stream) {
+                        settings.stream = false;
+                        showToast('检测到 Gemini 模型并开启自动生图，流式输出已禁用', 'info');
+                    }
+                } else {
+                    if (!settings.stream) {
+                        settings.stream = true;
+                        showToast('流式输出已恢复', 'success');
+                    }
+                }
+            }
+
             syncSettingsToGenerator();
         }, { deep: true });
 
@@ -381,6 +400,7 @@ createApp({
         const editingWorldInfo = reactive({ id: undefined, data: {} });
         const showSummaryModal = ref(false);
         const isSummarizing = ref(false);
+        const currentSummaryStreamingContent = ref('');
         const currentHoverWorldInfo = ref(null);
 
         // Export Modal State
@@ -792,9 +812,18 @@ createApp({
         watch(isAutoImageGenEnabled, (newVal) => {
             if (newVal) {
                 let messages = [];
-                if (settings.stream) {
-                    settings.stream = false;
-                    messages.push('流式输出已关闭');
+                const isGemini = settings.model.toLowerCase().includes('gemini');
+
+                if (isGemini) {
+                    if (settings.stream) {
+                        settings.stream = false;
+                        messages.push('已选择 Gemini 模型，流式输出已关闭');
+                    }
+                } else {
+                    if (!settings.stream) {
+                        settings.stream = true;
+                        messages.push('已选择非 Gemini 模型，流式输出已恢复');
+                    }
                 }
 
                 const regexMessages = updateImageGenRegexState();
@@ -2649,6 +2678,8 @@ ${textContent}`;
 
                 if (!isAuto) showToast('开始提取总结...', 'info');
 
+                currentSummaryStreamingContent.value = '';
+
                 const response = await fetch(url, {
                     method: 'POST',
                     headers: {
@@ -2659,28 +2690,71 @@ ${textContent}`;
                         model: settings.model,
                         messages: [{ role: 'system', content: systemPrompt }],
                         temperature: 0.5,
-                        stream: false
+                        stream: true
                     })
                 });
 
                 if (!response.ok) throw new Error(`API Error: ${response.status}`);
-                const rawText = await response.text();
+
                 let summaryContent = '';
-                try {
-                    const data = JSON.parse(rawText);
-                    summaryContent = data.choices[0]?.message?.content || '';
-                } catch (e) {
-                    const lines = rawText.split('\n');
-                    for (const line of lines) {
-                        if (line.trim().startsWith('data:')) {
-                            const dataStr = line.trim().substring(5).trim();
-                            if (dataStr === '[DONE]') continue;
-                            try {
-                                const chunk = JSON.parse(dataStr);
-                                summaryContent += chunk.choices[0]?.delta?.content || chunk.choices[0]?.message?.content || '';
-                            } catch (err) { }
+                const contentType = response.headers.get('content-type');
+                const isStream = contentType && contentType.includes('text/event-stream');
+
+                if (isStream) {
+                    const reader = response.body.getReader();
+                    const decoder = new TextDecoder();
+                    let buffer = '';
+
+                    while (true) {
+                        const { done, value } = await reader.read();
+                        if (done) break;
+
+                        buffer += decoder.decode(value, { stream: true });
+                        const lines = buffer.split('\n');
+                        buffer = lines.pop();
+
+                        for (const line of lines) {
+                            const trimmedLine = line.trim();
+                            if (!trimmedLine) continue;
+
+                            if (trimmedLine.startsWith('data: ')) {
+                                const dataStr = trimmedLine.slice(6);
+                                if (dataStr === '[DONE]') continue;
+
+                                try {
+                                    const chunk = JSON.parse(dataStr);
+                                    const content = chunk.choices[0]?.delta?.content || chunk.choices[0]?.message?.content || '';
+                                    if (content) {
+                                        summaryContent += content;
+                                        currentSummaryStreamingContent.value += content;
+                                        nextTick(() => {
+                                            const container = document.getElementById('summary-stream-container');
+                                            if (container) container.scrollTop = container.scrollHeight;
+                                        });
+                                    }
+                                } catch (err) { }
+                            }
                         }
                     }
+                } else {
+                    const rawText = await response.text();
+                    try {
+                        const data = JSON.parse(rawText);
+                        summaryContent = data.choices[0]?.message?.content || '';
+                    } catch (e) {
+                        const lines = rawText.split('\n');
+                        for (const line of lines) {
+                            if (line.trim().startsWith('data:')) {
+                                const dataStr = line.trim().substring(5).trim();
+                                if (dataStr === '[DONE]') continue;
+                                try {
+                                    const chunk = JSON.parse(dataStr);
+                                    summaryContent += chunk.choices[0]?.delta?.content || chunk.choices[0]?.message?.content || '';
+                                } catch (err) { }
+                            }
+                        }
+                    }
+                    currentSummaryStreamingContent.value = summaryContent;
                 }
 
                 if (!summaryContent) throw new Error('总结内容为空');
@@ -2712,6 +2786,7 @@ ${textContent}`;
                 if (!isAuto) showToast('总结失败: ' + err.message, 'error');
             } finally {
                 isSummarizing.value = false;
+                currentSummaryStreamingContent.value = '';
             }
         };
 
@@ -4972,6 +5047,7 @@ ${textContent}`;
             processRegex,
             showRegexEditor, showWorldInfoEditor, editingRegex, editingWorldInfo,
             worldInfoSettings, showWorldInfoSettings, estimatedGenerationTime, currentWaitTime,
+            currentSummaryStreamingContent,
             togglePlacement: (val) => {
                 if (!editingRegex.data.placement) editingRegex.data.placement = [];
                 const index = editingRegex.data.placement.indexOf(val);
