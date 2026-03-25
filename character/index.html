@@ -70,15 +70,89 @@
             display: none !important;
         }
 
-        /* Mobile specific styles */
+        /* Mobile specific styles - 竖屏移动端关闭除角色卡侧边栏以外的一切高斯模糊，用高不透明度背景替代 */
         @media (max-width: 768px) {
 
-            /* Fix global blur on mobile */
-            .drawer-overlay,
+            /* 1. 顶部导航栏 - 去除 backdrop-blur-md，改用不透明背景 */
+            .navbar {
+                backdrop-filter: none !important;
+                -webkit-backdrop-filter: none !important;
+                background-color: rgba(255, 255, 255, 0.97) !important;
+            }
+
+            /* 2. 模型切换器容器 - 去除 backdrop-blur-md */
+            .navbar .rounded-full[class*="backdrop-blur"] {
+                backdrop-filter: none !important;
+                -webkit-backdrop-filter: none !important;
+            }
+
+            /* 3. 存储警告横幅 - 去除 backdrop-blur-sm */
+            [class*="bg-warning"] {
+                backdrop-filter: none !important;
+                -webkit-backdrop-filter: none !important;
+            }
+
+            /* 4. 装饰性光晕球(设置选项中) - 隐藏 blur-xl，改用低透明度纯色圆 */
+            .blur-xl {
+                filter: none !important;
+                -webkit-filter: none !important;
+                opacity: 0.3;
+            }
+
+            /* 5. Diff 卡片头部 sticky header - 去除 backdrop-blur-md */
+            .card .sticky[class*="backdrop-blur"] {
+                backdrop-filter: none !important;
+                -webkit-backdrop-filter: none !important;
+                background-color: hsl(var(--b2) / 0.97) !important;
+            }
+
+            /* 6. 预览弹窗中的 badge 标签 - 去除 backdrop-blur */
+            .badge[class*="backdrop-blur"] {
+                backdrop-filter: none !important;
+                -webkit-backdrop-filter: none !important;
+                background-color: rgba(255, 255, 255, 0.95) !important;
+            }
+
+            /* 7. Tab 栏区域 - 去除 backdrop-blur-md */
+            .drawer-content [class*="backdrop-blur-md"][class*="border-b"] {
+                backdrop-filter: none !important;
+                -webkit-backdrop-filter: none !important;
+                background-color: rgba(255, 255, 255, 0.97) !important;
+            }
+
+            /* 8. 头像加载遮罩 / Hover 遮罩 / 上传图标背景 - 去除 backdrop-blur */
+            .avatar [class*="backdrop-blur"] {
+                backdrop-filter: none !important;
+                -webkit-backdrop-filter: none !important;
+            }
+
+            /* 9. 底部输入面板 - 去除 backdrop-blur-lg，改用不透明背景 */
+            [class*="backdrop-blur-lg"][class*="border-t"] {
+                backdrop-filter: none !important;
+                -webkit-backdrop-filter: none !important;
+                background-color: rgba(255, 255, 255, 0.98) !important;
+            }
+
+            /* 10. 侧边栏遮罩 overlay - 去除 backdrop-blur-sm */
+            .drawer-overlay {
+                backdrop-filter: none !important;
+                -webkit-backdrop-filter: none !important;
+            }
+
+            /* 11. Modal backdrop - 去除模糊 */
             .modal-backdrop {
                 backdrop-filter: none !important;
                 -webkit-backdrop-filter: none !important;
             }
+
+            /* 12. Toast 通知 - 去除 backdrop-blur-xl，改用高不透明度背景 */
+            .alert[class*="backdrop-blur"] {
+                backdrop-filter: none !important;
+                -webkit-backdrop-filter: none !important;
+                background-color: rgba(0, 0, 0, 0.85) !important;
+            }
+
+            /* === 注意：侧边栏 .drawer-side > .menu 的 backdrop-blur-xl 被有意保留 === */
         }
 
         /* Diff Modal Mobile Optimization for Keyboard */

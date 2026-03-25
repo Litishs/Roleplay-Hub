@@ -157,10 +157,147 @@ html {
                 height: 0 !important;
             }
             
-            /* Hide scrollbar for IE, Edge and Firefox */
+            /* Hide scrollbar for IE, Edge and Firefox + Global kill-switch for backdrop-filter on mobile */
             * {
                 -ms-overflow-style: none !important;  /* IE and Edge */
                 scrollbar-width: none !important;  /* Firefox */
+                backdrop-filter: none !important;
+                -webkit-backdrop-filter: none !important;
+            }
+
+            /* Disable Tailwind blur-* classes (filter: blur) on mobile, except .char-bg-blur */
+            [class*="blur-"]:not(.char-bg-blur) {
+                --tw-blur: !important;
+                filter: none !important;
+            }
+
+            /* Preserve filter blur ONLY for character card background layer */
+            .char-bg-blur {
+                filter: blur(2px) !important;
+            }
+
+            /* ===== Compensate: Replace blur with solid/high-opacity backgrounds ===== */
+
+            /* Toast notifications */
+            .toast-item {
+                background-color: rgba(255, 255, 255, 0.97) !important;
+            }
+
+            /* Mobile sidebar overlay - use darker solid overlay instead of blur */
+            .mobile-overlay {
+                background-color: rgba(0, 0, 0, 0.45) !important;
+            }
+
+            /* Summarizing overlay - deep solid bg */
+            .summarize-overlay {
+                background-color: rgba(30, 27, 75, 0.92) !important;
+            }
+
+            /* Chat header bar */
+            .chat-header-bar {
+                background-color: rgba(255, 255, 255, 0.95) !important;
+            }
+
+            /* Description panel overlay */
+            .desc-panel-overlay {
+                background-color: rgba(0, 0, 0, 0.12) !important;
+            }
+
+            /* Description panel itself */
+            .desc-panel {
+                background-color: rgba(255, 255, 255, 0.97) !important;
+            }
+
+            /* Description panel decorative inner overlay */
+            .desc-panel-decor {
+                background-color: rgba(255, 255, 255, 0.55) !important;
+            }
+
+            /* Close button in description panel */
+            .desc-close-btn:hover {
+                background-color: rgba(255, 255, 255, 0.75) !important;
+            }
+
+            /* Message name tags */
+            .msg-name-tag {
+                background-color: rgba(255, 255, 255, 0.7) !important;
+            }
+
+            /* Message bubbles - increase opacity for readability */
+            .msg-bubble-glass {
+                background-color: rgba(255, 255, 255, 0.88) !important;
+            }
+
+            /* Summary message box */
+            .summary-msg-box {
+                background-color: rgba(238, 242, 255, 0.92) !important;
+            }
+
+            /* Message action buttons */
+            .msg-action-btn {
+                background-color: rgba(255, 255, 255, 0.85) !important;
+            }
+
+            /* Typing indicator bubble */
+            .typing-bubble {
+                background-color: rgba(255, 255, 255, 0.88) !important;
+            }
+
+            /* Typing indicator timer badge */
+            .typing-timer-badge {
+                background-color: rgba(255, 255, 255, 0.7) !important;
+            }
+
+            /* Input area container (mobile bottom bar) */
+            .input-area-mobile {
+                background-color: rgba(255, 255, 255, 0.96) !important;
+                border-top: 1px solid rgba(0, 0, 0, 0.08) !important;
+            }
+
+            /* Input area inner island (desktop style - make transparent on mobile to avoid double overlapping) */
+            .input-island {
+                background-color: transparent !important;
+                border: none !important;
+                box-shadow: none !important;
+                -webkit-box-shadow: none !important;
+                --tw-ring-offset-shadow: 0 0 #0000 !important;
+                --tw-ring-shadow: 0 0 #0000 !important;
+                --tw-shadow: 0 0 #0000 !important;
+                --tw-shadow-colored: 0 0 #0000 !important;
+            }
+
+            /* Suggestion reply buttons */
+            .suggest-btn {
+                background-color: rgba(255, 255, 255, 0.98) !important;
+            }
+
+            /* Toolbar action buttons (suggest, auto-image, summarize) */
+            .toolbar-btn {
+                background-color: rgba(255, 255, 255, 0.95) !important;
+            }
+
+            /* Sinan HUD */
+            .sinan-hud {
+                backdrop-filter: none !important;
+                -webkit-backdrop-filter: none !important;
+                background: linear-gradient(to bottom right, rgba(255,255,255,0.95), rgba(255,255,255,0.88)) !important;
+            }
+
+            /* Glass panel override */
+            .glass-panel {
+                backdrop-filter: none !important;
+                -webkit-backdrop-filter: none !important;
+                background: rgba(255, 255, 255, 0.95) !important;
+            }
+
+            /* User bubble */
+            .user-bubble-self {
+                background-color: rgba(239, 246, 255, 0.95) !important;
+            }
+
+            /* World Info Footer */
+            .wi-footer {
+                background-color: rgba(249, 250, 251, 0.95) !important;
             }
         }
         
@@ -516,3 +653,36 @@ opacity: 0;
             height: 2px;
             background-color: #cbd5e1;
         }
+
+/* Performance Optimization: Disable backdrop-blur when no-blur class is present */
+.no-blur * {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+}
+
+/* Increase opacity for readability when blur is disabled */
+.no-blur .bg-white\/70,
+.no-blur .bg-white\/80,
+.no-blur .bg-white\/90,
+.no-blur .bg-white\/95,
+.no-blur .glass-panel {
+    background-color: rgba(255, 255, 255, 0.95) !important;
+}
+
+.no-blur .bg-blue-50\/85 {
+    background-color: rgba(239, 246, 255, 0.95) !important;
+}
+
+.no-blur .bg-gray-50\/50,
+.no-blur .bg-gray-50\/80 {
+    background-color: rgba(249, 250, 251, 0.95) !important;
+}
+
+.no-blur .bg-indigo-950\/60 {
+    background-color: rgba(30, 27, 75, 0.9) !important;
+}
+
+.no-blur .bg-black\/30 {
+    background-color: rgba(0, 0, 0, 0.5) !important;
+}
+

@@ -86,7 +86,7 @@
             class="fixed top-6 left-1/2 transform -translate-x-1/2 z-[100] flex flex-col gap-2 pointer-events-none items-center">
             <transition-group name="list" tag="div" class="flex flex-col items-center">
                 <div v-for="toast in toasts" :key="toast.id"
-                    class="pointer-events-auto flex items-center px-6 py-3 mb-2 rounded-full shadow-lg border bg-white text-gray-800 min-w-[300px] transform transition-all duration-300 backdrop-blur-sm bg-opacity-95"
+                    class="pointer-events-auto flex items-center px-6 py-3 mb-2 rounded-full shadow-lg border bg-white text-gray-800 min-w-[300px] transform transition-all duration-300 backdrop-blur-sm bg-opacity-95 toast-item"
                     :class="{
                         'border-green-200 text-green-800 bg-green-50': toast.type === 'success',
                         'border-red-200 text-red-800 bg-red-50': toast.type === 'error',
@@ -124,7 +124,7 @@
 
         <!-- Mobile Sidebar Overlay -->
         <div v-if="showMobileMenu" @click="showMobileMenu = false"
-            class="fixed inset-0 bg-black/30 backdrop-blur-sm z-40 md:hidden transition-opacity animate-fade-in"></div>
+            class="fixed inset-0 bg-black/30 backdrop-blur-sm z-40 md:hidden transition-opacity animate-fade-in mobile-overlay"></div>
 
         <!-- Sidebar (Desktop & Mobile Drawer) -->
         <div
@@ -237,7 +237,7 @@
                 enter-to-class="opacity-100" leave-active-class="transition duration-300 ease-in"
                 leave-from-class="opacity-100" leave-to-class="opacity-0">
                 <div v-if="isSummarizing"
-                    class="absolute inset-0 z-[80] flex flex-col items-center justify-center bg-indigo-950/60 backdrop-blur-xl transition-all">
+                    class="absolute inset-0 z-[80] flex flex-col items-center justify-center bg-indigo-950/60 backdrop-blur-xl transition-all summarize-overlay">
                     <div class="relative">
                         <div
                             class="w-20 h-20 border-4 border-indigo-400/20 border-t-indigo-500 rounded-full animate-spin">
@@ -273,25 +273,25 @@
 
                 <!-- Character Background Layer -->
                 <div v-if="settings.useCharacterBackground && currentCharacter && currentCharacter?.avatar"
-                    class="absolute -inset-4 bg-cover bg-center bg-no-repeat pointer-events-none transition-opacity duration-500 z-0 blur-[2px]"
+                    class="absolute -inset-4 bg-cover bg-center bg-no-repeat pointer-events-none transition-opacity duration-500 z-0 blur-[2px] char-bg-blur"
                     :style="{ backgroundImage: `url(${currentCharacter?.avatar})`, opacity: 0.8 }">
                 </div>
 
                 <!-- Blur Overlay for Description Panel -->
                 <transition name="fade">
                     <div v-if="showDescriptionPanel" @click="showDescriptionPanel = false"
-                        class="absolute inset-0 bg-black/5 backdrop-blur-[2px] z-10 transition-opacity duration-300">
+                        class="absolute inset-0 bg-black/5 backdrop-blur-[2px] z-10 transition-opacity duration-300 desc-panel-overlay">
                     </div>
                 </transition>
 
                 <!-- Character Description Panel -->
                 <transition name="dropdown">
                     <div v-if="showDescriptionPanel && currentCharacter"
-                        class="absolute top-14 left-4 right-4 md:w-[460px] md:left-[60px] md:right-auto md:top-[60px] md:ml-0 bg-white/95 backdrop-blur-2xl border border-white/60 shadow-[0_20px_60px_-10px_rgba(0,0,0,0.15)] rounded-3xl z-20 overflow-hidden ring-1 ring-black/5 origin-top-left transform-gpu">
+                        class="absolute top-14 left-4 right-4 md:w-[460px] md:left-[60px] md:right-auto md:top-[60px] md:ml-0 bg-white/95 backdrop-blur-2xl border border-white/60 shadow-[0_20px_60px_-10px_rgba(0,0,0,0.15)] rounded-3xl z-20 overflow-hidden ring-1 ring-black/5 origin-top-left transform-gpu desc-panel">
                         <!-- Decorative Header Background -->
                         <div
                             class="absolute top-0 left-0 right-0 h-32 bg-gradient-to-br from-primary-50 via-purple-50 to-pink-50 z-0">
-                            <div class="absolute inset-0 bg-white/40 backdrop-blur-[1px]"></div>
+                            <div class="absolute inset-0 bg-white/40 backdrop-blur-[1px] desc-panel-decor"></div>
                             <!-- Abstract decoration -->
                             <div
                                 class="absolute top-[-20%] right-[-10%] w-40 h-40 bg-gradient-to-br from-primary-200/30 to-purple-200/30 rounded-full blur-3xl">
@@ -304,7 +304,7 @@
                         <div class="relative z-10 p-4 pt-6">
                             <!-- Close Button -->
                             <button @click="showDescriptionPanel = false"
-                                class="absolute top-3 right-3 p-1.5 text-gray-400 hover:text-gray-600 hover:bg-white/60 rounded-full transition-all backdrop-blur-sm shadow-sm hover:shadow border border-transparent hover:border-gray-100 z-20">
+                                class="absolute top-3 right-3 p-1.5 text-gray-400 hover:text-gray-600 hover:bg-white/60 rounded-full transition-all backdrop-blur-sm shadow-sm hover:shadow border border-transparent hover:border-gray-100 z-20 desc-close-btn">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                         d="M6 18L18 6M6 6l12 12"></path>
@@ -400,7 +400,7 @@
 
                 <!-- Chat Header -->
                 <div
-                    class="absolute top-0 left-0 right-0 h-14 border-b border-gray-200 flex items-center justify-between px-4 bg-white/80 backdrop-blur-sm z-10">
+                    class="absolute top-0 left-0 right-0 h-14 border-b border-gray-200 flex items-center justify-between px-4 bg-white/80 backdrop-blur-sm z-10 chat-header-bar">
                     <div class="flex items-center min-w-0">
                         <button @click="toggleMobileMenu"
                             class="md:hidden mr-3 text-gray-500 md:hover:text-gray-700 active:text-gray-700 transition-colors flex-shrink-0">
@@ -516,7 +516,7 @@
                                 :class="['flex flex-col min-w-0', (parseCot(msg.content).cot) ? 'w-full' : '', msg.isSelf ? 'items-end' : 'items-start']">
                                 <!-- Name (Outside Bubble) -->
                                 <div
-                                    :class="['text-[10px] font-bold text-gray-600 mb-1 select-none px-1.5 py-0.5 rounded-md bg-white/50 backdrop-blur-sm border border-white/20 w-fit shadow-sm truncate max-w-[150px] md:max-w-[250px]', msg.isSelf ? 'ml-auto mr-1' : 'mr-auto ml-1']">
+                                    :class="['text-[10px] font-bold text-gray-600 mb-1 select-none px-1.5 py-0.5 rounded-md bg-white/50 backdrop-blur-sm border border-white/20 w-fit shadow-sm truncate max-w-[150px] md:max-w-[250px] msg-name-tag', msg.isSelf ? 'ml-auto mr-1' : 'mr-auto ml-1']">
                                     {{ msg.name || (msg.role === 'user' ? user.name : 'Unknown') }}
                                 </div>
                                 <!-- Message Bubble -->
@@ -527,7 +527,7 @@
                                         msg.role === 'user' ? (msg.isSelf ? 'bg-blue-50/85 text-gray-900 rounded-tr-none shadow-[0_4px_12px_rgba(59,130,246,0.1)] border border-primary-300/50' : 'bg-white/70 text-gray-800 rounded-tl-none border border-white/40 shadow-card') :
                                         msg.role === 'system' ? 'bg-red-50/70 text-red-800 border border-red-200/40' :
                                         'bg-white/70 text-gray-800 border border-white/40 shadow-card',
-                                        index >= chatHistory.length - (settings.renderLayerLimit > 100 ? 99999 : settings.renderLayerLimit) ? 'backdrop-blur-md glass-stabilize' : 'bg-opacity-100']">
+                                        index >= chatHistory.length - (settings.renderLayerLimit > 100 ? 99999 : settings.renderLayerLimit) ? 'backdrop-blur-md glass-stabilize msg-bubble-glass' : 'bg-opacity-100']">
 
 
                                         <div v-if="msg.isTriggered && !msg.showRaw" @click="msg.showRaw = true"
@@ -551,7 +551,7 @@
                                                 v-text="msg.content"></div>
                                         </div>
                                         <div v-else-if="msg.isSummary"
-                                            class="w-full bg-indigo-50/80 backdrop-blur-sm border border-indigo-100/50 rounded-[20px] p-4 md:p-5 shadow-[0_4px_12px_rgba(99,102,241,0.08)] relative overflow-hidden group transition-all duration-300">
+                                            class="w-full bg-indigo-50/80 backdrop-blur-sm border border-indigo-100/50 rounded-[20px] p-4 md:p-5 shadow-[0_4px_12px_rgba(99,102,241,0.08)] relative overflow-hidden group transition-all duration-300 summary-msg-box">
                                             <div
                                                 class="absolute top-0 left-0 w-1.5 h-full bg-gradient-to-b from-indigo-400 to-indigo-600">
                                             </div>
@@ -652,7 +652,7 @@
                                         :class="['absolute bottom-0 -mb-8 flex items-center space-x-1 md:space-x-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-200', msg.isSelf ? 'right-0' : 'left-0']">
                                         <button v-if="index === chatHistory.length - 1"
                                             @click="regenerateMessage(index)"
-                                            class="p-1 md:p-1.5 text-gray-400 hover:text-primary-600 bg-white/70 backdrop-blur-[2px] rounded-full border border-white/20 hover:bg-white hover:shadow-sm transition-all"
+                                            class="p-1 md:p-1.5 text-gray-400 hover:text-primary-600 bg-white/70 backdrop-blur-[2px] rounded-full border border-white/20 hover:bg-white hover:shadow-sm transition-all msg-action-btn"
                                             title="重新生成">
                                             <svg class="w-3.5 h-3.5 md:w-4 md:h-4" fill="none" stroke="currentColor"
                                                 viewBox="0 0 24 24">
@@ -662,7 +662,7 @@
                                             </svg>
                                         </button>
                                         <button @click="copyMessage(msg.content)"
-                                            class="p-1 md:p-1.5 text-gray-400 hover:text-primary-600 bg-white/70 backdrop-blur-[2px] rounded-full border border-white/20 hover:bg-white hover:shadow-sm transition-all"
+                                            class="p-1 md:p-1.5 text-gray-400 hover:text-primary-600 bg-white/70 backdrop-blur-[2px] rounded-full border border-white/20 hover:bg-white hover:shadow-sm transition-all msg-action-btn"
                                             title="复制">
                                             <svg class="w-3.5 h-3.5 md:w-4 md:h-4" fill="none" stroke="currentColor"
                                                 viewBox="0 0 24 24">
@@ -672,7 +672,7 @@
                                             </svg>
                                         </button>
                                         <button @click="deleteMessage(index)"
-                                            class="p-1 md:p-1.5 text-gray-400 hover:text-red-600 bg-white/70 backdrop-blur-[2px] rounded-full border border-white/20 hover:bg-white hover:shadow-sm transition-all"
+                                            class="p-1 md:p-1.5 text-gray-400 hover:text-red-600 bg-white/70 backdrop-blur-[2px] rounded-full border border-white/20 hover:bg-white hover:shadow-sm transition-all msg-action-btn"
                                             title="删除">
                                             <svg class="w-3.5 h-3.5 md:w-4 md:h-4" fill="none" stroke="currentColor"
                                                 viewBox="0 0 24 24">
@@ -697,18 +697,18 @@
                             </div>
                             <div class="flex flex-col min-w-0 items-start">
                                 <div
-                                    class="text-[10px] font-bold text-gray-600 mb-1 select-none px-1.5 py-0.5 rounded-md bg-white/50 backdrop-blur-sm border border-white/20 w-fit shadow-sm mr-auto ml-1 truncate max-w-[150px] md:max-w-[250px]">
+                                    class="text-[10px] font-bold text-gray-600 mb-1 select-none px-1.5 py-0.5 rounded-md bg-white/50 backdrop-blur-sm border border-white/20 w-fit shadow-sm mr-auto ml-1 truncate max-w-[150px] md:max-w-[250px] msg-name-tag">
                                     {{ currentCharacter.name }}
                                 </div>
                                 <div
-                                    class="min-w-[150px] min-h-[4.5rem] px-6 py-4 rounded-2xl rounded-tl-none bg-white/70 backdrop-blur-md glass-stabilize border border-white/40 shadow-card flex flex-col items-center justify-center gap-2 transition-all duration-500">
+                                    class="min-w-[150px] min-h-[4.5rem] px-6 py-4 rounded-2xl rounded-tl-none bg-white/70 backdrop-blur-md glass-stabilize border border-white/40 shadow-card flex flex-col items-center justify-center gap-2 transition-all duration-500 typing-bubble">
                                     <div class="typing-indicator scale-125" :class="{ 'thinking-mode': isThinking }">
                                         <span></span><span></span><span></span>
                                     </div>
                                     <div v-if="isThinking" class="text-[10px] text-purple-600 font-bold tracking-wider">
                                         已响应，等待思考...</div>
                                     <div v-if="isGenerating"
-                                        class="flex items-center gap-1.5 text-[11px] text-gray-500 font-mono bg-white/50 backdrop-blur-sm px-2.5 py-1 rounded-full border border-white/50 animate-fade-in mt-1 shadow-sm">
+                                        class="flex items-center gap-1.5 text-[11px] text-gray-500 font-mono bg-white/50 backdrop-blur-sm px-2.5 py-1 rounded-full border border-white/50 animate-fade-in mt-1 shadow-sm typing-timer-badge">
                                         <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                                 d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
@@ -731,9 +731,9 @@
 
                 <!-- Input Area -->
                 <div
-                    class="relative w-full md:absolute md:bottom-0 md:left-0 md:right-0 md:p-4 md:bg-transparent md:backdrop-blur-none md:border-none md:shadow-none md:z-30 md:pointer-events-none md:flex md:justify-center flex-shrink-0 bg-white/70 backdrop-blur-md border-t border-gray-200 rounded-t-3xl p-2 transition-all duration-300">
+                    class="relative w-full md:absolute md:bottom-0 md:left-0 md:right-0 md:p-4 md:bg-transparent md:backdrop-blur-none md:border-none md:shadow-none md:z-30 md:pointer-events-none md:flex md:justify-center flex-shrink-0 bg-white/70 backdrop-blur-md border-t border-gray-200 rounded-t-3xl p-2 transition-all duration-300 input-area-mobile">
                     <div
-                        class="w-full md:max-w-3xl md:pointer-events-auto md:p-4 md:bg-white/70 md:backdrop-blur-xl md:border md:border-white/40 md:shadow-[0_8px_32px_rgba(0,0,0,0.12)] md:rounded-[2.5rem] md:ring-1 md:ring-black/5 transition-all duration-300">
+                        class="w-full md:max-w-3xl md:pointer-events-auto md:p-4 md:bg-white/70 md:backdrop-blur-xl md:border md:border-white/40 md:shadow-[0_8px_32px_rgba(0,0,0,0.12)] md:rounded-[2.5rem] md:ring-1 md:ring-black/5 transition-all duration-300 input-island">
                         <!-- Suggestion Bubbles (Absolute positioned above the bar) -->
                     <div v-if="suggestedReplies.length > 0"
                         class="absolute bottom-full left-0 right-0 p-2 pointer-events-none z-50">
@@ -741,7 +741,7 @@
                             class="w-full flex flex-col gap-2.5 px-1 items-start pointer-events-auto animate-slide-up">
                             <button v-for="(reply, idx) in suggestedReplies" :key="idx"
                                 @click="userInput = reply; suggestedReplies = []"
-                                class="bg-white/95 hover:bg-white hover:border-primary-400 hover:text-primary-600 hover:shadow-primary-500/10 backdrop-blur-xl border border-gray-200/80 shadow-xl text-xs md:text-sm text-gray-800 px-5 py-3.5 rounded-2xl rounded-bl-sm transition-all cursor-pointer text-left w-auto max-w-[90%] md:max-w-[85%] hover:-translate-y-1 active:scale-[0.98] leading-relaxed font-semibold"
+                                class="bg-white/95 hover:bg-white hover:border-primary-400 hover:text-primary-600 hover:shadow-primary-500/10 backdrop-blur-xl border border-gray-200/80 shadow-xl text-xs md:text-sm text-gray-800 px-5 py-3.5 rounded-2xl rounded-bl-sm transition-all cursor-pointer text-left w-auto max-w-[90%] md:max-w-[85%] hover:-translate-y-1 active:scale-[0.98] leading-relaxed font-semibold suggest-btn"
                                 :title="reply">
                                 {{ reply }}
                             </button>
@@ -753,7 +753,7 @@
                         <div class="flex items-center gap-2">
                             <!-- Suggestion Button -->
                             <button @click="generateSuggestions"
-                                class="bg-white/90 backdrop-blur-md rounded-full w-8 h-8 flex items-center justify-center border border-gray-200 shadow-sm text-gray-500 hover:text-primary-600 hover:bg-white hover:border-primary-200 transition-all active:scale-95"
+                                class="bg-white/90 backdrop-blur-md rounded-full w-8 h-8 flex items-center justify-center border border-gray-200 shadow-sm text-gray-500 hover:text-primary-600 hover:bg-white hover:border-primary-200 transition-all active:scale-95 toolbar-btn"
                                 title="建议回复" :disabled="isGeneratingSuggestions">
                                 <svg v-if="!isGeneratingSuggestions" class="w-4 h-4" fill="none" stroke="currentColor"
                                     viewBox="0 0 24 24">
@@ -773,7 +773,7 @@
                             <!-- Auto Image Button -->
                             <button @click="isAutoImageGenEnabled = !isAutoImageGenEnabled"
                                 :class="[isAutoImageGenEnabled ? 'bg-primary-500 text-white shadow-primary-500/30 border-transparent' : 'bg-white/90 text-gray-500 hover:text-gray-700 hover:bg-white border-gray-200']"
-                                class="backdrop-blur-md rounded-full w-8 h-8 flex items-center justify-center border shadow-sm transition-all active:scale-95"
+                                class="backdrop-blur-md rounded-full w-8 h-8 flex items-center justify-center border shadow-sm transition-all active:scale-95 toolbar-btn"
                                 title="自动生图开关">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -783,7 +783,7 @@
                             </button>
                             <!-- Summarize Button -->
                             <button @click="showSummaryModal = true"
-                                class="bg-white/90 text-gray-500 hover:text-primary-600 hover:bg-white border hover:border-primary-200 border-gray-200 backdrop-blur-md rounded-full w-8 h-8 flex items-center justify-center shadow-sm transition-all active:scale-95"
+                                class="bg-white/90 text-gray-500 hover:text-primary-600 hover:bg-white border hover:border-primary-200 border-gray-200 backdrop-blur-md rounded-full w-8 h-8 flex items-center justify-center shadow-sm transition-all active:scale-95 toolbar-btn"
                                 title="一键总结下文并释放Tokens" :disabled="isSummarizing || isGenerating">
                                 <svg v-if="!isSummarizing" class="w-4 h-4" fill="none" stroke="currentColor"
                                     viewBox="0 0 24 24">
@@ -1487,9 +1487,9 @@
                                         <label
                                             class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 ml-1">详细设定</label>
                                         <div class="relative">
-                                            <textarea v-model="user.description" rows="3"
+                                            <textarea v-model="user.description" rows="6"
                                                 placeholder="描述您的外貌、性格、背景故事等..."
-                                                class="w-full bg-gray-50 border-2 border-gray-100 rounded-xl px-4 py-3 text-gray-800 focus:bg-white focus:border-primary-500 focus:ring-4 focus:ring-primary-100 focus:outline-none transition-all resize-none"></textarea>
+                                                class="w-full bg-gray-50 border-2 border-gray-100 rounded-xl px-4 py-3 text-gray-800 focus:bg-white focus:border-primary-500 focus:ring-4 focus:ring-primary-100 focus:outline-none transition-all resize-y"></textarea>
                                             <div class="absolute right-3 bottom-3 text-gray-300 pointer-events-none">
                                                 <svg class="w-5 h-5" fill="none" stroke="currentColor"
                                                     viewBox="0 0 24 24">
@@ -1502,27 +1502,7 @@
                                         </div>
                                     </div>
 
-                                    <!-- Bio Memory (AI Auto) -->
-                                    <div class="group">
-                                        <div class="flex justify-between items-center mb-2 ml-1">
-                                            <label
-                                                class="block text-xs font-bold text-purple-600 uppercase tracking-wider flex items-center gap-1">
-                                                <svg class="w-4 h-4" fill="none" stroke="currentColor"
-                                                    viewBox="0 0 24 24">
-                                                    <path stroke-linecap="round" stroke-linejoin="round"
-                                                        stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
-                                                </svg>
-                                                个性化记忆 (AI自动更新)
-                                            </label>
-                                            <span
-                                                class="text-[10px] bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-bold">Auto</span>
-                                        </div>
-                                        <div class="relative">
-                                            <textarea v-model="user.bio_memory" rows="6"
-                                                placeholder="这里存储了AI记住的关于您的个性化细节..."
-                                                class="w-full bg-purple-50/50 border-2 border-purple-100/50 rounded-xl px-4 py-3 text-gray-700 focus:bg-white focus:border-purple-500 focus:ring-4 focus:ring-purple-100 focus:outline-none transition-all resize-y"></textarea>
-                                        </div>
-                                    </div>
+
 
                                 </div>
                             </div>
@@ -2498,16 +2478,11 @@
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1">详细设定 (可选)</label>
-                            <textarea v-model="tempUserSetup.description" rows="3"
-                                class="w-full bg-gray-50 border border-gray-300 rounded-lg px-4 py-2 text-gray-800 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:outline-none transition-all"
+                            <textarea v-model="tempUserSetup.description" rows="6"
+                                class="w-full bg-gray-50 border border-gray-300 rounded-lg px-4 py-2 text-gray-800 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:outline-none transition-all resize-y"
                                 placeholder="例如：您的外貌、性格、人设等..."></textarea>
                         </div>
-                        <div v-if="user.name !== '请前往设置自定义你的名称'">
-                            <label class="block text-sm font-medium text-gray-700 mb-1">个性化记忆 (AI自动更新)</label>
-                            <textarea v-model="tempUserSetup.bio_memory" rows="3"
-                                class="w-full bg-gray-50 border border-gray-300 rounded-lg px-4 py-2 text-gray-800 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:outline-none transition-all"
-                                placeholder="这里存储了AI记住的关于您的个性化细节。您可以手动编辑。"></textarea>
-                        </div>
+
                     </div>
                 </div>
                 <div class="bg-gray-50 px-4 py-3 sm:px-6 flex flex-row-reverse rounded-b-xl">
@@ -3616,7 +3591,7 @@
 
                 <!-- Footer -->
                 <div
-                    class="p-4 md:p-5 border-t border-gray-100 flex justify-end space-x-3 bg-gray-50/80 backdrop-blur-sm flex-shrink-0 z-10">
+                    class="p-4 md:p-5 border-t border-gray-100 flex justify-end space-x-3 bg-gray-50/80 backdrop-blur-sm flex-shrink-0 z-10 wi-footer">
                     <button @click="showWorldInfoEditor = false"
                         class="px-5 py-2.5 bg-white hover:bg-gray-100 text-gray-700 border border-gray-200 rounded-xl transition-all shadow-sm font-medium text-sm active:scale-95">取消</button>
                     <button @click="saveWorldInfo"

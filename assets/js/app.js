@@ -119,24 +119,19 @@ createApp({
         const updateCountdown = ref(0);
         let updateCountdownTimer = null;
         const latestUpdate = reactive({
-            id: 10101, // 确保这是一个五位数ID，每次更新内容时增加这个数字
+            id: 10102, // 确保这是一个五位数ID，每次更新内容时增加这个数字
             date: new Date().toISOString().split('T')[0],
             title: '网站公告',
             content: `
-### RP-Hub 1.3.0 更新
+### RP-Hub 1.3.2 更新
 
-- 新增"总结"功能，支持自选楼层触发/手动触发两种模式
-- 新增渲染层数上限设置，有效改善了卡顿和生图额度浪费的问题
-- PC/横屏端新增一键收起侧边栏的按钮与功能
-- 优化了PC/移动端的沉浸感
-- 优化了部分按钮的动画表现
-- 修复了计时器不会在非流式输出模式显示的问题
-- 修复了角色卡工坊卡顿/闪退的问题
-- 修复了部分响应情况异常显示的问题
+- 优化了默认预设，大幅度减少了空回现象的发生
+- 优化了角色卡工坊的系统提示词，使其更符合Gemini的特性
+- 以极低的视觉代价，换取了极大的性能节省，减少了移动端发热掉帧的现象
 
 本项目为全开源公益项目，严禁倒卖源码，二改需经作者授权，Q群1015293774
 
-#### 更新时间：03/22/19:31
+#### 更新时间：03/25/21:47
                     `
         });
 
@@ -152,7 +147,7 @@ createApp({
         };
 
         const startUpdateCountdown = () => {
-            updateCountdown.value = 8;
+            updateCountdown.value = 7;
             if (updateCountdownTimer) clearInterval(updateCountdownTimer);
             updateCountdownTimer = setInterval(() => {
                 if (updateCountdown.value > 0) {
