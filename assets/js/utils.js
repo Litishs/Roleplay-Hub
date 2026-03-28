@@ -22,7 +22,7 @@ const formatTimeAgo = (dateString) => {
                 };
 
 const parseCot = (text) => {
-    if (!text) return { cot: '', main: '', isFinished: false };
+    if (!text) return { cot: '', main: '', sys: '', isFinished: false };
     // 匹配 <think> 或 <cot> 标签，支持未闭合的情况
     // 优化正则：允许闭合标签中存在空格，防止因闭合标签格式不规范（如 </think >）导致正文被吞
     // 同时支持闭合标签缺失斜杠的情况（如 <cot>...<cot>），这是某些模型常见的错误输出
@@ -40,6 +40,13 @@ const parseCot = (text) => {
         }
         return '';
     });
+
+    let sys = '';
+    const sysMatch = mainContent.match(/\n\n\[系统指令:\s*([\s\S]*?)\]\s*$/);
+    if (sysMatch) {
+        sys = sysMatch[1];
+        mainContent = mainContent.slice(0, sysMatch.index).trim();
+    }
     
-    return { cot: cotContent.trim(), main: mainContent.trimStart(), isFinished };
+    return { cot: cotContent.trim(), main: mainContent.trimStart(), sys: sys, isFinished };
 };
