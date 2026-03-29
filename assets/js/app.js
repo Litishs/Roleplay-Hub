@@ -112,6 +112,8 @@ createApp({
             }
         };
 
+        // Removed Friends State
+
         // Update Modal Logic
         const showUpdateModal = ref(false);
         const updateCountdown = ref(0);
@@ -175,6 +177,8 @@ createApp({
         const confirmMessage = ref('');
         const confirmCallback = ref(null);
         const isGenerating = ref(false);
+        const isRemoteGenerating = ref(false); // 新增：远程生成状态
+        const remoteEstimatedTime = ref(null); // 新增：远程预计时间
         const isReceiving = ref(false);
         const isThinking = ref(false);
         const abortController = ref(null);
@@ -269,22 +273,8 @@ createApp({
 
         // Listen for workshop ready message to trigger sync
         window.addEventListener('message', (event) => {
-            if (!event.data || typeof event.data !== 'object') return;
-
-            if (event.data.type === 'WORKSHOP_READY') {
+            if (event.data && event.data.type === 'WORKSHOP_READY') {
                 syncSettingsToGenerator();
-            }
-
-            if (event.data.type === 'RPH_IFRAME_HEIGHT' && event.data.id) {
-                const iframe = document.querySelector(`iframe[data-rich-ui-id="${event.data.id}"]`);
-                const height = Number(event.data.height);
-                if (iframe && Number.isFinite(height) && height > 0) {
-                    iframe.style.height = `${Math.ceil(height)}px`;
-                }
-            }
-
-            if (event.data.type === 'RPH_TRIGGER_SLASH' && typeof event.data.text === 'string') {
-                window.triggerSlash?.(event.data.text);
             }
         });
 
@@ -678,117 +668,6 @@ createApp({
             }
         };
 
-        const markdownRenderCache = new Map();
-        const MAX_MARKDOWN_RENDER_CACHE_SIZE = 250;
-        const deferredMessageIndexes = ref(new Set());
-        let deferredMessageObserver = null;
-        const clearMarkdownRenderCache = () => {
-            markdownRenderCache.clear();
-        };
-        const disconnectDeferredMessageObserver = () => {
-            if (deferredMessageObserver) {
-                deferredMessageObserver.disconnect();
-                deferredMessageObserver = null;
-            }
-        };
-        const clearDeferredMessageRendering = () => {
-            disconnectDeferredMessageObserver();
-            deferredMessageIndexes.value = new Set();
-        };
-        const getMarkdownRenderCacheKey = (text, role, skipRegex, skipIframe = false) => `${role}::${skipRegex ? '1' : '0'}::${skipIframe ? '1' : '0'}::${text}`;
-        const setMarkdownRenderCache = (key, value) => {
-            if (markdownRenderCache.size >= MAX_MARKDOWN_RENDER_CACHE_SIZE) {
-                markdownRenderCache.clear();
-            }
-            markdownRenderCache.set(key, value);
-            return value;
-        };
-        const getEffectiveRenderLayerLimit = () => settings.renderLayerLimit > 100 ? Number.POSITIVE_INFINITY : Math.max(0, settings.renderLayerLimit || 0);
-        const isMessageDeferredByLimit = (index) => {
-            const limit = getEffectiveRenderLayerLimit();
-            if (!Number.isFinite(limit) || limit <= 0) return false;
-            return index < Math.max(0, chatHistory.value.length - limit);
-        };
-        const markMessageAsRendered = (index) => {
-            if (!Number.isInteger(index) || deferredMessageIndexes.value.has(index)) return;
-            const nextIndexes = new Set(deferredMessageIndexes.value);
-            nextIndexes.add(index);
-            deferredMessageIndexes.value = nextIndexes;
-        };
-        const shouldRenderMessageContent = (index) => {
-            if (!isMessageDeferredByLimit(index)) return true;
-            return deferredMessageIndexes.value.has(index);
-        };
-        const getMessageContentRenderStyle = (index) => {
-            if (!isMessageDeferredByLimit(index)) return '';
-            if (!shouldRenderMessageContent(index)) {
-                return 'min-height: 150px; contain-intrinsic-size: auto 150px;';
-            }
-            return 'content-visibility: auto; contain-intrinsic-size: auto 150px;';
-        };
-        const ensureDeferredMessageObserver = () => {
-            if (deferredMessageObserver || !chatContainer.value || typeof IntersectionObserver === 'undefined') return;
-
-            deferredMessageObserver = new IntersectionObserver((entries) => {
-                entries.forEach((entry) => {
-                    if (!entry.isIntersecting) return;
-
-                    const index = Number(entry.target.dataset.messageIndex);
-                    if (Number.isInteger(index)) {
-                        markMessageAsRendered(index);
-                    }
-                    deferredMessageObserver?.unobserve(entry.target);
-                });
-            }, {
-                root: chatContainer.value,
-                rootMargin: '900px 0px'
-            });
-        };
-        const registerDeferredMessageElement = (element, index) => {
-            if (!element) return;
-
-            if (!isMessageDeferredByLimit(index) || shouldRenderMessageContent(index)) {
-                deferredMessageObserver?.unobserve(element);
-                return;
-            }
-
-            element.dataset.messageIndex = String(index);
-            ensureDeferredMessageObserver();
-            deferredMessageObserver?.observe(element);
-        };
-        const refreshDeferredMessageRendering = () => {
-            disconnectDeferredMessageObserver();
-
-            const nextIndexes = new Set(
-                Array.from(deferredMessageIndexes.value).filter(index => Number.isInteger(index) && index >= 0 && index < chatHistory.value.length)
-            );
-            const limit = getEffectiveRenderLayerLimit();
-            const eagerStart = Number.isFinite(limit)
-                ? Math.max(0, chatHistory.value.length - limit)
-                : 0;
-
-            for (let index = eagerStart; index < chatHistory.value.length; index++) {
-                nextIndexes.add(index);
-            }
-
-            deferredMessageIndexes.value = nextIndexes;
-
-            nextTick(() => {
-                if (currentView.value !== 'chat' || !chatContainer.value || !Number.isFinite(limit)) return;
-
-                const pendingElements = chatContainer.value.querySelectorAll('[data-deferred-message="true"]');
-                if (pendingElements.length === 0) return;
-
-                ensureDeferredMessageObserver();
-                pendingElements.forEach((element) => {
-                    const index = Number(element.dataset.messageIndex);
-                    if (Number.isInteger(index) && !shouldRenderMessageContent(index)) {
-                        deferredMessageObserver?.observe(element);
-                    }
-                });
-            });
-        };
-
         // Watch user name to update default regex
         watch(() => user.name, (newName) => {
             const defaultRegexName = 'Auto Replace {{user}}';
@@ -810,7 +689,6 @@ createApp({
         }, { deep: true });
 
         watch(regexScripts, (newVal) => {
-            clearMarkdownRenderCache();
             if (currentCharacterIndex.value !== -1 && characters.value[currentCharacterIndex.value]) {
                 const char = characters.value[currentCharacterIndex.value];
                 if (JSON.stringify(char.regexScripts) !== JSON.stringify(newVal)) {
@@ -818,10 +696,6 @@ createApp({
                 }
             }
         }, { deep: true });
-
-        watch(() => [chatHistory.value.length, settings.renderLayerLimit, currentView.value], () => {
-            refreshDeferredMessageRendering();
-        }, { immediate: true });
 
         watch(recentGenerationTimes, (newVal) => {
             if (currentCharacterIndex.value !== -1 && characters.value[currentCharacterIndex.value]) {
@@ -1036,6 +910,12 @@ createApp({
             }
         }, { deep: true });
 
+        // Manual Save Feedback (Optional, can be bound to a button)
+        const manualSave = () => {
+            saveData();
+            showToast('设置已保存', 'success');
+        };
+
         // --- Computed ---
         const currentCharacter = computed(() => {
             return currentCharacterIndex.value >= 0 ? characters.value[currentCharacterIndex.value] : null;
@@ -1172,6 +1052,8 @@ createApp({
         });
 
         // --- Methods ---
+
+        /* extracted formatTimeAgo */
 
         // Navigation Methods
         const scrollToPreviousMessage = () => {
@@ -1360,124 +1242,17 @@ createApp({
         // Markdown Rendering
         /* extracted parseCot */
 
-        const richUiBlockPattern = /^\s*<(div|table|section|article|aside|header|footer|style|script)\b/i;
-        const richUiDocumentPattern = /(<!doctype html>|<html\b[^>]*>)/i;
-        const streamRichUiPattern = /^\s*<(?:!doctype|html|head|body|div|table|section|article|aside|header|footer|style|script)\b/i;
-        const streamRichUiStartPattern = /(<!doctype html>|<html\b[^>]*>|<(div|table|section|article|aside|header|footer|style|script)\b)/i;
-
-        const isStreamingRichUiContent = (text) => {
-            if (!text) return false;
-
-            const parsed = parseCot(text);
-            const mainContent = parsed.main?.trim();
-            if (!mainContent || mainContent.includes('```')) return false;
-
-            return richUiDocumentPattern.test(mainContent) || streamRichUiPattern.test(mainContent);
-        };
-
-        const getDisplayParsedMessage = (msg) => {
-            const parsed = parseCot(msg?.content || '');
-            if (!msg?.isUiStreamingPending) {
-                return parsed;
-            }
-
-            const mainContent = parsed.main || '';
-            const richUiMatch = mainContent.match(streamRichUiStartPattern);
-            const previewMain = richUiMatch
-                ? mainContent.slice(0, richUiMatch.index).trimEnd()
-                : mainContent;
-
-            return {
-                ...parsed,
-                main: previewMain
-            };
-        };
-
-        const shouldShowUiStreamingPlaceholder = (msg) => {
-            return !!msg?.isUiStreamingPending;
-        };
-
-        const renderUiStreamingPlaceholder = () => `
-            <div class="ui-stream-placeholder" aria-live="polite">
-                <div class="ui-stream-placeholder__header">
-                    <span class="ui-stream-placeholder__dot"></span>
-                    <span>正在生成 UI 界面</span>
-                </div>
-                <div class="ui-stream-placeholder__body">
-                    <div class="ui-stream-placeholder__line ui-stream-placeholder__line--lg"></div>
-                    <div class="ui-stream-placeholder__line"></div>
-                    <div class="ui-stream-placeholder__line ui-stream-placeholder__line--short"></div>
-                </div>
-            </div>
-        `;
-
-        const hasRichUiContent = (text, role = 'assistant') => {
-            if (!text) return false;
-
-            const mainContent = parseCot(text).main;
-            if (!mainContent) return false;
-
-            const processed = processRegex(mainContent, { isDisplay: true, role });
-            const trimmed = processed.trim();
-            if (!trimmed || trimmed.includes('```')) return false;
-
-            return richUiDocumentPattern.test(trimmed) || richUiBlockPattern.test(trimmed);
-        };
-
-        const shouldUseFullWidthBubble = (msg) => {
-            if (!msg) return false;
-            if (msg.isSummary) return true;
-            if (msg.isUiStreamingPending) return true;
-
-            const parsed = parseCot(msg.content);
-            return !!parsed.cot || hasRichUiContent(parsed.main, msg.role);
-        };
-
-        const renderMarkdown = (text, role = 'assistant', skipRegex = false, skipIframeForBlocks = false) => {
+        const renderMarkdown = (text, role = 'assistant', skipRegex = false) => {
             if (!text) return '';
-            if (text === '__RPH_UI_STREAM_PLACEHOLDER__') {
-                return renderUiStreamingPlaceholder();
-            }
-
-            const cacheKey = getMarkdownRenderCacheKey(text, role, skipRegex, skipIframeForBlocks);
-            if (markdownRenderCache.has(cacheKey)) {
-                return markdownRenderCache.get(cacheKey);
-            }
 
             let processed = text;
 
             // Apply regex for display (real-time)
             processed = skipRegex ? processed : processRegex(processed, { isDisplay: true, role: role });
-
-            // Configure DOMPurify
-            const cleanConfig = {
-                ADD_TAGS: ['details', 'summary', 'iframe', 'svg', 'path', 'g', 'circle', 'rect', 'defs', 'linearGradient', 'stop', 'style', 'div', 'span', 'script', 'button', 'input'],
-                ADD_ATTR: ['style', 'open', 'srcdoc', 'sandbox', 'frameborder', 'allow', 'allowfullscreen', 'class', 'id', 'viewBox', 'fill', 'stroke', 'stroke-width', 'd', 'stroke-linecap', 'stroke-linejoin', 'x1', 'y1', 'x2', 'y2', 'offset', 'stop-color', 'stop-opacity', 'width', 'height', 'type', 'value', 'checked'],
-                FORBID_ATTR: ['onmouseover', 'onload', 'onclick'],
-                FORCE_BODY: true
-            };
-
-            if (skipIframeForBlocks) {
-                // Inline rendering to prevent v-html iframe flickering during streaming
-                let html = DOMPurify.sanitize(marked.parse(processed), cleanConfig);
-                return setMarkdownRenderCache(cacheKey, html);
-            }
-            const wrapHtmlCard = (rawHtml) => {
-                const container = document.createElement('div');
-                container.className = 'html-card-container';
-                container.style.margin = '0';
-                container.style.paddingBottom = '0';
-                container.style.marginBottom = '-1px';
-                container.appendChild(createIframe(rawHtml));
-                return container.outerHTML;
-            };
-
             // Helper to create iframe
             const createIframe = (rawHtml) => {
                 const iframe = document.createElement('iframe');
-                const iframeId = generateUUID();
                 iframe.className = 'w-full border-t border-gray-200 bg-white shadow-sm block';
-                iframe.dataset.richUiId = iframeId;
                 // Remove fixed height, use a small initial height to prevent layout jumping if possible
                 // height will be auto-adjusted by the script below
                 iframe.style.height = 'auto';
@@ -1486,31 +1261,39 @@ createApp({
                 // Ensure no margin at the bottom of iframe itself
                 iframe.style.marginBottom = '0';
                 iframe.setAttribute('scrolling', 'no');
-                iframe.sandbox = 'allow-scripts allow-forms allow-popups allow-modals';
+                iframe.sandbox = 'allow-scripts allow-forms allow-popups allow-modals allow-same-origin';
+
+                // External fallback resize (in case internal script fails or is blocked)
+                iframe.onload = function () {
+                    try {
+                        setTimeout(() => {
+                            if (this.contentWindow && this.contentWindow.document) {
+                                const doc = this.contentWindow.document;
+                                // Calculate precise height without minimum limit
+                                const height = Math.max(doc.body.scrollHeight, doc.documentElement.scrollHeight);
+                                this.style.height = height + 'px'; // Exact height, no buffer
+                            }
+                        }, 100);
+                    } catch (e) {
+                        console.warn('Failed to resize iframe:', e);
+                    }
+                };
 
                 const hudCSS = '.sinan-hud{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;padding:12px;background:linear-gradient(to bottom right,rgba(255,255,255,0.9),rgba(255,255,255,0.6));border-radius:12px;border:1px solid rgba(0,0,0,0.08);backdrop-filter:blur(4px)}.char-card{flex:1 1 140px;background:#fff;padding:10px;border-radius:8px;border-left:4px solid #ddd;box-shadow:0 2px 6px rgba(0,0,0,0.04);display:flex;flex-direction:column;gap:4px;font-size:12px;position:relative;overflow:hidden;transition:transform 0.2s}.char-card:hover{transform:translateY(-2px);box-shadow:0 4px 8px rgba(0,0,0,0.1)}.char-name{font-weight:700;font-size:14px;color:#374151;display:flex;justify-content:space-between;align-items:center}.char-mood{color:#6b7280;font-size:12px}.char-loc{color:#9ca3af;font-size:11px;margin-top:auto;padding-top:4px}.bar-bg{height:4px;background:#f3f4f6;border-radius:2px;overflow:hidden;margin-top:6px}.bar-fill{height:100%;background:#10b981;border-radius:2px}.c-tongqiu{border-left-color:#f59e0b}.c-tongqiu .bar-fill{background:#f59e0b}.c-yufan{border-left-color:#3b82f6}.c-yufan .bar-fill{background:#3b82f6}.c-linghu{border-left-color:#8b5cf6}.c-linghu .bar-fill{background:#8b5cf6}.c-chongtian{border-left-color:#ef4444}.c-chongtian .bar-fill{background:#ef4444}';
                 // Removed overflow:hidden to prevent content clipping if height calc is delayed
                 // FIX: Removed 'height: 100vh' or similar constraints from body/html to prevent layout stretching in auto-resizing iframes
-                const resetStyle = '<style>html,body{font-family:\'PingFang SC\',system-ui,-apple-system,sans-serif !important;font-size:14px !important;line-height:1.625 !important;color:#1f2937;margin:0 !important;padding:0 !important;width:100% !important;height:auto !important;min-height:auto !important;word-wrap:break-word !important;box-sizing:border-box !important;overflow:hidden !important;-webkit-text-size-adjust:100% !important;text-size-adjust:100% !important;} @media (min-width: 768px) { html,body { font-size: 16px !important; } } ::-webkit-scrollbar{display:none;} *,*::before,*::after{box-sizing:inherit !important;} img,video,canvas,svg{max-width:100% !important;height:auto !important;} table{display:block !important;overflow-x:auto !important;max-width:100% !important;} pre{white-space:pre-wrap !important;word-wrap:break-word !important;max-width:100% !important;} .container, .reality-panel, .app-container {max-width:100% !important; width:100% !important; margin: 0 !important; border-radius: 0 !important; box-shadow: none !important; border: none !important; height: auto !important; min-height: 0 !important;} body > div:first-child { margin: 0 !important; max-width: 100% !important; height: auto !important; min-height: 0 !important; } #app { height: auto !important; min-height: auto !important; }' + hudCSS + '</style>';
+                const resetStyle = '<style>html,body{margin:0 !important;padding:0 !important;width:100% !important;height:auto !important;min-height:auto !important;word-wrap:break-word !important;box-sizing:border-box !important;overflow:hidden !important;} ::-webkit-scrollbar{display:none;} *,*::before,*::after{box-sizing:inherit !important;} img,video,canvas,svg{max-width:100% !important;height:auto !important;} table{display:block !important;overflow-x:auto !important;max-width:100% !important;} pre{white-space:pre-wrap !important;word-wrap:break-word !important;max-width:100% !important;} .container, .reality-panel, .app-container {max-width:100% !important; width:100% !important; margin: 0 !important; border-radius: 0 !important; box-shadow: none !important; border: none !important; height: auto !important; min-height: 0 !important;} body > div:first-child { margin: 0 !important; max-width: 100% !important; height: auto !important; min-height: 0 !important; } #app { height: auto !important; min-height: auto !important; }' + hudCSS + '</style>';
                 const metaViewport = '<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">';
-                const needsJquery = /\bjQuery\b|\$\s*\(/.test(rawHtml);
-                const jqueryScript = needsJquery
-                    ? '<script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js" defer><\/script>'
-                    : '';
+                // Use defer to prevent blocking rendering if CDN is slow
+                const jqueryScript = '<script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js" defer><\/script>';
                 const scriptShim = `
                             <script>
-                                const iframeId = ${JSON.stringify(iframeId)};
-
-                                const postToParent = (payload) => {
-                                    try {
-                                        window.parent.postMessage(payload, '*');
-                                    } catch (error) {
-                                        console.warn('Failed to communicate with parent:', error);
-                                    }
-                                };
-
                                 window.triggerSlash = function(text) {
-                                    postToParent({ type: 'RPH_TRIGGER_SLASH', text });
+                                    if (window.parent && window.parent.triggerSlash) {
+                                        window.parent.triggerSlash(text);
+                                    } else {
+                                        console.error("SillyTavern's triggerSlash function not found in parent.");
+                                    }
                                 };
 
                                 // Robust Auto-Resize Logic
@@ -1518,6 +1301,8 @@ createApp({
                                 let isUpdating = false;
 
                                 function updateHeight() {
+                                    // Safety check for cross-origin or detached iframe
+                                    if (!window.frameElement) return;
                                     if (isUpdating) return;
                                     
                                     isUpdating = true;
@@ -1586,9 +1371,10 @@ createApp({
                                         // Since we forced overflow:hidden, the scrollbar loop risk is minimal.
                                         // We use a threshold of 0 to ensure smooth animations.
                                         
-                                        if (Math.abs(newHeight - lastHeight) > 1) {
+                                        if (Math.abs(newHeight - lastHeight) > 0) {
                                             lastHeight = newHeight;
-                                            postToParent({ type: 'RPH_IFRAME_HEIGHT', id: iframeId, height: newHeight });
+                                            // Remove extra buffer for tighter fit
+                                            window.frameElement.style.height = newHeight + 'px';
                                         }
                                         
                                         isUpdating = false;
@@ -1699,12 +1485,20 @@ ${rawHtml}
                 return iframe;
             };
 
+            // Configure DOMPurify
+            const cleanConfig = {
+                ADD_TAGS: ['details', 'summary', 'iframe', 'svg', 'path', 'g', 'circle', 'rect', 'defs', 'linearGradient', 'stop', 'style', 'div', 'span', 'script', 'button', 'input'],
+                ADD_ATTR: ['style', 'open', 'srcdoc', 'sandbox', 'frameborder', 'allow', 'allowfullscreen', 'class', 'id', 'viewBox', 'fill', 'stroke', 'stroke-width', 'd', 'stroke-linecap', 'stroke-linejoin', 'x1', 'y1', 'x2', 'y2', 'offset', 'stop-color', 'stop-opacity', 'width', 'height', 'onclick', 'type', 'value', 'checked'],
+                FORBID_ATTR: ['onmouseover', 'onload'], // Removed onclick to allow interactive UI
+                FORCE_BODY: true
+            };
+
             const trimmed = processed.trim();
 
             // Improved HTML Document Detection
             // Look for standard HTML document markers anywhere in the text, not just at the start
             // This handles cases where there might be some text before the HTML code
-            const htmlDocPattern = richUiDocumentPattern;
+            const htmlDocPattern = /(<!doctype html>|<html\b[^>]*>)/i;
             const htmlMatch = trimmed.match(htmlDocPattern);
             const containsHtmlDoc = !!htmlMatch;
 
@@ -1739,23 +1533,32 @@ ${rawHtml}
                 }
 
                 // 2. Render Iframe (HTML Card)
-                resultHtml += wrapHtmlCard(htmlContent);
+                const container = document.createElement('div');
+                container.className = 'html-card-container';
+                // Remove bottom margin to align with bubble bottom
+                container.style.margin = '0';
+                container.style.paddingBottom = '0';
+                // Adjust negative margin to pull it down slightly if needed, or just 0
+                container.style.marginBottom = '-1px'; // Slight pull to cover border if any
+                container.appendChild(createIframe(htmlContent));
+                resultHtml += container.outerHTML;
 
                 // 3. Render Post-text (Markdown)
                 if (postText.trim()) {
                     resultHtml += DOMPurify.sanitize(marked.parse(postText), cleanConfig);
                 }
 
-                return setMarkdownRenderCache(cacheKey, resultHtml);
+                return resultHtml;
             }
 
             const lowerTrimmed = trimmed.toLowerCase();
 
             // Smart detection: If content starts with block-level HTML and contains no Markdown Code Blocks,
-            // assume it is a self-contained rich UI block and isolate it in an iframe.
-            const startsWithBlockHtml = richUiBlockPattern.test(trimmed);
+            // assume it is raw HTML and skip marked parsing to prevent breaking layout/styles.
+            const startsWithBlockHtml = /^\s*<(div|table|section|article|aside|header|footer|style|script)/i.test(trimmed);
             if (startsWithBlockHtml && !trimmed.includes('```')) {
-                return setMarkdownRenderCache(cacheKey, wrapHtmlCard(processed));
+                // Directly sanitize and return, skipping Markdown parsing
+                return DOMPurify.sanitize(processed, cleanConfig);
             }
 
             // For mixed content (Text + HTML widgets like HUDs/Status Bars),
@@ -1771,8 +1574,26 @@ ${rawHtml}
 
             // Auto-render HTML code blocks AND escaped HTML texts
             try {
+                // Execute Scripts manually because setting innerHTML doesn't run scripts
                 const parser = new DOMParser();
                 const doc = parser.parseFromString(html, 'text/html');
+
+                // Handle scripts
+                const scripts = doc.querySelectorAll('script');
+                if (scripts.length > 0) {
+                    setTimeout(() => {
+                        scripts.forEach(oldScript => {
+                            // Find the script in the actual DOM after render
+                            // Note: This is tricky because we're returning HTML string, not mounting DOM yet.
+                            // Vue v-html will mount it. But v-html doesn't run scripts.
+                            // Strategy: We rely on the fact that inline rendering with <script> is dangerous/complex in Vue.
+                            // But since the user wants inline script execution for UI, we might need a workaround.
+                            // The createIframe approach already handles scripts because srcdoc runs them.
+                            // But for inline content (like the user's div), scripts won't run via v-html.
+                            // We will try to convert complex UI blocks containing scripts into IFRAMES automatically.
+                        });
+                    }, 0);
+                }
 
                 let modified = false;
 
@@ -1828,16 +1649,12 @@ ${rawHtml}
                     }
                 });
 
-                if (doc.querySelector('script')) {
-                    return setMarkdownRenderCache(cacheKey, wrapHtmlCard(doc.body.innerHTML));
-                }
-
-                if (modified) return setMarkdownRenderCache(cacheKey, doc.body.innerHTML);
+                if (modified) return doc.body.innerHTML;
             } catch (e) {
                 console.error('Error rendering HTML preview:', e);
             }
 
-            return setMarkdownRenderCache(cacheKey, html);
+            return html;
         };
 
         // API & Models
@@ -1872,6 +1689,7 @@ ${rawHtml}
             showModelSelector.value = false;
         };
 
+        // Removed Multiplayer Logic
         // --- Status Check functions ---
         const checkApiStatus = async () => {
             if (!settings.apiUrl || !settings.apiKey) {
@@ -1930,6 +1748,21 @@ ${rawHtml}
         const checkAllStatuses = () => {
             checkApiStatus();
             checkImageGenStatus();
+        };
+
+        // Removed Personal Channel and Friends Logic
+
+        // Removed Room Creation and Join Logic
+
+        // Removed Room Actions Logic
+
+        // Private Message Logic Helper (Defined early for use in other functions)
+        const getAtTarget = (content) => {
+            if (!content) return null;
+            // Use parseCot to get main content without thinking/cot tags
+            const { main } = parseCot(content);
+            const match = main.match(/^@([^\s]+)\s/);
+            return match ? match[1] : null;
         };
 
         // Chat Logic
@@ -1999,8 +1832,6 @@ ${rawHtml}
 
         const clearChat = () => {
             confirmAction('确定要清空聊天记录吗？此操作无法撤销。', () => {
-                clearMarkdownRenderCache();
-                clearDeferredMessageRendering();
                 chatHistory.value = [];
                 if (currentCharacter.value && currentCharacter.value.first_mes) {
                     chatHistory.value.push({
@@ -2049,7 +1880,6 @@ ${rawHtml}
 
         const deleteMessage = (index) => {
             confirmAction('确定要删除这条消息吗？', () => {
-                clearDeferredMessageRendering();
                 const msg = chatHistory.value[index];
                 // Remove timing record if exists
                 if (msg && msg.id) {
@@ -2073,7 +1903,6 @@ ${rawHtml}
             } else {
                 // 如果是 AI 消息，删除它（及之后）然后重新生成
                 confirmAction('确定要重新生成这条消息吗？', async () => {
-                    clearDeferredMessageRendering();
                     // Remove timing record for the message being regenerated
                     if (msg && msg.id) {
                         recentGenerationTimes.value = recentGenerationTimes.value.filter(t => (t.id || t) !== msg.id);
@@ -2666,8 +2495,7 @@ ${rawHtml}
                                                         reasoning: '',
                                                         id: generateUUID(), // Assign ID
                                                         shouldAnimate: true, // Enable animation for new stream
-                                                        isCotOpen: false,
-                                                        isUiStreamingPending: false // Buffer partial HTML UI streams until complete
+                                                        isCotOpen: false // Default collapsed for CoT
                                                     });
                                                     chatHistory.value.push(assistantMessage);
                                                     isReceiving.value = true;
@@ -2682,9 +2510,6 @@ ${rawHtml}
                                                 if (content) {
                                                     assistantMessage.content += content;
                                                     responseContent += content;
-                                                    if (!assistantMessage.isUiStreamingPending && isStreamingRichUiContent(assistantMessage.content)) {
-                                                        assistantMessage.isUiStreamingPending = true;
-                                                    }
                                                     isThinking.value = false;
                                                 }
 
@@ -2695,10 +2520,6 @@ ${rawHtml}
                                         }
                                     }
                                 }
-                            }
-
-                            if (assistantMessage) {
-                                assistantMessage.isUiStreamingPending = false;
                             }
                         } else {
                             // Non-streaming response handling
@@ -2728,8 +2549,7 @@ ${rawHtml}
                                         reasoning: reasoning,
                                         id: generateUUID(),
                                         shouldAnimate: true,
-                                        isCotOpen: false,
-                                        isUiStreamingPending: false
+                                        isCotOpen: false
                                     });
                                     chatHistory.value.push(assistantMessage);
                                     responseContent = content;
@@ -2772,8 +2592,7 @@ ${rawHtml}
                                         reasoning: finalReasoning,
                                         id: generateUUID(),
                                         shouldAnimate: true,
-                                        isCotOpen: false,
-                                        isUiStreamingPending: false
+                                        isCotOpen: false
                                     });
                                     chatHistory.value.push(assistantMessage);
 
@@ -2828,15 +2647,8 @@ ${rawHtml}
                                 id: assistantMessage.id,
                                 duration: duration
                             });
-
-                            if (assistantMessage) {
-                                assistantMessage.isUiStreamingPending = false;
-                            }
                             if (recentGenerationTimes.value.length > 5) {
                                 recentGenerationTimes.value.shift();
-                            }
-                            if (assistantMessage) {
-                                assistantMessage.isUiStreamingPending = false;
                             }
 
                             // -----------------------------
@@ -3325,8 +3137,6 @@ ${textContent}`;
             fetchQuota();
         });
         const selectCharacter = async (index, isNewImport = false) => {
-            clearMarkdownRenderCache();
-            clearDeferredMessageRendering();
             currentCharacterIndex.value = index;
             const char = characters.value[index];
 
@@ -4953,7 +4763,7 @@ ${textContent}`;
             showCharacterExportModal, characterToExportIndex, openCharacterExportModal, confirmCharacterExport, // Character Export Modal
             showUpdateModal, updateCountdown, latestUpdate, closeUpdateModal, // Update Modal
             showConfirmModal, confirmMessage, modelMode, // Export for template
-            isGenerating, isReceiving, isThinking, userInput, modelSearchQuery, activeModelTag, modelTags, characterSearchQuery, availableModels, filteredModels, filteredCharacters,
+            isGenerating, isRemoteGenerating, remoteEstimatedTime, isReceiving, isThinking, userInput, modelSearchQuery, activeModelTag, modelTags, characterSearchQuery, availableModels, filteredModels, filteredCharacters,
             user, settings, characters, currentCharacter, currentCharacterIndex, chatHistory, presets, regexScripts, worldInfo,
             activeRegexCount, activeWorldInfoCount, totalContextLength,
             editingCharacter, editingPreset, toasts, chatContainer, inputBox, messageElements,
@@ -4969,6 +4779,7 @@ ${textContent}`;
             scrollToPreviousMessage, scrollToNextMessage,
             fetchModels, selectModel, sendMessage, autoResizeInput, stopGeneration, clearChat,
             handleConfirm, handleCancel, // Export handlers
+            manualSave,
             copyMessage, deleteMessage, regenerateMessage, printAIRequestLogs,
             editSummaryMessage, saveSummaryMessage, cancelEditSummary,
             createNewCharacter, editCharacter, saveCharacter, deleteCharacter, selectCharacter,
@@ -4977,7 +4788,7 @@ ${textContent}`;
             handleAvatarUpload, importCharacter, exportCharacter,
             createPreset, editPreset, savePreset, deletePreset, movePreset,
 
-            renderMarkdown, parseCot, getDisplayParsedMessage, renderUiStreamingPlaceholder, shouldShowUiStreamingPlaceholder, shouldUseFullWidthBubble, shouldRenderMessageContent, getMessageContentRenderStyle, registerDeferredMessageElement, closeCharacterEditor: () => showCharacterEditor.value = false,
+            renderMarkdown, parseCot, formatTimeAgo, closeCharacterEditor: () => showCharacterEditor.value = false,
             openExportModal: (type) => {
                 exportType.value = type;
                 selectedExportIndices.value.clear();

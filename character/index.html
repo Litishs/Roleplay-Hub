@@ -619,7 +619,7 @@
                                     class="absolute top-2 left-1/2 -translate-x-1/2 z-20 badge badge-error badge-outline font-bold shadow-sm bg-base-100/90 backdrop-blur">
                                     变更前 Original</div>
                                 <iframe v-if="originalPreviewHTML" :srcdoc="originalPreviewHTML"
-                                    class="w-full h-full border-0" sandbox="allow-scripts"></iframe>
+                                    class="w-full h-full border-0" sandbox="allow-scripts allow-same-origin"></iframe>
                             </div>
                             <div class="flex-1 flex-col h-full relative"
                                 :class="mobilePreviewMode === 'modified' ? 'flex' : 'hidden md:flex'">
@@ -627,7 +627,7 @@
                                     class="absolute top-2 left-1/2 -translate-x-1/2 z-20 badge badge-success badge-outline font-bold shadow-sm bg-base-100/90 backdrop-blur">
                                     变更后 Modified</div>
                                 <iframe v-if="previewHTML" :srcdoc="previewHTML" class="w-full h-full border-0"
-                                    sandbox="allow-scripts"></iframe>
+                                    sandbox="allow-scripts allow-same-origin"></iframe>
                             </div>
                         </template>
 
@@ -635,7 +635,7 @@
                         <template v-else>
                             <div class="w-full h-full">
                                 <iframe :srcdoc="previewHTML" class="w-full h-full border-0"
-                                    sandbox="allow-scripts"></iframe>
+                                    sandbox="allow-scripts allow-same-origin"></iframe>
                             </div>
                         </template>
                     </div>
@@ -1490,7 +1490,6 @@
                 });
 
                 const updateGlider = () => {
-                    if (!tabs.value || tabs.value.length === 0) return;
                     const activeIndex = tabs.value.findIndex(t => t.id === activeTab.value);
                     const el = tabElements.value[activeIndex];
                     if (el) {
@@ -1609,6 +1608,9 @@
                     }
                 };
 
+                // Call sync setup
+                setupSyncListener();
+
                 // Options with persistence
                 const savedOptions = localStorage.getItem('ai_chargen_options');
                 const defaultOptions = {
@@ -1661,9 +1663,6 @@
                 watch(api, (newVal) => {
                     localStorage.setItem('ai_chargen_api', JSON.stringify(newVal));
                 }, { deep: true });
-
-                // Call sync setup after options/api are ready
-                setupSyncListener();
 
                 const targetFields = ['name', 'description', 'personality', 'scenario', 'first_mes', 'creator_notes', 'system_prompt', 'post_history_instructions'];
 

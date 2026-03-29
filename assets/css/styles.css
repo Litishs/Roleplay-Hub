@@ -83,40 +83,26 @@ html {
         }
         
         /* Default padding for text elements */
-        .markdown-body > :is(p, ul, ol, pre, blockquote, h1, h2, h3, h4, hr, table, details) {
+        .markdown-body > * {
             padding-left: 0.9rem;
             padding-right: 0.8rem;
             margin-bottom: 0.75em;
-        }
-
-        .markdown-body > p,
-        .markdown-body > li {
             text-align: justify;
         }
 
         /* Top/Bottom padding simulation */
-        .markdown-body > :is(p, ul, ol, pre, blockquote, h1, h2, h3, h4, hr, table, details):first-child { padding-top: 0.75rem; }
-        .markdown-body > :is(p, ul, ol, pre, blockquote, h1, h2, h3, h4, hr, table, details):last-child { padding-bottom: 0.75rem; margin-bottom: 0; }
+        .markdown-body > *:first-child { padding-top: 0.75rem; }
+        .markdown-body > *:last-child { padding-bottom: 0.75rem; margin-bottom: 0; }
 
         /* Full-width elements (iframe) */
         .markdown-body > iframe,
         .markdown-body > .html-card-container {
-            display: block;
-            align-self: stretch;
             width: 100%;
-            min-width: 0;
             padding: 0 !important;
             margin-left: 0 !important;
             margin-right: 0 !important;
             max-width: none;
             overflow: hidden !important;
-        }
-
-        .rich-message-content,
-        .rich-message-content .markdown-body,
-        .rich-message-content .html-card-container {
-            width: 100%;
-            min-width: 0;
         }
 
         .markdown-body p { color: inherit; }
@@ -145,6 +131,11 @@ html {
         /* Specific fix for immersive container from regex */
         .markdown-body div[style*="rgba(20, 10, 20, 0.7)"] {
             color: #ffffff !important;
+        }
+
+        /* Generic fix for immersive containers (custom regex outputs) to preserve newlines */
+        .markdown-body div[style] {
+            white-space: pre-wrap;
         }
 
         .glass-panel {
@@ -317,67 +308,6 @@ html {
             backface-visibility: hidden;
             perspective: 1000;
             -webkit-font-smoothing: subpixel-antialiased;
-        }
-
-        .ui-stream-placeholder {
-            margin: 0.75rem;
-            padding: 0.95rem 1rem;
-            border-radius: 1rem;
-            border: 1px solid rgba(59, 130, 246, 0.16);
-            background: linear-gradient(135deg, rgba(239, 246, 255, 0.96), rgba(255, 255, 255, 0.98));
-            box-shadow: 0 8px 24px rgba(59, 130, 246, 0.08);
-        }
-
-        .ui-stream-placeholder__header {
-            display: flex;
-            align-items: center;
-            gap: 0.55rem;
-            font-size: 0.86rem;
-            font-weight: 700;
-            color: #2563eb;
-            margin-bottom: 0.85rem;
-        }
-
-        .ui-stream-placeholder__dot {
-            width: 0.6rem;
-            height: 0.6rem;
-            border-radius: 9999px;
-            background: linear-gradient(135deg, #60a5fa, #2563eb);
-            box-shadow: 0 0 0 6px rgba(96, 165, 250, 0.12);
-            animation: uiStreamPulse 1.4s ease-in-out infinite;
-            flex-shrink: 0;
-        }
-
-        .ui-stream-placeholder__body {
-            display: flex;
-            flex-direction: column;
-            gap: 0.55rem;
-        }
-
-        .ui-stream-placeholder__line {
-            height: 0.8rem;
-            border-radius: 9999px;
-            background: linear-gradient(90deg, rgba(191, 219, 254, 0.9), rgba(219, 234, 254, 0.55), rgba(191, 219, 254, 0.9));
-            background-size: 200% 100%;
-            animation: uiStreamShimmer 1.5s linear infinite;
-        }
-
-        .ui-stream-placeholder__line--lg {
-            width: 88%;
-        }
-
-        .ui-stream-placeholder__line--short {
-            width: 56%;
-        }
-
-        @keyframes uiStreamPulse {
-            0%, 100% { transform: scale(1); opacity: 0.9; }
-            50% { transform: scale(1.12); opacity: 1; }
-        }
-
-        @keyframes uiStreamShimmer {
-            0% { background-position: 200% 0; }
-            100% { background-position: -200% 0; }
         }
 
         /* Elegant Message Entrance Animation */

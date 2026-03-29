@@ -5,6 +5,22 @@ const generateUUID = () => {
                     });
                 };
 
+const formatTimeAgo = (dateString) => {
+                    if (!dateString) return '从未在线';
+                    const date = new Date(dateString);
+                    const now = new Date();
+                    const seconds = Math.floor((now - date) / 1000);
+                    
+                    if (seconds < 60) return '刚刚';
+                    const minutes = Math.floor(seconds / 60);
+                    if (minutes < 60) return `${minutes}分钟前`;
+                    const hours = Math.floor(minutes / 60);
+                    if (hours < 24) return `${hours}小时前`;
+                    const days = Math.floor(hours / 24);
+                    if (days < 30) return `${days}天前`;
+                    return date.toLocaleDateString();
+                };
+
 const parseCot = (text) => {
     if (!text) return { cot: '', main: '', sys: '', isFinished: false };
     // 匹配 <think> 或 <cot> 标签，支持未闭合的情况
