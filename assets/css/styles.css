@@ -267,11 +267,6 @@ html {
                 background-color: rgba(255, 255, 255, 0.98) !important;
             }
 
-            /* Toolbar action buttons - only apply solid white default if not active/highlighted */
-            .toolbar-btn:not(.bg-primary-500) {
-                background-color: rgba(255, 255, 255, 0.95) !important;
-            }
-
             /* Sinan HUD */
             .sinan-hud {
                 backdrop-filter: none !important;
@@ -677,5 +672,27 @@ opacity: 0;
 
 .no-blur .bg-black\/30 {
     background-color: rgba(0, 0, 0, 0.5) !important;
+}
+
+/* UI Spinner Animation */
+@keyframes ui-dash {
+  0% {
+    stroke-dasharray: 1, 200;
+    stroke-dashoffset: 0;
+  }
+  50% {
+    stroke-dasharray: 89, 200;
+    stroke-dashoffset: -35px;
+  }
+  100% {
+    stroke-dasharray: 89, 200;
+    stroke-dashoffset: -124px;
+  }
+}
+
+.ui-spinner-path {
+  stroke: currentColor;
+  stroke-linecap: round;
+  animation: ui-dash 1.5s ease-in-out infinite;
 }
 

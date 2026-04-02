@@ -119,24 +119,23 @@ createApp({
         const updateCountdown = ref(0);
         let updateCountdownTimer = null;
         const latestUpdate = reactive({
-            id: 10104, // 确保这是一个五位数ID，每次更新内容时增加这个数字
+            id: 10105, // 确保这是一个五位数ID，每次更新内容时增加这个数字
             date: new Date().toISOString().split('T')[0],
             title: '网站公告',
             content: `
-### RP-Hub 1.3.5 更新
+### RP-Hub 1.4.0 更新
 
-- 新增“万相广场”社区和入口
-- 新增“临时指令”，“总结编辑”的功能
-- 新增“模型标签”功能，以帮助快速筛选模型
-- 优化了默认预设，提升了Claude/GLM模型的NSFW能力
-- 优化了导出功能，为万相广场保留了原始标签
-- 优化了PC/横屏端的输入区域UI
-- 修复了PC/横屏端高斯模糊状态异常的问题
-- 修复了自动滚动无法滚至最底部的问题
+- 新增"消息"编辑功能
+- 新增"沉浸模式"开关（推荐开启，对前端卡的沉浸感提升尤为明显）
+- 完全重构了移动端聊天界面的体验，大幅度增强了沉浸感
+- 为快捷模型切换提供了模型名称查看
+- 为流式输出生成UI添加了缓冲区，解决了重复渲染的问题
+- 优化了气泡间距与按钮可见度
+- 修复了自动滚动会被AI生成触发的问题
 
 本项目为全开源公益项目，严禁倒卖源码，二改需经作者授权
 
-#### 更新时间：03/29/07:47
+#### 更新时间：04/03/05:33
                     `
         });
 
@@ -152,7 +151,7 @@ createApp({
         };
 
         const startUpdateCountdown = () => {
-            updateCountdown.value = 7;
+            updateCountdown.value = 10;
             if (updateCountdownTimer) clearInterval(updateCountdownTimer);
             updateCountdownTimer = setInterval(() => {
                 if (updateCountdown.value > 0) {
@@ -196,9 +195,10 @@ createApp({
         const autoResizeInput = () => {
             if (inputBox.value) {
                 inputBox.value.style.height = 'auto';
-                inputBox.value.style.height = Math.min(inputBox.value.scrollHeight, 180) + 'px';
                 if (userInput.value === '') {
-                    inputBox.value.style.height = '52px';
+                    inputBox.value.style.height = '';
+                } else {
+                    inputBox.value.style.height = Math.min(inputBox.value.scrollHeight, 180) + 'px';
                 }
             }
         };
@@ -243,6 +243,7 @@ createApp({
             customFastModel: '',
             customSuggestionModel: '',
             useCharacterBackground: true,
+            immersiveMode: false,
             autoScroll: true,
             maxRetries: 2,
             renderLayerLimit: 25,
@@ -1796,7 +1797,7 @@ ${rawHtml}
                 avatar: user.avatar
             });
             await nextTick();
-            scrollToBottom();
+            // scrollToBottom(); // Removed auto-scroll before generation
 
             // Single player
             await generateResponse(startTime);
@@ -1852,6 +1853,47 @@ ${rawHtml}
                 console.error('Copy failed:', err);
                 showToast('复制失败', 'error');
             });
+        };
+
+        const editMessage = (index) => {
+            const msg = chatHistory.value[index];
+            if (msg) {
+                msg.isEditing_Message = true;
+                const cotMatch = msg.content.match(/<(think|cot)>[\s\S]*?(?:<\/\s*\1\s*>|<\s*\1\s*>|$)/i);
+                msg.originalCot = cotMatch ? cotMatch[0] : '';
+                msg.originalSys = parseCot(msg.content).sys;
+                msg.editMessageContent = parseCot(msg.content).main;
+            }
+        };
+
+        const saveEditMessage = (index) => {
+            const msg = chatHistory.value[index];
+            if (msg) {
+                let finalContent = msg.editMessageContent;
+                if (msg.originalSys) {
+                    finalContent = finalContent + '\n\n[系统指令:\n' + msg.originalSys + ']';
+                }
+                if (msg.originalCot) {
+                    finalContent = msg.originalCot + '\n\n' + finalContent;
+                }
+                msg.content = finalContent;
+                msg.isEditing_Message = false;
+                delete msg.editMessageContent;
+                delete msg.originalCot;
+                delete msg.originalSys;
+                saveData();
+                showToast('消息已保存', 'success');
+            }
+        };
+
+        const cancelEditMessage = (index) => {
+            const msg = chatHistory.value[index];
+            if (msg) {
+                msg.isEditing_Message = false;
+                delete msg.editMessageContent;
+                delete msg.originalCot;
+                delete msg.originalSys;
+            }
         };
 
         const editSummaryMessage = (index) => {
@@ -2514,7 +2556,7 @@ ${rawHtml}
                                                     isThinking.value = false;
                                                 }
 
-                                                scrollToBottom();
+                                                // scrollToBottom(); // Removed auto-scroll during generation
                                             }
                                         } catch (e) {
                                             console.warn('Error parsing stream chunk:', e);
@@ -2556,7 +2598,7 @@ ${rawHtml}
                                     responseContent = content;
 
                                     await nextTick();
-                                    scrollToBottom();
+                                    // scrollToBottom(); // Removed auto-scroll during generation
                                 }
                             } catch (e) {
                                 // 2. If JSON fails, try parsing as SSE text (data: {...})
@@ -2598,7 +2640,7 @@ ${rawHtml}
                                     chatHistory.value.push(assistantMessage);
 
                                     await nextTick();
-                                    scrollToBottom();
+                                    // scrollToBottom(); // Removed auto-scroll during generation
                                 }
                             }
                         }
@@ -4610,8 +4652,25 @@ ${textContent}`;
                 }
             });
         });
+        // 解析并截断生成的包含 HTML UI 的正文，避免闪屏问题
+        const processMainContent = (mainText, isGeneratingState) => {
+            if (!isGeneratingState) return { text: mainText, showSpinner: false };
+            const patterns = ['```html', '```vue', '<!DOCTYPE', '<div', '<style'];
+            let earliestIndex = -1;
+            for (const p of patterns) {
+                const idx = mainText.toLowerCase().indexOf(p);
+                if (idx !== -1 && (earliestIndex === -1 || idx < earliestIndex)) {
+                    earliestIndex = idx;
+                }
+            }
+            if (earliestIndex !== -1) {
+                return { text: mainText.substring(0, earliestIndex), showSpinner: true };
+            }
+            return { text: mainText, showSpinner: false };
+        };
 
         return {
+            processMainContent,
             currentView, showMobileMenu, showDescriptionPanel, showModelSelector, modelSelectionTarget, showChatModelSelector, showCharacterEditor, showAddCharacterMenu, showPresetEditor,
             showExportModal, showSummaryModal, isSummarizing, summarizeChatHistory, sysInstruction, showInstructionPanel, exportType, exportItems, selectedExportIndices, // Export Modal
             showCharacterExportModal, characterToExportIndex, openCharacterExportModal, confirmCharacterExport, // Character Export Modal
@@ -4635,6 +4694,7 @@ ${textContent}`;
             handleConfirm, handleCancel, // Export handlers
             manualSave,
             copyMessage, deleteMessage, regenerateMessage, printAIRequestLogs,
+            editMessage, saveEditMessage, cancelEditMessage,
             editSummaryMessage, saveSummaryMessage, cancelEditSummary,
             createNewCharacter, editCharacter, saveCharacter, deleteCharacter, selectCharacter,
             isBatchDeleteMode, isSidebarCollapsed, selectedCharacterIndices, toggleBatchDeleteMode, toggleCharacterSelection, batchDeleteCharacters,

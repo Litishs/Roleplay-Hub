@@ -217,7 +217,7 @@
                 </label>
             </div>
             <div
-                class="flex-1 flex items-center justify-center md:justify-start overflow-x-auto overflow-y-hidden scrollbar-hide md:pl-0">
+                class="flex-1 flex items-center justify-center md:justify-start md:pl-0">
                 <!-- PC端 Logo (占据侧边栏宽度以对齐) -->
                 <div
                     class="hidden md:flex w-[18.5rem] shrink-0 items-center gap-3 px-1 border-r border-base-200/50 mr-6">
@@ -232,49 +232,33 @@
 
                 <div
                     class="flex items-center gap-2 md:gap-4 shrink-0 transition-all scale-95 md:scale-100 origin-center md:origin-left">
-                    <!-- 模型切换 -->
-                    <div
-                        class="relative bg-base-200/50 p-1 rounded-full flex w-56 md:w-[15rem] border border-base-200/60 backdrop-blur-md shadow-inner">
-                        <!-- 滑动背景块 -->
-                        <div class="absolute top-1 bottom-1 w-[calc(33.333%-2px)] bg-white rounded-full shadow-md transition-all duration-300 ease-out z-0"
-                            :style="{ transform: activeModelType === 'fast' ? 'translateX(0)' : (activeModelType === 'balanced' ? 'translateX(100%)' : 'translateX(200%)'), left: '2px' }">
+                    <!-- 模型切换下拉栏 -->
+                    <div class="dropdown dropdown-end md:dropdown-start">
+                        <div tabindex="0" role="button"
+                            class="relative bg-base-200/50 hover:bg-base-200 py-1 px-4 rounded-xl flex items-center justify-between w-64 md:w-[24rem] h-[2.35rem] border border-base-200/60 backdrop-blur-md shadow-inner transition-colors">
+                            <span class="text-xs md:text-sm font-semibold truncate text-base-content w-full text-left">{{ options.customModels[activeModelType] || 'Unknown Model' }}</span>
+                            <svg class="w-4 h-4 ml-2 opacity-50 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                            </svg>
                         </div>
-
-                        <button
-                            class="btn btn-sm h-9 min-h-0 flex-1 rounded-full border-0 bg-transparent hover:bg-transparent transition-colors duration-300 z-10 gap-1.5 px-0 active:!scale-100 text-xs md:text-sm"
-                            :class="activeModelType === 'fast' ? 'text-primary font-extrabold' : 'text-base-content/60 font-medium hover:text-base-content/80'"
-                            @click="setActiveModel('fast')">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24"
-                                fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
-                                stroke-linejoin="round">
-                                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
-                            </svg>
-                            快速
-                        </button>
-                        <button
-                            class="btn btn-sm h-9 min-h-0 flex-1 rounded-full border-0 bg-transparent hover:bg-transparent transition-colors duration-300 z-10 gap-1.5 px-0 active:!scale-100 text-xs md:text-sm"
-                            :class="activeModelType === 'balanced' ? 'text-accent font-extrabold' : 'text-base-content/60 font-medium hover:text-base-content/80'"
-                            @click="setActiveModel('balanced')">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24"
-                                fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
-                                stroke-linejoin="round">
-                                <path
-                                    d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3" />
-                            </svg>
-                            均衡
-                        </button>
-                        <button
-                            class="btn btn-sm h-9 min-h-0 flex-1 rounded-full border-0 bg-transparent hover:bg-transparent transition-colors duration-300 z-10 gap-1.5 px-0 active:!scale-100 text-xs md:text-sm"
-                            :class="activeModelType === 'quality' ? 'text-secondary font-extrabold' : 'text-base-content/60 font-medium hover:text-base-content/80'"
-                            @click="setActiveModel('quality')">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24"
-                                fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
-                                stroke-linejoin="round">
-                                <path d="M12 2L14.4 9.6L22 12L14.4 14.4L12 22L9.6 14.4L2 12L9.6 9.6L12 2Z" />
-                                <path d="M20 2L20.8 4.4L23.2 5.2L20.8 6L20 8.4L19.2 6L16.8 5.2L19.2 4.4L20 2Z" />
-                            </svg>
-                            质量
-                        </button>
+                        
+                        <ul tabindex="0" class="dropdown-content z-[100] menu p-2 shadow-xl bg-base-100 rounded-2xl w-64 md:w-96 mt-2 border border-base-200/50">
+                            <li>
+                                <a onclick="document.activeElement.blur()" @click="setActiveModel('quality')" :class="{'bg-base-200/80 font-bold': activeModelType === 'quality'}" class="py-3 px-4">
+                                    <span class="font-mono text-xs w-full truncate">{{ options.customModels.quality }}</span>
+                                </a>
+                            </li>
+                            <li>
+                                <a onclick="document.activeElement.blur()" @click="setActiveModel('balanced')" :class="{'bg-base-200/80 font-bold': activeModelType === 'balanced'}" class="py-3 px-4">
+                                    <span class="font-mono text-xs w-full truncate">{{ options.customModels.balanced }}</span>
+                                </a>
+                            </li>
+                            <li>
+                                <a onclick="document.activeElement.blur()" @click="setActiveModel('fast')" :class="{'bg-base-200/80 font-bold': activeModelType === 'fast'}" class="py-3 px-4">
+                                    <span class="font-mono text-xs w-full truncate">{{ options.customModels.fast }}</span>
+                                </a>
+                            </li>
+                        </ul>
                     </div>
 
 
