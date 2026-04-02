@@ -867,7 +867,7 @@
                 <div
                     class="absolute bottom-0 left-0 right-0 w-full p-2 md:p-4 z-30 pointer-events-none flex justify-center flex-shrink-0 transition-all duration-300">
                     <div
-                        class="w-full max-w-lg pointer-events-auto p-2.5 md:p-4 bg-white/80 backdrop-blur-xl border border-white/40 shadow-lg rounded-3xl ring-1 ring-black/5 transition-all duration-300 flex flex-col">
+                        class="w-full max-w-lg pointer-events-auto p-2.5 md:p-4 bg-white/90 backdrop-blur-xl border border-white/40 shadow-lg rounded-3xl ring-1 ring-black/5 transition-all duration-300 flex flex-col">
                         <!-- Suggestion Bubbles (Absolute positioned above the bar) -->
                         <div v-if="suggestedReplies.length > 0"
                             class="absolute bottom-full left-0 right-0 p-2 pointer-events-none z-50">
@@ -887,7 +887,7 @@
                             <div class="flex items-center gap-2">
                                 <!-- Suggestion Button -->
                                 <button @click="generateSuggestions"
-                                    class="bg-white/40 hover:bg-white/60 rounded-full w-8 h-8 flex items-center justify-center border border-transparent shadow-none text-gray-500 hover:text-primary-600 transition-all active:scale-95"
+                                    class="bg-white hover:bg-gray-50 rounded-full w-8 h-8 flex items-center justify-center border border-transparent text-gray-500 hover:text-primary-600 transition-all active:scale-95 shadow-sm"
                                     title="建议回复" :disabled="isGeneratingSuggestions">
                                     <svg v-if="!isGeneratingSuggestions" class="w-4 h-4" fill="none"
                                         stroke="currentColor" viewBox="0 0 24 24">
@@ -906,7 +906,7 @@
                                 </button>
                                 <!-- Auto Image Button -->
                                 <button @click="isAutoImageGenEnabled = !isAutoImageGenEnabled"
-                                    :class="[isAutoImageGenEnabled ? 'bg-primary-500 text-white shadow-primary-500/30' : 'bg-white/40 text-gray-500 hover:text-gray-700 hover:bg-white/60']"
+                                    :class="[isAutoImageGenEnabled ? 'bg-primary-500 text-white shadow-primary-500/30' : 'bg-white text-gray-500 hover:text-gray-700 hover:bg-gray-50 shadow-sm']"
                                     class="rounded-full w-8 h-8 flex items-center justify-center border border-transparent shadow-none transition-all active:scale-95"
                                     title="自动生图开关">
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -917,7 +917,7 @@
                                 </button>
                                 <!-- Summarize Button -->
                                 <button @click="showSummaryModal = true"
-                                    class="bg-white/40 text-gray-500 hover:text-primary-600 hover:bg-white/60 border border-transparent rounded-full w-8 h-8 flex items-center justify-center shadow-none transition-all active:scale-95"
+                                    class="bg-white text-gray-500 hover:text-primary-600 hover:bg-gray-50 border border-transparent rounded-full w-8 h-8 flex items-center justify-center shadow-sm transition-all active:scale-95"
                                     title="一键总结下文并释放Tokens" :disabled="isSummarizing || isGenerating">
                                     <svg v-if="!isSummarizing" class="w-4 h-4" fill="none" stroke="currentColor"
                                         viewBox="0 0 24 24">
@@ -936,7 +936,7 @@
                                 <!-- Instruction Button -->
                                 <div class="relative instruction-panel-container">
                                     <button @click="showInstructionPanel = !showInstructionPanel"
-                                        :class="[sysInstruction.trim() ? 'bg-primary-500 text-white shadow-primary-500/30' : 'bg-white/40 text-gray-500 hover:text-primary-600 hover:bg-white/60']"
+                                        :class="[sysInstruction.trim() ? 'bg-primary-500 text-white shadow-primary-500/30' : 'bg-white text-gray-500 hover:text-primary-600 hover:bg-gray-50 shadow-sm']"
                                         class="rounded-full w-8 h-8 flex items-center justify-center border border-transparent shadow-none transition-all active:scale-95"
                                         title="单次系统指令">
                                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1073,7 +1073,7 @@
 
                                 <!-- Current Model Toggle Button -->
                                 <button @click.stop="showChatModelSelector = !showChatModelSelector"
-                                    class="px-3.5 py-1.5 rounded-full text-[10px] md:text-xs font-bold transition-all duration-300 flex items-center bg-white/40 hover:bg-white/60 border border-transparent shadow-none active:scale-95 text-primary-600"
+                                    class="px-3.5 py-1.5 rounded-full text-[10px] md:text-xs font-bold transition-all duration-300 flex items-center bg-white hover:bg-gray-50 border border-transparent shadow-sm active:scale-95 text-primary-600"
                                     title="切换模型">
                                     <svg v-if="modelMode === 'quality'" class="w-3.5 h-3.5 mr-1" fill="none"
                                         stroke="currentColor" viewBox="0 0 24 24">
@@ -1099,7 +1099,7 @@
                         <div class="relative w-full flex items-end gap-2 px-1">
                             <textarea v-model="userInput" @input="autoResizeInput" @keydown.enter.prevent="sendMessage"
                                 :placeholder="'输入消息...'"
-                                class="flex-1 bg-gray-100/50 text-gray-800 rounded-2xl px-4 py-2.5 md:px-5 md:py-3.5 focus:outline-none focus:ring-2 focus:ring-primary-500/30 focus:border-primary-400 resize-none border border-transparent shadow-inner transition-all focus:bg-white chat-input-scrollbar min-h-[44px] md:min-h-[52px] max-h-[140px] md:max-h-[180px]"
+                                class="flex-1 bg-gray-100/70 text-gray-800 rounded-2xl px-4 py-2.5 md:px-5 md:py-3.5 focus:outline-none focus:ring-2 focus:ring-primary-500/30 focus:border-primary-400 resize-none border border-transparent shadow-inner transition-all focus:bg-white chat-input-scrollbar min-h-[44px] md:min-h-[52px] max-h-[140px] md:max-h-[180px]"
                                 rows="1" ref="inputBox"></textarea>
 
                             <!-- Send/Stop Button -->
