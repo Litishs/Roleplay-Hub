@@ -119,23 +119,22 @@ createApp({
         const updateCountdown = ref(0);
         let updateCountdownTimer = null;
         const latestUpdate = reactive({
-            id: 10105, // 确保这是一个五位数ID，每次更新内容时增加这个数字
+            id: 10106, // 确保这是一个五位数ID，每次更新内容时增加这个数字
             date: new Date().toISOString().split('T')[0],
             title: '网站公告',
             content: `
-### RP-Hub 1.4.0 更新
+### RP-Hub 1.4.2 更新
 
-- 新增"消息"编辑功能
-- 新增"沉浸模式"开关（推荐开启，对前端卡的沉浸感提升尤为明显）
-- 完全重构了移动端聊天界面的体验，大幅度增强了沉浸感
-- 为快捷模型切换提供了模型名称查看
-- 为流式输出生成UI添加了缓冲区，解决了重复渲染的问题
-- 优化了气泡间距与按钮可见度
-- 修复了自动滚动会被AI生成触发的问题
+- 新增了"真实上下文请求"查看功能，现在可以查看最近一次对话触发了哪些世界书和完整上下文记录
+- 为总结新增了"回退"和"重新生成"功能
+- 添加了气泡入场的动画效果
+- 优化了部分字体设置
+- 彻底修复了自动滚动无法滚动至最底部的问题
+- 修复了角色卡工坊模型名称列表无法收起的问题
 
 本项目为全开源公益项目，严禁倒卖源码，二改需经作者授权
 
-#### 更新时间：04/03/05:33
+#### 更新时间：04/03/22:09
                     `
         });
 
@@ -191,6 +190,69 @@ createApp({
         const chatContainer = ref(null);
         const inputBox = ref(null);
         const messageElements = ref([]);
+
+        // IntersectionObserver for lazy loading images or other visibility triggers could go here
+
+        // Use ResizeObserver for robust automatic scrolling to bottom
+        let chatResizeObserver = null;
+        watch(chatContainer, (newEl, oldEl) => {
+            if (oldEl && chatResizeObserver) {
+                chatResizeObserver.disconnect();
+                chatResizeObserver = null;
+            }
+            if (newEl) {
+                chatResizeObserver = new ResizeObserver(() => {
+                    if (settings.autoScroll && currentView.value === 'chat') {
+                        // Only scroll to bottom if there's more than just the greeting
+                        if (chatHistory.value.length > 1) {
+                            newEl.scrollTop = newEl.scrollHeight;
+                        } else {
+                            // Keep at top for new/single-message chats
+                            newEl.scrollTop = 0;
+                        }
+                    }
+                });
+                chatResizeObserver.observe(newEl);
+                // Initial check when container is mounted
+                nextTick(() => {
+                    if (chatHistory.value.length > 1) {
+                        newEl.scrollTop = newEl.scrollHeight;
+                    } else {
+                        newEl.scrollTop = 0;
+                    }
+                });
+            }
+        });
+
+        // --- Scroll-reveal Animation Logic ---
+        let scrollRevealObserver = null;
+        const initScrollReveal = () => {
+            if (window.IntersectionObserver) {
+                scrollRevealObserver = new IntersectionObserver((entries) => {
+                    entries.forEach(entry => {
+                        if (entry.isIntersecting) {
+                            entry.target.classList.add('reveal-active');
+                        }
+                    });
+                }, {
+                    threshold: 0.05,
+                    rootMargin: '0px 0px -20px 0px'
+                });
+            }
+        };
+
+        // Watch for changes in the message list to observe new bubbles
+        watch(messageElements, (newEls) => {
+            if (!scrollRevealObserver) initScrollReveal();
+            if (scrollRevealObserver && newEls) {
+                newEls.forEach(el => {
+                    if (el instanceof HTMLElement && !el.classList.contains('reveal-active')) {
+                        scrollRevealObserver.observe(el);
+                    }
+                });
+            }
+        }, { deep: true, flush: 'post' });
+
 
         const autoResizeInput = () => {
             if (inputBox.value) {
@@ -408,6 +470,9 @@ createApp({
         const sysInstruction = ref('');
         const showInstructionPanel = ref(false);
         const currentHoverWorldInfo = ref(null);
+        const showContextViewerModal = ref(false);
+        const lastContextMessages = ref([]);
+        const lastTriggeredWorldInfos = ref([]);
 
         // Export Modal State
         const showExportModal = ref(false);
@@ -462,8 +527,7 @@ createApp({
                 // Add timestamp to force refresh
                 squareUrl.value = `https://rphforum.zeabur.app/?t=${Date.now()}`;
             } else if (newView === 'chat') {
-                // When switching back to chat, scroll to bottom
-                scrollToBottom();
+                // ResizeObserver handles the initial scroll
             } else if (newView === 'presets') {
                 nextTick(() => {
                     const el = document.getElementById('presets-list');
@@ -474,6 +538,21 @@ createApp({
                             onEnd: function (evt) {
                                 const item = presets.value.splice(evt.oldIndex, 1)[0];
                                 presets.value.splice(evt.newIndex, 0, item);
+                                saveData();
+                            }
+                        });
+                    }
+                });
+            } else if (newView === 'regex') {
+                nextTick(() => {
+                    const el = document.getElementById('regex-list');
+                    if (el && typeof Sortable !== 'undefined') {
+                        new Sortable(el, {
+                            handle: '.cursor-move',
+                            animation: 150,
+                            onEnd: function (evt) {
+                                const item = regexScripts.value.splice(evt.oldIndex, 1)[0];
+                                regexScripts.value.splice(evt.newIndex, 0, item);
                                 saveData();
                             }
                         });
@@ -737,7 +816,7 @@ createApp({
             isGeneratingSuggestions.value = true;
 
             try {
-                const prompt = "请根据上述对话上下文，生成3个符合当前角色设定及语境的简短用户行动/回复建议，以推动剧情发展。必须以严格的 JSON 字符串数组格式返回，不能包含任何其他内容，例如：[\"建议1\", \"建议2\", \"建议3\"]。";
+                const prompt = "请根据上述对话上下文，生成4个符合当前角色设定及语境的简短用户行动/回复建议，以推动剧情发展。必须以严格的 JSON 字符串数组格式返回，不能包含任何其他内容，例如：[\"建议1\", \"建议2\", \"建议3\", \"建议4\"]。";
 
                 // 构造轻量级的上下文，只取最后几条
                 const msgs = chatHistory.value.slice(-6).map(m => ({
@@ -775,7 +854,7 @@ createApp({
                 try {
                     const parsed = JSON.parse(content);
                     if (Array.isArray(parsed)) {
-                        suggestedReplies.value = parsed.slice(0, 3);
+                        suggestedReplies.value = parsed.slice(0, 4);
                     }
                 } catch (e) {
                     showToast('解析建议回复失败，API返回格式不符', 'warning');
@@ -836,12 +915,12 @@ createApp({
                 if (isGemini) {
                     if (settings.stream) {
                         settings.stream = false;
-                        messages.push('已选择 Gemini 模型，流式输出已关闭');
+                        messages.push('流式输出已关闭');
                     }
                 } else {
                     if (!settings.stream) {
                         settings.stream = true;
-                        messages.push('已选择非 Gemini 模型，流式输出已恢复');
+                        messages.push('流式输出已恢复');
                     }
                 }
 
@@ -1803,33 +1882,14 @@ ${rawHtml}
             await generateResponse(startTime);
         };
 
-        let scrollTimeouts = [];
-
         const scrollToBottom = () => {
-            if (!settings.autoScroll) return;
-            // Use nextTick to ensure the DOM has been updated before we try to scroll
-            nextTick(() => {
-                const doScroll = () => {
-                    if (chatContainer.value && settings.autoScroll) {
-                        chatContainer.value.scrollTop = chatContainer.value.scrollHeight;
-                    }
-                };
-
-                // Clear previous timeouts to avoid stacking too many during streaming
-                scrollTimeouts.forEach(clearTimeout);
-                scrollTimeouts = [];
-
-                if (chatContainer.value) {
-                    // The scrollHeight might not be final due to images or markdown rendering
+            if (chatContainer.value && settings.autoScroll) {
+                if (chatHistory.value.length > 1) {
                     chatContainer.value.scrollTop = chatContainer.value.scrollHeight;
+                } else {
+                    chatContainer.value.scrollTop = 0;
                 }
-
-                // Add multiple delays to ensure the user stays at the bottom even if large assets load slowly
-                scrollTimeouts.push(setTimeout(doScroll, 50));
-                scrollTimeouts.push(setTimeout(doScroll, 150));
-                scrollTimeouts.push(setTimeout(doScroll, 300));
-                scrollTimeouts.push(setTimeout(doScroll, 600));
-            });
+            }
         };
 
         const clearChat = () => {
@@ -1919,6 +1979,30 @@ ${rawHtml}
             if (msg && msg.isSummary) {
                 msg.isEditing = false;
             }
+        };
+
+        const revertSummary = (index) => {
+            const summaryMsg = chatHistory.value[index];
+            if (!summaryMsg?.isSummary || !summaryMsg.originalMessages) return;
+
+            confirmAction('确定要撤销总结并恢复历史记录吗？', () => {
+                chatHistory.value.splice(index, 1, ...summaryMsg.originalMessages);
+                saveData();
+                showToast('已恢复历史记录', 'success');
+            });
+        };
+
+        const resummarize = (index) => {
+            const summaryMsg = chatHistory.value[index];
+            if (!summaryMsg?.isSummary || !summaryMsg.originalMessages) return;
+
+            confirmAction('这将撤销本条总结并重新生成一份总结，确定继续吗？', () => {
+                chatHistory.value.splice(index, 1, ...summaryMsg.originalMessages);
+                saveData();
+                nextTick(() => {
+                    summarizeChatHistory(false);
+                });
+            });
         };
 
         const deleteMessage = (index) => {
@@ -2446,6 +2530,32 @@ ${rawHtml}
 
             messages = processMessageInjections(messages);
 
+            // Compute message-level World Info injections for Context Viewer
+            let globalInjectedWIs = [];
+            lastContextMessages.value = messages.map(m => {
+                let injectedWIs = [];
+                budgetedEntries.forEach(entry => {
+                    const injectTag = entry.comment || 'Entry';
+                    const searchStr = `[${injectTag}]\n${entry.content}`;
+                    const displayName = entry.comment || entry.name || '未命名条目';
+
+                    if (m.content.includes(searchStr) || (entry.content.length > 5 && m.content.includes(entry.content))) {
+                        injectedWIs.push(displayName);
+                        if (!globalInjectedWIs.some(i => i.name === displayName)) {
+                            globalInjectedWIs.push({ name: displayName });
+                        }
+                    }
+                });
+                return {
+                    role: m.role,
+                    name: m.name,
+                    content: m.content,
+                    wiTriggers: [...new Set(injectedWIs)]
+                };
+            });
+            // Store overall triggered entries based on actual injection order in the prompt
+            lastTriggeredWorldInfos.value = globalInjectedWIs;
+
             // --- 优化后的控制台日志 ---
             printAIRequestLogs(messages, settings.model);
             // ---------------------------
@@ -2925,7 +3035,8 @@ ${textContent}`;
                         isSummary: true,
                         isCollapsed: true,
                         content: summaryContent,
-                        id: generateUUID()
+                        id: generateUUID(),
+                        originalMessages: JSON.parse(JSON.stringify(historyToSummarize))
                     },
                     ...anchorMessages
                 ];
@@ -3275,8 +3386,6 @@ ${textContent}`;
             }
 
             saveData(); // Save the switch immediately
-            await nextTick();
-            scrollToBottom();
         };
 
         const handleAvatarUpload = (event) => {
@@ -3715,7 +3824,6 @@ ${textContent}`;
                     }
 
                     characters.value.push(char);
-                    showToast(`角色导入成功: ${name}`, 'success');
 
                     // Auto-select the new character
                     selectCharacter(characters.value.length - 1, true);
@@ -4663,7 +4771,8 @@ ${textContent}`;
         return {
             processMainContent,
             currentView, showMobileMenu, showDescriptionPanel, showModelSelector, modelSelectionTarget, showChatModelSelector, showCharacterEditor, showAddCharacterMenu, showPresetEditor,
-            showExportModal, showSummaryModal, isSummarizing, summarizeChatHistory, sysInstruction, showInstructionPanel, exportType, exportItems, selectedExportIndices, // Export Modal
+            showExportModal, showSummaryModal, isSummarizing, summarizeChatHistory, revertSummary, resummarize, sysInstruction, showInstructionPanel, exportType, exportItems, selectedExportIndices, // Export Modal
+            showContextViewerModal, lastContextMessages, lastTriggeredWorldInfos, // Context Viewer
             showCharacterExportModal, characterToExportIndex, openCharacterExportModal, confirmCharacterExport, // Character Export Modal
             showUpdateModal, updateCountdown, latestUpdate, closeUpdateModal, // Update Modal
             showConfirmModal, confirmMessage, modelMode, // Export for template

@@ -696,3 +696,30 @@ opacity: 0;
   animation: ui-dash 1.5s ease-in-out infinite;
 }
 
+/* --- Scroll Reveal Animations for Chat Bubbles --- */
+.scroll-reveal-left {
+    opacity: 0;
+    transform: translateX(-80px);
+    transition: transform 0.65s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.65s cubic-bezier(0.22, 1, 0.36, 1);
+    will-change: transform, opacity;
+}
+
+.scroll-reveal-right {
+    opacity: 0;
+    transform: translateX(80px);
+    transition: transform 0.65s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.65s cubic-bezier(0.22, 1, 0.36, 1);
+    will-change: transform, opacity;
+}
+
+.reveal-active {
+    opacity: 1 !important;
+    transform: translateX(0) !important;
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+    .scroll-reveal-left, .scroll-reveal-right {
+        transform: none !important;
+        transition: opacity 0.3s ease !important;
+    }
+}

@@ -233,33 +233,34 @@
                 <div
                     class="flex items-center gap-2 md:gap-4 shrink-0 transition-all scale-95 md:scale-100 origin-center md:origin-left">
                     <!-- 模型切换下拉栏 -->
-                    <div class="dropdown dropdown-end md:dropdown-start">
-                        <div tabindex="0" role="button"
-                            class="relative bg-base-200/50 hover:bg-base-200 py-1 px-4 rounded-xl flex items-center justify-between w-64 md:w-[24rem] h-[2.35rem] border border-base-200/60 backdrop-blur-md shadow-inner transition-colors">
-                            <span class="text-xs md:text-sm font-semibold truncate text-base-content w-full text-left">{{ options.customModels[activeModelType] || 'Unknown Model' }}</span>
+                    <!-- 模型切换下拉栏 -->
+                    <details class="dropdown dropdown-end md:dropdown-start">
+                        <summary
+                            class="relative bg-base-200/50 hover:bg-base-200 py-1 px-4 rounded-xl flex items-center justify-between w-64 md:w-[24rem] h-[2.35rem] border border-base-200/60 backdrop-blur-md shadow-inner transition-colors list-none cursor-pointer focus:outline-none">
+                            <span class="text-xs md:text-sm font-mono font-semibold truncate text-base-content w-full text-left">{{ options.customModels[activeModelType] || 'Unknown Model' }}</span>
                             <svg class="w-4 h-4 ml-2 opacity-50 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
                             </svg>
-                        </div>
+                        </summary>
                         
-                        <ul tabindex="0" class="dropdown-content z-[100] menu p-2 shadow-xl bg-base-100 rounded-2xl w-64 md:w-96 mt-2 border border-base-200/50">
+                        <ul class="dropdown-content z-[100] menu p-2 shadow-xl bg-base-100 rounded-2xl w-64 md:w-96 mt-2 border border-base-200/50">
                             <li>
-                                <a onclick="document.activeElement.blur()" @click="setActiveModel('quality')" :class="{'bg-base-200/80 font-bold': activeModelType === 'quality'}" class="py-3 px-4">
+                                <a onclick="this.closest('details').removeAttribute('open')" @click="setActiveModel('quality')" :class="{'bg-base-200/80 font-bold': activeModelType === 'quality'}" class="py-3 px-4">
                                     <span class="font-mono text-xs w-full truncate">{{ options.customModels.quality }}</span>
                                 </a>
                             </li>
                             <li>
-                                <a onclick="document.activeElement.blur()" @click="setActiveModel('balanced')" :class="{'bg-base-200/80 font-bold': activeModelType === 'balanced'}" class="py-3 px-4">
+                                <a onclick="this.closest('details').removeAttribute('open')" @click="setActiveModel('balanced')" :class="{'bg-base-200/80 font-bold': activeModelType === 'balanced'}" class="py-3 px-4">
                                     <span class="font-mono text-xs w-full truncate">{{ options.customModels.balanced }}</span>
                                 </a>
                             </li>
                             <li>
-                                <a onclick="document.activeElement.blur()" @click="setActiveModel('fast')" :class="{'bg-base-200/80 font-bold': activeModelType === 'fast'}" class="py-3 px-4">
+                                <a onclick="this.closest('details').removeAttribute('open')" @click="setActiveModel('fast')" :class="{'bg-base-200/80 font-bold': activeModelType === 'fast'}" class="py-3 px-4">
                                     <span class="font-mono text-xs w-full truncate">{{ options.customModels.fast }}</span>
                                 </a>
                             </li>
                         </ul>
-                    </div>
+                    </details>
 
 
                 </div>
