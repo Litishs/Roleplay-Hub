@@ -3852,7 +3852,7 @@
                 class="fixed inset-0 z-[100] flex items-center justify-center bg-gray-900/40 backdrop-blur-sm p-4 sm:p-6"
                 @click.self="showContextViewerModal = false">
                 <div
-                    class="bg-white rounded-2xl shadow-2xl w-full max-w-4xl flex flex-col overflow-hidden max-h-[85vh] border border-gray-200/50 relative">
+                    class="bg-white rounded-2xl shadow-2xl w-full max-w-4xl flex flex-col overflow-hidden max-h-[90vh] sm:max-h-[85vh] border border-gray-200/50 relative">
 
                     <!-- Header -->
                     <div
@@ -3879,7 +3879,7 @@
                     </div>
 
                     <!-- Content (Scrollable) -->
-                    <div class="p-5 overflow-y-auto flex-1 space-y-3 bg-gray-50 custom-scrollbar h-full relative">
+                    <div class="p-5 overflow-y-auto flex-1 space-y-3 bg-gray-50 custom-scrollbar overscroll-contain relative">
 
                         <!-- World Info Summary (Now scrolls with content) -->
                         <div class="bg-blue-50/80 border border-blue-200/60 rounded-xl p-4 shadow-sm mb-4">
