@@ -216,8 +216,7 @@
                     </svg>
                 </label>
             </div>
-            <div
-                class="flex-1 flex items-center justify-center md:justify-start md:pl-0">
+            <div class="flex-1 flex items-center justify-center md:justify-start md:pl-0">
                 <!-- PC端 Logo (占据侧边栏宽度以对齐) -->
                 <div
                     class="hidden md:flex w-[18.5rem] shrink-0 items-center gap-3 px-1 border-r border-base-200/50 mr-6">
@@ -237,26 +236,42 @@
                     <details class="dropdown dropdown-end md:dropdown-start">
                         <summary
                             class="relative bg-base-200/50 hover:bg-base-200 py-1 px-4 rounded-xl flex items-center justify-between w-64 md:w-[24rem] h-[2.35rem] border border-base-200/60 backdrop-blur-md shadow-inner transition-colors list-none cursor-pointer focus:outline-none">
-                            <span class="text-xs md:text-sm font-mono font-semibold truncate text-base-content w-full text-left">{{ options.customModels[activeModelType] || 'Unknown Model' }}</span>
-                            <svg class="w-4 h-4 ml-2 opacity-50 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                            <span
+                                class="text-xs md:text-sm font-mono font-semibold truncate text-base-content w-full text-left">{{
+                                options.customModels[activeModelType] || 'Unknown Model' }}</span>
+                            <svg class="w-4 h-4 ml-2 opacity-50 shrink-0" fill="none" stroke="currentColor"
+                                viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M19 9l-7 7-7-7"></path>
                             </svg>
                         </summary>
-                        
-                        <ul class="dropdown-content z-[100] menu p-2 shadow-xl bg-base-100 rounded-2xl w-64 md:w-96 mt-2 border border-base-200/50">
+
+                        <ul
+                            class="dropdown-content z-[100] menu p-2 shadow-xl bg-base-100 rounded-2xl w-64 md:w-96 mt-2 border border-base-200/50">
                             <li>
-                                <a onclick="this.closest('details').removeAttribute('open')" @click="setActiveModel('quality')" :class="{'bg-base-200/80 font-bold': activeModelType === 'quality'}" class="py-3 px-4">
-                                    <span class="font-mono text-xs w-full truncate">{{ options.customModels.quality }}</span>
+                                <a onclick="this.closest('details').removeAttribute('open')"
+                                    @click="setActiveModel('quality')"
+                                    :class="{'bg-base-200/80 font-bold': activeModelType === 'quality'}"
+                                    class="py-3 px-4">
+                                    <span class="font-mono text-xs w-full truncate">{{ options.customModels.quality
+                                        }}</span>
                                 </a>
                             </li>
                             <li>
-                                <a onclick="this.closest('details').removeAttribute('open')" @click="setActiveModel('balanced')" :class="{'bg-base-200/80 font-bold': activeModelType === 'balanced'}" class="py-3 px-4">
-                                    <span class="font-mono text-xs w-full truncate">{{ options.customModels.balanced }}</span>
+                                <a onclick="this.closest('details').removeAttribute('open')"
+                                    @click="setActiveModel('balanced')"
+                                    :class="{'bg-base-200/80 font-bold': activeModelType === 'balanced'}"
+                                    class="py-3 px-4">
+                                    <span class="font-mono text-xs w-full truncate">{{ options.customModels.balanced
+                                        }}</span>
                                 </a>
                             </li>
                             <li>
-                                <a onclick="this.closest('details').removeAttribute('open')" @click="setActiveModel('fast')" :class="{'bg-base-200/80 font-bold': activeModelType === 'fast'}" class="py-3 px-4">
-                                    <span class="font-mono text-xs w-full truncate">{{ options.customModels.fast }}</span>
+                                <a onclick="this.closest('details').removeAttribute('open')"
+                                    @click="setActiveModel('fast')"
+                                    :class="{'bg-base-200/80 font-bold': activeModelType === 'fast'}" class="py-3 px-4">
+                                    <span class="font-mono text-xs w-full truncate">{{ options.customModels.fast
+                                        }}</span>
                                 </a>
                             </li>
                         </ul>
@@ -907,6 +922,15 @@
                                             <div class="flex flex-col gap-3 pt-2 pb-4">
                                                 <div class="form-control">
                                                     <label class="label py-1"><span
+                                                            class="label-text text-xs font-bold text-base-content/50 uppercase">条目标题
+                                                            / 注释
+                                                            Comment & Name</span></label>
+                                                    <input type="text" v-model="entry.comment"
+                                                        class="input input-bordered input-sm bg-base-200/30"
+                                                        placeholder="条目备注/标题..." />
+                                                </div>
+                                                <div class="form-control">
+                                                    <label class="label py-1"><span
                                                             class="label-text text-xs font-bold text-base-content/50 uppercase">触发关键词
                                                             Keys</span></label>
                                                     <input type="text" v-model="entry.keyInput"
@@ -921,15 +945,6 @@
                                                     <textarea v-model="entry.content"
                                                         class="textarea textarea-bordered h-48 text-sm bg-base-200/30"
                                                         placeholder="条目内容..."></textarea>
-                                                </div>
-
-                                                <div class="form-control">
-                                                    <label class="label py-1"><span
-                                                            class="label-text text-xs font-bold text-base-content/50 uppercase">注释
-                                                            Comment</span></label>
-                                                    <input type="text" v-model="entry.comment"
-                                                        class="input input-bordered input-sm bg-base-200/30"
-                                                        placeholder="备注..." />
                                                 </div>
 
                                                 <!-- Advanced World Info Settings -->
@@ -983,9 +998,11 @@
                                                                 class="select select-bordered select-xs w-full">
                                                                 <option :value="0">Before Char</option>
                                                                 <option :value="1">After Char</option>
-                                                                <option :value="2">AN Top</option>
-                                                                <option :value="3">AN Bottom</option>
-                                                                <option :value="4">At Depth</option>
+                                                                <optgroup label="In-Chat (对话中)">
+                                                                    <option :value="4">At Depth</option>
+                                                                    <option value="user_top">User Msg Top</option>
+                                                                    <option value="assistant_top">AI Msg Top</option>
+                                                                </optgroup>
                                                             </select>
                                                         </div>
                                                         <div class="form-control">
@@ -2156,27 +2173,49 @@
     *   **无变更**：如果某个部分不需要修改，请不要输出对应的 Diff 块。
     
     **内容创作规范**：
-    *   **Name**: 使用中文。推荐唯美、趣味或具有轻小说风格的标题。禁止使用网文常见泛名（如“林婉儿”）。
-    *   **Description**: 100字左右的引言。使用第二人称“你”代指用户。**拒绝**使用 \`{{user}}\` 占位符。文风直白易懂，代入感强，使用 Markdown 加粗重点。
-    *   **Personality**: 详尽的角色设定。包含外貌、性格、癖好等。**设定中任何涉及用户或用户名字的地方，一律强制使用 \`{{user}}\` 占位符。
-    *   **First Message**: 500-1000字开场白，以对话和互动为主，**用词必须通俗易懂、口语化、直白接地气**，禁止使用文绉绉、过于文学化的修辞手法或复杂冗长的描写（例如绝对不要出现类似“琥珀色的威士忌挂下粘稠的液痕”或“泛着诱人的光泽”这类造作的环境描写）。
-        *   **代称**：任何指代用户、呼唤用户的地方，一律严格使用 \`{{user}}\` 占位符，绝对禁用“你/您”或捏造任何用户名字。
-        *   **格式**：避免每一小段内容过长，段落间空一行，对话请使用『』包裹，- 环境和场景描写不要包裹在圆括号内。
-        *   **内容**：自然切入剧情，对白，避免每一小段内容过长，动作描写要简练干脆，绝对禁止复杂的环境渲染。
-        *   **互动**：**严禁**替用户（{{user}}）说话、行动或做决定。将主动权留给用户。
-    *   **Creator Notes**: 必填。使用 \`#标签\` 格式（如 \`#纯爱 #校园\`）。
+    *   **Name**: 角色卡名字，中文，禁止使用冒号和副标题，请参考日系轻小说或Galgame标题，推荐唯美意象词，**推荐生成趣味标题**（如“我的妹妹不可能这么可爱”、“今天也要来点兔子吗”）。禁止使用“林”、“苏”姓及“婉儿”等网文常见名。
+    *   **Description**: 角色卡描述，100字左右，让用户了解大体设定/世界观，是向用户介绍角色卡的引言，请使用“你”称呼user，不要使用{{user}}占位符，内容要有沉浸感，减少环境描写，使用直白易懂的文风，使用markdown格式，重要内容加粗，注意每段之间空一行。
+    *   **Personality**: 详细的角色卡设定，必须详尽，注意换行，**设定中任何涉及用户或用户名字的地方，一律强制使用 {{user}} 占位符**，若是人物则需包含如发色，眼睛颜色，身材，以及其他外貌特征等人物特点或形象，禁用琥珀色，以世界观或复杂设定为角色卡的禁止编写默认NPC的设定，以便自由发挥。
+    *   **Scenario**: 场景或背景状态。
+    *   **First Message**: 开场白，生动沉浸，以对话和互动为主，**用词必须通俗易懂、口语化、直白接地气**，禁止使用文绉绉、过于文学化的修辞手法，绝对不要出现类似“琥珀色的威士忌挂下粘稠的液痕”或“泛着诱人光泽”这类造作冗长的小说式描写。动作描写要简练干脆，绝对禁止复杂的环境描写。避免每一小段内容过长，段落间空一行。**开场白中任何指代用户、呼唤用户或描写用户相关的地方，一律严格使用 {{user}} 占位符，绝对禁用“你”或捏造任何用户名字**，600-1000字，使用角色名字取代“她”或“他”，禁止出现指节，泛白的字样。**对于R18内容，用词需有一定色气，但禁止出现任何{{user}}的言行/任何行为，应将后续选择权和行动权留给{{user}}**
+    *   **Creator Notes**: 作者注释，必填，使用简单的#+关键词的标签形式说明人物卡的内容，每个关键词之间隔一个空格，例如#纯爱 #校园，如有大量色情内容请在最前面添加#R18标签，如没有过多关于性或者色情的内容请不要随意添加#R18标签。
     
-    **高级功能生成规范**：
-    *   **World Info (世界书)**：
-        *   若用户要求添加设定，请在 \`worldInfo\` 数组中添加新条目。
-        *   必须包含 \`"世界观"\` 和 \`"XX的设定"\` 条目。
-        *   禁止使用 \`depth\`（深度）扫描，保持原触发位置。
-    *   **Regex Scripts (正则脚本)**：
-        *   若用户要求美化样式，请在 \`regexScripts\` 数组中添加/修改脚本。务必使用高级、现代感、与角色氛围匹配的精美 CSS 样式。
-        *   **沉浸式容器**：若需要，生成 \`/(^[\\s\\S]+$)/g\` 匹配全文的正则，将内容包裹在充满高级感的 \`div\` 容器中（要求选用极具代入感的 \`font-family\` 字体、\`white-space: pre-wrap\`、渐变/高级背景 \`background\`、阴影 \`box-shadow\`、合适合理内边距 \`padding\`、圆角 \`border-radius\`，绝对不使用图片背景）。
-        *   **文字高亮**：生成脚本高亮对话或心理活动。对话高亮要求色彩柔和、微加粗带轻微阴影；而对于**心理活动描写**，样式务求高级内敛（例如增加微小字间距 \`letter-spacing: 0.05em\`、使用颜色略暗或低饱和度的冷色调、斜体，以及极致轻微的圆角背景色块，以呈现出高级氛围感。
+    **Regex Scripts 生成要求**：
+       - **建议**严格按照当前角色的氛围风格去定制 "正文容器"、"对话高亮"、"心理描写优化" 和 "名字高亮" 的样式，要具有极高的美学品味。
+       - 脚本配置参考：
+         - scriptName: "对话高亮"
+         - findRegex: \`/“([^”]*?)”/g\`
+         - replaceString: \`<span style="color: #此处为颜色; font-weight: 500; text-shadow: 0 1px 2px rgba(0,0,0,0.05);">“$1”</span>\`
+         - placement: [2] (仅 AI)
     
-    **最终检查**：
+    **Regex Scripts-正文美化 (Text Immersion & Highlighting)**：
+       - **沉浸式容器（优先级最高，顺序需在所有正则脚本的第一位）**：
+         - 需使用 \`/(^[\\s\\S]+$)/g\` 匹配整个正文内容。
+         - 将正文包裹在一个充满现代感或高级感的 \`div\` 容器中（如：精致信纸、暗黑哥特、科幻全息、高级毛玻璃、唯美渐变等，绝对不可以使用图片背景）。
+         - 容器样式设计要求（必须写出高级CSS）：
+           - 使用 \`background\` 为精美的渐变色 (例如 \`linear-gradient\` 或带有低透明度的基础色配合 \`backdrop-filter: blur(10px)\`)。
+           - 使用 \`box-shadow\` 打造高级的层次感 (如 \`box-shadow: 0 4px 20px rgba(0,0,0,0.05)\`)。
+           - 增加大量留白的 \`padding\` (如 \`1.5rem\` 或 \`20px 24px\`) 以及圆角 \`border-radius\` (如 \`12px\` 到 \`16px\`)。
+           - 设计优雅的边框（如极细的半透明边框 \`border: 1px solid rgba(0,0,0,0.05)\` 或 \`border-top: 3px solid #主题色\`）。
+           - 必须运用 \`font-family\` 根据设定氛围选择合适的字体（如：科幻风使用无衬线/等宽字体，古典风使用楷体/衬线体，信件风使用手写体等）。
+           - 必须包含 \`white-space: pre-wrap;\` (保留自带换行) 和 \`margin-bottom: 0px;\`，以及与风格相符的优雅文字颜色。
+         - **必须**将此正则脚本放在 \`Regex Scripts\` 数组的第一位。
+       - **语法高亮与文字修饰（要求精致柔和）**：
+         - **对话高亮**：识别双引号内的对话内容（如 \`/“([^”]*?)”/g\`），使用带有感情色彩的柔和文本颜色，加上稍微加粗排版（\`font-weight: 500/600\`），甚至配上极轻微的文字阴影（\`text-shadow\`）增加质感，不使用刺眼的纯色。
+         - **角色心理描写**：识别心理描写内容（如 \`/（([^）]*?)）/g\`），样式要求采用**左侧带竖线的块级引用（Blockquote）风格**。必须包含：左侧实线、适宜的左侧内边距和外边距以及块级显示，配合极其淡雅的背景色块和微小字间距（\`letter-spacing: 0.05em\`），呈现出内敛的回忆或心理独白感。
+         - **角色或特殊名词**：使用精致的行内高亮背景标签（如 \`background: rgba(x,y,z,0.1); padding: 0.2em 0.4em; border-radius: 4px; font-weight: bold;\`）重点强调。
+    
+    **世界书 (World Info) 生成规范**（所有条目禁止使用按深度）：
+    - **样式规范与心理对话格式（必填 & 常驻）**：必须包含一条名为 "样式规范" 的常驻条目（Position=after_char）。内容需明确指示：“在回复中必须包含丰富细腻的心理活动或心理对话，且心理活动必须使用圆括号（）包裹，说出口的对话请使用『』包裹。请严格遵守此格式输出，以便系统进行高亮渲染。”
+    - **重要提示**：在 JSON 内容中，如果涉及到双引号（"），**必须**使用反斜杠进行转义（如：\\"），否则会导致系统解析失败。
+    - **世界观设定**：必须包含一条名为“世界观”的详细条目（内容最少1000字），必须详尽详细描述世界背景、社会结构等，为 AI 的自由发挥提供坚实基础。
+    - **角色设定**：必须包含名为“XX的设定”的详细条目，详细描述某个对应角色具体设定，为 AI 的自由发挥提供坚实基础，多个角色可拥有多世界书条目。
+    
+    **First Message 最终检查**：
+    - 正文必须包含自然的对话和描写，段落间空一行，禁止出现任何{{user}}的言行，应将选择权和行动权留给{{user}}。
+    - 确保正则脚本能完美匹配正文并消除原始内容，不留残余字符。
+    - 环境和场景描写不要包裹在圆括号内。
+    
     在输出前，请自我检查：FIND 块是否能精确匹配原文？REPLACE 块的内容是否符合人设和逻辑？JSON 语法是否正确？
     
     请根据用户的具体指令，开始生成 Diff 补丁。`;
@@ -2776,7 +2815,12 @@ ${options.generateExtra ? `### World Info
 - comment (字符串): (简略易懂的描述，中文，作为条目的标识)
 - constant (布尔): 是否常驻
 - selective (布尔): 是否选择性触发
-- position (字符串): 插入位置，可选值: "before_char", "after_char", "an_top", "an_bottom", "at_depth"，示例: "at_depth"
+- position (字符串): 插入位置，必须是以下规范的值之一（按适用场景选择）：
+  - "before_char": 适合在角色详情前补充的前置世界背景。
+  - "after_char": 适合在角色详情后的设定补充、或定义格式（如：强制规定必须写心理描写的样式规范）。
+  - "at_depth": (默认) 适合对话中动态触发的剧情分支、物品或设定，随触发词生效。
+  - "user_top": 适合强加给用户的行为约束或临时状态。
+  - "assistant_top": 适合强加给AI的行为指导或短期内心引导。
 - order (数字，1-99): 插入顺序，数字不允许重复，多个条目应确保使用不同的插入顺序
 - probability (数字 0-100): 触发概率
 - useProbability (布尔): 是否启用概率
@@ -2822,7 +2866,7 @@ ${options.generateExtra ? `### World Info
      - **必须**将此正则脚本放在 \`Regex Scripts\` 数组的第一位。
    - **语法高亮与文字修饰（要求精致柔和）**：
      - **对话高亮**：识别双引号内的对话内容（如 \`/“([^”]*?)”/g\`），使用带有感情色彩的柔和文本颜色，加上稍微加粗排版（\`font-weight: 500/600\`），甚至配上极轻微的文字阴影（\`text-shadow\`）增加质感，不使用刺眼的纯色。
-     - **角色心理描写**：识别心理描写内容（如 \`/（([^）]*?)）/g\`），样式务求高级内敛、具有高级感。要求增加微小的字间距（\`letter-spacing: 0.05em\`）、配合斜体（\`font-style: italic\`）甚至是内联背景色块，以在视觉上呈现一种高级氛围感。
+     - **角色心理描写**：识别心理描写内容（如 \`/（([^）]*?)）/g\`），样式要求采用**左侧带竖线的块级引用（Blockquote）风格**。必须包含：左侧实线、适宜的左侧内边距和外边距以及块级显示，配合极其淡雅的背景色块和微小字间距（\`letter-spacing: 0.05em\`），呈现出内敛的回忆或心理独白感。
      - **角色或特殊名词**：使用精致的行内高亮背景标签（如 \`background: rgba(x,y,z,0.1); padding: 0.2em 0.4em; border-radius: 4px; font-weight: bold;\`）重点强调。
 
 **世界书 (World Info) 生成规范**（所有条目禁止使用按深度）：
@@ -3115,8 +3159,13 @@ JSON 字段（世界书/正则脚本）必须输出为合法的 JSON 数组，**
                                         currentCharacter.value.worldInfo = parsed.map(p => {
                                             let pos = p.position;
                                             if (typeof pos === 'string') {
-                                                const idx = ["before_char", "after_char", "an_top", "an_bottom", "at_depth"].indexOf(pos);
-                                                pos = idx !== -1 ? idx : 1;
+                                                const validStringPositions = ["user_top", "assistant_top"];
+                                                if (!validStringPositions.includes(pos)) {
+                                                    const idx = ["before_char", "after_char", "an_top", "an_bottom", "at_depth"].indexOf(pos);
+                                                    pos = idx !== -1 ? idx : 1;
+                                                    // Handle deprecated positions by converting them to valid ones (after_char)
+                                                    if (pos === 2 || pos === 3) pos = 1;
+                                                }
                                             }
                                             return {
                                                 name: p.comment || p.name || 'New Entry',

@@ -52,11 +52,11 @@ createApp({
         const DEFAULT_API_CONFIG = {
             apiUrl: 'https://sta1n.zeabur.app',
             apiKey: 'sk-Vk78S1r6mjBc2YpzFkzcTRMLohBf5jlam4YYeK8WSl4hTszN',
-            model: 'gemini-3-flash-preview-high', // Default selected
-            qualityModel: 'gemini-3.1-pro-preview-high',
-            balancedModel: 'gemini-3-flash-preview-high',
-            fastModel: 'gemini-3.1-flash-lite-preview-thinking',
-            suggestionModel: 'gemini-3.1-flash-lite-preview'
+            model: '', // Default selected
+            qualityModel: '',
+            balancedModel: '',
+            fastModel: '',
+            suggestionModel: ''
         };
 
         // --- State ---
@@ -5278,24 +5278,19 @@ ${textContent}`;
                     settings.customFastModel = settings.fastModel;
                     settings.customSuggestionModel = settings.suggestionModel;
 
-                    // Apply public defaults
+                    // Apply public defaults (仅强制刷新 API URL 和 Key)
                     settings.apiUrl = DEFAULT_API_CONFIG.apiUrl;
                     settings.apiKey = DEFAULT_API_CONFIG.apiKey;
-                    settings.qualityModel = DEFAULT_API_CONFIG.qualityModel;
-                    settings.balancedModel = DEFAULT_API_CONFIG.balancedModel;
-                    settings.fastModel = DEFAULT_API_CONFIG.fastModel;
-                    settings.suggestionModel = DEFAULT_API_CONFIG.suggestionModel;
-                    settings.model = DEFAULT_API_CONFIG.model;
 
                 } else if (mode === 'custom') {
-                    // Restore custom
-                    if (settings.customApiUrl) settings.apiUrl = settings.customApiUrl;
-                    if (settings.customApiKey) settings.apiKey = settings.customApiKey;
-                    if (settings.customQualityModel) settings.qualityModel = settings.customQualityModel;
-                    if (settings.customBalancedModel) settings.balancedModel = settings.customBalancedModel;
-                    if (settings.customFastModel) settings.fastModel = settings.customFastModel;
-                    if (settings.customSuggestionModel) settings.suggestionModel = settings.customSuggestionModel;
-                    if (settings.customModel) settings.model = settings.customModel;
+                    // Restore custom (初次切换时由缺省判定全部置空)
+                    settings.apiUrl = settings.customApiUrl !== undefined ? settings.customApiUrl : '';
+                    settings.apiKey = settings.customApiKey !== undefined ? settings.customApiKey : '';
+                    settings.qualityModel = settings.customQualityModel !== undefined ? settings.customQualityModel : '';
+                    settings.balancedModel = settings.customBalancedModel !== undefined ? settings.customBalancedModel : '';
+                    settings.fastModel = settings.customFastModel !== undefined ? settings.customFastModel : '';
+                    settings.suggestionModel = settings.customSuggestionModel !== undefined ? settings.customSuggestionModel : '';
+                    settings.model = settings.customModel !== undefined ? settings.customModel : '';
                 }
 
                 saveData();
