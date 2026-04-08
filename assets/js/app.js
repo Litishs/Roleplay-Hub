@@ -327,7 +327,7 @@ createApp({
             customSuggestionModel: '',
             useCharacterBackground: true,
             immersiveMode: false,
-            fontSize: 14,
+            fontSize: window.innerWidth > 768 ? 16 : 14,
             autoScroll: true,
             maxRetries: 2,
             renderLayerLimit: 25,
