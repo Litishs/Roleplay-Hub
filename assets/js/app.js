@@ -119,22 +119,23 @@ createApp({
         const updateCountdown = ref(0);
         let updateCountdownTimer = null;
         const latestUpdate = reactive({
-            id: 10106, // 确保这是一个五位数ID，每次更新内容时增加这个数字
+            id: 10108, // 确保这是一个五位数ID，每次更新内容时增加这个数字
             date: new Date().toISOString().split('T')[0],
             title: '网站公告',
             content: `
-### RP-Hub 1.4.2 更新
+### RP-Hub 1.4.5 更新
 
-- 新增了"真实上下文请求"查看功能，现在可以查看最近一次对话触发了哪些世界书和完整上下文记录
-- 为总结新增了"回退"和"重新生成"功能
-- 添加了气泡入场的动画效果
-- 优化了部分字体设置
-- 彻底修复了自动滚动无法滚动至最底部的问题
-- 修复了角色卡工坊模型名称列表无法收起的问题
+- 用户设置中新增“多人设管理”功能
+- 高级设置中新增“字体大小”调整
+- 为上下文请求查看器新增触发内容/楼层与高亮显示
+- 解决了公益模型配置重置的问题
+- 解决了世界书中文关键词的词缩进失效漏统
+- 修复了世界书触发概率被错误重复计算的问题
+- 修复了角色卡工坊世界书分组异常命名的问题
 
 本项目为全开源公益项目，严禁倒卖源码，二改需经作者授权
 
-#### 更新时间：04/03/22:09
+#### 更新时间：04/08/22:15
                     `
         });
 
@@ -279,8 +280,28 @@ createApp({
             name: '请前往设置自定义你的名称',
             description: '',
             avatar: '',
-            person: 'second', // 记录人称偏好：second 或 third
+            person: 'second', //记录人称偏好：second 或 third
         });
+
+        const userProfiles = ref([]);
+        const activeProfileId = ref(null);
+        const showProfileDropdown = ref(false);
+
+        watch(user, (newVal) => {
+            if (activeProfileId.value && userProfiles.value.length > 0) {
+                const profileIndex = userProfiles.value.findIndex(p => p.uuid === activeProfileId.value);
+                if (profileIndex !== -1) {
+                    const currentProfile = userProfiles.value[profileIndex];
+                    if (currentProfile.name !== newVal.name ||
+                        currentProfile.description !== newVal.description ||
+                        currentProfile.avatar !== newVal.avatar ||
+                        currentProfile.person !== newVal.person) {
+                        userProfiles.value[profileIndex] = JSON.parse(JSON.stringify(newVal));
+                        userProfiles.value[profileIndex].uuid = activeProfileId.value;
+                    }
+                }
+            }
+        }, { deep: true });
 
         const savedMainConfig = reactive({
             apiUrl: DEFAULT_API_CONFIG.apiUrl,
@@ -306,6 +327,7 @@ createApp({
             customSuggestionModel: '',
             useCharacterBackground: true,
             immersiveMode: false,
+            fontSize: 14,
             autoScroll: true,
             maxRetries: 2,
             renderLayerLimit: 25,
@@ -443,7 +465,7 @@ createApp({
         const showWorldInfoSettings = ref(false);
         const worldInfoSettings = reactive({
             scanDepth: 2,
-            contextPercent: 25,
+            contextPercent: 0,
             tokenBudget: 0,
             minActivations: 0,
             maxDepth: 0,
@@ -617,6 +639,8 @@ createApp({
                 await dbSet('silly_tavern_worldinfo_settings', worldInfoSettings);
                 // await dbSet('silly_tavern_recent_times', recentGenerationTimes.value); // Deprecated: Saved in character
                 await dbSet('silly_tavern_user', user);
+                await dbSet('silly_tavern_user_profiles', JSON.parse(JSON.stringify(userProfiles.value)));
+                if (activeProfileId.value) await dbSet('silly_tavern_active_profile_id', activeProfileId.value);
 
                 // Save Chat State
                 if (currentCharacterIndex.value >= 0) {
@@ -735,6 +759,26 @@ createApp({
                 const savedUser = await dbGet('silly_tavern_user');
                 if (savedUser) Object.assign(user, savedUser);
                 if (!user.uuid) user.uuid = generateUUID(); // Ensure UUID
+
+                const savedProfiles = await dbGet('silly_tavern_user_profiles');
+                const savedActiveId = await dbGet('silly_tavern_active_profile_id');
+
+                if (savedProfiles && savedProfiles.length > 0) {
+                    userProfiles.value = savedProfiles;
+                    activeProfileId.value = savedActiveId || savedProfiles[0].uuid;
+                    const activeProfile = userProfiles.value.find(p => p.uuid === activeProfileId.value);
+                    if (activeProfile) {
+                        Object.assign(user, activeProfile);
+                        if (!user.uuid) user.uuid = activeProfileId.value;
+                    }
+                } else {
+                    // Migrate single user to profiles
+                    const firstProfile = JSON.parse(JSON.stringify(user));
+                    if (!firstProfile.uuid) firstProfile.uuid = generateUUID();
+                    user.uuid = firstProfile.uuid;
+                    userProfiles.value = [firstProfile];
+                    activeProfileId.value = firstProfile.uuid;
+                }
 
                 // Load Last Active Character Index
                 const lastCharIndex = await dbGet('silly_tavern_last_active_char');
@@ -2104,14 +2148,19 @@ ${rawHtml}
 
             // --- Advanced World Info Processing ---
 
+            const evaluatedProbability = new Map(); // Store rolled probabilities to prevent re-rolls
+
             // Helper function to check a single entry against a text block
             const checkEntryTrigger = (entry, text, isRecursiveScan = false) => {
                 // In initial scan, skip entries that are "delayUntilRecursion: true"
                 if (!isRecursiveScan && entry.delayUntilRecursion === true) return { triggered: false };
 
-                // Probability Check (do this early)
+                // Probability Check (do this early, rolled once per entry per generation)
                 if (entry.useProbability !== false && entry.probability !== undefined && entry.probability < 100) {
-                    if (Math.random() * 100 > entry.probability) return { triggered: false };
+                    if (!evaluatedProbability.has(entry)) {
+                        evaluatedProbability.set(entry, (Math.random() * 100) <= entry.probability);
+                    }
+                    if (!evaluatedProbability.get(entry)) return { triggered: false };
                 }
 
                 const caseSensitive = entry.caseSensitive ?? worldInfoSettings.caseSensitive;
@@ -2119,6 +2168,7 @@ ${rawHtml}
                 const textToScan = caseSensitive ? text : text.toLowerCase();
                 let primaryMatches = 0;
                 let secondaryMatches = 0;
+                let matchedKeys = [];
 
                 const checkKeys = (keys) => {
                     let matchCount = 0;
@@ -2135,12 +2185,18 @@ ${rawHtml}
                             } catch (e) { console.warn(`Invalid regex: ${finalKey}`); }
                         } else if (matchWholeWords) {
                             const escapedKey = finalKey.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
-                            const regex = new RegExp(`\\b${escapedKey}\\b`, caseSensitive ? 'g' : 'gi');
+                            // Fix: CJK characters do not have \b word boundaries
+                            const startsWithWordChar = /^\w/i.test(finalKey);
+                            const endsWithWordChar = /\w$/.test(finalKey);
+                            let regexStr = escapedKey;
+                            if (startsWithWordChar) regexStr = `\\b` + regexStr;
+                            if (endsWithWordChar) regexStr = regexStr + `\\b`;
+                            const regex = new RegExp(regexStr, caseSensitive ? 'g' : 'gi');
                             if (regex.test(textToScan)) isMatch = true;
                         } else {
                             if (textToScan.includes(finalKey)) isMatch = true;
                         }
-                        if (isMatch) matchCount++;
+                        if (isMatch) { matchCount++; if (!matchedKeys.includes(finalKey)) matchedKeys.push(finalKey); }
                     });
                     return matchCount;
                 };
@@ -2160,7 +2216,7 @@ ${rawHtml}
                     if (logic === 3 && secondaryMatches === secondaryKeys.length) return { triggered: false }; // NOT ALL
                 }
 
-                return { triggered: true, score: primaryMatches + secondaryMatches };
+                return { triggered: true, score: primaryMatches + secondaryMatches, matchedKeys };
             };
 
             let triggeredEntries = new Map(); // Use Map to store entries and their scores
@@ -2169,7 +2225,7 @@ ${rawHtml}
             // 1. Initial Scan (Chat History)
             activeWorldInfo.forEach(entry => {
                 if (entry.constant) {
-                    triggeredEntries.set(entry, { score: Infinity }); // Constants get highest score
+                    triggeredEntries.set(entry, { score: Infinity, matchedKeys: ['常驻 (Constant)'] }); // Constants get highest score
                     return;
                 }
 
@@ -2187,7 +2243,7 @@ ${rawHtml}
                 if (entry.keys && entry.keys.length > 0) {
                     const result = checkEntryTrigger(entry, scanText);
                     if (result.triggered) {
-                        triggeredEntries.set(entry, { score: result.score });
+                        triggeredEntries.set(entry, { score: result.score, matchedKeys: result.matchedKeys });
                     }
                 }
             });
@@ -2212,7 +2268,7 @@ ${rawHtml}
                         if (triggeredEntries.has(entry)) continue;
                         const result = checkEntryTrigger(entry, singleMsgScanText);
                         if (result.triggered) {
-                            triggeredEntries.set(entry, { score: result.score });
+                            triggeredEntries.set(entry, { score: result.score, matchedKeys: result.matchedKeys });
                             if (triggeredEntries.size >= worldInfoSettings.minActivations) break;
                         }
                     }
@@ -2240,7 +2296,7 @@ ${rawHtml}
                         const result = checkEntryTrigger(entry, recursionText, true);
                         if (result.triggered) {
                             newTriggersInPass.add(entry);
-                            triggeredEntries.set(entry, { score: result.score });
+                            triggeredEntries.set(entry, { score: result.score, matchedKeys: result.matchedKeys });
                         }
                     });
                     currentDepth++;
@@ -2249,10 +2305,10 @@ ${rawHtml}
 
             // 3. Group Processing
             let finalEntries = Array.from(triggeredEntries.keys());
-            const groups = {};
+            const groups = Object.create(null);
             finalEntries.forEach(entry => {
                 // Fix: Don't group System entries if they are constant (intended to coexist)
-                const isSystemGroup = entry.group && entry.group.toLowerCase() === 'system';
+                const isSystemGroup = entry.group && String(entry.group).toLowerCase() === 'system';
                 const shouldGroup = !isSystemGroup || !entry.constant;
 
                 if (entry.group && shouldGroup) {
@@ -2275,26 +2331,29 @@ ${rawHtml}
                     candidates = candidates.filter(entry => triggeredEntries.get(entry).score === maxScore);
                 }
 
-                if (candidates.length <= 1) return;
-
                 let winner = null;
+                const getWeight = (e) => !isNaN(parseFloat(e.groupWeight)) ? parseFloat(e.groupWeight) : 100;
 
-                // 3.2 Check for Prioritized Inclusion
-                // If any candidate has preferential enabled, we select based on highest Order
-                const prioritized = candidates.filter(e => e.preferential);
-                if (prioritized.length > 0) {
-                    prioritized.sort((a, b) => (b.order || 0) - (a.order || 0));
-                    winner = prioritized[0];
-                } else {
-                    // 3.3 Select one winner from candidates (weighted random)
-                    let totalWeight = candidates.reduce((sum, entry) => sum + (entry.groupWeight || 100), 0);
-                    let random = Math.random() * totalWeight;
-                    winner = candidates[candidates.length - 1]; // Default to last
-                    for (const entry of candidates) {
-                        random -= (entry.groupWeight || 100);
-                        if (random <= 0) {
-                            winner = entry;
-                            break;
+                if (candidates.length === 1) {
+                    winner = candidates[0];
+                } else if (candidates.length > 1) {
+                    // 3.2 Check for Prioritized Inclusion
+                    // If any candidate has preferential enabled, we select based on highest Order
+                    const prioritized = candidates.filter(e => e.preferential);
+                    if (prioritized.length > 0) {
+                        prioritized.sort((a, b) => (b.order || 0) - (a.order || 0));
+                        winner = prioritized[0];
+                    } else {
+                        // 3.3 Select one winner from candidates (weighted random)
+                        let totalWeight = candidates.reduce((sum, entry) => sum + getWeight(entry), 0);
+                        let random = Math.random() * totalWeight;
+                        winner = candidates[candidates.length - 1]; // Default to last
+                        for (const entry of candidates) {
+                            random -= getWeight(entry);
+                            if (random <= 0) {
+                                winner = entry;
+                                break;
+                            }
                         }
                     }
                 }
@@ -2343,6 +2402,21 @@ ${rawHtml}
                     break; // Stop adding entries
                 }
             }
+
+            // --- Output Trigger Log ---
+            console.groupCollapsed('📚 World Info Trigger Log');
+            if (budgetedEntries.length === 0) {
+                console.log('No World Info entries triggered for this request.');
+            } else {
+                budgetedEntries.forEach(entry => {
+                    const data = triggeredEntries.get(entry);
+                    const keysStr = data && data.matchedKeys ? data.matchedKeys.join(', ') : 'Unknown';
+                    console.log(`[${entry.comment || 'Unnamed'}] (Pos: ${entry.position || 'at_depth'}, Order: ${entry.order || 0})`);
+                    console.log(`  ↪ Matched Keys: ${keysStr}`);
+                    console.log(`  ↪ Content Preview: ${(entry.content || '').substring(0, 50).replace(/\n/g, ' ')}...`);
+                });
+            }
+            console.groupEnd();
 
             // 5. Group by Position
             const wiGroups = {
@@ -2532,27 +2606,93 @@ ${rawHtml}
 
             messages = processMessageInjections(messages);
 
+            // Escape HTML helper
+            const escapeHtml = (unsafe) => {
+                if (!unsafe) return '';
+                return unsafe
+                    .replace(/&/g, "&amp;")
+                    .replace(/</g, "&lt;")
+                    .replace(/>/g, "&gt;")
+                    .replace(/"/g, "&quot;")
+                    .replace(/'/g, "&#039;");
+            };
+
+            // Pre-calculate trigger keyword floors and collect all trigger keys for highlighting
+            const floorInfo = new Map();
+            const allTriggerKeys = new Set();
+            triggeredEntries.forEach((data, entry) => {
+                if (data.matchedKeys) {
+                    data.matchedKeys.forEach(k => {
+                        if (k === '常驻 (Constant)') return;
+                        allTriggerKeys.add(k);
+                    });
+                }
+            });
+
+            messages.forEach((m, idx) => {
+                const text = m.content;
+                allTriggerKeys.forEach(k => {
+                    if (text.toLowerCase().includes(k.toLowerCase())) {
+                        if (!floorInfo.has(k)) floorInfo.set(k, new Set());
+                        floorInfo.get(k).add(idx + 1);
+                    }
+                });
+            });
+
             // Compute message-level World Info injections for Context Viewer
             let globalInjectedWIs = [];
-            lastContextMessages.value = messages.map(m => {
-                let injectedWIs = [];
+            lastContextMessages.value = messages.map((m, index) => {
+                let injectedWIsMap = new Map();
                 budgetedEntries.forEach(entry => {
                     const injectTag = entry.comment || 'Entry';
                     const searchStr = `[${injectTag}]\n${entry.content}`;
                     const displayName = entry.comment || entry.name || '未命名条目';
 
                     if (m.content.includes(searchStr) || (entry.content.length > 5 && m.content.includes(entry.content))) {
-                        injectedWIs.push(displayName);
+                        const entryData = triggeredEntries.get(entry);
+                        let triggersStr = '';
+                        if (entryData && entryData.matchedKeys) {
+                            let triggersWithFloors = entryData.matchedKeys.map(k => {
+                                if (k === '常驻 (Constant)') return '常驻';
+                                const floors = floorInfo.get(k);
+                                if (floors && floors.size > 0) {
+                                    return `${k} (${Array.from(floors).map(f => 'F' + f).join(', ')})`;
+                                }
+                                return k;
+                            });
+                            triggersStr = triggersWithFloors.join(', ');
+                        } else {
+                            triggersStr = '关联触发';
+                        }
+
+                        if (!injectedWIsMap.has(displayName)) {
+                            injectedWIsMap.set(displayName, triggersStr);
+                        }
+
                         if (!globalInjectedWIs.some(i => i.name === displayName)) {
-                            globalInjectedWIs.push({ name: displayName });
+                            globalInjectedWIs.push({ name: displayName, triggers: triggersStr });
                         }
                     }
                 });
+
+                let renderedContent = escapeHtml(m.content);
+                // Sort keys by length descending to match longer phrases first
+                const sortedKeys = Array.from(allTriggerKeys).sort((a, b) => b.length - a.length);
+                sortedKeys.forEach(k => {
+                    if (k.length < 1) return;
+                    const escapedK = k.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+                    // Avoid replacing inside html tags like <mark class="...">
+                    const safeRegex = new RegExp(`(${escapedK})(?![^<]*>)`, 'gi');
+                    renderedContent = renderedContent.replace(safeRegex, '<mark class="bg-yellow-200/80 text-yellow-900 border-b border-yellow-400 font-bold px-0.5 mx-px rounded shadow-sm">$1</mark>');
+                });
+
                 return {
                     role: m.role,
                     name: m.name,
                     content: m.content,
-                    wiTriggers: [...new Set(injectedWIs)]
+                    renderedContent: renderedContent,
+                    floor: index + 1,
+                    wiTriggers: Array.from(injectedWIsMap.entries()).map(([name, triggers]) => ({ name, triggers }))
                 };
             });
             // Store overall triggered entries based on actual injection order in the prompt
@@ -4252,11 +4392,6 @@ ${textContent}`;
             if (settings.apiMode === 'public') {
                 settings.apiUrl = DEFAULT_API_CONFIG.apiUrl;
                 settings.apiKey = DEFAULT_API_CONFIG.apiKey;
-                settings.model = DEFAULT_API_CONFIG.model;
-                settings.qualityModel = DEFAULT_API_CONFIG.qualityModel;
-                settings.balancedModel = DEFAULT_API_CONFIG.balancedModel;
-                settings.fastModel = DEFAULT_API_CONFIG.fastModel;
-                settings.suggestionModel = DEFAULT_API_CONFIG.suggestionModel;
                 // showToast('已自动恢复默认 API 设置', 'info');
             } else if (settings.apiMode === undefined && settings.autoRestoreDefaultAPI) {
                 // Legacy support for older configurations
@@ -4264,11 +4399,6 @@ ${textContent}`;
                 delete settings.autoRestoreDefaultAPI;
                 settings.apiUrl = DEFAULT_API_CONFIG.apiUrl;
                 settings.apiKey = DEFAULT_API_CONFIG.apiKey;
-                settings.model = DEFAULT_API_CONFIG.model;
-                settings.qualityModel = DEFAULT_API_CONFIG.qualityModel;
-                settings.balancedModel = DEFAULT_API_CONFIG.balancedModel;
-                settings.fastModel = DEFAULT_API_CONFIG.fastModel;
-                settings.suggestionModel = DEFAULT_API_CONFIG.suggestionModel;
             } else if (settings.apiMode === undefined && settings.autoRestoreDefaultAPI === false) {
                 settings.apiMode = 'custom';
                 delete settings.autoRestoreDefaultAPI;
@@ -4327,7 +4457,8 @@ ${textContent}`;
 2. **直白露骨**：使用直白、露骨、甚至粗俗的词汇来描述器官、行为、生理反应和心理状态。严禁使用“幽径”、“精气”、“蜜液”、“肉柱”等隐喻词，请直接使用精准的生理名词或常见的色情俚语（如肉棒、小穴、乳房、高潮、精液等）。
 3. **感官强化**：着重描写视觉（体液、充血）、听觉（淫叫、水声）、触觉（温度、粘稠）和嗅觉（体味、精味），以构建极致的感官刺激。
 4. **用户主动权**：将剧情和性行为推进的主动权移交到用户手中，用户未采取下一步行为时禁止推进和补充剧情。
-5. **年龄合理化**：把所有nsfw场景中出现的角色背景默认设置为18岁但不准在文中提起。\n</nsfw_enhancement>`;
+5. **年龄合理化**：把所有nsfw场景中出现的角色背景默认设置为18岁但不准在文中提起。\n</nsfw_enhancement>
+`;
 
             const existingNsfwPreset = presets.value.find(p => p.name === nsfwPresetName);
             if (!existingNsfwPreset) {
@@ -4754,6 +4885,9 @@ ${textContent}`;
                 if (showInstructionPanel.value && !e.target.closest('.instruction-panel-container')) {
                     showInstructionPanel.value = false;
                 }
+                if (showProfileDropdown.value && !e.target.closest('.profile-dropdown-container')) {
+                    showProfileDropdown.value = false;
+                }
             });
         });
         // 解析并截断生成的包含 HTML UI 的正文，避免闪屏问题
@@ -4773,7 +4907,64 @@ ${textContent}`;
             return { text: mainText, showSpinner: false };
         };
 
+        const switchProfile = (id) => {
+            const profile = userProfiles.value.find(p => p.uuid === id);
+            if (profile) {
+                activeProfileId.value = id;
+                Object.assign(user, JSON.parse(JSON.stringify(profile)));
+                saveData();
+                showToast(`已切换为人设: ${user.name}`, 'success');
+            }
+        };
+
+        const createNewProfile = () => {
+            const newProfile = {
+                uuid: generateUUID(),
+                name: '新人设',
+                description: '',
+                avatar: null,
+                person: 'second'
+            };
+            userProfiles.value.push(newProfile);
+            switchProfile(newProfile.uuid);
+        };
+
+        const cloneProfile = () => {
+            const currentProfile = userProfiles.value.find(p => p.uuid === activeProfileId.value);
+            if (currentProfile) {
+                const newProfile = JSON.parse(JSON.stringify(currentProfile));
+                newProfile.uuid = generateUUID();
+                newProfile.name = newProfile.name + ' (副本)';
+                userProfiles.value.push(newProfile);
+                switchProfile(newProfile.uuid);
+            }
+        };
+
+        const deleteProfile = (id) => {
+            if (userProfiles.value.length <= 1) {
+                showToast('无法删除唯一的人设配置', 'error');
+                return;
+            }
+
+            confirmMessage.value = '确定要删除此人设配置吗？此操作不可逆。';
+            confirmCallback.value = () => {
+                const index = userProfiles.value.findIndex(p => p.uuid === id);
+                if (index !== -1) {
+                    userProfiles.value.splice(index, 1);
+                    if (activeProfileId.value === id) {
+                        switchProfile(userProfiles.value[0].uuid);
+                    } else {
+                        saveData();
+                    }
+                    showToast('人设已删除', 'success');
+                }
+                showConfirmModal.value = false;
+            };
+            showConfirmModal.value = true;
+        };
+
         return {
+            switchProfile, createNewProfile, cloneProfile, deleteProfile, userProfiles, activeProfileId, showProfileDropdown,
             processMainContent,
             currentView, showMobileMenu, showDescriptionPanel, showModelSelector, modelSelectionTarget, showChatModelSelector, showCharacterEditor, showAddCharacterMenu, showPresetEditor,
             showExportModal, showSummaryModal, isSummarizing, summarizeChatHistory, revertSummary, resummarize, sysInstruction, showInstructionPanel, exportType, exportItems, selectedExportIndices, // Export Modal
