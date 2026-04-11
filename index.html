@@ -82,7 +82,7 @@
     <div id="app" v-cloak class="h-full flex flex-col md:flex-row relative">
         <component is="style" v-if="settings.fontSize">
             .markdown-body :not(h1):not(h2):not(h3):not(h4):not(h5):not(h6):not(small):not(sub):not(sup):not(code) {
-                font-size: inherit !important;
+            font-size: inherit !important;
             }
         </component>
         <!-- Toast Notification Container -->
@@ -168,6 +168,19 @@
                     </svg>
                     <span v-show="!isSidebarCollapsed" class="whitespace-nowrap overflow-hidden">聊天</span>
                 </button>
+                <button @click="currentView = 'memory'; showMobileMenu = false"
+                    :class="['w-full flex items-center rounded-lg transition-all duration-200 font-medium', currentView === 'memory' ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900', isSidebarCollapsed ? 'justify-center px-0 py-3' : 'px-3 py-2']">
+                    <svg class="w-5 h-5" :class="isSidebarCollapsed ? 'mr-0' : 'mr-3'" fill="none" stroke="currentColor"
+                        viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z">
+                        </path>
+                    </svg>
+                    <span v-show="!isSidebarCollapsed" class="whitespace-nowrap overflow-hidden">记忆系统</span>
+                    <span v-if="!isSidebarCollapsed && isExtractingMemory" class="ml-auto">
+                        <span class="inline-block w-2 h-2 rounded-full bg-primary-500 memory-extracting"></span>
+                    </span>
+                </button>
                 <button @click="currentView = 'characters'; showMobileMenu = false"
                     :class="['w-full flex items-center rounded-lg transition-all duration-200 font-medium', currentView === 'characters' ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900', isSidebarCollapsed ? 'justify-center px-0 py-3' : 'px-3 py-2']">
                     <svg class="w-5 h-5" :class="isSidebarCollapsed ? 'mr-0' : 'mr-3'" fill="none" stroke="currentColor"
@@ -218,6 +231,7 @@
                     </svg>
                     <span v-show="!isSidebarCollapsed" class="whitespace-nowrap overflow-hidden">世界书</span>
                 </button>
+
                 <button @click="currentView = 'regex'; showMobileMenu = false"
                     :class="['w-full flex items-center rounded-lg transition-all duration-200 font-medium', currentView === 'regex' ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900', isSidebarCollapsed ? 'justify-center px-0 py-3' : 'px-3 py-2']">
                     <svg class="w-5 h-5" :class="isSidebarCollapsed ? 'mr-0' : 'mr-3'" fill="none" stroke="currentColor"
@@ -629,16 +643,23 @@
                                                         v-if="msg.originalMessages && !msg.isCollapsed && !msg.isEditing"
                                                         class="p-1 md:p-1.5 text-indigo-300 hover:text-orange-500 bg-white/60 backdrop-blur hover:bg-white rounded-full transition-all shadow-sm border border-transparent hover:border-orange-200 relative z-10"
                                                         title="撤销总结并恢复历史">
-                                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"></path>
+                                                        <svg class="w-4 h-4" fill="none" stroke="currentColor"
+                                                            viewBox="0 0 24 24">
+                                                            <path stroke-linecap="round" stroke-linejoin="round"
+                                                                stroke-width="2"
+                                                                d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"></path>
                                                         </svg>
                                                     </button>
                                                     <button @click="resummarize(index)"
                                                         v-if="msg.originalMessages && !msg.isCollapsed && !msg.isEditing"
                                                         class="p-1 md:p-1.5 text-indigo-300 hover:text-blue-500 bg-white/60 backdrop-blur hover:bg-white rounded-full transition-all shadow-sm border border-transparent hover:border-blue-200 relative z-10"
                                                         title="重新总结">
-                                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                                                        <svg class="w-4 h-4" fill="none" stroke="currentColor"
+                                                            viewBox="0 0 24 24">
+                                                            <path stroke-linecap="round" stroke-linejoin="round"
+                                                                stroke-width="2"
+                                                                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15">
+                                                            </path>
                                                         </svg>
                                                     </button>
                                                     <button @click="editSummaryMessage(index)"
@@ -1601,14 +1622,15 @@
                     <!-- User Settings - Optimized UI -->
                     <div class="bg-white rounded-2xl border border-gray-200 shadow-sm mb-6" style="overflow: visible;">
                         <!-- Header with Background Pattern -->
-                        <div class="h-24 bg-gradient-to-r from-blue-500 to-indigo-600 relative flex items-start justify-between rounded-t-2xl" style="overflow: visible;">
+                        <div class="h-24 bg-gradient-to-r from-blue-500 to-indigo-600 relative flex items-start justify-between rounded-t-2xl"
+                            style="overflow: visible;">
                             <!-- Background Pattern -->
                             <div class="absolute inset-0 opacity-10 pointer-events-none">
                                 <svg class="w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
                                     <path d="M0 100 C 20 0 50 0 100 100 Z" fill="white" />
                                 </svg>
                             </div>
-                            
+
                             <div class="mt-4 ml-6 text-white font-semibold flex items-center relative z-10">
                                 <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -1618,20 +1640,26 @@
                             </div>
 
                             <!-- Profile Management Controls -->
-                            <div class="mt-3 mr-4 flex flex-wrap items-center gap-1.5 md:gap-2 relative" :class="showProfileDropdown ? 'z-[60]' : 'z-10'">
+                            <div class="mt-3 mr-4 flex flex-wrap items-center gap-1.5 md:gap-2 relative"
+                                :class="showProfileDropdown ? 'z-[60]' : 'z-10'">
                                 <div class="relative profile-dropdown-container">
                                     <!-- Trigger Button -->
                                     <button @click.stop="showProfileDropdown = !showProfileDropdown"
                                         class="bg-white/20 hover:bg-white/30 border border-white/40 text-white text-xs md:text-sm font-bold rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-white/50 focus:outline-none cursor-pointer backdrop-blur-md transition-all shadow-sm flex items-center gap-2 max-w-[140px] md:max-w-[180px] active:scale-95">
-                                        <div v-if="user?.avatar" class="w-5 h-5 rounded-full overflow-hidden border border-white/50 flex-shrink-0">
+                                        <div v-if="user?.avatar"
+                                            class="w-5 h-5 rounded-full overflow-hidden border border-white/50 flex-shrink-0">
                                             <img :src="user.avatar" class="w-full h-full object-cover">
                                         </div>
-                                        <div v-else class="w-5 h-5 rounded-full bg-white/30 flex items-center justify-center text-[10px] font-black flex-shrink-0">
+                                        <div v-else
+                                            class="w-5 h-5 rounded-full bg-white/30 flex items-center justify-center text-[10px] font-black flex-shrink-0">
                                             {{ (user.name || 'U').charAt(0).toUpperCase() }}
                                         </div>
                                         <span class="truncate">{{ user.name || '未命名' }}</span>
-                                        <svg class="w-3.5 h-3.5 flex-shrink-0 opacity-80 transition-transform duration-200" :class="{'rotate-180': showProfileDropdown}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                                        <svg class="w-3.5 h-3.5 flex-shrink-0 opacity-80 transition-transform duration-200"
+                                            :class="{'rotate-180': showProfileDropdown}" fill="none"
+                                            stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                d="M19 9l-7 7-7-7"></path>
                                         </svg>
                                     </button>
 
@@ -1644,7 +1672,8 @@
                                         leave-to-class="opacity-0 -translate-y-1 scale-95">
                                         <div v-if="showProfileDropdown"
                                             class="absolute top-full right-0 mt-2 z-50 min-w-[220px] max-w-[280px] transform-gpu origin-top-right">
-                                            <div class="bg-white/95 backdrop-blur-xl border border-gray-200 shadow-2xl rounded-xl p-1.5 flex flex-col gap-0.5 ring-1 ring-black/5 max-h-[260px] overflow-y-auto custom-scrollbar">
+                                            <div
+                                                class="bg-white/95 backdrop-blur-xl border border-gray-200 shadow-2xl rounded-xl p-1.5 flex flex-col gap-0.5 ring-1 ring-black/5 max-h-[260px] overflow-y-auto custom-scrollbar">
                                                 <div v-for="profile in userProfiles" :key="profile.uuid"
                                                     @click="switchProfile(profile.uuid); showProfileDropdown = false"
                                                     :class="['w-full px-3 py-2.5 rounded-lg text-xs transition-all duration-150 flex items-center gap-2.5 cursor-pointer active:scale-[0.98] group',
@@ -1652,36 +1681,57 @@
                                                     <!-- Profile Avatar -->
                                                     <div class="w-7 h-7 rounded-full overflow-hidden flex-shrink-0 border-2 transition-colors"
                                                         :class="activeProfileId === profile.uuid ? 'border-indigo-400 shadow-sm' : 'border-gray-200 group-hover:border-gray-300'">
-                                                        <img v-if="profile.avatar" :src="profile.avatar" class="w-full h-full object-cover">
-                                                        <div v-else class="w-full h-full flex items-center justify-center text-[11px] font-black"
+                                                        <img v-if="profile.avatar" :src="profile.avatar"
+                                                            class="w-full h-full object-cover">
+                                                        <div v-else
+                                                            class="w-full h-full flex items-center justify-center text-[11px] font-black"
                                                             :class="activeProfileId === profile.uuid ? 'bg-indigo-100 text-indigo-600' : 'bg-gray-100 text-gray-400'">
                                                             {{ (profile.name || 'U').charAt(0).toUpperCase() }}
                                                         </div>
                                                     </div>
                                                     <!-- Profile Info -->
                                                     <div class="flex-1 min-w-0">
-                                                        <div class="font-bold truncate text-[13px]">{{ profile.name || '未命名人设' }}</div>
+                                                        <div class="font-bold truncate text-[13px]">{{ profile.name ||
+                                                            '未命名人设' }}</div>
                                                         <div class="text-[10px] truncate mt-0.5"
                                                             :class="activeProfileId === profile.uuid ? 'text-indigo-500' : 'text-gray-400'">
                                                             {{ profile.person === 'second' ? '第二人称' : '第三人称' }}
-                                                            <span v-if="profile.description"> · {{ profile.description.substring(0, 20) }}{{ profile.description.length > 20 ? '...' : '' }}</span>
+                                                            <span v-if="profile.description"> · {{
+                                                                profile.description.substring(0, 20) }}{{
+                                                                profile.description.length > 20 ? '...' : '' }}</span>
                                                         </div>
                                                     </div>
                                                     <!-- Active Indicator -->
-                                                    <svg v-if="activeProfileId === profile.uuid" class="w-4 h-4 text-indigo-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path>
+                                                    <svg v-if="activeProfileId === profile.uuid"
+                                                        class="w-4 h-4 text-indigo-500 flex-shrink-0" fill="none"
+                                                        stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round"
+                                                            stroke-width="2.5" d="M5 13l4 4L19 7"></path>
                                                     </svg>
                                                 </div>
                                             </div>
                                         </div>
                                     </transition>
                                 </div>
-                                <button @click="createNewProfile" class="p-1.5 bg-white/20 hover:bg-white text-white hover:text-indigo-600 backdrop-blur-md rounded-lg border border-white/40 transition-all shadow-sm active:scale-95" title="新建人设">
-                                    <svg class="w-4 h-4 md:w-5 md:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                                <button @click="createNewProfile"
+                                    class="p-1.5 bg-white/20 hover:bg-white text-white hover:text-indigo-600 backdrop-blur-md rounded-lg border border-white/40 transition-all shadow-sm active:scale-95"
+                                    title="新建人设">
+                                    <svg class="w-4 h-4 md:w-5 md:h-5" fill="none" stroke="currentColor"
+                                        viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M12 4v16m8-8H4"></path>
+                                    </svg>
                                 </button>
 
-                                <button @click="deleteProfile(activeProfileId)" class="p-1.5 bg-white/20 hover:bg-red-500 text-white backdrop-blur-md rounded-lg border border-white/40 transition-all shadow-sm active:scale-95" title="删除当前人设">
-                                    <svg class="w-4 h-4 md:w-5 md:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                                <button @click="deleteProfile(activeProfileId)"
+                                    class="p-1.5 bg-white/20 hover:bg-red-500 text-white backdrop-blur-md rounded-lg border border-white/40 transition-all shadow-sm active:scale-95"
+                                    title="删除当前人设">
+                                    <svg class="w-4 h-4 md:w-5 md:h-5" fill="none" stroke="currentColor"
+                                        viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16">
+                                        </path>
+                                    </svg>
                                 </button>
                             </div>
                         </div>
@@ -2291,8 +2341,8 @@
                                                     class="text-xs font-mono text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-100 whitespace-nowrap">{{
                                                     settings.fontSize }}px</span>
                                             </div>
-                                            <input type="range" v-model.number="settings.fontSize" min="12"
-                                                max="24" step="1"
+                                            <input type="range" v-model.number="settings.fontSize" min="12" max="24"
+                                                step="1"
                                                 class="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-500 hover:accent-indigo-400 transition-all">
                                         </div>
                                     </div>
@@ -2494,6 +2544,534 @@
 
             <!-- Removed Friends View -->
 
+            <!-- Memory View -->
+            <div v-if="currentView === 'memory'" class="p-4 md:p-6 h-full overflow-y-auto animate-fade-in">
+                <div class="flex justify-between items-center mb-4 md:mb-6">
+                    <div class="flex items-center">
+                        <button @click="toggleMobileMenu"
+                            class="md:hidden mr-3 text-gray-500 md:hover:text-gray-700 active:text-gray-700 transition-colors">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M4 6h16M4 12h16m-7 6h7"></path>
+                            </svg>
+                        </button>
+                        <h2 class="text-xl md:text-2xl font-bold text-gray-800 flex items-center">
+                            <svg class="w-6 h-6 md:w-7 md:h-7 mr-2 text-primary-600" fill="none" stroke="currentColor"
+                                viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z">
+                                </path>
+                            </svg>
+                            记忆系统
+                            <span v-if="isExtractingMemory"
+                                class="ml-2 text-[11px] font-medium text-primary-600 bg-primary-50 px-2 py-0.5 rounded-full border border-primary-200">
+                                <svg class="w-3 h-3 inline-block mr-1 animate-spin" fill="none" stroke="currentColor"
+                                    viewBox="0 0 24 24">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor"
+                                        stroke-width="4"></circle>
+                                    <path class="opacity-75" fill="currentColor"
+                                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z">
+                                    </path>
+                                </svg>
+                                提取中
+                            </span>
+                        </h2>
+                    </div>
+                    <div class="flex space-x-2 md:space-x-3">
+                        <button @click="exportMemories()"
+                            class="p-2.5 bg-white hover:bg-gray-50 text-gray-600 rounded-xl border border-gray-200 transition-all shadow-sm hover:shadow-md active:scale-95"
+                            title="导出">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
+                            </svg>
+                        </button>
+                        <label
+                            class="cursor-pointer p-2.5 bg-white hover:bg-gray-50 text-gray-600 rounded-xl border border-gray-200 transition-all shadow-sm hover:shadow-md active:scale-95"
+                            title="导入">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                            </svg>
+                            <input type="file" accept=".json" @change="importMemories" class="hidden">
+                        </label>
+                        <button @click="clearAllMemories()"
+                            v-if="memoryStats.total > 0"
+                            class="p-2.5 bg-white text-red-600 rounded-xl border border-gray-200 shadow-sm active:scale-95 transition-all"
+                            title="清空所有记忆">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Stats Bar -->
+                <div v-if="memoryStats.total > 0"
+                    class="flex items-center flex-wrap gap-3 mb-4 text-xs font-medium text-gray-500">
+                    <div class="flex items-center gap-1.5 bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-100">
+                        <svg class="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10">
+                            </path>
+                        </svg>
+                        {{ memoryStats.total }} 条记忆
+                    </div>
+                    <div v-if="memoryStats.turnCount > 0"
+                        class="flex items-center gap-1.5 bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-100">
+                        <svg class="w-3.5 h-3.5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15">
+                            </path>
+                        </svg>
+                        {{ memoryStats.turnCount }} 次对话
+                    </div>
+                    <div v-if="memoryStats.totalChars > 0"
+                        class="flex items-center gap-1.5 bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-100">
+                        <svg class="w-3.5 h-3.5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129">
+                            </path>
+                        </svg>
+                        {{ memoryStats.totalChars }} 字
+                    </div>
+                </div>
+
+                <!-- Memory Settings (Collapsible like World Info) -->
+                <div
+                    class="bg-white/70 backdrop-blur-sm p-1 rounded-2xl border border-gray-200 shadow-sm mb-4 overflow-hidden">
+                    <button @click="showMemorySettings = !showMemorySettings"
+                        :class="['w-full flex justify-between items-center px-4 py-3 rounded-xl transition-all font-bold',
+                                     showMemorySettings ? 'bg-primary-50 text-primary-700' : 'text-gray-700 hover:bg-gray-50']">
+                        <span class="flex items-center">
+                            <div
+                                :class="['p-1.5 rounded-lg mr-3 transition-colors', showMemorySettings ? 'bg-primary-100 text-primary-600' : 'bg-gray-100 text-gray-500']">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4">
+                                    </path>
+                                </svg>
+                            </div>
+                            记忆引擎设置
+                        </span>
+                        <svg :class="{'transform rotate-180': showMemorySettings}"
+                            class="w-5 h-5 transition-transform duration-300" fill="none" stroke="currentColor"
+                            viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7">
+                            </path>
+                        </svg>
+                    </button>
+                    <div v-show="showMemorySettings" class="px-4 pb-4 pt-3 border-t border-gray-100 animate-fade-in">
+                        <!-- System Toggle & Extract -->
+                        <div class="flex items-center justify-between mb-3">
+                            <div class="flex items-center space-x-3">
+                                <span class="text-sm font-bold text-gray-700">记忆引擎</span>
+                                <label class="relative inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" v-model="memorySettings.enabled" class="sr-only peer">
+                                    <div
+                                        class="w-10 h-[22px] bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-[18px] peer-checked:after:border-white after:content-[''] after:absolute after:top-[3px] after:left-[3px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all after:shadow-sm peer-checked:bg-gradient-to-r peer-checked:from-primary-500 peer-checked:to-primary-600">
+                                    </div>
+                                </label>
+                            </div>
+                            <button @click="extractMemoryFromChat()"
+                                :disabled="isExtractingMemory || !memorySettings.enabled"
+                                class="inline-flex items-center text-xs px-3 py-1.5 bg-gradient-to-r from-primary-50 to-blue-50 hover:from-primary-100 hover:to-blue-100 text-primary-700 rounded-lg border border-primary-200/80 transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-sm hover:shadow font-medium active:scale-95">
+                                <svg v-if="isExtractingMemory" class="w-3.5 h-3.5 mr-1.5 animate-spin" fill="none"
+                                    viewBox="0 0 24 24">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor"
+                                        stroke-width="4"></circle>
+                                    <path class="opacity-75" fill="currentColor"
+                                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z">
+                                    </path>
+                                </svg>
+                                <svg v-else class="w-3.5 h-3.5 mr-1.5" fill="none" stroke="currentColor"
+                                    viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15">
+                                    </path>
+                                </svg>
+                                <span v-if="isExtractingMemory">提取中...</span>
+                                <span v-else>手动提取</span>
+                            </button>
+                        </div>
+                        <!-- Expandable Settings -->
+                        <div v-if="memorySettings.enabled"
+                            class="space-y-3 pt-3 border-t border-gray-100 animate-fade-in">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <div>
+                                    <label class="text-xs font-medium text-gray-500 block mb-1.5">记忆模型（留空使用快速模型）</label>
+                                    <div class="flex gap-2">
+                                        <button @click="modelSelectionTarget = 'memoryModel'; showModelSelector = true"
+                                            class="flex-1 px-3 py-2 text-sm text-left bg-gray-50/80 border border-gray-200 rounded-xl hover:border-primary-300 hover:bg-white transition-all cursor-pointer truncate"
+                                            :title="memorySettings.model || '自动选择'">
+                                            <span
+                                                :class="memorySettings.model ? 'text-gray-800 font-mono' : 'text-gray-400'">{{
+                                                memorySettings.model || '推荐使用 gemini-3-flash-thinking' }}</span>
+                                        </button>
+                                        <button v-if="memorySettings.model" @click="memorySettings.model = ''"
+                                            class="px-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors flex-shrink-0"
+                                            title="清除（使用默认）">
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                    d="M6 18L18 6M6 6l12 12"></path>
+                                            </svg>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Context Compression Settings -->
+                            <div class="pt-3 border-t border-gray-100 mt-1">
+                                <div class="bg-gray-50/80 p-3 rounded-xl border border-gray-100">
+                                    <div class="flex justify-between items-center mb-2">
+                                        <label class="text-xs font-medium text-gray-500">保留最近楼层</label>
+                                        <span
+                                            class="text-xs font-mono text-primary-600 bg-primary-50 px-1.5 py-0.5 rounded border border-primary-100">{{
+                                            memorySettings.keepFloors === 0 ? '关闭' : memorySettings.keepFloors + ' 楼' + (memoryStats.savedChars > 0 ? '（节约' + memoryStats.savedChars + '字）' : '')
+                                            }}</span>
+                                    </div>
+                                    <input type="range" v-model.number="keepFloorsSlider" min="20" max="105"
+                                        step="5"
+                                        class="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary-500">
+                                    <p class="text-[10px] text-gray-400 mt-1.5">仅保留最近 N 楼原始消息，更早的楼层使用记忆引擎替代，拖到最右侧关闭
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Category Filter -->
+                <div v-if="memories.length > 0" class="grid grid-cols-4 gap-2 mb-4">
+                    <button @click="memoryFilterCategory = 'all'"
+                        :class="['memory-filter-btn cursor-pointer rounded-xl py-2 text-xs font-bold transition-all border flex items-center justify-center gap-1.5', 
+                        memoryFilterCategory === 'all' ? 'bg-gradient-to-r from-gray-800 to-gray-900 text-white border-gray-700 shadow-lg shadow-gray-900/20' : 'bg-white border-gray-200 hover:border-gray-300 text-gray-600 hover:shadow-sm']">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M4 6h16M4 10h16M4 14h16M4 18h16"></path>
+                        </svg>
+                        全部 <span class="opacity-70">{{ memoryStats.total }}</span>
+                    </button>
+                    <button @click="memoryFilterCategory = 'event'"
+                        :class="['memory-filter-btn cursor-pointer rounded-xl py-2 text-xs font-bold transition-all border flex items-center justify-center gap-1.5', 
+                        memoryFilterCategory === 'event' ? 'bg-gradient-to-r from-purple-500 to-purple-600 text-white border-purple-500 shadow-lg shadow-purple-500/20' : 'bg-white border-gray-200 hover:border-purple-300 text-gray-600 hover:text-purple-600 hover:shadow-sm']">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z">
+                            </path>
+                        </svg>
+                        事件 <span class="opacity-70">{{ memoryStats.byCategory.event }}</span>
+                    </button>
+                    <button @click="memoryFilterCategory = 'state'"
+                        :class="['memory-filter-btn cursor-pointer rounded-xl py-2 text-xs font-bold transition-all border flex items-center justify-center gap-1.5', 
+                        memoryFilterCategory === 'state' ? 'bg-gradient-to-r from-emerald-500 to-green-600 text-white border-emerald-500 shadow-lg shadow-emerald-500/20' : 'bg-white border-gray-200 hover:border-emerald-300 text-gray-600 hover:text-emerald-600 hover:shadow-sm']">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                        状态 <span class="opacity-70">{{ memoryStats.byCategory.state }}</span>
+                    </button>
+                    <button @click="memoryFilterCategory = 'relationship'"
+                        :class="['memory-filter-btn cursor-pointer rounded-xl py-2 text-xs font-bold transition-all border flex items-center justify-center gap-1.5', 
+                        memoryFilterCategory === 'relationship' ? 'bg-gradient-to-r from-pink-500 to-rose-500 text-white border-pink-500 shadow-lg shadow-pink-500/20' : 'bg-white border-gray-200 hover:border-pink-300 text-gray-600 hover:text-pink-600 hover:shadow-sm']">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z">
+                            </path>
+                        </svg>
+                        关系 <span class="opacity-70">{{ memoryStats.byCategory.relationship }}</span>
+                    </button>
+                </div>
+
+                <!-- Memory List -->
+                <div v-if="filteredMemories.length > 0" class="space-y-3">
+                    <div v-for="(mem, mIdx) in filteredMemories" :key="mem.id"
+                        :class="['memory-card group relative bg-white rounded-2xl border overflow-hidden', 'cat-' + mem.category, mem.enabled === false ? 'opacity-50 grayscale-[30%]' : '']">
+                        <!-- Top accent gradient bar -->
+                        <div :class="['absolute top-0 left-0 right-0 h-[3px]',
+                            mem.category === 'event' ? 'bg-gradient-to-r from-purple-400 to-violet-500' :
+                            mem.category === 'state' ? 'bg-gradient-to-r from-emerald-400 to-teal-500' :
+                            'bg-gradient-to-r from-pink-400 to-rose-500']"></div>
+                        <div class="p-4 pt-4">
+                            <div class="flex items-start justify-between mb-2">
+                                <div class="flex items-center gap-2 flex-wrap">
+                                    <span :class="['inline-flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-lg font-bold border shadow-sm', 
+                                        mem.category === 'event' ? 'bg-purple-50 text-purple-700 border-purple-200/80' : 
+                                        mem.category === 'state' ? 'bg-emerald-50 text-emerald-700 border-emerald-200/80' : 
+                                        'bg-pink-50 text-pink-700 border-pink-200/80']">
+                                        <svg v-if="mem.category === 'event'" class="w-3 h-3" fill="none"
+                                            stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z">
+                                            </path>
+                                        </svg>
+                                        <svg v-else-if="mem.category === 'state'" class="w-3 h-3" fill="none"
+                                            stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                        </svg>
+                                        <svg v-else class="w-3 h-3" fill="none" stroke="currentColor"
+                                            viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z">
+                                            </path>
+                                        </svg>
+                                        {{ mem.category === 'event' ? '事件' : mem.category === 'state' ? '状态' : '关系' }}
+                                    </span>
+                                    <span
+                                        class="text-[10px] text-gray-400 font-mono bg-gray-50 px-2 py-0.5 rounded-md border border-gray-100">R{{
+                                        mem.turn || '?' }}</span>
+                                </div>
+                                <div
+                                    class="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                                    <button @click="toggleMemory(mem.id)"
+                                        class="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+                                        :title="mem.enabled !== false ? '禁用' : '启用'">
+                                        <svg v-if="mem.enabled !== false" class="w-4 h-4 text-emerald-500" fill="none"
+                                            stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                                            <path stroke-linecap="round" stroke-linejoin="round"
+                                                d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                                            <path stroke-linecap="round" stroke-linejoin="round"
+                                                d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z">
+                                            </path>
+                                        </svg>
+                                        <svg v-else class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor"
+                                            viewBox="0 0 24 24" stroke-width="2">
+                                            <path stroke-linecap="round" stroke-linejoin="round"
+                                                d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21">
+                                            </path>
+                                        </svg>
+                                    </button>
+                                    <button @click="editMemory(mem.id)"
+                                        class="p-1.5 rounded-lg hover:bg-gray-100 transition-colors" title="编辑">
+                                        <svg class="w-4 h-4 text-gray-400 hover:text-primary-500 transition-colors"
+                                            fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z">
+                                            </path>
+                                        </svg>
+                                    </button>
+                                    <button @click="deleteMemory(mem.id)"
+                                        class="p-1.5 rounded-lg hover:bg-red-50 transition-colors" title="删除">
+                                        <svg class="w-4 h-4 text-gray-400 hover:text-red-500 transition-colors"
+                                            fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16">
+                                            </path>
+                                        </svg>
+                                    </button>
+                                </div>
+                            </div>
+                            <p class="text-sm text-gray-700 leading-relaxed pr-2">{{ mem.summary }}</p>
+                            <div v-if="mem.category === 'event' && (mem.time || mem.location)"
+                                class="flex items-center flex-wrap gap-2 mt-2.5 pt-2.5 border-t border-gray-100/80">
+                                <span v-if="mem.time"
+                                    class="inline-flex items-center gap-1 text-[11px] text-amber-700 bg-amber-50/80 border border-amber-200/60 rounded-lg px-2 py-1 font-medium">
+                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                    </svg>
+                                    {{ mem.time }}
+                                </span>
+                                <span v-if="mem.location"
+                                    class="inline-flex items-center gap-1 text-[11px] text-teal-700 bg-teal-50/80 border border-teal-200/60 rounded-lg px-2 py-1 font-medium">
+                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z">
+                                        </path>
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                                    </svg>
+                                    {{ mem.location }}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Empty State -->
+                <div v-else class="flex flex-col items-center justify-center py-16 md:py-24 px-4">
+                    <div class="relative mb-8">
+                        <div
+                            class="w-28 h-28 bg-gradient-to-br from-primary-100 via-blue-50 to-indigo-100 rounded-full flex items-center justify-center border border-primary-100 shadow-inner">
+                            <svg class="w-14 h-14 text-primary-300" fill="none" stroke="currentColor"
+                                viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                                    d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z">
+                                </path>
+                            </svg>
+                        </div>
+                        <!-- Decorative rings -->
+                        <div
+                            class="absolute -inset-3 border-2 border-primary-100/50 rounded-full border-dashed memory-spin-slow">
+                        </div>
+                        <div class="absolute -inset-6 border border-primary-50/40 rounded-full border-dashed memory-spin-slow"
+                            style="animation-direction: reverse; animation-duration: 20s"></div>
+                    </div>
+                    <p class="text-lg font-black text-gray-700 mb-2 tracking-wide">暂无记忆数据</p>
+                    <p class="text-sm text-gray-400 max-w-[280px] text-center leading-relaxed">开启记忆系统后，AI
+                        会在对话中自动提取摘要，构建长期记忆网络。</p>
+                    <button v-if="!memorySettings.enabled" @click="memorySettings.enabled = true"
+                        class="mt-6 px-5 py-2 bg-gradient-to-r from-primary-600 to-blue-600 text-white text-sm font-bold rounded-xl hover:from-primary-700 hover:to-blue-700 transition-all shadow-md shadow-primary-500/20 active:scale-95">
+                        启用记忆系统
+                    </button>
+                </div>
+
+            </div>
+
+            <!-- Memory Editor Modal -->
+            <teleport to="body">
+                <transition name="fade">
+                    <div v-if="showMemoryEditor"
+                        class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fade-in memory-modal-overlay"
+                        @click.self="showMemoryEditor = false">
+                        <div
+                            class="bg-white rounded-2xl border border-gray-200 w-full max-w-lg flex flex-col shadow-2xl overflow-hidden max-h-[85vh]">
+                            <!-- Header -->
+                            <div
+                                class="p-4 md:p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50/80 flex-shrink-0">
+                                <div class="flex items-center gap-3">
+                                    <div class="p-2 bg-primary-50 text-primary-600 rounded-lg">
+                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z">
+                                            </path>
+                                        </svg>
+                                    </div>
+                                    <div>
+                                        <h3 class="text-lg font-bold text-gray-800 leading-tight">{{ editingMemory.id
+                                            !== undefined ? '编辑记忆' : '添加记忆' }}</h3>
+                                        <p class="text-xs text-gray-500">Memory Entry</p>
+                                    </div>
+                                </div>
+                                <button @click="showMemoryEditor = false"
+                                    class="text-gray-400 hover:text-gray-600 hover:bg-gray-100 p-2 rounded-full transition-all">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M6 18L18 6M6 6l12 12"></path>
+                                    </svg>
+                                </button>
+                            </div>
+
+                            <!-- Body -->
+                            <div class="p-6 space-y-5 bg-gray-50/30 overflow-y-auto custom-scrollbar">
+                                <!-- Category -->
+                                <div>
+                                    <label
+                                        class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">分类</label>
+                                    <div class="grid grid-cols-3 gap-2">
+                                        <button @click="editingMemory.data.category = 'event'"
+                                            :class="['py-2.5 rounded-xl text-xs font-bold transition-all border flex items-center justify-center gap-1.5', editingMemory.data.category === 'event' ? 'bg-purple-50 text-purple-700 border-purple-300 shadow-sm' : 'bg-white text-gray-500 border-gray-200 hover:border-purple-200 hover:text-purple-600']">
+                                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor"
+                                                viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z">
+                                                </path>
+                                            </svg>
+                                            事件
+                                        </button>
+                                        <button @click="editingMemory.data.category = 'state'"
+                                            :class="['py-2.5 rounded-xl text-xs font-bold transition-all border flex items-center justify-center gap-1.5', editingMemory.data.category === 'state' ? 'bg-emerald-50 text-emerald-700 border-emerald-300 shadow-sm' : 'bg-white text-gray-500 border-gray-200 hover:border-emerald-200 hover:text-emerald-600']">
+                                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor"
+                                                viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                    d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                            </svg>
+                                            状态
+                                        </button>
+                                        <button @click="editingMemory.data.category = 'relationship'"
+                                            :class="['py-2.5 rounded-xl text-xs font-bold transition-all border flex items-center justify-center gap-1.5', editingMemory.data.category === 'relationship' ? 'bg-pink-50 text-pink-700 border-pink-300 shadow-sm' : 'bg-white text-gray-500 border-gray-200 hover:border-pink-200 hover:text-pink-600']">
+                                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor"
+                                                viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                    d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z">
+                                                </path>
+                                            </svg>
+                                            关系
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- Summary -->
+                                <div>
+                                    <label
+                                        class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">记忆内容</label>
+                                    <textarea v-model="editingMemory.data.summary" rows="4" placeholder="描述发生了什么..."
+                                        class="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-gray-800 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:outline-none transition-all shadow-sm text-sm leading-relaxed resize-y min-h-[100px]"></textarea>
+                                </div>
+
+                                <!-- Time & Location (event only) -->
+                                <div v-if="editingMemory.data.category === 'event'" class="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label
+                                            class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">
+                                            <span class="inline-flex items-center gap-1">
+                                                <svg class="w-3 h-3 text-amber-500" fill="none" stroke="currentColor"
+                                                    viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round"
+                                                        stroke-width="2"
+                                                        d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                                </svg>
+                                                时间
+                                            </span>
+                                        </label>
+                                        <input type="text" v-model="editingMemory.data.time" placeholder="如：深夜、第二天早上"
+                                            class="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 focus:outline-none transition-all shadow-sm text-sm">
+                                    </div>
+                                    <div>
+                                        <label
+                                            class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">
+                                            <span class="inline-flex items-center gap-1">
+                                                <svg class="w-3 h-3 text-teal-500" fill="none" stroke="currentColor"
+                                                    viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round"
+                                                        stroke-width="2"
+                                                        d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z">
+                                                    </path>
+                                                </svg>
+                                                地点
+                                            </span>
+                                        </label>
+                                        <input type="text" v-model="editingMemory.data.location" placeholder="如：森林、城堡内"
+                                            class="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 focus:ring-2 focus:ring-teal-500 focus:border-teal-500 focus:outline-none transition-all shadow-sm text-sm">
+                                    </div>
+                                </div>
+
+                                <!-- Enabled -->
+                                <div
+                                    class="flex items-center justify-between p-3 bg-white rounded-xl border border-gray-200 shadow-sm">
+                                    <span class="text-sm text-gray-700 font-medium">启用此记忆</span>
+                                    <label class="relative inline-flex items-center cursor-pointer">
+                                        <input type="checkbox" v-model="editingMemory.data.enabled"
+                                            class="sr-only peer">
+                                        <div
+                                            class="w-10 h-[22px] bg-gray-200 rounded-full peer peer-checked:after:translate-x-[18px] peer-checked:after:border-white after:content-[''] after:absolute after:top-[3px] after:left-[3px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all after:shadow-sm peer-checked:bg-primary-600">
+                                        </div>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <!-- Footer -->
+                            <div
+                                class="p-4 md:p-5 border-t border-gray-100 flex justify-end space-x-3 bg-gray-50/80 flex-shrink-0">
+                                <button @click="showMemoryEditor = false"
+                                    class="px-5 py-2.5 bg-white hover:bg-gray-100 text-gray-700 border border-gray-200 rounded-xl transition-all shadow-sm font-medium text-sm active:scale-95">取消</button>
+                                <button @click="saveMemory()"
+                                    class="px-6 py-2.5 bg-primary-600 hover:bg-primary-700 text-white rounded-xl transition-all shadow-md hover:shadow-lg font-bold text-sm active:scale-95 flex items-center">
+                                    <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M5 13l4 4L19 7">
+                                        </path>
+                                    </svg>
+                                    保存记忆
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </transition>
+            </teleport>
+
             <!-- World Info View -->
             <div v-if="currentView === 'worldinfo'" class="p-4 md:p-6 h-full overflow-y-auto animate-fade-in">
                 <div class="flex justify-between items-center mb-4 md:mb-6">
@@ -2655,12 +3233,19 @@
                     </div>
                 </div>
 
-                <div class="space-y-4">
+                <div id="worldinfo-list" class="space-y-4">
                     <div v-for="(entry, index) in worldInfo" :key="index"
                         class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-all flex justify-between items-center">
-                        <div class="flex-1 min-w-0 mr-4">
-                            <div class="flex items-center">
-                                <h3 class="font-bold text-gray-800 truncate">{{ entry.comment || '未命名条目' }}</h3>
+                        <div class="flex-1 min-w-0 mr-4 flex items-center">
+                            <div class="cursor-move text-gray-400 mr-3 hover:text-gray-600" title="拖动排序">
+                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8h16M4 16h16"></path>
+                                </svg>
+                            </div>
+                            <div class="min-w-0">
+                                <div class="flex items-center">
+                                    <h3 class="font-bold text-gray-800 truncate">{{ entry.comment || '未命名条目' }}</h3>
+                                </div>
                             </div>
                         </div>
                         <div class="flex items-center space-x-4 flex-shrink-0">
@@ -2867,7 +3452,8 @@
                                 <span
                                     class="text-gray-700 font-mono font-medium group-hover:text-primary-600 transition-colors">{{
                                     model.id }}</span>
-                                <span v-if="settings[modelSelectionTarget] === model.id"
+                                <span
+                                    v-if="(modelSelectionTarget === 'memoryModel' ? memorySettings.model : settings[modelSelectionTarget]) === model.id"
                                     class="text-primary-600 bg-primary-50 p-1 rounded-full shadow-sm">
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -3941,17 +4527,19 @@
                     </div>
 
                     <!-- Content (Scrollable) -->
-                    <div class="p-5 overflow-y-auto flex-1 space-y-3 bg-gray-50 custom-scrollbar overscroll-contain relative">
+                    <div
+                        class="p-5 overflow-y-auto flex-1 space-y-3 bg-gray-50 custom-scrollbar overscroll-contain relative">
 
                         <!-- World Info Summary (Now scrolls with content) -->
                         <details class="group bg-blue-50/80 border border-blue-200/60 rounded-xl shadow-sm mb-4">
-                            <summary class="font-bold text-blue-800 flex items-center p-4 text-sm cursor-pointer select-none outline-none">
+                            <summary
+                                class="font-bold text-blue-800 flex items-center p-4 text-sm cursor-pointer select-none outline-none">
                                 <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                         d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253">
                                     </path>
                                 </svg>
-                                <span>本次插入的世界书 (共 {{ lastTriggeredWorldInfos.length }} 条)</span>
+                                <span>本次插入的世界书/记忆 (共 {{ lastTriggeredWorldInfos.length }} 条)</span>
                                 <div class="ml-auto flex items-center">
                                     <svg class="w-4 h-4 text-blue-500 group-open:rotate-180 transition-transform duration-300"
                                         fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -3963,9 +4551,12 @@
                             <div class="px-4 pb-4 pt-0">
                                 <div class="flex flex-wrap gap-2 max-h-32 overflow-y-auto custom-scrollbar">
                                     <div v-for="(wi, idx) in lastTriggeredWorldInfos" :key="'wi-'+idx"
-                                        class="bg-blue-100 text-blue-700 px-2.5 py-1.5 rounded-md text-xs shadow-sm border border-blue-200 flex flex-col justify-center">
+                                        :class="[wi.name === '角色记忆' ? 'bg-purple-100 text-purple-700 border-purple-200' : 'bg-blue-100 text-blue-700 border-blue-200', 'px-2.5 py-1.5 rounded-md text-xs shadow-sm border flex flex-col justify-center']">
                                         <span class="font-bold pb-0.5">{{ wi.name }}</span>
-                                        <span v-if="wi.triggers" class="font-normal text-[10px] text-blue-600/90 mt-0.5 pt-0.5 border-t border-blue-200/50 leading-none">{{ wi.triggers === '常驻' ? '常驻' : '触发: ' + wi.triggers }}</span>
+                                        <span v-if="wi.triggers"
+                                            :class="[wi.name === '角色记忆' ? 'text-purple-600/90 border-purple-200/50' : 'text-blue-600/90 border-blue-200/50', 'font-normal text-[10px] mt-0.5 pt-0.5 border-t leading-none']">{{
+                                            wi.triggers === '常驻' ? '常驻' : wi.name === '角色记忆' ? wi.triggers : '触发: ' +
+                                            wi.triggers }}</span>
                                     </div>
                                     <span v-if="lastTriggeredWorldInfos.length === 0"
                                         class="text-blue-500/80 text-sm italic">未触发任何世界书或世界书功能关闭。</span>
@@ -3983,12 +4574,14 @@
                                         <div class="flex flex-row justify-between items-center w-full">
                                             <div class="flex items-center gap-2">
                                                 <span :class="{
-                                                        'bg-red-100 text-red-700 border border-red-200 shadow-sm': msg.role === 'system',
+                                                        'bg-rose-100 text-rose-700 border border-rose-300 shadow-sm': msg.isMemory,
+                                                        'bg-red-100 text-red-700 border border-red-200 shadow-sm': msg.role === 'system' && !msg.isMemory,
                                                         'bg-green-100 text-green-700 border border-green-200 shadow-sm': msg.role === 'user',
                                                         'bg-purple-100 text-purple-700 border border-purple-200 shadow-sm': msg.role === 'assistant'
                                                     }"
                                                     class="px-2.5 py-1 rounded-md text-[11px] font-black uppercase tracking-wider flex items-center justify-center min-w-[70px] whitespace-nowrap">
-                                                    <span class="opacity-70 mr-1 font-bold">F{{ msg.floor }}</span> {{ msg.role }}
+                                                    <span class="opacity-70 mr-1 font-bold">F{{ msg.floor }}</span> {{
+                                                    msg.isMemory ? '记忆' : msg.role }}
                                                 </span>
                                                 <span
                                                     class="font-bold bg-white border border-gray-200 shadow-sm text-gray-500 px-2.5 rounded-full py-0.5 text-[11px]">{{
@@ -3998,8 +4591,8 @@
                                             <div class="flex items-center flex-shrink-0 ml-2">
                                                 <svg class="w-4 h-4 text-gray-400 group-open:rotate-180 transition-transform duration-300"
                                                     fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                                        d="M19 9l-7 7-7-7"></path>
+                                                    <path stroke-linecap="round" stroke-linejoin="round"
+                                                        stroke-width="2" d="M19 9l-7 7-7-7"></path>
                                                 </svg>
                                             </div>
                                         </div>
@@ -4008,15 +4601,18 @@
                                         <div v-if="msg.wiTriggers && msg.wiTriggers.length > 0"
                                             class="flex flex-wrap gap-1.5 items-center w-full">
                                             <div v-for="(trigger, tIdx) in msg.wiTriggers" :key="tIdx"
-                                                class="bg-blue-100 text-blue-700 px-2 py-0.5 rounded flex flex-col border border-blue-200">
-                                                <span class="text-[11px] font-semibold tracking-wide">{{ trigger.name }}</span>
-                                                <span v-if="trigger.triggers" class="text-[9px] font-normal text-blue-600/90 mt-[1px] pt-[1px] border-t border-blue-200/50 leading-[10px]">{{ trigger.triggers === '常驻' ? '常驻' : '触发: ' + trigger.triggers }}</span>
+                                                :class="[trigger.name === '角色记忆' ? 'bg-purple-100 text-purple-700 border-purple-200' : 'bg-blue-100 text-blue-700 border-blue-200', 'px-2 py-0.5 rounded flex flex-col border']">
+                                                <span class="text-[11px] font-semibold tracking-wide">{{ trigger.name
+                                                    }}</span>
+                                                <span v-if="trigger.triggers"
+                                                    :class="[trigger.name === '角色记忆' ? 'text-purple-600/90 border-purple-200/50' : 'text-blue-600/90 border-blue-200/50', 'text-[9px] font-normal mt-[1px] pt-[1px] border-t leading-[10px]']">{{
+                                                    trigger.triggers === '常驻' ? '常驻' : trigger.name === '角色记忆' ?
+                                                    trigger.triggers : '触发: ' + trigger.triggers }}</span>
                                             </div>
                                         </div>
                                     </summary>
 
-                                    <div
-                                        class="p-4 bg-white border-t border-gray-100 font-mono text-[13px] text-gray-700 whitespace-pre-wrap leading-relaxed max-h-[500px] overflow-y-auto custom-scrollbar decoration-clone selection:bg-blue-200 selection:text-blue-900 break-words"
+                                    <div class="p-4 bg-white border-t border-gray-100 font-mono text-[13px] text-gray-700 whitespace-pre-wrap leading-relaxed max-h-[500px] overflow-y-auto custom-scrollbar decoration-clone selection:bg-blue-200 selection:text-blue-900 break-words"
                                         v-html="msg.renderedContent">
                                     </div>
                                 </details>

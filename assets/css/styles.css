@@ -724,3 +724,85 @@ opacity: 0;
         transition: opacity 0.3s ease !important;
     }
 }
+
+/* --- Memory System Styles --- */
+.memory-category-event { background-color: #dbeafe; color: #1e40af; border-color: #93c5fd; }
+.memory-category-state { background-color: #dcfce7; color: #166534; border-color: #86efac; }
+.memory-category-relationship { background-color: #fce7f3; color: #9d174d; border-color: #f9a8d4; }
+
+.memory-card {
+    border-color: #e5e7eb;
+}
+
+.memory-importance-bar {
+    height: 3px;
+    border-radius: 2px;
+    background: #f3f4f6;
+    overflow: hidden;
+}
+.memory-importance-fill {
+    height: 100%;
+    border-radius: 2px;
+    background: linear-gradient(90deg, #60a5fa, #a855f7);
+    transition: width 0.3s ease;
+}
+
+@keyframes memory-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+.memory-extracting {
+    animation: memory-pulse 1.5s ease-in-out infinite;
+}
+
+/* Memory floating particles */
+@keyframes memory-float {
+    0%, 100% { transform: translateY(0) scale(1); opacity: 0.3; }
+    50% { transform: translateY(-8px) scale(1.3); opacity: 0.6; }
+}
+.memory-float-particle {
+    animation: memory-float 3s ease-in-out infinite;
+}
+
+/* Memory empty state spin */
+@keyframes memory-spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+.memory-spin-slow {
+    animation: memory-spin 15s linear infinite;
+}
+
+/* Memory view card */
+.memory-view-card {
+    transition: box-shadow 0.3s ease;
+}
+.memory-view-card:hover {
+    box-shadow: 0 4px 20px -4px rgba(124, 58, 237, 0.1);
+}
+
+/* Memory filter button */
+.memory-filter-btn {
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.memory-filter-btn:active {
+    transform: scale(0.95);
+}
+
+/* Mobile overrides for memory */
+@media (max-width: 768px) {
+    .memory-modal-overlay {
+        background-color: rgba(0, 0, 0, 0.5) !important;
+    }
+    .memory-view-card {
+        background-color: rgba(255, 255, 255, 0.97) !important;
+    }
+    .memory-card {
+        background-color: rgba(255, 255, 255, 0.97) !important;
+    }
+    /* Show action buttons always on mobile since no hover */
+    .memory-card .group-hover\:opacity-100 {
+        opacity: 1 !important;
+    }
+}
+

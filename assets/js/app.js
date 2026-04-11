@@ -119,23 +119,20 @@ createApp({
         const updateCountdown = ref(0);
         let updateCountdownTimer = null;
         const latestUpdate = reactive({
-            id: 10108, // 确保这是一个五位数ID，每次更新内容时增加这个数字
+            id: 10110, // 确保这是一个五位数ID，每次更新内容时增加这个数字
             date: new Date().toISOString().split('T')[0],
             title: '网站公告',
             content: `
-### RP-Hub 1.4.5 更新
+### RP-Hub 1.4.7 更新
 
-- 用户设置中新增“多人设管理”功能
-- 高级设置中新增“字体大小”调整
-- 为上下文请求查看器新增触发内容/楼层与高亮显示
-- 解决了公益模型配置重置的问题
-- 解决了世界书中文关键词的词缩进失效漏统
-- 修复了世界书触发概率被错误重复计算的问题
-- 修复了角色卡工坊世界书分组异常命名的问题
+- 新增“记忆引擎”系统，现在支持自动提取记忆摘要并可视化，支持长记忆，支持实现无限上下文，任何模型通用，无需总结
+- 支持了世界书拖动调整位置
+- 优化了生图世界书的插入位置，增强了遵循效果
+- 修复了关闭生图后，AI依旧会再次生图的问题
 
 本项目为全开源公益项目，严禁倒卖源码，二改需经作者授权
 
-#### 更新时间：04/08/22:15
+#### 更新时间：04/12/06:09
                     `
         });
 
@@ -437,6 +434,64 @@ createApp({
         let waitTimer = null;
         const longPressTimer = ref(null);
 
+        // --- Memory System State ---
+        const memories = ref([]);
+        const memorySettings = reactive({
+            enabled: false,
+            model: '', // 留空则使用 fastModel
+            defaultDepth: 3,
+            autoExtract: true,
+            keepFloors: 0 // 0=关闭压缩，>0 则保留最近N楼，其余用记忆替代
+        });
+        const showMemoryEditor = ref(false);
+        const editingMemory = reactive({ id: undefined, data: {} });
+        const isExtractingMemory = ref(false);
+        const memoryFilterCategory = ref('all');
+        let _memoriesLoaded = false; // 守卫标志：防止在记忆加载前 saveData 覆盖已存数据
+
+        // 防抖计算节约字数，避免滑块拖动时卡顿
+        const _memorySavedChars = ref(0);
+        let _savedCharsTimer = null;
+        const _recalcSavedChars = () => {
+            clearTimeout(_savedCharsTimer);
+            _savedCharsTimer = setTimeout(() => {
+                let result = 0;
+                if (memorySettings.enabled && memorySettings.keepFloors > 0 && memories.value.length > 0) {
+                    const chatHistoryForCalc = chatHistory.value.filter(m => m.role !== 'system');
+                    const totalFloors = chatHistoryForCalc.length;
+                    const keepCount = memorySettings.keepFloors;
+                    if (totalFloors > keepCount) {
+                        const candidateCount = totalFloors - keepCount;
+                        const enabledMemories = memories.value.filter(m => m.enabled !== false);
+                        const maxMemoryTurn = Math.max(0, ...enabledMemories.map(m => m.turn || 0));
+                        let assistantSoFar = 0;
+                        let safeCompressEnd = 0;
+                        for (let i = 0; i < candidateCount; i++) {
+                            const msg = chatHistoryForCalc[i];
+                            if (msg.role === 'assistant' && !msg.isSummary) assistantSoFar++;
+                            if (assistantSoFar > maxMemoryTurn) break;
+                            safeCompressEnd = i + 1;
+                        }
+                        if (safeCompressEnd > 0) {
+                            const compressedAssistantCount = chatHistoryForCalc.slice(0, safeCompressEnd)
+                                .filter(m => m.role === 'assistant' && !m.isSummary).length;
+                            const compressedMemories = enabledMemories
+                                .filter(m => (m.turn || 0) <= compressedAssistantCount);
+                            if (compressedMemories.length > 0) {
+                                const originalChars = chatHistoryForCalc.slice(0, safeCompressEnd)
+                                    .reduce((sum, m) => sum + (m.content || '').length, 0);
+                                const compressedMemoryChars = compressedMemories
+                                    .reduce((sum, m) => sum + (m.summary || '').length, 0);
+                                result = Math.max(0, originalChars - compressedMemoryChars);
+                            }
+                        }
+                    }
+                }
+                _memorySavedChars.value = result;
+            }, 300);
+        };
+        watch(() => [memorySettings.keepFloors, memorySettings.enabled, memories.value.length, chatHistory.value.length], _recalcSavedChars);
+
         const estimatedGenerationTime = computed(() => {
             if (recentGenerationTimes.value.length === 0) return null;
             const total = recentGenerationTimes.value.reduce((sum, item) => {
@@ -448,6 +503,7 @@ createApp({
         });
 
         const showWorldInfoSettings = ref(false);
+        const showMemorySettings = ref(false);
         const worldInfoSettings = reactive({
             scanDepth: 2,
             contextPercent: 0,
@@ -565,8 +621,24 @@ createApp({
                         });
                     }
                 });
+            } else if (newView === 'worldinfo') {
+                nextTick(() => {
+                    const el = document.getElementById('worldinfo-list');
+                    if (el && typeof Sortable !== 'undefined') {
+                        new Sortable(el, {
+                            handle: '.cursor-move',
+                            animation: 150,
+                            onEnd: function (evt) {
+                                const item = worldInfo.value.splice(evt.oldIndex, 1)[0];
+                                worldInfo.value.splice(evt.newIndex, 0, item);
+                                saveData();
+                            }
+                        });
+                    }
+                });
             }
         });
+
 
         // --- Persistence (IndexedDB) ---
         const dbName = 'SillyTavernDB';
@@ -632,6 +704,12 @@ createApp({
                     await dbSet('silly_tavern_last_active_char', currentCharacterIndex.value);
                     await dbSet(`silly_tavern_chat_${currentCharacterIndex.value}`, chatHistory.value);
                 }
+
+                // Save Memory State
+                await dbSet('silly_tavern_memory_settings', JSON.parse(JSON.stringify(memorySettings)));
+                if (_memoriesLoaded && currentCharacter.value && currentCharacter.value.uuid) {
+                    await dbSet(`silly_tavern_memories_${currentCharacter.value.uuid}`, JSON.parse(JSON.stringify(memories.value)));
+                }
             } catch (e) {
                 console.error('Save failed:', e);
                 if (e.name === 'QuotaExceededError') {
@@ -652,6 +730,13 @@ createApp({
         };
 
         /* extracted generateUUID */
+
+        // Auto-save memory settings when changed (debounced to avoid lag on slider drag)
+        let _memorySettingsSaveTimer = null;
+        watch(memorySettings, () => {
+            clearTimeout(_memorySettingsSaveTimer);
+            _memorySettingsSaveTimer = setTimeout(() => saveData(), 500);
+        }, { deep: true });
 
         const loadData = async () => {
             try {
@@ -770,6 +855,10 @@ createApp({
                 if (lastCharIndex !== undefined) {
                     lastActiveCharacterId.value = lastCharIndex;
                 }
+
+                // Load Memory Settings
+                const savedMemorySettings = await dbGet('silly_tavern_memory_settings');
+                if (savedMemorySettings) Object.assign(memorySettings, savedMemorySettings);
 
             } catch (e) {
                 console.error('Failed to load saved data', e);
@@ -1254,6 +1343,12 @@ createApp({
         };
 
         // Regex Processing
+        // 辅助函数：当自动生图关闭时，移除 <image>...</image> 标签及其内容
+        const stripImageTags = (text) => {
+            if (!text) return text;
+            if (isAutoImageGenEnabled.value) return text; // 生图开启时保留
+            return text.replace(/<image>[\s\S]*?<\/image>/gi, '').replace(/\n{3,}/g, '\n\n').trim();
+        };
         const processRegex = (text, options = {}) => {
             if (!text) return '';
             let result = text;
@@ -1355,6 +1450,9 @@ createApp({
             if (!text) return '';
 
             let processed = text;
+
+            // 自动生图关闭时，先移除 <image>...</image> 标签
+            processed = stripImageTags(processed);
 
             // Apply regex for display (real-time)
             processed = skipRegex ? processed : processRegex(processed, { isDisplay: true, role: role });
@@ -1785,6 +1883,13 @@ ${rawHtml}
         };
 
         const selectModel = (modelId) => {
+            // Memory model: write to memorySettings instead of settings
+            if (modelSelectionTarget.value === 'memoryModel') {
+                memorySettings.model = modelId;
+                showModelSelector.value = false;
+                return;
+            }
+
             settings[modelSelectionTarget.value] = modelId;
 
             if (
@@ -1922,7 +2027,7 @@ ${rawHtml}
         };
 
         const clearChat = () => {
-            confirmAction('确定要清空聊天记录吗？此操作无法撤销。', () => {
+            confirmAction('确定要清空聊天记录吗？记忆也将一并清空，此操作无法撤销。', () => {
                 chatHistory.value = [];
                 if (currentCharacter.value && currentCharacter.value.first_mes) {
                     chatHistory.value.push({
@@ -1931,7 +2036,9 @@ ${rawHtml}
                         content: currentCharacter.value.first_mes
                     });
                 }
-                showToast('聊天记录已清空', 'success');
+                memories.value = [];
+                saveData();
+                showToast('聊天记录和记忆已清空', 'success');
             });
         };
 
@@ -2035,14 +2142,16 @@ ${rawHtml}
         };
 
         const deleteMessage = (index) => {
-            confirmAction('确定要删除这条消息吗？', () => {
+            confirmAction('确定要删除这条消息吗？相关记忆也将清空。', () => {
                 const msg = chatHistory.value[index];
                 // Remove timing record if exists
                 if (msg && msg.id) {
                     recentGenerationTimes.value = recentGenerationTimes.value.filter(t => (t.id || t) !== msg.id);
                 }
                 chatHistory.value.splice(index, 1);
-                showToast('消息已删除', 'success');
+                memories.value = [];
+                saveData();
+                showToast('消息已删除，记忆已清空', 'success');
             });
         };
 
@@ -2055,10 +2164,18 @@ ${rawHtml}
 
             if (msg.role === 'user') {
                 // 如果是用户消息，直接基于当前上下文生成（重试/继续）
+                abortMemoryExtraction(); // 中断正在进行的记忆提取
+                // 只删除最新一轮的记忆，保留之前的
+                const currentTurn = chatHistory.value.filter(h => h.role === 'assistant' && !h.isSummary).length;
+                memories.value = memories.value.filter(m => (m.turn || 0) < currentTurn);
                 await generateResponse(startTime);
             } else {
                 // 如果是 AI 消息，删除它（及之后）然后重新生成
-                confirmAction('确定要重新生成这条消息吗？', async () => {
+                confirmAction('确定要重新生成这条消息吗？该楼层的记忆将被清除。', async () => {
+                    abortMemoryExtraction(); // 中断正在进行的记忆提取
+                    // 计算被删除区间的 assistant 轮次，只删除 >= 该轮次的记忆
+                    const turnAtIndex = chatHistory.value.slice(0, index).filter(h => h.role === 'assistant' && !h.isSummary).length + 1;
+                    memories.value = memories.value.filter(m => (m.turn || 0) < turnAtIndex);
                     // Remove timing record for the message being regenerated
                     if (msg && msg.id) {
                         recentGenerationTimes.value = recentGenerationTimes.value.filter(t => (t.id || t) !== msg.id);
@@ -2098,6 +2215,7 @@ ${rawHtml}
         };
 
         // Refactored generation logic
+        let _wasCancelled = false;
         const generateResponse = async (startTime = null) => {
             if (isGenerating.value) return;
 
@@ -2403,6 +2521,20 @@ ${rawHtml}
             }
             console.groupEnd();
 
+            // --- Memory Injection Log ---
+            if (memorySettings.enabled && memories.value.length > 0) {
+                const enabledMems = memories.value.filter(m => m.enabled !== false);
+                if (enabledMems.length > 0) {
+                    console.groupCollapsed('%c🧠 Memory Injection Log', 'color: #a855f7; font-weight: bold;');
+                    console.log(`共 ${enabledMems.length} 条记忆将注入上下文`);
+                    enabledMems.forEach(m => {
+                        const catLabels = { event: '事件', state: '状态', relationship: '关系' };
+                        console.log(`  [${catLabels[m.category] || '记忆'}] D${m.depth || 4} | 重要度: ${m.importance || 5} | ${m.summary}`);
+                    });
+                    console.groupEnd();
+                }
+            }
+
             // 5. Group by Position
             const wiGroups = {
                 system_top: [], global_note: [], before_char: [], after_char: [],
@@ -2515,13 +2647,89 @@ ${rawHtml}
                 });
             }
 
+            // 记忆压缩：保留最近 N 楼，其余有记忆覆盖的楼层用记忆摘要替代，无记忆的楼层保留
+            let chatHistoryForContext = [...chatHistory.value];
+            let compressedMemoryContent = null;
+
+            if (memorySettings.enabled && memorySettings.keepFloors > 0 && memories.value.length > 0) {
+                const totalFloors = chatHistoryForContext.length;
+                const keepCount = memorySettings.keepFloors;
+
+                if (totalFloors > keepCount) {
+                    // 候选压缩区间：最前面的 (totalFloors - keepCount) 楼
+                    const candidateCount = totalFloors - keepCount;
+
+                    // 找出所有启用记忆的最大 turn 号（即记忆覆盖到第几轮对话）
+                    const enabledMemories = memories.value.filter(m => m.enabled !== false);
+                    const maxMemoryTurn = Math.max(0, ...enabledMemories.map(m => m.turn || 0));
+
+                    // 遍历候选区间，计算每条消息对应的 turn 号
+                    // 只有 turn <= maxMemoryTurn 的楼层才能被压缩（有记忆覆盖）
+                    let assistantSoFar = 0;
+                    let safeCompressEnd = 0; // 可以安全压缩到的位置
+
+                    for (let i = 0; i < candidateCount; i++) {
+                        const msg = chatHistoryForContext[i];
+                        if (msg.role === 'assistant' && !msg.isSummary) {
+                            assistantSoFar++;
+                        }
+                        // 当前位置对应的 turn 超过了记忆覆盖范围，停止
+                        if (assistantSoFar > maxMemoryTurn) break;
+                        safeCompressEnd = i + 1;
+                    }
+
+                    if (safeCompressEnd > 0) {
+                        // 收集被压缩区间对应的记忆
+                        const compressedAssistantCount = chatHistoryForContext.slice(0, safeCompressEnd)
+                            .filter(m => m.role === 'assistant' && !m.isSummary).length;
+
+                        const compressedMemories = enabledMemories
+                            .filter(m => (m.turn || 0) <= compressedAssistantCount)
+                            .sort((a, b) => (a.turn || 0) - (b.turn || 0));
+
+                        if (compressedMemories.length > 0) {
+                            const categoryLabels = { event: '事件', state: '状态', relationship: '关系' };
+                            const turnGroups = {};
+                            compressedMemories.forEach(m => {
+                                const t = m.turn || 0;
+                                if (!turnGroups[t]) turnGroups[t] = [];
+                                turnGroups[t].push(m);
+                            });
+                            const turnKeys = Object.keys(turnGroups).sort((a, b) => Number(a) - Number(b));
+                            const formattedLines = turnKeys.map((turnKey, idx) => {
+                                const group = turnGroups[turnKey];
+                                const label = `第${idx + 1}次对话`;
+                                const lines = group.map(m => {
+                                    const cat = categoryLabels[m.category] || '记忆';
+                                    if (m.category === 'event' && (m.time || m.location)) {
+                                        const meta = [m.time, m.location].filter(Boolean).join('·');
+                                        return `- [${cat}|${meta}] ${m.summary}`;
+                                    }
+                                    return `- [${cat}] ${m.summary}`;
+                                }).join('\n');
+                                return `[—— ${label} ——]\n${lines}`;
+                            }).join('\n\n');
+
+                            compressedMemoryContent = `[角色记忆 - 早期历史压缩]\n以下是较早的对话历史的记忆摘要，原始对话已被压缩，请以这些记忆为基础维持剧情连贯性。\n\n${formattedLines}`;
+
+                            chatHistoryForContext = chatHistoryForContext.slice(safeCompressEnd);
+
+                            console.log(`%c[记忆压缩] 保留最近 ${keepCount} 楼，压缩了前 ${safeCompressEnd} 楼（共 ${candidateCount} 楼候选），用 ${compressedMemories.length} 条记忆替代`, 'color: #a855f7; font-weight: bold;');
+                        }
+                    }
+                }
+            }
+
             // 添加聊天记录
-            messages = messages.concat(chatHistory.value
+            messages = messages.concat(chatHistoryForContext
                 .map((m, index) => {
                     // Remove CoT content from history messages before sending to AI
                     // This ensures previous thoughts don't pollute the context
                     const parsedData = parseCot(m.content);
                     let cleanContent = parsedData.main;
+
+                    // 自动生图关闭时，从上下文中移除 <image>...</image> 标签
+                    cleanContent = stripImageTags(cleanContent);
 
                     // Restore the system instruction for the AI context payload if it exists
                     if (parsedData.sys && m.role === 'user') {
@@ -2535,6 +2743,12 @@ ${rawHtml}
                     };
                 })
             );
+
+            // 如果有压缩内容，将其作为 system 消息插入到开场白/聊天记录之前
+            if (compressedMemoryContent) {
+                // 插入到 system prompt 和 jailbreak 之后，聊天记录之前
+                messages.splice(safeTargetLimit, 0, { role: 'system', content: compressedMemoryContent });
+            }
 
             // Handle @D (At Depth) and other message-level injections
             const processMessageInjections = (msgArray) => {
@@ -2567,6 +2781,62 @@ ${rawHtml}
 
                         finalMessages.splice(targetIndex, 0, { role: 'system', content });
                     });
+                }
+
+                // Memory Injection (at_depth style, grouped by turn)
+                if (memorySettings.enabled && memories.value.length > 0) {
+                    const enabledMemories = memories.value
+                        .filter(m => m.enabled !== false)
+                        .sort((a, b) => (a.turn || 0) - (b.turn || 0));
+
+                    if (enabledMemories.length > 0) {
+                        const categoryLabels = { event: '事件', state: '状态', relationship: '关系' };
+
+                        // 按 turn 分组
+                        const turnGroups = {};
+                        enabledMemories.forEach(m => {
+                            const t = m.turn || 0;
+                            if (!turnGroups[t]) turnGroups[t] = [];
+                            turnGroups[t].push(m);
+                        });
+
+                        // 生成按轮次分组的内容
+                        const turnKeys = Object.keys(turnGroups).sort((a, b) => Number(a) - Number(b));
+                        const formattedContent = turnKeys.map((turnKey, idx) => {
+                            const group = turnGroups[turnKey];
+                            const turnLabel = `第${idx + 1}次对话`;
+                            const lines = group.map(m => {
+                                const cat = categoryLabels[m.category] || '记忆';
+                                if (m.category === 'event' && (m.time || m.location)) {
+                                    const meta = [m.time, m.location].filter(Boolean).join('·');
+                                    return `- [${cat}|${meta}] ${m.summary}`;
+                                }
+                                return `- [${cat}] ${m.summary}`;
+                            }).join('\n');
+                            return `[—— ${turnLabel} ——]\n${lines}`;
+                        }).join('\n\n');
+
+                        const fullContent = `[角色记忆 - 时间线]\n${formattedContent}`;
+
+                        // 按 depth 注入（取所有记忆中最小的 depth）
+                        const minDepth = Math.min(...enabledMemories.map(m => m.depth || memorySettings.defaultDepth || 3));
+
+                        const reversedForMemory = [...finalMessages].reverse();
+                        let countdown = minDepth;
+                        let targetIndex = -1;
+                        for (let i = 0; i < reversedForMemory.length; i++) {
+                            if (reversedForMemory[i].role === 'user' || reversedForMemory[i].role === 'assistant') {
+                                countdown--;
+                            }
+                            if (countdown < 0) {
+                                targetIndex = reversedForMemory.length - 1 - i;
+                                break;
+                            }
+                        }
+                        if (targetIndex < safeTargetLimit) targetIndex = safeTargetLimit;
+
+                        finalMessages.splice(targetIndex, 0, { role: 'system', content: fullContent });
+                    }
                 }
 
                 // User Top
@@ -2660,6 +2930,25 @@ ${rawHtml}
                     }
                 });
 
+                // Detect Memory injections in this message
+                if (m.role === 'system' && m.content.startsWith('[角色记忆')) {
+                    const memLines = m.content.split('\n').filter(l => l.startsWith('- ['));
+                    const turnLines = m.content.split('\n').filter(l => l.startsWith('[——'));
+                    const catCounts = {};
+                    memLines.forEach(line => {
+                        const catMatch = line.match(/- \[(.+?)\]/);
+                        if (catMatch) {
+                            const cat = catMatch[1];
+                            catCounts[cat] = (catCounts[cat] || 0) + 1;
+                        }
+                    });
+                    const memSummary = Object.entries(catCounts).map(([cat, count]) => `${cat}x${count}`).join(', ');
+                    injectedWIsMap.set('角色记忆', `${memLines.length} 条 / ${turnLines.length} 次对话 (${memSummary})`);
+                    if (!globalInjectedWIs.some(i => i.name === '角色记忆')) {
+                        globalInjectedWIs.push({ name: '角色记忆', triggers: `${memLines.length} 条记忆 / ${turnLines.length} 次对话` });
+                    }
+                }
+
                 let renderedContent = escapeHtml(m.content);
                 // Sort keys by length descending to match longer phrases first
                 const sortedKeys = Array.from(allTriggerKeys).sort((a, b) => b.length - a.length);
@@ -2671,12 +2960,25 @@ ${rawHtml}
                     renderedContent = renderedContent.replace(safeRegex, '<mark class="bg-yellow-200/80 text-yellow-900 border-b border-yellow-400 font-bold px-0.5 mx-px rounded shadow-sm">$1</mark>');
                 });
 
+                // Highlight memory content with purple
+                if (m.role === 'system' && m.content.startsWith('[角色记忆')) {
+                    renderedContent = renderedContent.replace(
+                        /\[角色记忆[^\]]*\]/g,
+                        '<mark class="bg-purple-200/80 text-purple-900 border-b border-purple-400 font-bold px-1 rounded shadow-sm">$&</mark>'
+                    );
+                    renderedContent = renderedContent.replace(
+                        /\[——[^—]*——\]/g,
+                        '<mark class="bg-purple-100/80 text-purple-700 font-semibold px-0.5 rounded">$&</mark>'
+                    );
+                }
+
                 return {
                     role: m.role,
                     name: m.name,
                     content: m.content,
                     renderedContent: renderedContent,
                     floor: index + 1,
+                    isMemory: m.role === 'system' && m.content.startsWith('[角色记忆'),
                     wiTriggers: Array.from(injectedWIsMap.entries()).map(([name, triggers]) => ({ name, triggers }))
                 };
             });
@@ -2954,6 +3256,7 @@ ${rawHtml}
                 }
             } catch (error) {
                 if (error.name === 'AbortError') {
+                    _wasCancelled = true;
                     showToast('生成已中止', 'info');
                     const lastMessage = chatHistory.value[chatHistory.value.length - 1];
                     if (lastMessage && lastMessage.role === 'assistant' && isReceiving.value) {
@@ -2975,6 +3278,8 @@ ${rawHtml}
                 isReceiving.value = false;
                 isThinking.value = false;
                 abortController.value = null;
+                const wasCancelled = _wasCancelled;
+                _wasCancelled = false;
                 if (waitTimer) {
                     clearInterval(waitTimer);
                     waitTimer = null;
@@ -2992,6 +3297,163 @@ ${rawHtml}
                         summarizeChatHistory(true);
                     });
                 }
+
+                // 记忆提取：在对话正常完成后异步提取记忆（用户取消时不触发）
+                if (!wasCancelled && memorySettings.enabled && memorySettings.autoExtract && chatHistory.value.length >= 2) {
+                    nextTick(() => {
+                        extractMemoryFromChat();
+                    });
+                }
+            }
+        };
+
+        // --- Memory Extraction ---
+        let _memoryExtractAbort = null; // AbortController for cancelling in-flight extraction
+        const abortMemoryExtraction = () => {
+            if (_memoryExtractAbort) {
+                _memoryExtractAbort.abort();
+                _memoryExtractAbort = null;
+            }
+            isExtractingMemory.value = false;
+        };
+        const extractMemoryFromChat = async () => {
+            // 如果已有提取在进行，先中断
+            if (isExtractingMemory.value) {
+                abortMemoryExtraction();
+            }
+            if (!currentCharacter.value) return;
+            _memoryExtractAbort = new AbortController();
+            isExtractingMemory.value = true;
+
+            try {
+                const recentMessages = chatHistory.value.slice(-4).map(m => {
+                    const name = m.role === 'user' ? user.name : (m.name || currentCharacter.value.name);
+                    const cleanMsg = parseCot(m.content).main;
+                    return `${name}: ${cleanMsg}`;
+                }).join('\n\n');
+
+                const existingMemories = memories.value
+                    .filter(m => m.enabled !== false)
+                    .slice(-20)
+                    .map(m => `[${m.category}] ${m.summary}`)
+                    .join('\n');
+
+                const systemPrompt = `你是一个专业的角色扮演记忆提取系统。你的任务是从对话中精准分类并提取三种不同维度的长期记忆。
+
+角色名称：${currentCharacter.value.name}
+用户名称：${user.name}
+
+${existingMemories ? `已有记忆（避免重复提取语义相同的内容）：\n${existingMemories}\n` : ''}
+
+最新对话：
+${recentMessages}
+
+你必须从以下三个维度各提取恰好1条记忆（共3条）。如果某个维度确实没有新信息，则该维度的 summary 写"无显著变化"。
+
+## 维度一：event（事件记录）
+职责：详细记录对话中发生的关键事件，保留足够的情节细节以便日后回溯。
+要求：尽可能完整地描述事件的起因、经过和结果，写清楚"谁对谁做了什么，为什么，结果如何"，保留关键对话和情节细节。
+必须包含 time（时间描述，如"深夜""黄昏""不确定"）和 location（地点，如"森林""卧室""未知"）。
+summary 长度控制在100-300字，尽量详细。
+示例 summary："${currentCharacter.value.name}在酒馆中因被陌生人挑衅而发生争执，${user.name}试图介入调停却被推开，最终酒馆老板将两人一同驱赶出去，${currentCharacter.value.name}对此感到愤怒但没有继续追究"
+
+## 维度二：state（状态变化）
+职责：追踪角色的身体状况、精神状态、能力变化、装备/物品变动、环境/世界设定变化。
+要求：只描述"变成了什么状态"或"获得/失去了什么"，不要复述事件经过。
+示例 summary："${currentCharacter.value.name}的右手受伤，暂时无法握剑"
+示例 summary："${user.name}获得了一枚古老的护身符"
+
+## 维度三：relationship（关系变化）
+职责：用一句简短的话概括角色间情感态度的方向性变化。
+要求：
+- summary 控制在30字以内，用一句话描述情感/态度的变化方向
+- 只写"对谁的情感变成了怎样"，严禁描述具体行为、动作、原因或事件经过
+- 错误示例（绝对禁止）："${currentCharacter.value.name}对${user.name}的态度在亲昵中带着强烈的占有欲，对敷衍的问候感到不满，并试图通过肢体接触确立优先地位" ← 这是在描述行为和事件，不是关系变化！
+- 正确示例："${currentCharacter.value.name}对${user.name}的占有欲和独占意识明显增强"
+- 正确示例："${user.name}对${currentCharacter.value.name}的态度从警惕逐渐转向好奇"
+- 正确示例："${currentCharacter.value.name}开始对${user.name}产生依赖感"
+
+返回格式要求：
+- 严格返回JSON数组，包含恰好3个对象
+- 每个对象必须有 category 和 summary 字段
+- event 类型还必须有 time 和 location 字段
+- event 的 summary 控制在100-300字，state 控制在20-80字，relationship 控制在30字以内
+
+示例返回：
+[{"category":"event","summary":"突然下起暴雨，${currentCharacter.value.name}拉着${user.name}在雨中并肩跑过街道，两人一起躲进了路边的废弃教堂，在昏暗的大厅里相视而笑","time":"傍晚","location":"旧城区街道"},{"category":"state","summary":"${currentCharacter.value.name}因淋雨导致体温偏低，身体微微发抖"},{"category":"relationship","summary":"${currentCharacter.value.name}对${user.name}的好感和信赖感明显加深"}]`;
+
+                const memoryModel = memorySettings.model || settings.fastModel || settings.model;
+                const url = settings.apiUrl.endsWith('/v1') ? `${settings.apiUrl}/chat/completions` : `${settings.apiUrl}/v1/chat/completions`;
+
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${settings.apiKey}`
+                    },
+                    body: JSON.stringify({
+                        model: memoryModel,
+                        messages: [{ role: 'system', content: systemPrompt }],
+                        temperature: 0.3
+                    }),
+                    signal: _memoryExtractAbort?.signal
+                });
+
+                if (!response.ok) throw new Error(`Memory API Error: ${response.status}`);
+                const data = await response.json();
+                let content = data.choices[0]?.message?.content || '';
+
+                // 清理 markdown 代码块
+                content = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+                const match = content.match(/\[[\s\S]*\]/);
+                if (match) content = match[0];
+
+                const parsed = JSON.parse(content);
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                    const newMemories = parsed
+                        .filter(m => m.summary && m.category)
+                        .map(m => ({
+                            id: generateUUID(),
+                            timestamp: Date.now(),
+                            turn: chatHistory.value.filter(h => h.role === 'assistant' && !h.isSummary).length,
+                            category: m.category,
+                            summary: m.summary,
+                            time: m.category === 'event' ? (m.time || '') : '',
+                            location: m.category === 'event' ? (m.location || '') : '',
+                            depth: memorySettings.defaultDepth || 3,
+                            enabled: true
+                        }));
+
+                    // 去重（基于 summary 相似度）
+                    const existingSummaries = memories.value.map(m => m.summary.toLowerCase());
+                    const uniqueNewMemories = newMemories.filter(m => {
+                        const lowerSummary = m.summary.toLowerCase();
+                        return !existingSummaries.some(existing =>
+                            existing.includes(lowerSummary.substring(0, 15)) ||
+                            lowerSummary.includes(existing.substring(0, 15))
+                        );
+                    });
+
+                    if (uniqueNewMemories.length > 0) {
+                        memories.value.push(...uniqueNewMemories);
+
+
+                        if (currentCharacter.value?.uuid) {
+                            await dbSet(`silly_tavern_memories_${currentCharacter.value.uuid}`, JSON.parse(JSON.stringify(memories.value)));
+                        }
+
+                        console.log(`%c[Memory] 提取了 ${uniqueNewMemories.length} 条新记忆`, 'color: #a855f7; font-weight: bold;');
+                    }
+                }
+            } catch (e) {
+                if (e.name === 'AbortError') {
+                    console.log('%c[Memory] 记忆提取已被中断', 'color: #f59e0b; font-weight: bold;');
+                } else {
+                    console.warn('[Memory] 记忆提取失败:', e.message);
+                }
+            } finally {
+                _memoryExtractAbort = null;
+                isExtractingMemory.value = false;
             }
         };
 
@@ -3397,8 +3859,8 @@ ${textContent}`;
 特别提示：出现user或主角参与的情况(如被口、手交），禁止出现主角的人物形象(脸部，头部）！必须使用第一视角(POV）相关提示词！且要作为Character  Prompt添加，禁止出现角色卡和角色名字(包括英文和拼音），中文和{{user}}是明令禁止的，且一定要保持同一人物在上下文中的形象一致性，不要丢失人物特性(如有异色瞳特征人物），涉及人物常见特征(如发色，瞳孔颜色等）的提示词请增加权重\n</auto_image_gen>`,
                 constant: true,
                 enabled: false, // Default closed
-                position: 'an_bottom',
-                depth: 1,
+                position: 'at_depth',
+                depth: 4,
                 order: 100,
                 useProbability: true,
                 probability: 100,
@@ -3507,6 +3969,20 @@ ${textContent}`;
                     showToast('已同步生图风格：' + messages.join('，'), 'success');
                 }
             }
+
+            // Load Character Memories
+            try {
+                const savedMemories = await dbGet(`silly_tavern_memories_${char.uuid}`);
+                if (savedMemories && savedMemories.length > 0) {
+                    memories.value = savedMemories;
+                } else {
+                    memories.value = [];
+                }
+            } catch (e) {
+                console.error('Error loading memories:', e);
+                memories.value = [];
+            }
+            _memoriesLoaded = true;
 
             currentView.value = 'chat';
             showToast(`已切换到角色: ${char.name}`, 'success');
@@ -4775,6 +5251,20 @@ ${textContent}`;
                 if (char.recentGenerationTimes) recentGenerationTimes.value = JSON.parse(JSON.stringify(char.recentGenerationTimes));
                 else recentGenerationTimes.value = [];
 
+                // Load Character Memories on restore
+                try {
+                    const savedMemories = await dbGet(`silly_tavern_memories_${char.uuid}`);
+                    if (savedMemories && savedMemories.length > 0) {
+                        memories.value = savedMemories;
+                    } else {
+                        memories.value = [];
+                    }
+                } catch (e) {
+                    console.error('Error loading memories on restore:', e);
+                    memories.value = [];
+                }
+                _memoriesLoaded = true;
+
                 // Ensure default regex
                 const defaultRegexName = 'Auto Replace {{user}}';
                 const hasDefaultRegex = regexScripts.value.some(r => r.name === defaultRegexName);
@@ -4947,6 +5437,138 @@ ${textContent}`;
             isGeneratingSuggestions, suggestedReplies, generateSuggestions,
             apiStatus, apiLatency, imageGenStatus, imageGenLatency, checkAllStatuses, // Status Exports
             showQuotaPanel, quotaValue, quotaLoading, quotaError, quotaAvailable, fetchQuota, // Quota exports
+            // Memory System Exports
+            memories, memorySettings, showMemoryEditor, editingMemory, isExtractingMemory, memoryFilterCategory,
+            extractMemoryFromChat,
+            // 滑块值映射：20-100 为实际楼层数，105 为关闭（keepFloors=0）
+            keepFloorsSlider: computed({
+                get: () => memorySettings.keepFloors === 0 ? 105 : memorySettings.keepFloors,
+                set: (val) => { memorySettings.keepFloors = val >= 105 ? 0 : val; }
+            }),
+            filteredMemories: computed(() => {
+                let result = memories.value;
+                if (memoryFilterCategory.value && memoryFilterCategory.value !== 'all') {
+                    result = result.filter(m => m.category === memoryFilterCategory.value);
+                }
+                return result.sort((a, b) => {
+                    const turnDiff = (b.turn || 0) - (a.turn || 0);
+                    if (turnDiff !== 0) return turnDiff;
+                    return (b.timestamp || 0) - (a.timestamp || 0);
+                });
+            }),
+            memoryStats: computed(() => {
+                const total = memories.value.length;
+                const enabled = memories.value.filter(m => m.enabled !== false).length;
+                const byCategory = { event: 0, state: 0, relationship: 0 };
+                const turns = new Set();
+                memories.value.forEach(m => {
+                    if (byCategory.hasOwnProperty(m.category)) byCategory[m.category]++;
+                    if (m.turn) turns.add(m.turn);
+                });
+                return { total, enabled, byCategory, turnCount: turns.size, totalChars: memories.value.reduce((sum, m) => sum + (m.summary || '').length, 0), savedChars: _memorySavedChars.value };
+            }),
+            createMemory: () => {
+                editingMemory.id = undefined;
+                editingMemory.data = {
+                    category: 'event',
+                    summary: '',
+                    importance: 5,
+                    depth: memorySettings.defaultDepth || 3,
+                    turn: chatHistory.value.filter(h => h.role === 'assistant' && !h.isSummary).length || 1,
+                    enabled: true
+                };
+                showMemoryEditor.value = true;
+            },
+            editMemory: (index) => {
+                const realIndex = memories.value.findIndex(m => m.id === index);
+                if (realIndex === -1) return;
+                editingMemory.id = index;
+                editingMemory.data = JSON.parse(JSON.stringify(memories.value[realIndex]));
+                showMemoryEditor.value = true;
+            },
+            saveMemory: () => {
+                if (!editingMemory.data.summary || !editingMemory.data.summary.trim()) {
+                    showToast('记忆内容不能为空', 'error');
+                    return;
+                }
+                if (editingMemory.id !== undefined) {
+                    const realIndex = memories.value.findIndex(m => m.id === editingMemory.id);
+                    if (realIndex !== -1) {
+                        memories.value[realIndex] = { ...memories.value[realIndex], ...editingMemory.data };
+                    }
+                } else {
+                    memories.value.push({
+                        id: generateUUID(),
+                        timestamp: Date.now(),
+                        ...editingMemory.data
+                    });
+                }
+                showMemoryEditor.value = false;
+                saveData();
+                showToast('记忆已保存', 'success');
+            },
+            deleteMemory: (id) => {
+                confirmAction('确定要删除这条记忆吗？', () => {
+                    memories.value = memories.value.filter(m => m.id !== id);
+                    saveData();
+                    showToast('记忆已删除', 'success');
+                });
+            },
+            toggleMemory: (id) => {
+                const mem = memories.value.find(m => m.id === id);
+                if (mem) {
+                    mem.enabled = !mem.enabled;
+                    saveData();
+                }
+            },
+            clearAllMemories: () => {
+                confirmAction('确定要清空所有记忆吗？此操作无法撤销。', () => {
+                    memories.value = [];
+                    saveData();
+                    showToast('所有记忆已清空', 'success');
+                });
+            },
+            exportMemories: () => {
+                if (memories.value.length === 0) { showToast('没有记忆可导出', 'info'); return; }
+                const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(memories.value, null, 2));
+                const el = document.createElement('a');
+                el.setAttribute("href", dataStr);
+                el.setAttribute("download", `memories_${currentCharacter.value?.name || 'unknown'}.json`);
+                el.click();
+                showToast('记忆已导出', 'success');
+            },
+            importMemories: (event) => {
+                const file = event.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        const data = JSON.parse(e.target.result);
+                        if (Array.isArray(data)) {
+                            const normalized = data
+                                .filter(m => m.summary && m.summary.trim())
+                                .map(m => ({
+                                    id: m.id || generateUUID(),
+                                    timestamp: m.timestamp || Date.now(),
+                                    turn: m.turn || 0,
+                                    category: ['event', 'state', 'relationship'].includes(m.category) ? m.category : 'event',
+                                    summary: m.summary.trim(),
+                                    enabled: m.enabled !== false
+                                }));
+                            memories.value = [...memories.value, ...normalized];
+                            saveData();
+                            showToast(`成功导入 ${normalized.length} 条记忆`, 'success');
+                        } else {
+                            showToast('导入失败: 文件内容需为数组', 'error');
+                        }
+                        event.target.value = '';
+                    } catch (err) {
+                        showToast('导入失败: JSON 格式错误', 'error');
+                        event.target.value = '';
+                    }
+                };
+                reader.readAsText(file);
+            },
             toggleMobileMenu: () => showMobileMenu.value = !showMobileMenu.value,
             scrollToPreviousMessage, scrollToNextMessage,
             fetchModels, selectModel, sendMessage, autoResizeInput, stopGeneration, clearChat,
@@ -5340,7 +5962,7 @@ ${textContent}`;
 
             processRegex,
             showRegexEditor, showWorldInfoEditor, editingRegex, editingWorldInfo,
-            worldInfoSettings, showWorldInfoSettings, estimatedGenerationTime, currentWaitTime,
+            worldInfoSettings, showWorldInfoSettings, showMemorySettings, estimatedGenerationTime, currentWaitTime,
             currentSummaryStreamingContent,
             togglePlacement: (val) => {
                 if (!editingRegex.data.placement) editingRegex.data.placement = [];
