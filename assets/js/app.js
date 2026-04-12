@@ -599,6 +599,15 @@ createApp({
                             handle: '.cursor-move',
                             animation: 150,
                             onEnd: function (evt) {
+                                // Revert SortableJS DOM manipulation before updating Vue data
+                                // to avoid conflict between SortableJS and Vue's virtual DOM
+                                const movedEl = el.children[evt.newIndex];
+                                if (evt.oldIndex < evt.newIndex) {
+                                    el.insertBefore(movedEl, el.children[evt.oldIndex]);
+                                } else {
+                                    el.insertBefore(movedEl, el.children[evt.oldIndex + 1]);
+                                }
+                                // Now update Vue reactive data — Vue will handle the DOM update
                                 const item = presets.value.splice(evt.oldIndex, 1)[0];
                                 presets.value.splice(evt.newIndex, 0, item);
                                 saveData();
@@ -614,6 +623,12 @@ createApp({
                             handle: '.cursor-move',
                             animation: 150,
                             onEnd: function (evt) {
+                                const movedEl = el.children[evt.newIndex];
+                                if (evt.oldIndex < evt.newIndex) {
+                                    el.insertBefore(movedEl, el.children[evt.oldIndex]);
+                                } else {
+                                    el.insertBefore(movedEl, el.children[evt.oldIndex + 1]);
+                                }
                                 const item = regexScripts.value.splice(evt.oldIndex, 1)[0];
                                 regexScripts.value.splice(evt.newIndex, 0, item);
                                 saveData();
@@ -629,6 +644,14 @@ createApp({
                             handle: '.cursor-move',
                             animation: 150,
                             onEnd: function (evt) {
+                                // Revert SortableJS DOM manipulation before updating Vue data
+                                const movedEl = el.children[evt.newIndex];
+                                if (evt.oldIndex < evt.newIndex) {
+                                    el.insertBefore(movedEl, el.children[evt.oldIndex]);
+                                } else {
+                                    el.insertBefore(movedEl, el.children[evt.oldIndex + 1]);
+                                }
+                                // Now update Vue reactive data
                                 const item = worldInfo.value.splice(evt.oldIndex, 1)[0];
                                 worldInfo.value.splice(evt.newIndex, 0, item);
                                 saveData();
