@@ -3234,7 +3234,7 @@
                 </div>
 
                 <div id="worldinfo-list" class="space-y-4">
-                    <div v-for="(entry, index) in worldInfo" :key="index"
+                    <div v-for="(entry, index) in worldInfo" :key="(entry.comment || '') + '_' + index"
                         class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-all flex justify-between items-center">
                         <div class="flex-1 min-w-0 mr-4 flex items-center">
                             <div class="cursor-move text-gray-400 mr-3 hover:text-gray-600" title="拖动排序">
