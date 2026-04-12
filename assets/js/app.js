@@ -2142,16 +2142,27 @@ ${rawHtml}
         };
 
         const deleteMessage = (index) => {
-            confirmAction('确定要删除这条消息吗？相关记忆也将清空。', () => {
+            confirmAction('确定要删除这条消息吗？该楼层的关联记忆也将一并删除。', () => {
                 const msg = chatHistory.value[index];
                 // Remove timing record if exists
                 if (msg && msg.id) {
                     recentGenerationTimes.value = recentGenerationTimes.value.filter(t => (t.id || t) !== msg.id);
                 }
-                chatHistory.value.splice(index, 1);
-                memories.value = [];
-                saveData();
-                showToast('消息已删除，记忆已清空', 'success');
+                // 只删除与该楼层关联的记忆，而非全部清空
+                if (msg && msg.role === 'assistant' && !msg.isSummary) {
+                    // 计算该 assistant 消息对应的轮次 (turn)
+                    const turnAtIndex = chatHistory.value.slice(0, index).filter(h => h.role === 'assistant' && !h.isSummary).length + 1;
+                    const before = memories.value.length;
+                    memories.value = memories.value.filter(m => (m.turn || 0) !== turnAtIndex);
+                    const removed = before - memories.value.length;
+                    chatHistory.value.splice(index, 1);
+                    saveData();
+                    showToast(removed > 0 ? `消息已删除，清除了 ${removed} 条关联记忆` : '消息已删除', 'success');
+                } else {
+                    chatHistory.value.splice(index, 1);
+                    saveData();
+                    showToast('消息已删除', 'success');
+                }
             });
         };
 
