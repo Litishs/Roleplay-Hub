@@ -2200,9 +2200,10 @@
 
                             </div>
                         </div>
+                    </div>
 
-                        <!-- Advanced Settings -->
-                        <div class="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden mb-6">
+                    <!-- Advanced Settings -->
+                    <div class="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden mb-6">
                             <!-- Header -->
                             <div
                                 class="h-16 bg-gradient-to-r from-indigo-600 to-violet-700 relative overflow-hidden flex items-center px-6">
@@ -2349,7 +2350,7 @@
                                 </div>
                             </div>
                         </div>
-                    </div>
+
                 </div>
             </div>
 
@@ -2595,13 +2596,13 @@
                             </svg>
                             <input type="file" accept=".json" @change="importMemories" class="hidden">
                         </label>
-                        <button @click="clearAllMemories()"
-                            v-if="memoryStats.total > 0"
+                        <button @click="clearAllMemories()" v-if="memoryStats.total > 0"
                             class="p-2.5 bg-white text-red-600 rounded-xl border border-gray-200 shadow-sm active:scale-95 transition-all"
                             title="清空所有记忆">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16">
+                                </path>
                             </svg>
                         </button>
                     </div>
@@ -2728,11 +2729,11 @@
                                         <label class="text-xs font-medium text-gray-500">保留最近楼层</label>
                                         <span
                                             class="text-xs font-mono text-primary-600 bg-primary-50 px-1.5 py-0.5 rounded border border-primary-100">{{
-                                            memorySettings.keepFloors === 0 ? '关闭' : memorySettings.keepFloors + ' 楼' + (memoryStats.savedChars > 0 ? '（节约' + memoryStats.savedChars + '字）' : '')
+                                            memorySettings.keepFloors === 0 ? '关闭' : memorySettings.keepFloors + ' 楼' +
+                                            (memoryStats.savedChars > 0 ? '（节约' + memoryStats.savedChars + '字）' : '')
                                             }}</span>
                                     </div>
-                                    <input type="range" v-model.number="keepFloorsSlider" min="20" max="105"
-                                        step="5"
+                                    <input type="range" v-model.number="keepFloorsSlider" min="20" max="105" step="5"
                                         class="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary-500">
                                     <p class="text-[10px] text-gray-400 mt-1.5">仅保留最近 N 楼原始消息，更早的楼层使用记忆引擎替代，拖到最右侧关闭
                                     </p>
@@ -3239,7 +3240,8 @@
                         <div class="flex-1 min-w-0 mr-4 flex items-center">
                             <div class="cursor-move text-gray-400 mr-3 hover:text-gray-600" title="拖动排序">
                                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8h16M4 16h16"></path>
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M4 8h16M4 16h16"></path>
                                 </svg>
                             </div>
                             <div class="min-w-0">
