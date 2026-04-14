@@ -4027,6 +4027,79 @@ ${textContent}`;
             }
 
             saveData(); // Save the switch immediately
+
+            // ==========================================
+            // 【新增：脱线流重连接管模块 (Server Streaming Reattach)】
+            // ==========================================
+            setTimeout(async () => {
+                if (!char.uuid) return;
+                try {
+                    let chatKey = `silly_tavern_chat_${char.uuid}`;
+                    // 静默探针：如果服务端支持断网接管，则会返回活跃流
+                    const reconnectRes = await fetch(`/api/proxy/reconnect?chatKey=${chatKey}`);
+                    if (reconnectRes.status === 200 && reconnectRes.body) {
+                        console.log('%c[RP-Hub] 发现后台有未执行完的幽灵任务！开始自动接管打字流...', 'color: #10b981;');
+                        isReceiving.value = true;
+                        isGenerating.value = true;
+                        
+                        // 从界面伪造一条正在生成的气泡
+                        let assistantMessage = reactive({ 
+                            role: 'assistant', 
+                            name: char.name, 
+                            content: '', 
+                            reasoning: '', 
+                            id: generateUUID(), 
+                            shouldAnimate: true, 
+                            isCotOpen: false 
+                        });
+                        chatHistory.value.push(assistantMessage);
+                        await nextTick();
+                        scrollToBottom();
+                        
+                        const reader = reconnectRes.body.getReader();
+                        const decoder = new TextDecoder('utf-8');
+                        let buffer = '';
+                        
+                        while (true) {
+                            const { done, value } = await reader.read();
+                            if (done) break;
+                            
+                            const chunkStr = decoder.decode(value, { stream: true });
+                            buffer += chunkStr;
+                            let newlineIdx;
+                            while ((newlineIdx = buffer.indexOf('\n')) !== -1) {
+                                const line = buffer.slice(0, newlineIdx).trim();
+                                buffer = buffer.slice(newlineIdx + 1);
+                                if (line.startsWith('data: ') && line !== 'data: [DONE]') {
+                                    try {
+                                        const data = JSON.parse(line.substring(6));
+                                        const delta = data?.choices?.[0]?.delta;
+                                        if (delta) {
+                                            if (delta.reasoning_content) { 
+                                                assistantMessage.reasoning += delta.reasoning_content; 
+                                                isThinking.value = true; 
+                                            }
+                                            if (delta.content) { 
+                                                assistantMessage.content += delta.content; 
+                                                isThinking.value = false; 
+                                            }
+                                            scrollToBottom();
+                                        }
+                                    } catch(e) {}
+                                }
+                            }
+                        }
+                        
+                        isReceiving.value = false;
+                        isGenerating.value = false;
+                        isThinking.value = false;
+                        saveData();
+                        console.log('%c[RP-Hub] 幽灵任务生成并接管完毕。', 'color: #10b981;');
+                    }
+                } catch(e) { 
+                    // 忽略网络错误（表示用户处于纯静态独立部署环境）
+                }
+            }, 100);
         };
 
         const handleAvatarUpload = (event) => {
