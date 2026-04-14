@@ -4042,17 +4042,33 @@ ${textContent}`;
                         isReceiving.value = true;
                         isGenerating.value = true;
                         
-                        // 从界面伪造一条正在生成的气泡
-                        let assistantMessage = reactive({ 
-                            role: 'assistant', 
-                            name: char.name, 
-                            content: '', 
-                            reasoning: '', 
-                            id: generateUUID(), 
-                            shouldAnimate: true, 
-                            isCotOpen: false 
-                        });
-                        chatHistory.value.push(assistantMessage);
+                        // 寻找界面上最后一条是不是断线前留下的半截气泡
+                        let assistantMessage = null;
+                        if (chatHistory.value.length > 0) {
+                            let lastMsg = chatHistory.value[chatHistory.value.length - 1];
+                            if (lastMsg.role === 'assistant') {
+                                assistantMessage = lastMsg;
+                                assistantMessage.shouldAnimate = true;
+                                // 清空残留内容，因为后端即将下发的 catch-up 补偿包里包含完整的现存文本
+                                assistantMessage.content = '';
+                                assistantMessage.reasoning = '';
+                            }
+                        }
+                        
+                        // 如果因为刚开始生成就断网导致上一条没存入，才退化为新建
+                        if (!assistantMessage) {
+                            assistantMessage = reactive({ 
+                                role: 'assistant', 
+                                name: char.name, 
+                                content: '', 
+                                reasoning: '', 
+                                id: generateUUID(), 
+                                shouldAnimate: true, 
+                                isCotOpen: false 
+                            });
+                            chatHistory.value.push(assistantMessage);
+                        }
+                        
                         await nextTick();
                         scrollToBottom();
                         
