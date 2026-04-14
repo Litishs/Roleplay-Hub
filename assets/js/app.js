@@ -446,6 +446,7 @@ createApp({
         const showMemoryEditor = ref(false);
         const editingMemory = reactive({ id: undefined, data: {} });
         const isExtractingMemory = ref(false);
+        const memoryExtractStatus = ref('waiting');
         const memoryFilterCategory = ref('all');
         let _memoriesLoaded = false; // 标志：防止在记忆加载前 saveData 覆盖已存数据
         let _initComplete = false; // 守卫标志：防止 onMounted 初始化阶段写入默认值覆盖服务端数据
@@ -3365,6 +3366,7 @@ ${rawHtml}
             if (!currentCharacter.value) return;
             _memoryExtractAbort = new AbortController();
             isExtractingMemory.value = true;
+            memoryExtractStatus.value = 'extracting';
 
             try {
                 const recentMessages = chatHistory.value.slice(-4).map(m => {
@@ -3486,11 +3488,16 @@ summary 长度控制在100-300字，尽量详细。
                         console.log(`%c[Memory] 提取了 ${uniqueNewMemories.length} 条新记忆`, 'color: #a855f7; font-weight: bold;');
                     }
                 }
+                memoryExtractStatus.value = 'success';
+                setTimeout(() => { if (memoryExtractStatus.value === 'success') memoryExtractStatus.value = 'waiting'; }, 5000);
             } catch (e) {
                 if (e.name === 'AbortError') {
                     console.log('%c[Memory] 记忆提取已被中断', 'color: #f59e0b; font-weight: bold;');
+                    memoryExtractStatus.value = 'waiting';
                 } else {
                     console.warn('[Memory] 记忆提取失败:', e.message);
+                    memoryExtractStatus.value = 'error';
+                    setTimeout(() => { if (memoryExtractStatus.value === 'error') memoryExtractStatus.value = 'waiting'; }, 5000);
                 }
             } finally {
                 _memoryExtractAbort = null;
@@ -5483,7 +5490,7 @@ ${textContent}`;
             apiStatus, apiLatency, imageGenStatus, imageGenLatency, checkAllStatuses, // Status Exports
             showQuotaPanel, quotaValue, quotaLoading, quotaError, quotaAvailable, fetchQuota, // Quota exports
             // Memory System Exports
-            memories, memorySettings, showMemoryEditor, editingMemory, isExtractingMemory, memoryFilterCategory,
+            memories, memorySettings, showMemoryEditor, editingMemory, isExtractingMemory, memoryExtractStatus, memoryFilterCategory,
             extractMemoryFromChat,
             // 滑块值映射：20-100 为实际楼层数，105 为关闭（keepFloors=0）
             keepFloorsSlider: computed({
