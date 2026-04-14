@@ -447,7 +447,8 @@ createApp({
         const editingMemory = reactive({ id: undefined, data: {} });
         const isExtractingMemory = ref(false);
         const memoryFilterCategory = ref('all');
-        let _memoriesLoaded = false; // 守卫标志：防止在记忆加载前 saveData 覆盖已存数据
+        let _memoriesLoaded = false; // 标志：防止在记忆加载前 saveData 覆盖已存数据
+        let _initComplete = false; // 守卫标志：防止 onMounted 初始化阶段写入默认值覆盖服务端数据
 
         // 防抖计算节约字数，避免滑块拖动时卡顿
         const _memorySavedChars = ref(0);
@@ -718,9 +719,13 @@ createApp({
                 await dbSet('silly_tavern_worldinfo', worldInfo.value);
                 await dbSet('silly_tavern_worldinfo_settings', worldInfoSettings);
                 // await dbSet('silly_tavern_recent_times', recentGenerationTimes.value); // Deprecated: Saved in character
-                await dbSet('silly_tavern_user', user);
-                await dbSet('silly_tavern_user_profiles', JSON.parse(JSON.stringify(userProfiles.value)));
-                if (activeProfileId.value) await dbSet('silly_tavern_active_profile_id', activeProfileId.value);
+
+                // 守卫：初始化完成前不写入用户/记忆数据，防止默认值覆盖服务端已有数据
+                if (_initComplete) {
+                    await dbSet('silly_tavern_user', user);
+                    await dbSet('silly_tavern_user_profiles', JSON.parse(JSON.stringify(userProfiles.value)));
+                    if (activeProfileId.value) await dbSet('silly_tavern_active_profile_id', activeProfileId.value);
+                }
 
                 // Save Chat State
                 if (currentCharacterIndex.value >= 0) {
@@ -729,7 +734,9 @@ createApp({
                 }
 
                 // Save Memory State
-                await dbSet('silly_tavern_memory_settings', JSON.parse(JSON.stringify(memorySettings)));
+                if (_initComplete) {
+                    await dbSet('silly_tavern_memory_settings', JSON.parse(JSON.stringify(memorySettings)));
+                }
                 if (_memoriesLoaded && currentCharacter.value && currentCharacter.value.uuid) {
                     await dbSet(`silly_tavern_memories_${currentCharacter.value.uuid}`, JSON.parse(JSON.stringify(memories.value)));
                 }
@@ -4847,9 +4854,10 @@ ${textContent}`;
         // Lifecycle
         onMounted(async () => {
             fetchQuota(); // Fetch quota on load
-            checkUpdate(); // Check for updates
 
             await loadData();
+
+            checkUpdate(); // Check for updates — 必须在 loadData 之后，否则 localStorage 代理中的 update_id 还未从服务端加载
 
             // --- 全局清理废弃正则 (思维隐藏及旧版画图迁移项已清理完毕，保留基础结构) ---
             const obsoleteRegexNames = ['隐藏正文的thinking', 'Nai画图正则-本子风', 'Nai画图正则-竖图'];
@@ -5231,8 +5239,11 @@ ${textContent}`;
 
 
 
-            // Save enforced defaults immediately
+            // Save enforced defaults immediately (仅保存预设/正则等结构性数据)
             saveData();
+
+            // 初始化守卫解除：此后 saveData 才允许写入 user / memorySettings
+            _initComplete = true;
 
             // Restore Last Active Session
             if (lastActiveCharacterId.value !== null && characters.value[lastActiveCharacterId.value]) {
