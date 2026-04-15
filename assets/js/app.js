@@ -2712,6 +2712,7 @@ ${rawHtml}
             // 记忆压缩：保留最近 N 楼，其余有记忆覆盖的楼层用记忆摘要替代，无记忆的楼层保留
             let chatHistoryForContext = [...chatHistory.value];
             let compressedMemoryContent = null;
+            let compressedMemoriesSet = new Set();
 
             if (memorySettings.enabled && memorySettings.keepFloors > 0 && memories.value.length > 0) {
                 const totalFloors = chatHistoryForContext.length;
@@ -2744,7 +2745,10 @@ ${rawHtml}
                                 }
                             }
                             if (hasMemory) {
-                                coveredMemories.forEach(m => compressedMemoryTurns.add(m));
+                                coveredMemories.forEach(m => {
+                                    compressedMemoryTurns.add(m);
+                                    compressedMemoriesSet.add(m);
+                                });
                             }
                         }
                     }
@@ -2775,7 +2779,7 @@ ${rawHtml}
                             const turnKeys = Object.keys(turnGroups).sort((a, b) => Number(a) - Number(b));
                             const formattedLines = turnKeys.map((turnKey, idx) => {
                                 const group = turnGroups[turnKey];
-                                const label = `第${idx + 1}次对话`;
+                                const label = `往事切片 ${idx + 1}`;
                                 const lines = group.map(m => {
                                     const cat = categoryLabels[m.category] || '记忆';
                                     if (m.category === 'event' && (m.time || m.location)) {
@@ -2861,7 +2865,7 @@ ${rawHtml}
                 // Memory Injection (at_depth style, grouped by turn)
                 if (memorySettings.enabled && memories.value.length > 0) {
                     const enabledMemories = memories.value
-                        .filter(m => m.enabled !== false)
+                        .filter(m => m.enabled !== false && !compressedMemoriesSet.has(m))
                         .sort((a, b) => (a.turn || 0) - (b.turn || 0));
 
                     if (enabledMemories.length > 0) {
@@ -2877,9 +2881,8 @@ ${rawHtml}
 
                         // 生成按轮次分组的内容
                         const turnKeys = Object.keys(turnGroups).sort((a, b) => Number(a) - Number(b));
-                        const formattedContent = turnKeys.map((turnKey, idx) => {
+                        const formattedContent = turnKeys.map((turnKey) => {
                             const group = turnGroups[turnKey];
-                            const turnLabel = `第${idx + 1}次对话`;
                             const lines = group.map(m => {
                                 const cat = categoryLabels[m.category] || '记忆';
                                 if (m.category === 'event' && (m.time || m.location)) {
@@ -2888,7 +2891,7 @@ ${rawHtml}
                                 }
                                 return `- [${cat}] ${m.summary}`;
                             }).join('\n');
-                            return `[—— ${turnLabel} ——]\n${lines}`;
+                            return `[—— 近期记忆节点 ——]\n${lines}`;
                         }).join('\n\n');
 
                         const fullContent = `[角色记忆 - 时间线]\n${formattedContent}`;
@@ -3454,11 +3457,11 @@ ${recentMessages}
 职责：详细记录对话中发生的关键事件，保留足够的情节细节以便日后回溯。
 要求：尽可能完整地描述事件的起因、经过和结果，写清楚"谁对谁做了什么，为什么，结果如何"，保留关键对话和情节细节。
 必须包含 time（时间描述，如"深夜""黄昏""不确定"）和 location（地点，如"森林""卧室""未知"）。
-summary 长度控制在100-300字，尽量详细。
+summary 长度控制在300-500字，尽量完全详细。
 示例 summary："${currentCharacter.value.name}在酒馆中因被陌生人挑衅而发生争执，${user.name}试图介入调停却被推开，最终酒馆老板将两人一同驱赶出去，${currentCharacter.value.name}对此感到愤怒但没有继续追究"
 
 ## 维度二：state（状态变化）
-职责：追踪角色的身体状况、精神状态、能力变化、装备/物品变动、环境/世界设定变化。
+职责：追踪角色的身体状况、精神状态、能力变化、装备/物品变动、环境/世界设定变化以及其他具体数值。
 要求：只描述"变成了什么状态"或"获得/失去了什么"，不要复述事件经过。
 示例 summary："${currentCharacter.value.name}的右手受伤，暂时无法握剑"
 示例 summary："${user.name}获得了一枚古老的护身符"
@@ -3466,7 +3469,7 @@ summary 长度控制在100-300字，尽量详细。
 ## 维度三：relationship（关系变化）
 职责：用一句简短的话概括角色间情感态度的方向性变化。
 要求：
-- summary 控制在30字以内，用一句话描述情感/态度的变化方向
+- summary 控制在50字以内，描述情感/态度的变化方向
 - 只写"对谁的情感变成了怎样"，严禁描述具体行为、动作、原因或事件经过
 - 错误示例（绝对禁止）："${currentCharacter.value.name}对${user.name}的态度在亲昵中带着强烈的占有欲，对敷衍的问候感到不满，并试图通过肢体接触确立优先地位" ← 这是在描述行为和事件，不是关系变化！
 - 正确示例："${currentCharacter.value.name}对${user.name}的占有欲和独占意识明显增强"
@@ -3540,8 +3543,10 @@ summary 长度控制在100-300字，尽量详细。
                         await dbSet(`silly_tavern_memories_${currentCharacter.value.uuid}`, JSON.parse(JSON.stringify(memories.value)));
                     }
                     console.log(`%c[Memory] 提取了 ${uniqueNewMemories.length} 条新记忆`, 'color: #a855f7; font-weight: bold;');
+                    return uniqueNewMemories.length;
                 }
             }
+            return 0;
         };
 
         const startBatchMemoryExtraction = async () => {
@@ -3606,9 +3611,17 @@ summary 长度控制在100-300字，尽量详细。
                         }
                     } catch (err) {
                         if (err.name === 'AbortError') throw err;
-                        console.warn(`[Memory] 批量提取失败:`, err.message);
-                        showToast(`遇到错误 (${err.message})，已中断补录。`, 'error');
-                        throw err;
+                        console.warn(`[Memory] 区块提取失败:`, err.message);
+
+                        const retry = window.confirm(`区块 ${i + 1}/${chunks.length} 提取遇到错误：\n${err.message}\n\n是否立即重试？\n(点击【确定】重试当前区块，点击【取消】中断后续所有补录)`);
+                        if (retry) {
+                            i--; // 重试当前区块
+                            continue;
+                        } else {
+                            const abortErr = new Error('用户取消了重试并中止了补录队列');
+                            abortErr.name = 'AbortError';
+                            throw abortErr;
+                        }
                     }
 
                     if (i < chunks.length - 1 && isBatchExtracting.value) {
