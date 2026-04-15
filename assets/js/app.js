@@ -50,8 +50,8 @@ createApp({
 
         // --- Default API Configuration ---
         const DEFAULT_API_CONFIG = {
-            apiUrl: 'https://sta1n.zeabur.app',
-            apiKey: 'sk-Vk78S1r6mjBc2YpzFkzcTRMLohBf5jlam4YYeK8WSl4hTszN',
+            apiUrl: '',
+            apiKey: '',
             model: '', // Default selected
             qualityModel: '',
             balancedModel: '',
@@ -123,16 +123,18 @@ createApp({
             date: new Date().toISOString().split('T')[0],
             title: '网站公告',
             content: `
-### RP-Hub 1.4.7 更新
+### RP-Hub 1.5.0 更新
 
-- 新增“记忆引擎”系统，现在支持自动提取记忆摘要并可视化，支持长记忆，支持实现无限上下文，任何模型通用，无需总结
-- 支持了世界书拖动调整位置
-- 优化了生图世界书的插入位置，增强了遵循效果
-- 修复了关闭生图后，AI依旧会再次生图的问题
+- 记忆引擎新增“全篇补录”功能
+- 新增了记忆记录状态的显示
+- 优化了记忆系统的提示词，增强了细节与数值捕捉能力
+- 修复了记忆系统的部分严重逻辑漏洞
+- 隐藏总结功能，现在需通过“/总结”来触发总结
+- 优化了对话框的间距
 
 本项目为全开源公益项目，严禁倒卖源码，二改需经作者授权
 
-#### 更新时间：04/12/06:09
+#### 更新时间：04/15/22:44
                     `
         });
 
@@ -172,6 +174,7 @@ createApp({
         const showConfirmModal = ref(false);
         const confirmMessage = ref('');
         const confirmCallback = ref(null);
+        const showNoMemoryNeededModal = ref(false);
         const isGenerating = ref(false);
         const isRemoteGenerating = ref(false); // 新增：远程生成状态
         const remoteEstimatedTime = ref(null); // 新增：远程预计时间
@@ -321,7 +324,6 @@ createApp({
             autoScroll: true,
             maxRetries: 2,
             renderLayerLimit: 25,
-            autoSummarizeLimit: 0,
             imageGenKey: '',
             imageStyle: 'vertical',
             imageSize: '竖图',
@@ -446,6 +448,8 @@ createApp({
         const showMemoryEditor = ref(false);
         const editingMemory = reactive({ id: undefined, data: {} });
         const isExtractingMemory = ref(false);
+        const isBatchExtracting = ref(false);
+        const batchExtractProgress = ref({ current: 0, total: 0 });
         const memoryExtractStatus = ref('waiting');
         const memoryFilterCategory = ref('all');
         let _memoriesLoaded = false; // 标志：防止在记忆加载前 saveData 覆盖已存数据
@@ -459,33 +463,43 @@ createApp({
             _savedCharsTimer = setTimeout(() => {
                 let result = 0;
                 if (memorySettings.enabled && memorySettings.keepFloors > 0 && memories.value.length > 0) {
-                    const chatHistoryForCalc = chatHistory.value.filter(m => m.role !== 'system');
-                    const totalFloors = chatHistoryForCalc.length;
-                    const keepCount = memorySettings.keepFloors;
-                    if (totalFloors > keepCount) {
-                        const candidateCount = totalFloors - keepCount;
+                    const candidateCount = chatHistory.value.length - memorySettings.keepFloors;
+                    if (candidateCount > 0) {
                         const enabledMemories = memories.value.filter(m => m.enabled !== false);
-                        const maxMemoryTurn = Math.max(0, ...enabledMemories.map(m => m.turn || 0));
-                        let assistantSoFar = 0;
-                        let safeCompressEnd = 0;
-                        for (let i = 0; i < candidateCount; i++) {
-                            const msg = chatHistoryForCalc[i];
-                            if (msg.role === 'assistant' && !msg.isSummary) assistantSoFar++;
-                            if (assistantSoFar > maxMemoryTurn) break;
-                            safeCompressEnd = i + 1;
-                        }
-                        if (safeCompressEnd > 0) {
-                            const compressedAssistantCount = chatHistoryForCalc.slice(0, safeCompressEnd)
-                                .filter(m => m.role === 'assistant' && !m.isSummary).length;
-                            const compressedMemories = enabledMemories
-                                .filter(m => (m.turn || 0) <= compressedAssistantCount);
-                            if (compressedMemories.length > 0) {
-                                const originalChars = chatHistoryForCalc.slice(0, safeCompressEnd)
-                                    .reduce((sum, m) => sum + (m.content || '').length, 0);
-                                const compressedMemoryChars = compressedMemories
-                                    .reduce((sum, m) => sum + (m.summary || '').length, 0);
-                                result = Math.max(0, originalChars - compressedMemoryChars);
+                        const emptyLog = memorySettings.emptyTurns?.[currentCharacter.value?.uuid] || [];
+
+                        let originalChars = 0;
+                        const compressedMemoryTurns = new Set();
+
+                        for (let i = 0; i < chatHistory.value.length; i += 4) {
+                            if (i >= candidateCount) break;
+                            const chunkEndTimeIdx = Math.min(i + 3, chatHistory.value.length - 1);
+                            const chunkTurnMax = chatHistory.value.slice(0, chunkEndTimeIdx + 1).filter(h => h.role === 'assistant' && !h.isSummary).length;
+                            const chunkTurnMin = chatHistory.value.slice(0, Math.max(0, i)).filter(h => h.role === 'assistant' && !h.isSummary).length + 1;
+
+                            const coveredMemories = enabledMemories.filter(m => m.turn >= chunkTurnMin && m.turn <= chunkTurnMax);
+                            const hasMemory = coveredMemories.length > 0;
+                            const isEmpty = emptyLog.includes(chunkTurnMax);
+
+                            if (hasMemory || isEmpty) {
+                                for (let j = i; j <= chunkEndTimeIdx; j++) {
+                                    if (j < candidateCount) {
+                                        const msg = chatHistory.value[j];
+                                        if (msg.role !== 'system') {
+                                            originalChars += (msg.content || '').length;
+                                        }
+                                    }
+                                }
+                                if (hasMemory) {
+                                    coveredMemories.forEach(m => compressedMemoryTurns.add(m));
+                                }
                             }
+                        }
+
+                        if (originalChars > 0) {
+                            const compressedMemoryChars = Array.from(compressedMemoryTurns)
+                                .reduce((sum, m) => sum + (m.summary || '').length, 0);
+                            result = Math.max(0, originalChars - compressedMemoryChars);
                         }
                     }
                 }
@@ -2021,8 +2035,14 @@ ${rawHtml}
         const sendMessage = async () => {
             if (!userInput.value.trim() || isGenerating.value) return;
 
-            const startTime = Date.now(); // Record click time
             const content = userInput.value.trim();
+            if (content === '/总结') {
+                userInput.value = '';
+                showSummaryModal.value = true;
+                return;
+            }
+
+            const startTime = Date.now(); // Record click time
             userInput.value = '';
 
             let finalContent = content;
@@ -2698,36 +2718,51 @@ ${rawHtml}
                 const keepCount = memorySettings.keepFloors;
 
                 if (totalFloors > keepCount) {
-                    // 候选压缩区间：最前面的 (totalFloors - keepCount) 楼
                     const candidateCount = totalFloors - keepCount;
 
-                    // 找出所有启用记忆的最大 turn 号（即记忆覆盖到第几轮对话）
                     const enabledMemories = memories.value.filter(m => m.enabled !== false);
-                    const maxMemoryTurn = Math.max(0, ...enabledMemories.map(m => m.turn || 0));
+                    const emptyLog = memorySettings.emptyTurns?.[currentCharacter.value.uuid] || [];
 
-                    // 遍历候选区间，计算每条消息对应的 turn 号
-                    // 只有 turn <= maxMemoryTurn 的楼层才能被压缩（有记忆覆盖）
-                    let assistantSoFar = 0;
-                    let safeCompressEnd = 0; // 可以安全压缩到的位置
+                    const removableIndices = new Set();
+                    const compressedMemoryTurns = new Set();
 
-                    for (let i = 0; i < candidateCount; i++) {
-                        const msg = chatHistoryForContext[i];
-                        if (msg.role === 'assistant' && !msg.isSummary) {
-                            assistantSoFar++;
+                    for (let i = 0; i < chatHistory.value.length; i += 4) {
+                        if (i >= candidateCount) break;
+
+                        const chunkEndTimeIdx = Math.min(i + 3, chatHistory.value.length - 1);
+                        const chunkTurnMax = chatHistory.value.slice(0, chunkEndTimeIdx + 1).filter(h => h.role === 'assistant' && !h.isSummary).length;
+                        const chunkTurnMin = chatHistory.value.slice(0, Math.max(0, i)).filter(h => h.role === 'assistant' && !h.isSummary).length + 1;
+
+                        const coveredMemories = enabledMemories.filter(m => m.turn >= chunkTurnMin && m.turn <= chunkTurnMax);
+                        const hasMemory = coveredMemories.length > 0;
+                        const isEmpty = emptyLog.includes(chunkTurnMax);
+
+                        if (hasMemory || isEmpty) {
+                            for (let j = i; j <= chunkEndTimeIdx; j++) {
+                                if (j < candidateCount) {
+                                    removableIndices.add(j);
+                                }
+                            }
+                            if (hasMemory) {
+                                coveredMemories.forEach(m => compressedMemoryTurns.add(m));
+                            }
                         }
-                        // 当前位置对应的 turn 超过了记忆覆盖范围，停止
-                        if (assistantSoFar > maxMemoryTurn) break;
-                        safeCompressEnd = i + 1;
                     }
 
-                    if (safeCompressEnd > 0) {
-                        // 收集被压缩区间对应的记忆
-                        const compressedAssistantCount = chatHistoryForContext.slice(0, safeCompressEnd)
-                            .filter(m => m.role === 'assistant' && !m.isSummary).length;
+                    if (removableIndices.size > 0) {
+                        const newChatHistoryForContext = [];
+                        let originalCharsRemoved = 0;
 
-                        const compressedMemories = enabledMemories
-                            .filter(m => (m.turn || 0) <= compressedAssistantCount)
-                            .sort((a, b) => (a.turn || 0) - (b.turn || 0));
+                        for (let idx = 0; idx < chatHistoryForContext.length; idx++) {
+                            if (removableIndices.has(idx)) {
+                                originalCharsRemoved += (chatHistoryForContext[idx].content || '').length;
+                            } else {
+                                newChatHistoryForContext.push(chatHistoryForContext[idx]);
+                            }
+                        }
+                        chatHistoryForContext = newChatHistoryForContext;
+
+                        const compressedMemories = Array.from(compressedMemoryTurns).sort((a, b) => (a.turn || 0) - (b.turn || 0));
 
                         if (compressedMemories.length > 0) {
                             const categoryLabels = { event: '事件', state: '状态', relationship: '关系' };
@@ -2754,9 +2789,7 @@ ${rawHtml}
 
                             compressedMemoryContent = `[角色记忆 - 早期历史压缩]\n以下是较早的对话历史的记忆摘要，原始对话已被压缩，请以这些记忆为基础维持剧情连贯性。\n\n${formattedLines}`;
 
-                            chatHistoryForContext = chatHistoryForContext.slice(safeCompressEnd);
-
-                            console.log(`%c[记忆压缩] 保留最近 ${keepCount} 楼，压缩了前 ${safeCompressEnd} 楼（共 ${candidateCount} 楼候选），用 ${compressedMemories.length} 条记忆替代`, 'color: #a855f7; font-weight: bold;');
+                            console.log(`%c[记忆压缩] 候选区间 ${candidateCount} 楼，成功智能剥离 ${removableIndices.size} 楼，保留间隙原文。用 ${compressedMemories.length} 条记忆替代。`, 'color: #a855f7; font-weight: bold;');
                         }
                     }
                 }
@@ -2976,18 +3009,9 @@ ${rawHtml}
                 if (m.role === 'system' && m.content.startsWith('[角色记忆')) {
                     const memLines = m.content.split('\n').filter(l => l.startsWith('- ['));
                     const turnLines = m.content.split('\n').filter(l => l.startsWith('[——'));
-                    const catCounts = {};
-                    memLines.forEach(line => {
-                        const catMatch = line.match(/- \[(.+?)\]/);
-                        if (catMatch) {
-                            const cat = catMatch[1];
-                            catCounts[cat] = (catCounts[cat] || 0) + 1;
-                        }
-                    });
-                    const memSummary = Object.entries(catCounts).map(([cat, count]) => `${cat}x${count}`).join(', ');
-                    injectedWIsMap.set('角色记忆', `${memLines.length} 条 / ${turnLines.length} 次对话 (${memSummary})`);
+                    injectedWIsMap.set('角色记忆', '已注入');
                     if (!globalInjectedWIs.some(i => i.name === '角色记忆')) {
-                        globalInjectedWIs.push({ name: '角色记忆', triggers: `${memLines.length} 条记忆 / ${turnLines.length} 次对话` });
+                        globalInjectedWIs.push({ name: '角色记忆', triggers: '已注入' });
                     }
                 }
 
@@ -3334,12 +3358,6 @@ ${rawHtml}
                     isBackupRetrying.value = false;
                 }
 
-                if (settings.autoSummarizeLimit > 0 && chatHistory.value.length > settings.autoSummarizeLimit) {
-                    nextTick(() => {
-                        summarizeChatHistory(true);
-                    });
-                }
-
                 // 记忆提取：在对话正常完成后异步提取记忆（用户取消时不触发）
                 if (!wasCancelled && memorySettings.enabled && memorySettings.autoExtract && chatHistory.value.length >= 2) {
                     nextTick(() => {
@@ -3351,6 +3369,8 @@ ${rawHtml}
 
         // --- Memory Extraction ---
         let _memoryExtractAbort = null; // AbortController for cancelling in-flight extraction
+        let _batchExtractAbort = null;
+
         const abortMemoryExtraction = () => {
             if (_memoryExtractAbort) {
                 _memoryExtractAbort.abort();
@@ -3358,30 +3378,61 @@ ${rawHtml}
             }
             isExtractingMemory.value = false;
         };
+
         const extractMemoryFromChat = async () => {
-            // 如果已有提取在进行，先中断
-            if (isExtractingMemory.value) {
+            if (isExtractingMemory.value || isBatchExtracting.value) {
                 abortMemoryExtraction();
             }
-            if (!currentCharacter.value) return;
+            if (!currentCharacter.value || chatHistory.value.length < 2) return;
+
             _memoryExtractAbort = new AbortController();
             isExtractingMemory.value = true;
             memoryExtractStatus.value = 'extracting';
 
             try {
-                const recentMessages = chatHistory.value.slice(-4).map(m => {
-                    const name = m.role === 'user' ? user.name : (m.name || currentCharacter.value.name);
-                    const cleanMsg = parseCot(m.content).main;
-                    return `${name}: ${cleanMsg}`;
-                }).join('\n\n');
+                // Modified to slice(-2) to truly enforce "1 floor = 1 memory"
+                const messagesArray = chatHistory.value.slice(-2);
+                await _doExtractMemoryForMessages(messagesArray, _memoryExtractAbort.signal);
 
-                const existingMemories = memories.value
-                    .filter(m => m.enabled !== false)
-                    .slice(-20)
-                    .map(m => `[${m.category}] ${m.summary}`)
-                    .join('\n');
+                memoryExtractStatus.value = 'success';
+                setTimeout(() => { if (memoryExtractStatus.value === 'success') memoryExtractStatus.value = 'waiting'; }, 5000);
+            } catch (e) {
+                if (e.name === 'AbortError') {
+                    console.log('%c[Memory] 记忆提取已被中断', 'color: #f59e0b; font-weight: bold;');
+                    memoryExtractStatus.value = 'waiting';
+                } else {
+                    console.warn('[Memory] 记忆提取失败:', e.message);
+                    memoryExtractStatus.value = 'error';
+                    setTimeout(() => { if (memoryExtractStatus.value === 'error') memoryExtractStatus.value = 'waiting'; }, 5000);
+                }
+            } finally {
+                _memoryExtractAbort = null;
+                isExtractingMemory.value = false;
+            }
+        };
 
-                const systemPrompt = `你是一个专业的角色扮演记忆提取系统。你的任务是从对话中精准分类并提取三种不同维度的长期记忆。
+        const abortBatchExtraction = () => {
+            if (_batchExtractAbort) {
+                _batchExtractAbort.abort();
+                _batchExtractAbort = null;
+            }
+            isBatchExtracting.value = false;
+        };
+
+        const _doExtractMemoryForMessages = async (messagesArray, signal, chunkEndIdx) => {
+            const recentMessages = messagesArray.map(m => {
+                const name = m.role === 'user' ? user.name : (m.name || currentCharacter.value.name);
+                const cleanMsg = parseCot(m.content).main;
+                return `${name}: ${cleanMsg}`;
+            }).join('\n\n');
+
+            const existingMemories = memories.value
+                .filter(m => m.enabled !== false)
+                .slice(-20)
+                .map(m => `[${m.category}] ${m.summary}`)
+                .join('\n');
+
+            const systemPrompt = `你是一个专业的角色扮演记忆提取系统。你的任务是从对话中精准分类并提取三种不同维度的长期记忆。
 
 角色名称：${currentCharacter.value.name}
 用户名称：${user.name}
@@ -3392,6 +3443,12 @@ ${existingMemories ? `已有记忆（避免重复提取语义相同的内容）�
 ${recentMessages}
 
 你必须从以下三个维度各提取恰好1条记忆（共3条）。如果某个维度确实没有新信息，则该维度的 summary 写"无显著变化"。
+
+## 特别注意（代码标记与数值识别）：
+对话文本中可能混杂着类似代码片段、UI标签或隐藏数值的表示（例如：[好感度: +5]、[Mood: Angry]、{{frontend: Affinity 70}} 或代码块格式的属性变化等）。
+- **绝对不要忽略它们！** 请务必识别这些数值变动或标签，并将其真实含义转译入对应的记忆维度。
+- 如果包含“好感度变化/Affinity/Love”，请优先提炼为 relationship 的变动。
+- 如果包含“情绪值、健康度、特殊Buff、持有点数”等变化，请优先提炼为 state 的变动。
 
 ## 维度一：event（事件记录）
 职责：详细记录对话中发生的关键事件，保留足够的情节细节以便日后回溯。
@@ -3425,83 +3482,157 @@ summary 长度控制在100-300字，尽量详细。
 示例返回：
 [{"category":"event","summary":"突然下起暴雨，${currentCharacter.value.name}拉着${user.name}在雨中并肩跑过街道，两人一起躲进了路边的废弃教堂，在昏暗的大厅里相视而笑","time":"傍晚","location":"旧城区街道"},{"category":"state","summary":"${currentCharacter.value.name}因淋雨导致体温偏低，身体微微发抖"},{"category":"relationship","summary":"${currentCharacter.value.name}对${user.name}的好感和信赖感明显加深"}]`;
 
-                const memoryModel = memorySettings.model || settings.fastModel || settings.model;
-                const url = settings.apiUrl.endsWith('/v1') ? `${settings.apiUrl}/chat/completions` : `${settings.apiUrl}/v1/chat/completions`;
+            const memoryModel = memorySettings.model || settings.fastModel || settings.model;
+            const url = settings.apiUrl.endsWith('/v1') ? `${settings.apiUrl}/chat/completions` : `${settings.apiUrl}/v1/chat/completions`;
 
-                const response = await fetch(url, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${settings.apiKey}`
-                    },
-                    body: JSON.stringify({
-                        model: memoryModel,
-                        messages: [{ role: 'system', content: systemPrompt }],
-                        temperature: 0.3
-                    }),
-                    signal: _memoryExtractAbort?.signal
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${settings.apiKey}`
+                },
+                body: JSON.stringify({
+                    model: memoryModel,
+                    messages: [{ role: 'system', content: systemPrompt }],
+                    temperature: 0.3
+                }),
+                signal: signal
+            });
+
+            if (!response.ok) throw new Error(`Memory API Error: ${response.status}`);
+            const data = await response.json();
+            let content = data.choices[0]?.message?.content || '';
+
+            // 清理 markdown 代码块
+            content = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+            const match = content.match(/\[[\s\S]*\]/);
+            if (match) content = match[0];
+
+            const parsed = JSON.parse(content);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+                const newMemories = parsed
+                    .filter(m => m.summary && m.category)
+                    .map(m => ({
+                        id: generateUUID(),
+                        timestamp: Date.now(),
+                        turn: chatHistory.value.slice(0, chunkEndIdx !== undefined ? chunkEndIdx + 1 : undefined).filter(h => h.role === 'assistant' && !h.isSummary).length,
+                        category: m.category,
+                        summary: m.summary,
+                        time: m.category === 'event' ? (m.time || '') : '',
+                        location: m.category === 'event' ? (m.location || '') : '',
+                        depth: memorySettings.defaultDepth || 3,
+                        enabled: true
+                    }));
+
+                // 去重（基于 summary 相似度）
+                const existingSummaries = memories.value.map(m => m.summary.toLowerCase());
+                const uniqueNewMemories = newMemories.filter(m => {
+                    const lowerSummary = m.summary.toLowerCase();
+                    return !existingSummaries.some(existing =>
+                        existing.includes(lowerSummary.substring(0, 15)) ||
+                        lowerSummary.includes(existing.substring(0, 15))
+                    );
                 });
 
-                if (!response.ok) throw new Error(`Memory API Error: ${response.status}`);
-                const data = await response.json();
-                let content = data.choices[0]?.message?.content || '';
+                if (uniqueNewMemories.length > 0) {
+                    memories.value.push(...uniqueNewMemories);
+                    if (currentCharacter.value?.uuid) {
+                        await dbSet(`silly_tavern_memories_${currentCharacter.value.uuid}`, JSON.parse(JSON.stringify(memories.value)));
+                    }
+                    console.log(`%c[Memory] 提取了 ${uniqueNewMemories.length} 条新记忆`, 'color: #a855f7; font-weight: bold;');
+                }
+            }
+        };
 
-                // 清理 markdown 代码块
-                content = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-                const match = content.match(/\[[\s\S]*\]/);
-                if (match) content = match[0];
+        const startBatchMemoryExtraction = async () => {
+            if (isBatchExtracting.value) {
+                abortBatchExtraction();
+            }
+            if (!currentCharacter.value || chatHistory.value.length === 0) return;
 
-                const parsed = JSON.parse(content);
-                if (Array.isArray(parsed) && parsed.length > 0) {
-                    const newMemories = parsed
-                        .filter(m => m.summary && m.category)
-                        .map(m => ({
-                            id: generateUUID(),
-                            timestamp: Date.now(),
-                            turn: chatHistory.value.filter(h => h.role === 'assistant' && !h.isSummary).length,
-                            category: m.category,
-                            summary: m.summary,
-                            time: m.category === 'event' ? (m.time || '') : '',
-                            location: m.category === 'event' ? (m.location || '') : '',
-                            depth: memorySettings.defaultDepth || 3,
-                            enabled: true
-                        }));
+            if (!memorySettings.emptyTurns) memorySettings.emptyTurns = {};
+            const uuid = currentCharacter.value.uuid;
+            if (!memorySettings.emptyTurns[uuid]) memorySettings.emptyTurns[uuid] = [];
+            const emptyLog = memorySettings.emptyTurns[uuid];
 
-                    // 去重（基于 summary 相似度）
-                    const existingSummaries = memories.value.map(m => m.summary.toLowerCase());
-                    const uniqueNewMemories = newMemories.filter(m => {
-                        const lowerSummary = m.summary.toLowerCase();
-                        return !existingSummaries.some(existing =>
-                            existing.includes(lowerSummary.substring(0, 15)) ||
-                            lowerSummary.includes(existing.substring(0, 15))
-                        );
-                    });
+            const chunks = [];
 
-                    if (uniqueNewMemories.length > 0) {
-                        memories.value.push(...uniqueNewMemories);
+            for (let i = 0; i < chatHistory.value.length; i += 4) {
+                const chunk = chatHistory.value.slice(i, i + 4);
+                if (chunk.filter(m => m.role === 'assistant').length > 0) {
+                    const chunkEndIdx = Math.min(i + 3, chatHistory.value.length - 1);
+                    const chunkTurnMax = chatHistory.value.slice(0, chunkEndIdx + 1).filter(h => h.role === 'assistant' && !h.isSummary).length;
+                    const chunkTurnMin = chatHistory.value.slice(0, Math.max(0, i)).filter(h => h.role === 'assistant' && !h.isSummary).length + 1;
 
+                    const hasMemory = memories.value.some(m => m.turn >= chunkTurnMin && m.turn <= chunkTurnMax);
+                    const isEmpty = emptyLog.includes(chunkTurnMax);
 
-                        if (currentCharacter.value?.uuid) {
-                            await dbSet(`silly_tavern_memories_${currentCharacter.value.uuid}`, JSON.parse(JSON.stringify(memories.value)));
-                        }
-
-                        console.log(`%c[Memory] 提取了 ${uniqueNewMemories.length} 条新记忆`, 'color: #a855f7; font-weight: bold;');
+                    if (!hasMemory && !isEmpty) {
+                        chunks.push({ data: chunk, endIdx: chunkEndIdx, turnValue: chunkTurnMax });
                     }
                 }
-                memoryExtractStatus.value = 'success';
-                setTimeout(() => { if (memoryExtractStatus.value === 'success') memoryExtractStatus.value = 'waiting'; }, 5000);
+            }
+
+            if (chunks.length === 0) {
+                showNoMemoryNeededModal.value = true;
+                return;
+            }
+
+            _batchExtractAbort = new AbortController();
+            isBatchExtracting.value = true;
+            batchExtractProgress.value = { current: 0, total: chunks.length };
+            memoryExtractStatus.value = 'extracting';
+
+            try {
+                for (let i = 0; i < chunks.length; i++) {
+                    if (!isBatchExtracting.value) break;
+
+                    const { data, endIdx, turnValue } = chunks[i];
+
+                    try {
+                        const addedCount = await _doExtractMemoryForMessages(data, _batchExtractAbort.signal, endIdx);
+                        batchExtractProgress.value.current = i + 1;
+
+                        if (addedCount === 0) {
+                            if (!emptyLog.includes(turnValue)) {
+                                emptyLog.push(turnValue);
+                                if (typeof saveSettings === 'function') saveSettings();
+                            }
+                        } else {
+                            if (emptyLog.includes(turnValue)) {
+                                emptyLog.splice(emptyLog.indexOf(turnValue), 1);
+                                if (typeof saveSettings === 'function') saveSettings();
+                            }
+                        }
+                    } catch (err) {
+                        if (err.name === 'AbortError') throw err;
+                        console.warn(`[Memory] 批量提取失败:`, err.message);
+                        showToast(`遇到错误 (${err.message})，已中断补录。`, 'error');
+                        throw err;
+                    }
+
+                    if (i < chunks.length - 1 && isBatchExtracting.value) {
+                        await new Promise(resolve => setTimeout(resolve, 1500));
+                    }
+                }
+
+                if (isBatchExtracting.value) {
+                    memoryExtractStatus.value = 'success';
+                    showToast('补录全部完成！', 'success');
+                    setTimeout(() => { if (memoryExtractStatus.value === 'success') memoryExtractStatus.value = 'waiting'; }, 5000);
+                }
             } catch (e) {
                 if (e.name === 'AbortError') {
-                    console.log('%c[Memory] 记忆提取已被中断', 'color: #f59e0b; font-weight: bold;');
+                    console.log('%c[Memory] 批量记忆提取已中断', 'color: #f59e0b; font-weight: bold;');
                     memoryExtractStatus.value = 'waiting';
                 } else {
-                    console.warn('[Memory] 记忆提取失败:', e.message);
+                    console.error('[Memory] 批量记忆提取异常:', e);
                     memoryExtractStatus.value = 'error';
                     setTimeout(() => { if (memoryExtractStatus.value === 'error') memoryExtractStatus.value = 'waiting'; }, 5000);
                 }
             } finally {
-                _memoryExtractAbort = null;
-                isExtractingMemory.value = false;
+                _batchExtractAbort = null;
+                isBatchExtracting.value = false;
             }
         };
 
@@ -5476,7 +5607,7 @@ ${textContent}`;
             showContextViewerModal, lastContextMessages, lastTriggeredWorldInfos, // Context Viewer
             showCharacterExportModal, characterToExportIndex, openCharacterExportModal, confirmCharacterExport, // Character Export Modal
             showUpdateModal, updateCountdown, latestUpdate, closeUpdateModal, // Update Modal
-            showConfirmModal, confirmMessage, modelMode, // Export for template
+            showConfirmModal, confirmMessage, modelMode, showNoMemoryNeededModal, // Export for template
             isGenerating, isRemoteGenerating, remoteEstimatedTime, isReceiving, isThinking, userInput, modelSearchQuery, activeModelTag, modelTags, characterSearchQuery, availableModels, filteredModels, filteredCharacters,
             user, settings, characters, currentCharacter, currentCharacterIndex, chatHistory, presets, regexScripts, worldInfo,
             activeRegexCount, activeWorldInfoCount, totalContextLength,
@@ -5490,8 +5621,8 @@ ${textContent}`;
             apiStatus, apiLatency, imageGenStatus, imageGenLatency, checkAllStatuses, // Status Exports
             showQuotaPanel, quotaValue, quotaLoading, quotaError, quotaAvailable, fetchQuota, // Quota exports
             // Memory System Exports
-            memories, memorySettings, showMemoryEditor, editingMemory, isExtractingMemory, memoryExtractStatus, memoryFilterCategory,
-            extractMemoryFromChat,
+            memories, memorySettings, showMemoryEditor, editingMemory, isExtractingMemory, isBatchExtracting, batchExtractProgress, memoryExtractStatus, memoryFilterCategory,
+            extractMemoryFromChat, startBatchMemoryExtraction, abortBatchExtraction,
             // 滑块值映射：20-100 为实际楼层数，105 为关闭（keepFloors=0）
             keepFloorsSlider: computed({
                 get: () => memorySettings.keepFloors === 0 ? 105 : memorySettings.keepFloors,
