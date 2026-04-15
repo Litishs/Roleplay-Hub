@@ -4677,6 +4677,33 @@
                 </div>
             </div>
         </transition>
+
+        <!-- Theme-compliant Global Confirm Modal -->
+        <transition enter-active-class="transition duration-300 ease-out" enter-from-class="opacity-0"
+            enter-to-class="opacity-100" leave-active-class="transition duration-200 ease-in"
+            leave-from-class="opacity-100" leave-to-class="opacity-0">
+            <div v-if="globalConfirmModal.show" class="fixed inset-0 z-[200] flex items-center justify-center px-4 pt-4 pb-20 text-center sm:p-0">
+                <div class="fixed inset-0 bg-black/40 backdrop-blur-[2px]"></div>
+                <div class="bg-white rounded-2xl shadow-[0_20px_60px_-10px_rgba(0,0,0,0.15)] transform transition-transform w-full max-w-sm overflow-hidden relative z-10 border border-gray-100 p-6 flex flex-col items-center animate-slide-up">
+                    <div class="w-12 h-12 rounded-full bg-yellow-50 flex items-center justify-center mb-4 border border-yellow-100 shadow-sm">
+                        <svg class="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                        </svg>
+                    </div>
+                    <h3 class="text-lg font-bold text-gray-900 mb-2 tracking-tight">{{ globalConfirmModal.title }}</h3>
+                    <p class="text-[13px] text-gray-500 mb-6 whitespace-pre-wrap leading-relaxed px-2">{{ globalConfirmModal.message }}</p>
+                    <div class="flex space-x-3 w-full">
+                        <button @click="globalConfirmModal.onCancel" class="flex-1 py-2.5 px-4 bg-gray-50 hover:bg-gray-100 text-gray-600 font-bold rounded-xl transition-all border border-gray-200 shadow-sm focus:outline-none focus:ring-2 focus:ring-gray-300 hover:-translate-y-0.5">
+                            取消中断
+                        </button>
+                        <button @click="globalConfirmModal.onConfirm" class="flex-1 py-2.5 px-4 bg-primary-600 hover:bg-primary-500 text-white font-bold rounded-xl shadow-md hover:shadow-lg transition-all focus:outline-none focus:ring-2 focus:ring-primary-400 hover:-translate-y-0.5">
+                            立即重试
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </transition>
+
     </div>
 
     <script>

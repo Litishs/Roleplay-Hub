@@ -60,6 +60,32 @@ createApp({
         };
 
         // --- State ---
+        const globalConfirmModal = ref({
+            show: false,
+            title: '',
+            message: '',
+            onConfirm: null,
+            onCancel: null
+        });
+
+        const showVueConfirmModal = (title, message) => {
+            return new Promise((resolve) => {
+                globalConfirmModal.value = {
+                    show: true,
+                    title,
+                    message,
+                    onConfirm: () => {
+                        globalConfirmModal.value.show = false;
+                        resolve(true);
+                    },
+                    onCancel: () => {
+                        globalConfirmModal.value.show = false;
+                        resolve(false);
+                    }
+                };
+            });
+        };
+
         const currentView = ref('chat');
         const showMobileMenu = ref(false);
         const isSidebarCollapsed = ref(false);
@@ -3613,7 +3639,10 @@ summary 长度控制在300-500字，尽量完全详细。
                         if (err.name === 'AbortError') throw err;
                         console.warn(`[Memory] 区块提取失败:`, err.message);
 
-                        const retry = window.confirm(`区块 ${i + 1}/${chunks.length} 提取遇到错误：\n${err.message}\n\n是否立即重试？\n(点击【确定】重试当前区块，点击【取消】中断后续所有补录)`);
+                        const retry = await showVueConfirmModal(
+                            '提取遇到错误',
+                            `区块 ${i + 1}/${chunks.length} 提取遇到错误：\n${err.message}\n\n是否立即重试？`
+                        );
                         if (retry) {
                             i--; // 重试当前区块
                             continue;
@@ -6159,7 +6188,7 @@ ${textContent}`;
             processRegex,
             showRegexEditor, showWorldInfoEditor, editingRegex, editingWorldInfo,
             worldInfoSettings, showWorldInfoSettings, showMemorySettings, estimatedGenerationTime, currentWaitTime,
-            currentSummaryStreamingContent,
+            currentSummaryStreamingContent, globalConfirmModal, showVueConfirmModal,
             togglePlacement: (val) => {
                 if (!editingRegex.data.placement) editingRegex.data.placement = [];
                 const index = editingRegex.data.placement.indexOf(val);
