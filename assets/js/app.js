@@ -119,7 +119,7 @@ createApp({
         const updateCountdown = ref(0);
         let updateCountdownTimer = null;
         const latestUpdate = reactive({
-            id: 10110, // 确保这是一个五位数ID，每次更新内容时增加这个数字
+            id: 10111, // 确保这是一个五位数ID，每次更新内容时增加这个数字
             date: new Date().toISOString().split('T')[0],
             title: '网站公告',
             content: `
@@ -150,7 +150,7 @@ createApp({
         };
 
         const startUpdateCountdown = () => {
-            updateCountdown.value = 10;
+            updateCountdown.value = 7;
             if (updateCountdownTimer) clearInterval(updateCountdownTimer);
             updateCountdownTimer = setInterval(() => {
                 if (updateCountdown.value > 0) {
