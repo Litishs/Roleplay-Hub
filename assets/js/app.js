@@ -210,7 +210,7 @@ createApp({
         const userInput = ref('');
         const modelSearchQuery = ref('');
         const activeModelTag = ref('all');
-        const popularModelFamilies = ['gpt', 'claude', 'gemini', 'deepseek', 'qwen', 'grok', 'glm'];
+        const popularModelFamilies = ['gpt', 'claude', 'gemini', 'deepseek', 'qwen', 'grok', 'glm', 'minimax'];
         const characterSearchQuery = ref('');
         const availableModels = ref([]);
         const toasts = ref([]);
