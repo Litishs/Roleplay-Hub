@@ -276,49 +276,7 @@
 
         <div class="flex-1 flex flex-col h-full overflow-hidden bg-gray-50 relative">
 
-            <!-- Local Summarizing Overlay (Chat Area Only) -->
-            <transition enter-active-class="transition duration-300 ease-out" enter-from-class="opacity-0"
-                enter-to-class="opacity-100" leave-active-class="transition duration-300 ease-in"
-                leave-from-class="opacity-100" leave-to-class="opacity-0">
-                <div v-if="isSummarizing"
-                    class="absolute inset-0 z-[80] flex flex-col items-center justify-center bg-indigo-900/40 md:bg-indigo-950/60 backdrop-blur-lg md:backdrop-blur-xl transition-all summarize-overlay">
-                    <div class="relative">
-                        <div
-                            class="w-20 h-20 border-4 border-indigo-400/20 border-t-indigo-500 rounded-full animate-spin">
-                        </div>
-                        <div class="absolute inset-0 flex items-center justify-center">
-                            <svg class="w-8 h-8 text-indigo-400 animate-pulse" fill="none" stroke="currentColor"
-                                viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 002-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10">
-                                </path>
-                            </svg>
-                        </div>
-                    </div>
-                    <div class="mt-8 text-white text-center px-10 w-full max-w-2xl">
-                        <h2
-                            class="text-xl font-black mb-2 tracking-widest uppercase bg-clip-text text-transparent bg-gradient-to-r from-indigo-200 to-white">
-                            正在深度总结剧情</h2>
-                        <p v-if="!currentSummaryStreamingContent"
-                            class="text-indigo-200/60 text-xs max-w-xs mx-auto leading-relaxed font-medium">
-                            系统正在为您梳理长篇对话中的关键事件并精简上下文记忆，请稍候...</p>
-                        <div v-else
-                            class="mt-6 text-left p-4 md:p-5 bg-indigo-800/20 md:bg-indigo-900/40 rounded-xl border border-indigo-300/20 md:border-indigo-400/30 max-h-[40vh] overflow-y-auto custom-scrollbar backdrop-blur-md shadow-lg"
-                            id="summary-stream-container">
-                            <div class="markdown-body text-indigo-50 md:text-indigo-100 leading-relaxed"
-                                :style="settings.fontSize ? { fontSize: settings.fontSize + 'px' } : { fontSize: '15px' }"
-                                v-html="renderMarkdown(currentSummaryStreamingContent, 'assistant', true)"></div>
-                        </div>
-                    </div>
-                    <div class="mt-10 flex space-x-3">
-                        <div class="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce [animation-delay:-0.3s]">
-                        </div>
-                        <div class="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce [animation-delay:-0.15s]">
-                        </div>
-                        <div class="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce"></div>
-                    </div>
-                </div>
-            </transition>
+
 
             <!-- Chat View -->
             <div v-if="currentView === 'chat'" class="flex flex-col h-full relative">
@@ -534,7 +492,7 @@
                         :class="['flex w-full scroll-reveal-container', msg.isSelf ? 'justify-end scroll-reveal-right' : 'justify-start scroll-reveal-left']"
                         :style="{ transitionDelay: (index % 5) * 50 + 'ms' }">
                         <div
-                            :class="['flex', msg.isEditing_Message ? 'w-full max-w-full' : ['md:max-w-[75%] lg:max-w-[70%]', settings.immersiveMode ? 'max-w-full' : 'max-w-[99%]'], (parseCot(msg.content).cot || msg.isSummary || msg.isEditing_Message) ? 'w-full' : '', msg.isSelf ? 'flex-row-reverse' : 'flex-row']">
+                            :class="['flex', msg.isEditing_Message ? 'w-full max-w-full' : ['md:max-w-[75%] lg:max-w-[70%]', settings.immersiveMode ? 'max-w-full' : 'max-w-[99%]'], (parseCot(msg.content).cot || msg.isEditing_Message) ? 'w-full' : '', msg.isSelf ? 'flex-row-reverse' : 'flex-row']">
                             <!-- Avatar -->
                             <div v-show="!settings.immersiveMode"
                                 :class="['flex-shrink-0 select-none', msg.shouldAnimate ? 'animate-message-in' : '']">
@@ -555,7 +513,7 @@
                             </div>
 
                             <div
-                                :class="['flex flex-col min-w-0', (parseCot(msg.content).cot || msg.isSummary || msg.isEditing_Message) ? 'w-full' : '', msg.isSelf ? 'items-end' : 'items-start']">
+                                :class="['flex flex-col min-w-0', (parseCot(msg.content).cot || msg.isEditing_Message) ? 'w-full' : '', msg.isSelf ? 'items-end' : 'items-start']">
                                 <!-- Name (Outside Bubble) -->
                                 <div v-show="!settings.immersiveMode"
                                     :class="['text-[10px] font-bold text-gray-600 mb-1 select-none px-1.5 py-0.5 rounded-md bg-white/50 backdrop-blur-sm border border-white/20 w-fit shadow-sm truncate max-w-[150px] md:max-w-[250px] msg-name-tag', msg.isSelf ? 'ml-auto mr-1' : 'mr-auto ml-1', msg.shouldAnimate ? 'animate-message-in' : '']">
@@ -563,11 +521,11 @@
                                 </div>
                                 <!-- Message Bubble -->
                                 <div class="group relative"
-                                    :class="{'w-full': parseCot(msg.content).cot || msg.isSummary || msg.isEditing_Message}">
+                                    :class="{'w-full': parseCot(msg.content).cot || msg.isEditing_Message}">
                                     <div
                                         :class="['p-0 rounded-2xl shadow-sm text-sm md:text-base leading-relaxed overflow-hidden',
                                         msg.shouldAnimate ? 'animate-message-in' : '',
-                                        (parseCot(msg.content).cot || msg.isSummary || msg.isEditing_Message) ? 'w-full' : '',
+                                        (parseCot(msg.content).cot || msg.isEditing_Message) ? 'w-full' : '',
                                         msg.role === 'user' ? (msg.isSelf ? 'bg-blue-50/85 text-gray-900 shadow-[0_4px_12px_rgba(59,130,246,0.1)] border border-primary-300/50' : 'bg-white/70 text-gray-800 border border-white/40 shadow-card') :
                                         msg.role === 'system' ? 'bg-red-50/70 text-red-800 border border-red-200/40' :
                                         'bg-white/70 text-gray-800 border border-white/40 shadow-card',
@@ -614,104 +572,7 @@
                                                 :style="settings.fontSize ? { fontSize: settings.fontSize + 'px' } : {}"
                                                 v-text="msg.content"></div>
                                         </div>
-                                        <div v-else-if="msg.isSummary"
-                                            class="w-full bg-gradient-to-br from-indigo-50/90 to-blue-50/50 backdrop-blur-xl border border-indigo-200/60 rounded-xl p-4 md:p-5 shadow-[0_8px_30px_rgba(99,102,241,0.06)] relative overflow-hidden group transition-all duration-500 hover:shadow-[0_8px_30px_rgba(99,102,241,0.12)]">
-                                            <div
-                                                class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-indigo-400 via-purple-400 to-blue-400 opacity-80">
-                                            </div>
-                                            <!-- decorative background element -->
-                                            <div
-                                                class="absolute -right-6 -top-6 w-32 h-32 bg-indigo-400/10 rounded-full blur-3xl pointer-events-none">
-                                            </div>
-                                            <div
-                                                class="flex items-center text-indigo-900 font-black tracking-wide mb-4 text-[15px] flex-row justify-between border-b border-indigo-100/50 pb-3">
-                                                <div class="flex items-center cursor-pointer select-none relative z-10"
-                                                    @click="msg.isCollapsed = !msg.isCollapsed">
-                                                    <svg class="w-4 h-4 mr-1.5 text-indigo-500 transition-transform duration-300 shadow-sm"
-                                                        :class="{'rotate-[-90deg]': msg.isCollapsed}" fill="none"
-                                                        stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path stroke-linecap="round" stroke-linejoin="round"
-                                                            stroke-width="2" d="M19 9l-7 7-7-7"></path>
-                                                    </svg>
-                                                    <span
-                                                        class="bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 to-purple-600">剧情总览
-                                                        · 记忆节点</span>
-                                                </div>
-                                                <div
-                                                    class="flex items-center space-x-1 translate-x-1 md:translate-x-1.5">
-                                                    <button @click="revertSummary(index)"
-                                                        v-if="msg.originalMessages && !msg.isCollapsed && !msg.isEditing"
-                                                        class="p-1 md:p-1.5 text-indigo-300 hover:text-orange-500 bg-white/60 backdrop-blur hover:bg-white rounded-full transition-all shadow-sm border border-transparent hover:border-orange-200 relative z-10"
-                                                        title="撤销总结并恢复历史">
-                                                        <svg class="w-4 h-4" fill="none" stroke="currentColor"
-                                                            viewBox="0 0 24 24">
-                                                            <path stroke-linecap="round" stroke-linejoin="round"
-                                                                stroke-width="2"
-                                                                d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"></path>
-                                                        </svg>
-                                                    </button>
-                                                    <button @click="resummarize(index)"
-                                                        v-if="msg.originalMessages && !msg.isCollapsed && !msg.isEditing"
-                                                        class="p-1 md:p-1.5 text-indigo-300 hover:text-blue-500 bg-white/60 backdrop-blur hover:bg-white rounded-full transition-all shadow-sm border border-transparent hover:border-blue-200 relative z-10"
-                                                        title="重新总结">
-                                                        <svg class="w-4 h-4" fill="none" stroke="currentColor"
-                                                            viewBox="0 0 24 24">
-                                                            <path stroke-linecap="round" stroke-linejoin="round"
-                                                                stroke-width="2"
-                                                                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15">
-                                                            </path>
-                                                        </svg>
-                                                    </button>
-                                                    <button @click="editSummaryMessage(index)"
-                                                        v-if="!msg.isCollapsed && !msg.isEditing"
-                                                        class="p-1 md:p-1.5 text-indigo-300 hover:text-indigo-600 bg-white/60 backdrop-blur hover:bg-white rounded-full transition-all shadow-sm border border-transparent hover:border-indigo-200 relative z-10"
-                                                        title="编辑总结">
-                                                        <svg class="w-4 h-4" fill="none" stroke="currentColor"
-                                                            viewBox="0 0 24 24">
-                                                            <path stroke-linecap="round" stroke-linejoin="round"
-                                                                stroke-width="2"
-                                                                d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z">
-                                                            </path>
-                                                        </svg>
-                                                    </button>
-                                                    <button @click="deleteMessage(index)"
-                                                        class="p-1 md:p-1.5 text-indigo-300 hover:text-red-500 bg-white/60 backdrop-blur hover:bg-white rounded-full transition-all shadow-sm border border-transparent hover:border-red-100 relative z-10"
-                                                        title="删除这部分记忆">
-                                                        <svg class="w-4 h-4" fill="none" stroke="currentColor"
-                                                            viewBox="0 0 24 24">
-                                                            <path stroke-linecap="round" stroke-linejoin="round"
-                                                                stroke-width="2"
-                                                                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16">
-                                                            </path>
-                                                        </svg>
-                                                    </button>
-                                                </div>
-                                            </div>
-                                            <div v-if="!msg.isCollapsed && msg.isEditing"
-                                                class="relative z-10 animate-fade-in w-full mt-2">
-                                                <textarea v-model="msg.editContent"
-                                                    class="w-full h-[400px] min-h-[300px] p-3 text-sm text-gray-700 bg-white/70 backdrop-blur-md rounded-xl border border-indigo-200 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:bg-white transition-all shadow-inner resize-y custom-scrollbar"
-                                                    placeholder="编辑总结..."></textarea>
-                                                <div class="flex justify-end space-x-2 mt-3">
-                                                    <button @click="cancelEditSummary(index)"
-                                                        class="px-4 py-1.5 text-xs font-bold text-gray-500 bg-white/80 hover:bg-white border border-gray-200 rounded-lg shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-gray-200">
-                                                        取消
-                                                    </button>
-                                                    <button @click="saveSummaryMessage(index)"
-                                                        class="px-4 py-1.5 text-xs font-bold text-white bg-indigo-500 hover:bg-indigo-600 rounded-lg shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-indigo-500">
-                                                        保存
-                                                    </button>
-                                                </div>
-                                            </div>
-                                            <div v-else-if="!msg.isCollapsed"
-                                                class="text-gray-700/90 leading-relaxed markdown-body animate-fade-in relative z-10 font-medium"
-                                                :style="settings.fontSize ? { fontSize: settings.fontSize + 'px' } : { fontSize: '15px' }"
-                                                v-html="renderMarkdown(msg.content, 'assistant', true)"></div>
-                                            <div v-else @click="msg.isCollapsed = false"
-                                                class="text-indigo-400/80 text-[13px] font-medium cursor-pointer flex items-center hover:text-indigo-600 transition-colors select-none py-2 animate-fade-in text-center justify-center bg-indigo-100/30 rounded-lg border border-indigo-100/50 relative z-10">
-                                                点击展开此阶段的详细剧情回顾
-                                            </div>
-                                        </div>
+
                                         <div v-else class="message-content-wrapper"
                                             :style="index < chatHistory.length - (settings.renderLayerLimit > 100 ? 99999 : settings.renderLayerLimit) ? 'content-visibility: auto; contain-intrinsic-size: auto 150px;' : ''">
                                             <!-- CoT Part -->
@@ -823,7 +684,7 @@
                                     </div>
 
                                     <!-- Message Actions -->
-                                    <div v-if="!msg.isSummary && !msg.isEditing_Message && !(index === chatHistory.length - 1 && !msg.isSelf && (isGenerating || isRemoteGenerating))"
+                                    <div v-if="!msg.isEditing_Message && !(index === chatHistory.length - 1 && !msg.isSelf && (isGenerating || isRemoteGenerating))"
                                         :class="['absolute bottom-0 -mb-8 md:-mb-10 flex items-center space-x-1 md:space-x-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-200', msg.isSelf ? 'right-0' : 'left-0']">
                                         <button v-if="index === chatHistory.length - 1"
                                             @click="regenerateMessage(index)"
@@ -2881,7 +2742,7 @@
                                 </div>
                             </div>
                             <p class="text-sm text-gray-700 leading-relaxed pr-2">{{ mem.summary }}</p>
-                            <div v-if="mem.category === 'event' && (mem.time || mem.location)"
+                            <div v-if="mem.category === 'event' && (mem.time || mem.location || (mem.npcs && mem.npcs.length > 0))"
                                 class="flex items-center flex-wrap gap-2 mt-2.5 pt-2.5 border-t border-gray-100/80">
                                 <span v-if="mem.time"
                                     class="inline-flex items-center gap-1 text-[11px] text-amber-700 bg-amber-50/80 border border-amber-200/60 rounded-lg px-2 py-1 font-medium">
@@ -2901,6 +2762,14 @@
                                             d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path>
                                     </svg>
                                     {{ mem.location }}
+                                </span>
+                                <span v-if="mem.npcs && mem.npcs.length > 0"
+                                    class="inline-flex items-center gap-1 text-[11px] text-indigo-700 bg-indigo-50/80 border border-indigo-200/60 rounded-lg px-2 py-1 font-medium">
+                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
+                                    </svg>
+                                    {{ mem.npcs.join(' · ') }}
                                 </span>
                             </div>
                         </div>
@@ -3054,6 +2923,19 @@
                                             class="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 focus:ring-2 focus:ring-teal-500 focus:border-teal-500 focus:outline-none transition-all shadow-sm text-sm">
                                     </div>
                                 </div>
+                                
+                                <div v-if="editingMemory.data.category === 'event'">
+                                    <label class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5 mt-3">
+                                        <span class="inline-flex items-center gap-1">
+                                            <svg class="w-3 h-3 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
+                                            </svg>
+                                            场景NPC (逗号分隔)
+                                        </span>
+                                    </label>
+                                    <input type="text" :value="editingMemory.data.npcs ? editingMemory.data.npcs.join(', ') : ''" @input="editingMemory.data.npcs = $event.target.value.split(',').map(s=>s.trim()).filter(Boolean)" placeholder="如：店小二, 守夜人"
+                                        class="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 focus:outline-none transition-all shadow-sm text-sm">
+                                </div>
 
                                 <!-- Enabled -->
                                 <div
@@ -3172,27 +3054,6 @@
                                         worldInfoSettings.scanDepth }}</span>
                                 </div>
                                 <input type="range" v-model.number="worldInfoSettings.scanDepth" min="0" max="20"
-                                    class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary-600">
-                            </div>
-                            <!-- Context Percent -->
-                            <div>
-                                <div class="flex justify-between items-center mb-1">
-                                    <label class="font-medium text-gray-600">上下文百分比</label>
-                                    <span class="text-primary-600 font-mono bg-primary-50 px-2 py-0.5 rounded">{{
-                                        worldInfoSettings.contextPercent }}%</span>
-                                </div>
-                                <input type="range" v-model.number="worldInfoSettings.contextPercent" min="0" max="100"
-                                    class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary-600">
-                            </div>
-                            <!-- Token Budget -->
-                            <div>
-                                <div class="flex justify-between items-center mb-1">
-                                    <label class="font-medium text-gray-600">Token预算上限</label>
-                                    <span class="text-primary-600 font-mono bg-primary-50 px-2 py-0.5 rounded">{{
-                                        worldInfoSettings.tokenBudget }}</span>
-                                </div>
-                                <input type="range" v-model.number="worldInfoSettings.tokenBudget" min="0" max="4096"
-                                    step="64"
                                     class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary-600">
                             </div>
                             <!-- Min Activations -->
@@ -3333,7 +3194,7 @@
         <div v-if="showUpdateModal"
             class="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fade-in">
             <div
-                class="bg-white rounded-xl border border-gray-200 w-full max-w-lg flex flex-col shadow-2xl transform transition-all scale-100 overflow-hidden">
+                class="bg-white rounded-xl border border-gray-200 w-full max-w-lg flex flex-col shadow-2xl transform transition-all scale-100 overflow-hidden relative">
                 <div class="bg-gradient-to-r from-primary-50 to-purple-50 p-4 border-b border-gray-100">
                     <div class="flex items-center gap-3">
                         <h3 class="text-xl font-bold text-gray-900">{{ latestUpdate.title }}</h3>
@@ -3341,19 +3202,25 @@
                             class="bg-primary-100 text-primary-600 text-[10px] font-bold px-2 py-0.5 rounded-full border border-primary-200 transform translate-y-0.5">New</span>
                     </div>
                 </div>
-                <div class="p-4 max-h-[60vh] overflow-y-auto custom-scrollbar update-content">
+                <div class="p-4 max-h-[75vh] overflow-y-auto custom-scrollbar update-content" @scroll="checkUpdateScroll">
                     <div class="prose prose-sm prose-gray max-w-none">
                         <!-- 使用 Markdown 渲染内容，支持富文本，且不应用正则替换 -->
                         <div class="markdown-body" v-html="renderMarkdown(latestUpdate.content, 'assistant', true)">
                         </div>
                     </div>
+                    <div class="mt-8 mb-2 flex justify-end">
+                        <button @click="closeUpdateModal" :disabled="updateCountdown > 0"
+                            :class="{'opacity-50 cursor-not-allowed': updateCountdown > 0}"
+                            class="px-10 py-2.5 bg-primary-600 hover:bg-primary-700 text-white font-medium rounded-lg shadow-sm hover:shadow transition-all active:scale-95">
+                            知道了 <span v-if="updateCountdown > 0">({{ updateCountdown }}s)</span>
+                        </button>
+                    </div>
                 </div>
-                <div class="bg-gray-50 p-4 flex justify-end rounded-b-xl border-t border-gray-100">
-                    <button @click="closeUpdateModal" :disabled="updateCountdown > 0"
-                        :class="{'opacity-50 cursor-not-allowed': updateCountdown > 0}"
-                        class="px-5 py-2.5 bg-primary-600 hover:bg-primary-700 text-white font-medium rounded-lg shadow-sm hover:shadow transition-all active:scale-95">
-                        知道了 <span v-if="updateCountdown > 0">({{ updateCountdown }}s)</span>
-                    </button>
+                <div v-show="!isUpdateScrolledToBottom" class="absolute bottom-0 left-0 right-0 pt-12 pb-4 bg-gradient-to-t from-white via-white/80 to-transparent flex justify-center items-end pointer-events-none transition-opacity duration-300 rounded-b-xl">
+                    <div class="text-xs text-blue-500 flex items-center gap-1 animate-bounce bg-white shadow-sm border border-blue-100 px-3 py-1.5 rounded-full">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"></path></svg>
+                        向下滑动查看完整内容
+                    </div>
                 </div>
             </div>
         </div>
@@ -4018,35 +3885,7 @@
 
 
 
-        <!-- Summarize Confirm Modal -->
-        <div v-if="showSummaryModal"
-            class="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fade-in">
-            <div
-                class="bg-white rounded-xl border border-gray-200 w-full max-w-sm flex flex-col shadow-2xl transform transition-all scale-100 overflow-hidden">
-                <div class="p-6 text-center">
-                    <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-indigo-100 mb-4">
-                        <svg class="h-6 w-6 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 002-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                        </svg>
-                    </div>
-                    <h3 class="text-lg font-medium text-gray-900 mb-2">总结并压缩上下文</h3>
-                    <p class="text-sm text-gray-500 whitespace-pre-wrap">您确定要总结当前的对话记录吗？
 
-                        过往对话记录将被清理，请及时备份。</p>
-                </div>
-                <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse rounded-b-xl">
-                    <button @click="summarizeChatHistory(false)" type="button"
-                        class="w-full inline-flex justify-center rounded-lg border border-transparent shadow-sm px-4 py-2 bg-indigo-600 text-base font-medium text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:ml-3 sm:w-auto sm:text-sm transition-colors">
-                        确认总结
-                    </button>
-                    <button @click="showSummaryModal = false" type="button"
-                        class="mt-3 w-full inline-flex justify-center rounded-lg border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm transition-colors">
-                        取消
-                    </button>
-                </div>
-            </div>
-        </div>
 
         <!-- Export Selection Modal -->
         <div v-if="showExportModal"
