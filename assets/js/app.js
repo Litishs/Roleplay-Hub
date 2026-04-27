@@ -114,13 +114,14 @@ createApp({
             quotaError.value = false;
             try {
                 const imageGenToken = settings.imageGenKey ? settings.imageGenKey : 'STD-QMqT4lxiWqWMVneiePiE';
-                const response = await fetch('https://std.loliyc.com/api/api/getUser', {
+                const baseUrl = imageGenToken.trim().toUpperCase().startsWith('STA1N') ? 'https://nai.sta1n.cn' : 'https://std.loliyc.com';
+                const response = await fetch(`${baseUrl}/api/api/getUser`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ toUserId: imageGenToken })
                 });
                 const data = await response.json();
-                if (data.status === 'ok' && data.type === 'std') {
+                if (data.status === 'ok' && (data.type === 'std' || data.type === 'sta1n')) {
                     let val = parseInt(data.data.value);
                     if (val > 1000) val = 1000;
                     quotaValue.value = val;
@@ -2055,7 +2056,10 @@ ${rawHtml}
                 const id = setTimeout(() => controller.abort(), 10000);
                 const startTime = performance.now();
 
-                await fetch('https://std.loliyc.com', {
+                const imageGenToken = settings.imageGenKey ? settings.imageGenKey : 'STD-QMqT4lxiWqWMVneiePiE';
+                const baseUrl = imageGenToken.trim().toUpperCase().startsWith('STA1N') ? 'https://nai.sta1n.cn' : 'https://std.loliyc.com';
+
+                await fetch(baseUrl, {
                     method: 'HEAD',
                     mode: 'no-cors',
                     signal: controller.signal
@@ -3810,6 +3814,7 @@ summary 长度控制在300-500字，尽量完全详细。
 
         const enforceSpecialRules = () => {
             const imageGenToken = settings.imageGenKey ? settings.imageGenKey : 'STD-QMqT4lxiWqWMVneiePiE';
+            const baseUrl = imageGenToken.trim().toUpperCase().startsWith('STA1N') ? 'https://nai.sta1n.cn' : 'https://std.loliyc.com';
 
             // 1. NAI画图正则 (统一版本)
             const imageGenRegexName = 'NAI画图正则';
@@ -3830,7 +3835,7 @@ summary 长度控制在300-500字，尽量完全详细。
             const imageGenRegexContent = {
                 name: imageGenRegexName,
                 regex: '/image###([\\s\\S]*?)###/g',
-                replacement: '<div style="width: auto; height: auto; max-width: 100%; border: 8px solid transparent; background-image: linear-gradient(45deg, #FFC9D9, #CCE5FF); position: relative; border-radius: 16px; overflow: hidden; display: flex; justify-content: center; align-items: center; animation: gradientBG 3s ease infinite; box-shadow: 0 4px 15px rgba(204,229,255,0.3);"><div style="background: rgba(255,255,255,0.85); backdrop-filter: blur(5px); width: 100%; height: 100%; position: absolute; top: 0; left: 0;"></div><img src="https://std.loliyc.com/generate?tag=$1&token=' + imageGenToken + '&model=nai-diffusion-4-5-full&artist=' + targetArtists + '&size=' + settings.imageSize + '&steps=40&scale=6&cfg=0&sampler=k_dpmpp_2m_sde&negative={{{{bad anatomy}}}},{bad feet},bad hands,{{{bad proportions}}},{blurry},cloned face,cropped,{{{deformed}}},{{{disfigured}}},error,{{{extra arms}}},{extra digit},{{{extra legs}}},extra limbs,{{extra limbs}},{fewer digits},{{{fused fingers}}},gross proportions,ink eyes,ink hair,jpeg artifacts,{{{{long neck}}}},low quality,{malformed limbs},{{missing arms}},{missing fingers},{{missing legs}},{{{more than 2 nipples}}},mutated hands,{{{mutation}}},normal quality,owres,{{poorly drawn face}},{{poorly drawn hands}},reen eyes,signature,text,{{too many fingers}},{{{ugly}}},username,uta,watermark,worst quality,{{{more than 2 legs}}},awkward hand sign,weird hand gesture,contorted hand,unnatural finger pose,deformed hand gesture,{shaka},{hang loose},{{rock on}},{shaka sign}&nocache=0&noise_schedule=karras"  alt="生成图片" style="max-width: 100%; height: auto; width: auto; display: block; object-fit: contain; transition: transform 0.3s ease; position: relative; z-index: 1;"></div><style>@keyframes gradientBG {0% {background-image: linear-gradient(45deg, #FFC9D9, #CCE5FF);}50% {background-image: linear-gradient(225deg, #FFC9D9, #CCE5FF);}100% {background-image: linear-gradient(45deg, #FFC9D9, #CCE5FF);}}</style>',
+                replacement: '<div style="width: auto; height: auto; max-width: 100%; border: 8px solid transparent; background-image: linear-gradient(45deg, #FFC9D9, #CCE5FF); position: relative; border-radius: 16px; overflow: hidden; display: flex; justify-content: center; align-items: center; animation: gradientBG 3s ease infinite; box-shadow: 0 4px 15px rgba(204,229,255,0.3);"><div style="background: rgba(255,255,255,0.85); backdrop-filter: blur(5px); width: 100%; height: 100%; position: absolute; top: 0; left: 0;"></div><img src="' + baseUrl + '/generate?tag=$1&token=' + imageGenToken + '&model=nai-diffusion-4-5-full&artist=' + targetArtists + '&size=' + settings.imageSize + '&steps=40&scale=6&cfg=0&sampler=k_dpmpp_2m_sde&negative={{{{bad anatomy}}}},{bad feet},bad hands,{{{bad proportions}}},{blurry},cloned face,cropped,{{{deformed}}},{{{disfigured}}},error,{{{extra arms}}},{extra digit},{{{extra legs}}},extra limbs,{{extra limbs}},{fewer digits},{{{fused fingers}}},gross proportions,ink eyes,ink hair,jpeg artifacts,{{{{long neck}}}},low quality,{malformed limbs},{{missing arms}},{missing fingers},{{missing legs}},{{{more than 2 nipples}}},mutated hands,{{{mutation}}},normal quality,owres,{{poorly drawn face}},{{poorly drawn hands}},reen eyes,signature,text,{{too many fingers}},{{{ugly}}},username,uta,watermark,worst quality,{{{more than 2 legs}}},awkward hand sign,weird hand gesture,contorted hand,unnatural finger pose,deformed hand gesture,{shaka},{hang loose},{{rock on}},{shaka sign}&nocache=0&noise_schedule=karras"  alt="生成图片" style="max-width: 100%; height: auto; width: auto; display: block; object-fit: contain; transition: transform 0.3s ease; position: relative; z-index: 1;"></div><style>@keyframes gradientBG {0% {background-image: linear-gradient(45deg, #FFC9D9, #CCE5FF);}50% {background-image: linear-gradient(225deg, #FFC9D9, #CCE5FF);}100% {background-image: linear-gradient(45deg, #FFC9D9, #CCE5FF);}}</style>',
                 placement: [2],
                 markdownOnly: true,
                 promptOnly: false,
