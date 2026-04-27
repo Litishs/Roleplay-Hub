@@ -18,7 +18,7 @@ Roleplay Hub 致力于提供流畅、私密且功能强大的本地化AI Rolepla
 
 ## 快速开始 (Quick Start)
 
-本项目无需复杂的 Node.js 环境或依赖安装，即开即用！
+本项目无需复杂的环境或依赖安装，即开即用！
 
 ### 1. 下载与运行
 1. 点击项目主页绿色的 `Code` 按钮，选择 `Download ZIP`。
