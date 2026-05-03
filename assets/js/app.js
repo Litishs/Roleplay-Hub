@@ -783,13 +783,15 @@ createApp({
             });
         };
 
-        const dbSet = (key, value) => {
+        const cloneForStorage = (value) => JSON.parse(JSON.stringify(value));
+
+        const dbSet = (key, value, options = {}) => {
             return new Promise((resolve, reject) => {
                 if (!db) return reject('DB not initialized');
                 const transaction = db.transaction(['store'], 'readwrite');
                 const store = transaction.objectStore('store');
-                // Clone to plain object to avoid Proxy issues
-                const request = store.put(JSON.parse(JSON.stringify(value)), key);
+                // Clone to plain object to avoid Proxy issues unless the caller already did it.
+                const request = store.put(options.clone === false ? value : cloneForStorage(value), key);
                 request.onsuccess = () => resolve();
                 request.onerror = (event) => reject(event.target.error);
             });
@@ -804,6 +806,37 @@ createApp({
                 request.onsuccess = () => resolve(request.result);
                 request.onerror = (event) => reject(event.target.error);
             });
+        };
+
+        let chatHistorySaveTimer = null;
+
+        const saveChatHistoryNow = async () => {
+            if (chatHistorySaveTimer) {
+                clearTimeout(chatHistorySaveTimer);
+                chatHistorySaveTimer = null;
+            }
+            if (currentCharacterIndex.value < 0 || !currentCharacter.value || !currentCharacter.value.uuid) return;
+
+            try {
+                const historyToSave = cloneForStorage(chatHistory.value);
+                await dbSet(`silly_tavern_chat_${currentCharacter.value.uuid}`, historyToSave, { clone: false });
+            } catch (e) {
+                console.error('Failed to save chat history:', e);
+            }
+        };
+
+        const scheduleChatHistorySave = () => {
+            if (chatHistorySaveTimer) clearTimeout(chatHistorySaveTimer);
+            const delay = (isGenerating.value || isRemoteGenerating.value) ? 1500 : 300;
+            chatHistorySaveTimer = setTimeout(() => {
+                chatHistorySaveTimer = null;
+                saveChatHistoryNow();
+            }, delay);
+        };
+
+        const flushPendingChatHistorySave = async () => {
+            if (!chatHistorySaveTimer) return;
+            await saveChatHistoryNow();
         };
 
         const saveData = async () => {
@@ -827,7 +860,7 @@ createApp({
                 // Save Chat State
                 if (currentCharacterIndex.value >= 0) {
                     await dbSet('silly_tavern_last_active_char', currentCharacterIndex.value);
-                    await dbSet(`silly_tavern_chat_${currentCharacterIndex.value}`, chatHistory.value);
+                    await saveChatHistoryNow();
                 }
 
                 // Save Memory State
@@ -1241,17 +1274,10 @@ createApp({
             debouncedSave();
         }, { deep: true });
 
-        // Watch chat history separately to save it specifically
-        watch(chatHistory, async (newHistory) => {
-            if (currentCharacterIndex.value >= 0 && currentCharacter.value && currentCharacter.value.uuid) {
-                try {
-                    // Deep clone to avoid proxy issues
-                    const historyToSave = JSON.parse(JSON.stringify(newHistory));
-                    await dbSet(`silly_tavern_chat_${currentCharacter.value.uuid}`, historyToSave);
-                } catch (e) {
-                    console.error('Failed to save chat history:', e);
-                }
-            }
+        // Watch chat history separately, but batch writes so streaming chunks do not
+        // repeatedly clone and persist the full conversation.
+        watch(chatHistory, () => {
+            scheduleChatHistorySave();
         }, { deep: true });
 
         // Manual Save Feedback (Optional, can be bound to a button)
@@ -3277,7 +3303,7 @@ ${rawHtml}
                                     applyPendingNativeReasoning();
                                 });
                             };
-                            const flushNativeReasoning = async (force = false) => {
+                            const flushNativeReasoning = () => {
                                 if (!assistantMessage || !pendingNativeReasoning) return;
                                 if (nativeReasoningFlushRaf) {
                                     cancelAnimationFrame(nativeReasoningFlushRaf);
@@ -3334,7 +3360,7 @@ ${rawHtml}
                                                 }
 
                                                 if (content) {
-                                                    await flushNativeReasoning(true);
+                                                    flushNativeReasoning();
                                                     assistantMessage.content += content;
                                                     responseContent += content;
                                                     isThinking.value = false;
@@ -3349,7 +3375,7 @@ ${rawHtml}
                                     }
                                 }
                             }
-                            await flushNativeReasoning(true);
+                            flushNativeReasoning();
                         } else {
                             // Non-streaming response handling
                             // Compatibility Fix: Some APIs force return SSE format even if stream=false
@@ -3526,6 +3552,7 @@ ${rawHtml}
                 }
             } finally {
                 collapseActiveNativeReasoning();
+                await saveChatHistoryNow();
                 isGenerating.value = false;
                 isReceiving.value = false;
                 isThinking.value = false;
@@ -4103,6 +4130,7 @@ image###生成的提示词###
             fetchQuota();
         });
         const selectCharacter = async (index, isNewImport = false) => {
+            await flushPendingChatHistorySave();
             currentCharacterIndex.value = index;
             const char = characters.value[index];
 

@@ -608,7 +608,8 @@
                                                     </button>
                                                     <div class="cot-body native-thinking-body"
                                                         :class="{ 'is-open': msg.isReasoningOpen !== false }">
-                                                        <div class="cot-inner native-thinking-inner">
+                                                        <div v-if="msg.isReasoningOpen !== false"
+                                                            class="cot-inner native-thinking-inner">
                                                             <div class="cot-content native-thinking-scroll custom-scrollbar"
                                                                 :style="settings.fontSize ? { fontSize: (settings.fontSize - 1) + 'px' } : {}"
                                                                 v-text="msg.reasoning"></div>
