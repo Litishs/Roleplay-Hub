@@ -492,7 +492,7 @@
                         :class="['flex w-full scroll-reveal-container', msg.isSelf ? 'justify-end scroll-reveal-right' : 'justify-start scroll-reveal-left']"
                         :style="{ transitionDelay: (index % 5) * 50 + 'ms' }">
                         <div
-                            :class="['flex', msg.isEditing_Message ? 'w-full max-w-full' : ['md:max-w-[75%] lg:max-w-[70%]', settings.immersiveMode ? 'max-w-full' : 'max-w-[99%]'], (parseCot(msg.content).cot || msg.isEditing_Message) ? 'w-full' : '', msg.isSelf ? 'flex-row-reverse' : 'flex-row']">
+                            :class="['flex', msg.isEditing_Message ? 'w-full max-w-full' : ['md:max-w-[75%] lg:max-w-[70%]', settings.immersiveMode ? 'max-w-full' : 'max-w-[99%]'], (parseCot(msg.content).cot || msg.isEditing_Message || messageUsesHtmlFrame(msg)) ? 'w-full' : '', msg.isSelf ? 'flex-row-reverse' : 'flex-row']">
                             <!-- Avatar -->
                             <div v-show="!settings.immersiveMode"
                                 :class="['flex-shrink-0 select-none', msg.shouldAnimate ? 'animate-message-in' : '']">
@@ -513,7 +513,7 @@
                             </div>
 
                             <div
-                                :class="['flex flex-col min-w-0', (parseCot(msg.content).cot || msg.isEditing_Message) ? 'w-full' : '', msg.isSelf ? 'items-end' : 'items-start']">
+                                :class="['flex flex-col min-w-0', (parseCot(msg.content).cot || msg.isEditing_Message || messageUsesHtmlFrame(msg)) ? 'flex-1 w-full' : '', msg.isSelf ? 'items-end' : 'items-start']">
                                 <!-- Name (Outside Bubble) -->
                                 <div v-show="!settings.immersiveMode"
                                     :class="['text-[10px] font-bold text-gray-600 mb-1 select-none px-1.5 py-0.5 rounded-md bg-white/50 backdrop-blur-sm border border-white/20 w-fit shadow-sm truncate max-w-[150px] md:max-w-[250px] msg-name-tag', msg.isSelf ? 'ml-auto mr-1' : 'mr-auto ml-1', msg.shouldAnimate ? 'animate-message-in' : '']">
@@ -521,11 +521,11 @@
                                 </div>
                                 <!-- Message Bubble -->
                                 <div class="group relative"
-                                    :class="{'w-full': parseCot(msg.content).cot || msg.isEditing_Message}">
+                                    :class="{'w-full': parseCot(msg.content).cot || msg.isEditing_Message || messageUsesHtmlFrame(msg)}">
                                     <div
                                         :class="['p-0 rounded-2xl shadow-sm text-sm md:text-base leading-relaxed overflow-hidden',
                                         msg.shouldAnimate ? 'animate-message-in' : '',
-                                        (parseCot(msg.content).cot || msg.isEditing_Message) ? 'w-full' : '',
+                                        (parseCot(msg.content).cot || msg.isEditing_Message || messageUsesHtmlFrame(msg)) ? 'w-full' : '',
                                         msg.role === 'user' ? (msg.isSelf ? 'bg-blue-50/85 text-gray-900 shadow-[0_4px_12px_rgba(59,130,246,0.1)] border border-primary-300/50' : 'bg-white/70 text-gray-800 border border-white/40 shadow-card') :
                                         msg.role === 'system' ? 'bg-red-50/70 text-red-800 border border-red-200/40' :
                                         'bg-white/70 text-gray-800 border border-white/40 shadow-card',
@@ -574,6 +574,7 @@
                                         </div>
 
                                         <div v-else class="message-content-wrapper"
+                                            :class="{'w-full': parseCot(msg.content).cot || msg.isEditing_Message || messageUsesHtmlFrame(msg)}"
                                             :style="index < chatHistory.length - (settings.renderLayerLimit > 100 ? 99999 : settings.renderLayerLimit) ? 'content-visibility: auto; contain-intrinsic-size: auto 150px;' : ''">
                                             <!-- CoT Part -->
                                             <div v-if="parseCot(msg.content).cot" class="cot-wrapper">

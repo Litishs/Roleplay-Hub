@@ -98,11 +98,19 @@ html {
         .markdown-body > iframe,
         .markdown-body > .html-card-container {
             width: 100%;
+            min-width: 100%;
+            align-self: stretch;
             padding: 0 !important;
             margin-left: 0 !important;
             margin-right: 0 !important;
             max-width: none;
             overflow: hidden !important;
+        }
+
+        .markdown-body > .html-card-container > iframe {
+            display: block;
+            width: 100% !important;
+            min-width: 0;
         }
 
         .markdown-body p { color: inherit; }
@@ -805,4 +813,3 @@ opacity: 0;
         opacity: 1 !important;
     }
 }
-

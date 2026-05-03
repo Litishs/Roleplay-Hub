@@ -1541,9 +1541,48 @@ createApp({
         /* extracted parseCot */
 
         const renderMarkdownCache = new Map();
+        const htmlFrameDetectionCache = new Map();
         watch(() => [settings.disableImages, regexScripts.value], () => {
             renderMarkdownCache.clear();
+            htmlFrameDetectionCache.clear();
         }, { deep: true });
+
+        const contentUsesHtmlFrame = (text, role = 'assistant', skipRegex = false) => {
+            if (!text) return false;
+            const cacheKey = `${role}_${skipRegex}_${text}`;
+            if (htmlFrameDetectionCache.has(cacheKey)) return htmlFrameDetectionCache.get(cacheKey);
+
+            let processed = stripImageTags(text);
+            processed = skipRegex ? processed : processRegex(processed, { isDisplay: true, role: role });
+            const trimmed = processed.trim();
+            let usesFrame = false;
+
+            const codeFencePattern = /```([^\n`]*)\n?([\s\S]*?)```/g;
+            let codeMatch;
+            while ((codeMatch = codeFencePattern.exec(trimmed)) !== null) {
+                const lang = codeMatch[1] || '';
+                const blockContent = codeMatch[2] || '';
+                if (/\b(html|xml)\b/i.test(lang) || /^\s*<(!doctype|html|head|body|div|span|style|script|table|img)/i.test(blockContent)) {
+                    usesFrame = true;
+                    break;
+                }
+            }
+
+            if (!usesFrame && !trimmed.includes('```')) {
+                usesFrame = /(<!doctype html>|<html\b[^>]*>)/i.test(trimmed);
+            }
+
+            htmlFrameDetectionCache.set(cacheKey, usesFrame);
+            if (htmlFrameDetectionCache.size > 2000) htmlFrameDetectionCache.delete(htmlFrameDetectionCache.keys().next().value);
+            return usesFrame;
+        };
+
+        const messageUsesHtmlFrame = (msg) => {
+            if (!msg || !msg.content) return false;
+            if (msg.isTriggered) return msg.showRaw && contentUsesHtmlFrame(msg.content, msg.role);
+            const parsed = parseCot(msg.content);
+            return contentUsesHtmlFrame(parsed.main || msg.content, msg.role);
+        };
 
         const renderMarkdown = (text, role = 'assistant', skipRegex = false) => {
             if (!text) return '';
@@ -2610,7 +2649,7 @@ ${rawHtml}
                     console.log(`共 ${enabledMems.length} 条记忆将注入上下文`);
                     enabledMems.forEach(m => {
                         const catLabels = { event: '事件', state: '状态', relationship: '关系' };
-                        console.log(`  [${catLabels[m.category] || '记忆'}] D${m.depth || 4} | 重要度: ${m.importance || 5} | ${m.summary}`);
+                        console.log(`  [${catLabels[m.category] || '记忆'}] D${m.depth || 4} | ${m.summary}`);
                     });
                     console.groupEnd();
                 }
@@ -5551,7 +5590,6 @@ image###生成的提示词###
                 editingMemory.data = {
                     category: 'event',
                     summary: '',
-                    importance: 5,
                     depth: memorySettings.defaultDepth || 3,
                     turn: chatHistory.value.filter(h => h.role === 'assistant').length || 1,
                     enabled: true
@@ -5570,16 +5608,20 @@ image###生成的提示词###
                     showToast('记忆内容不能为空', 'error');
                     return;
                 }
+                const memoryData = { ...editingMemory.data };
+                delete memoryData.importance;
                 if (editingMemory.id !== undefined) {
                     const realIndex = memories.value.findIndex(m => m.id === editingMemory.id);
                     if (realIndex !== -1) {
-                        memories.value[realIndex] = { ...memories.value[realIndex], ...editingMemory.data };
+                        const existingMemory = { ...memories.value[realIndex] };
+                        delete existingMemory.importance;
+                        memories.value[realIndex] = { ...existingMemory, ...memoryData };
                     }
                 } else {
                     memories.value.push({
                         id: generateUUID(),
                         timestamp: Date.now(),
-                        ...editingMemory.data
+                        ...memoryData
                     });
                 }
                 showMemoryEditor.value = false;
@@ -5625,15 +5667,19 @@ image###生成的提示词###
                         const data = JSON.parse(e.target.result);
                         if (Array.isArray(data)) {
                             const normalized = data
-                                .filter(m => m.summary && m.summary.trim())
-                                .map(m => ({
-                                    id: m.id || generateUUID(),
-                                    timestamp: m.timestamp || Date.now(),
-                                    turn: m.turn || 0,
-                                    category: ['event', 'state', 'relationship'].includes(m.category) ? m.category : 'event',
-                                    summary: m.summary.trim(),
-                                    enabled: m.enabled !== false
-                                }));
+                                .filter(m => m && typeof m.summary === 'string' && m.summary.trim())
+                                .map(m => {
+                                    const { importance, ...memoryData } = m;
+                                    return {
+                                        ...memoryData,
+                                        id: memoryData.id || generateUUID(),
+                                        timestamp: memoryData.timestamp || Date.now(),
+                                        turn: memoryData.turn || 0,
+                                        category: ['event', 'state', 'relationship'].includes(memoryData.category) ? memoryData.category : 'event',
+                                        summary: memoryData.summary.trim(),
+                                        enabled: memoryData.enabled !== false
+                                    };
+                                });
                             memories.value = [...memories.value, ...normalized];
                             saveData();
                             showToast(`成功导入 ${normalized.length} 条记忆`, 'success');
@@ -5661,7 +5707,7 @@ image###生成的提示词###
             handleAvatarUpload, importCharacter, exportCharacter,
             createPreset, editPreset, savePreset, deletePreset, movePreset,
 
-            renderMarkdown, parseCot, formatTimeAgo, closeCharacterEditor: () => showCharacterEditor.value = false,
+            renderMarkdown, messageUsesHtmlFrame, parseCot, formatTimeAgo, closeCharacterEditor: () => showCharacterEditor.value = false,
             openExportModal: (type) => {
                 exportType.value = type;
                 selectedExportIndices.value.clear();
