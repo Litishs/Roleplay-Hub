@@ -1679,11 +1679,15 @@ createApp({
             return !!(lastMessage && lastMessage.role === 'assistant' && typeof lastMessage.reasoning === 'string' && lastMessage.reasoning.trim());
         });
 
+        let nativeReasoningScrollRaf = null;
         const scrollNativeReasoningToBottom = () => {
-            requestAnimationFrame(() => {
-                document.querySelectorAll('.native-thinking-scroll').forEach(el => {
-                    el.scrollTop = el.scrollHeight;
-                });
+            if (nativeReasoningScrollRaf) return;
+            nativeReasoningScrollRaf = requestAnimationFrame(() => {
+                nativeReasoningScrollRaf = null;
+                const liveScroll = document.querySelector('.native-thinking-card.is-live.is-open .native-thinking-scroll');
+                const allScrolls = document.querySelectorAll('.native-thinking-scroll');
+                const target = liveScroll || allScrolls[allScrolls.length - 1];
+                if (target) target.scrollTop = target.scrollHeight;
             });
         };
 
@@ -3271,6 +3275,30 @@ ${rawHtml}
                             const reader = response.body.getReader();
                             const decoder = new TextDecoder();
                             let buffer = '';
+                            let pendingNativeReasoning = '';
+                            let nativeReasoningFlushRaf = null;
+                            const applyPendingNativeReasoning = async () => {
+                                if (!assistantMessage || !pendingNativeReasoning) return;
+                                assistantMessage.reasoning += pendingNativeReasoning;
+                                pendingNativeReasoning = '';
+                                await nextTick();
+                                scrollNativeReasoningToBottom();
+                            };
+                            const scheduleNativeReasoningFlush = () => {
+                                if (!assistantMessage || !pendingNativeReasoning || nativeReasoningFlushRaf) return;
+                                nativeReasoningFlushRaf = requestAnimationFrame(async () => {
+                                    nativeReasoningFlushRaf = null;
+                                    await applyPendingNativeReasoning();
+                                });
+                            };
+                            const flushNativeReasoning = async (force = false) => {
+                                if (!assistantMessage || !pendingNativeReasoning) return;
+                                if (nativeReasoningFlushRaf) {
+                                    cancelAnimationFrame(nativeReasoningFlushRaf);
+                                    nativeReasoningFlushRaf = null;
+                                }
+                                await applyPendingNativeReasoning();
+                            };
 
                             while (true) {
                                 const { done, value } = await reader.read();
@@ -3314,13 +3342,13 @@ ${rawHtml}
                                                 }
 
                                                 if (reasoning) {
-                                                    assistantMessage.reasoning += reasoning;
+                                                    pendingNativeReasoning += reasoning;
                                                     isThinking.value = true;
-                                                    await nextTick();
-                                                    scrollNativeReasoningToBottom();
+                                                    scheduleNativeReasoningFlush();
                                                 }
 
                                                 if (content) {
+                                                    await flushNativeReasoning(true);
                                                     assistantMessage.content += content;
                                                     responseContent += content;
                                                     isThinking.value = false;
@@ -3335,6 +3363,7 @@ ${rawHtml}
                                     }
                                 }
                             }
+                            await flushNativeReasoning(true);
                         } else {
                             // Non-streaming response handling
                             // Compatibility Fix: Some APIs force return SSE format even if stream=false
