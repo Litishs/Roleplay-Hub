@@ -570,8 +570,6 @@ createApp({
             recursiveScan: true,
             caseSensitive: false,
             matchWholeWords: true,
-            useGroupScoring: false,
-            overflowWarning: false,
         });
 
         // Editing States
@@ -840,7 +838,7 @@ createApp({
                         if (localRegex) regexScripts.value = JSON.parse(localRegex);
 
                         const localWI = localStorage.getItem('silly_tavern_worldinfo');
-                        if (localWI) worldInfo.value = JSON.parse(localWI);
+                        if (localWI) worldInfo.value = JSON.parse(localWI).map(normalizeWorldInfoEntry);
 
                         const localUser = localStorage.getItem('silly_tavern_user');
                         if (localUser) Object.assign(user, JSON.parse(localUser));
@@ -882,6 +880,9 @@ createApp({
                             char.createdAt = Date.now() - (savedChars.length - index) * 1000;
                             migrated = true;
                         }
+                        if (Array.isArray(char.worldInfo)) {
+                            char.worldInfo = char.worldInfo.map(normalizeWorldInfoEntry);
+                        }
                         return char;
                     });
                     if (migrated) {
@@ -900,10 +901,14 @@ createApp({
                 if (savedRegex) regexScripts.value = savedRegex;
 
                 const savedWI = await dbGet('silly_tavern_worldinfo');
-                if (savedWI) worldInfo.value = savedWI;
+                if (savedWI) worldInfo.value = savedWI.map(normalizeWorldInfoEntry);
 
                 const savedWISettings = await dbGet('silly_tavern_worldinfo_settings');
-                if (savedWISettings) Object.assign(worldInfoSettings, savedWISettings);
+                if (savedWISettings) {
+                    delete savedWISettings['use' + 'GroupScoring'];
+                    delete savedWISettings['overflow' + 'Warning'];
+                    Object.assign(worldInfoSettings, savedWISettings);
+                }
 
                 // const savedRecentTimes = await dbGet('silly_tavern_recent_times'); // Deprecated
                 // if (savedRecentTimes) recentGenerationTimes.value = savedRecentTimes;
@@ -963,7 +968,7 @@ createApp({
                 // Only update if different to avoid infinite loops or unnecessary updates
                 const char = characters.value[currentCharacterIndex.value];
                 if (JSON.stringify(char.worldInfo) !== JSON.stringify(newVal)) {
-                    char.worldInfo = JSON.parse(JSON.stringify(newVal));
+                    char.worldInfo = JSON.parse(JSON.stringify(newVal)).map(normalizeWorldInfoEntry);
                 }
             }
         }, { deep: true });
@@ -2390,7 +2395,6 @@ ${rawHtml}
                 const matchWholeWords = entry.matchWholeWords ?? worldInfoSettings.matchWholeWords;
                 const textToScan = caseSensitive ? text : text.toLowerCase();
                 let primaryMatches = 0;
-                let secondaryMatches = 0;
                 let matchedKeys = [];
 
                 const checkKeys = (keys) => {
@@ -2427,19 +2431,7 @@ ${rawHtml}
                 primaryMatches = checkKeys(entry.keys);
                 if (primaryMatches === 0) return { triggered: false };
 
-                // Handle Selective Logic (secondary keys)
-                const secondaryKeys = entry.secondary_keys || [];
-                if (secondaryKeys.length > 0) {
-                    secondaryMatches = checkKeys(secondaryKeys);
-                    const logic = entry.selectiveLogic || 0; // 0: AND ANY, 1: AND ALL, 2: NOT ANY, 3: NOT ALL
-
-                    if (logic === 0 && secondaryMatches === 0) return { triggered: false }; // AND ANY
-                    if (logic === 1 && secondaryMatches < secondaryKeys.length) return { triggered: false }; // AND ALL
-                    if (logic === 2 && secondaryMatches > 0) return { triggered: false }; // NOT ANY
-                    if (logic === 3 && secondaryMatches === secondaryKeys.length) return { triggered: false }; // NOT ALL
-                }
-
-                return { triggered: true, score: primaryMatches + secondaryMatches, matchedKeys };
+                return { triggered: true, score: primaryMatches, matchedKeys };
             };
 
             let triggeredEntries = new Map(); // Use Map to store entries and their scores
@@ -2525,73 +2517,9 @@ ${rawHtml}
                     currentDepth++;
                 }
             }
-
-            // 3. Group Processing
             let finalEntries = Array.from(triggeredEntries.keys());
-            const groups = Object.create(null);
-            finalEntries.forEach(entry => {
-                // Fix: Don't group System entries if they are constant (intended to coexist)
-                const isSystemGroup = entry.group && String(entry.group).toLowerCase() === 'system';
-                const shouldGroup = !isSystemGroup || !entry.constant;
 
-                if (entry.group && shouldGroup) {
-                    if (!groups[entry.group]) groups[entry.group] = [];
-                    groups[entry.group].push(entry);
-                }
-            });
-
-            Object.values(groups).forEach(group => {
-                if (group.length <= 1) return;
-
-                let candidates = [...group];
-                // 3.1 Group Scoring
-                if (worldInfoSettings.useGroupScoring) {
-                    let maxScore = 0;
-                    candidates.forEach(entry => {
-                        const score = triggeredEntries.get(entry).score;
-                        if (score > maxScore) maxScore = score;
-                    });
-                    candidates = candidates.filter(entry => triggeredEntries.get(entry).score === maxScore);
-                }
-
-                let winner = null;
-                const getWeight = (e) => !isNaN(parseFloat(e.groupWeight)) ? parseFloat(e.groupWeight) : 100;
-
-                if (candidates.length === 1) {
-                    winner = candidates[0];
-                } else if (candidates.length > 1) {
-                    // 3.2 Check for Prioritized Inclusion
-                    // If any candidate has preferential enabled, we select based on highest Order
-                    const prioritized = candidates.filter(e => e.preferential);
-                    if (prioritized.length > 0) {
-                        prioritized.sort((a, b) => (b.order || 0) - (a.order || 0));
-                        winner = prioritized[0];
-                    } else {
-                        // 3.3 Select one winner from candidates (weighted random)
-                        let totalWeight = candidates.reduce((sum, entry) => sum + getWeight(entry), 0);
-                        let random = Math.random() * totalWeight;
-                        winner = candidates[candidates.length - 1]; // Default to last
-                        for (const entry of candidates) {
-                            random -= getWeight(entry);
-                            if (random <= 0) {
-                                winner = entry;
-                                break;
-                            }
-                        }
-                    }
-                }
-
-                // Deactivate all others in the original group
-                group.forEach(entry => {
-                    if (entry !== winner) {
-                        triggeredEntries.delete(entry);
-                    }
-                });
-            });
-
-            finalEntries = Array.from(triggeredEntries.keys());
-
-            // 4. Token Budgeting
+            // 3. Token Budgeting
             let tokenBudget;
             if (worldInfoSettings.tokenBudget > 0) {
                 tokenBudget = worldInfoSettings.tokenBudget;
@@ -2619,9 +2547,6 @@ ${rawHtml}
                     budgetedEntries.push(entry);
                     usedTokens += entryTokens;
                 } else {
-                    if (worldInfoSettings.overflowWarning) {
-                        showToast(`世界书超出预算，条目 "${entry.comment || 'Unnamed'}" 未被插入`, 'info');
-                    }
                     break; // Stop adding entries
                 }
             }
@@ -3898,7 +3823,6 @@ summary 长度控制在300-500字，尽量完全详细。
             const autoImageGenWIContent = {
                 comment: autoImageGenWIName,
                 keys: [],
-                secondary_keys: [],
                 content: `<auto_image_gen>\n在精彩场景描绘时使用“<image>”作为场景图片，使用绘画tag对场景人物进行特写。一个场景必须拥有1-3个<image>。
 注意:始终使用逗号分隔条目.另外请保证同一角色的特征，如发色，瞳孔颜色，体态，外貌的一致性.
 使用 image###生成的提示词### 的格式！
@@ -3975,8 +3899,7 @@ image###生成的提示词###
                 depth: 4,
                 order: 100,
                 useProbability: true,
-                probability: 100,
-                selectiveLogic: 0
+                probability: 100
             };
 
             const wiIndex = worldInfo.value.findIndex(w => w.comment === autoImageGenWIName);
@@ -4027,7 +3950,7 @@ image###生成的提示词###
 
             // Load Character Specific Data
             if (char.worldInfo) {
-                worldInfo.value = JSON.parse(JSON.stringify(char.worldInfo));
+                worldInfo.value = JSON.parse(JSON.stringify(char.worldInfo)).map(normalizeWorldInfoEntry);
             } else {
                 worldInfo.value = [];
             }
@@ -4252,13 +4175,6 @@ image###生成的提示词###
                 keys = [];
             }
 
-            let secondary_keys = mergedEntry.secondary_keys || mergedEntry.keysecondary || [];
-            if (typeof secondary_keys === 'string') {
-                secondary_keys = secondary_keys.split(',').map(k => k.trim()).filter(Boolean);
-            } else if (!Array.isArray(secondary_keys)) {
-                secondary_keys = [];
-            }
-
             // Map ST position to our internal values with improved logic
             let position = 'at_depth'; // Default
             const stPos = mergedEntry.position;
@@ -4321,8 +4237,6 @@ image###生成的提示词###
 
                 // --- Keys & Matching ---
                 keys: keys,
-                secondary_keys: secondary_keys,
-                selectiveLogic: toNumber(getValue(['selectiveLogic', 'selective_logic'], 0), 0),
                 useRegex: toBoolean(getValue(['use_regex', 'useRegex'], false), false),
                 caseSensitive: toBoolean(getValue(['case_sensitive', 'caseSensitive'], false), false),
                 matchWholeWords: toBoolean(getValue(['match_whole_words', 'matchWholeWords'], true), true),
@@ -4336,20 +4250,33 @@ image###生成的提示词###
                 probability: toNumber(getValue(['probability'], 100), 100),
                 useProbability: toBoolean(getValue(['useProbability', 'use_probability'], true), true),
 
-                // --- Grouping ---
-                group: toBoolean(getValue(['constant'], false), false) && getValue(['group'], '').toLowerCase() === 'system' ? '' : getValue(['group'], ''),
-                groupWeight: toNumber(getValue(['group_weight', 'groupWeight'], 100), 100),
-                preferential: toBoolean(getValue(['preferential', 'preferential_inclusion'], false), false),
-
-                // --- Timed Effects ---
-                sticky: toNumber(getValue(['sticky'], 0), 0),
-                cooldown: toNumber(getValue(['cooldown'], 0), 0),
-                delay: toNumber(getValue(['delay'], 0), 0),
-
                 // --- Recursion ---
                 excludeRecursion: toBoolean(getValue(['exclude_recursion', 'excludeRecursion'], false), false),
                 preventRecursion: toBoolean(getValue(['prevent_recursion', 'preventRecursion'], false), false),
                 delayUntilRecursion: toBoolean(getValue(['delay_until_recursion', 'delayUntilRecursion'], false), false),
+            };
+        };
+
+        const toWorldInfoExportEntry = (entry) => {
+            const normalized = normalizeWorldInfoEntry(entry);
+            return {
+                comment: normalized.comment,
+                content: normalized.content,
+                enabled: normalized.enabled,
+                keys: Array.isArray(normalized.keys) ? normalized.keys : [],
+                useRegex: normalized.useRegex,
+                caseSensitive: normalized.caseSensitive,
+                matchWholeWords: normalized.matchWholeWords,
+                constant: normalized.constant,
+                position: normalized.position,
+                order: normalized.order,
+                depth: normalized.depth,
+                scanDepth: normalized.scanDepth,
+                probability: normalized.probability,
+                useProbability: normalized.useProbability,
+                excludeRecursion: normalized.excludeRecursion,
+                preventRecursion: normalized.preventRecursion,
+                delayUntilRecursion: normalized.delayUntilRecursion,
             };
         };
 
@@ -4698,16 +4625,7 @@ image###生成的提示词###
                 post_history_instructions: char.post_history_instructions || '',
                 alternate_greetings: char.alternate_greetings || [],
                 character_book: char.worldInfo ? {
-                    entries: char.worldInfo.map(e => {
-                        // Map internal fields back to ST format if needed
-                        // Currently our internal structure is a superset, so direct mapping is mostly fine.
-                        // Just ensure keys are arrays if they were split.
-                        return {
-                            ...e,
-                            keys: Array.isArray(e.keys) ? e.keys : [],
-                            secondary_keys: Array.isArray(e.secondary_keys) ? e.secondary_keys : []
-                        };
-                    })
+                    entries: char.worldInfo.map(toWorldInfoExportEntry)
                 } : undefined,
                 tags: char.tags || [],
                 creator: char.creator || '',
@@ -5360,7 +5278,7 @@ image###生成的提示词###
                 }
 
                 // Load Char Specifics
-                if (char.worldInfo) worldInfo.value = JSON.parse(JSON.stringify(char.worldInfo));
+                if (char.worldInfo) worldInfo.value = JSON.parse(JSON.stringify(char.worldInfo)).map(normalizeWorldInfoEntry);
                 else worldInfo.value = [];
 
                 if (char.regexScripts) regexScripts.value = JSON.parse(JSON.stringify(char.regexScripts));
@@ -5759,7 +5677,7 @@ image###生成的提示词###
                 } else if (exportType.value === 'worldinfo') {
                     fileName = 'world_info.json';
                     // World Info should be wrapped in entries object
-                    dataToExport = { entries: items };
+                    dataToExport = { entries: items.map(toWorldInfoExportEntry) };
                 }
 
                 const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(dataToExport));
@@ -6008,23 +5926,9 @@ image###生成的提示词###
                     probability: 100,
                     useProbability: true,
 
-                    // Advanced Filters
-                    secondary_keys: [],
-                    selectiveLogic: 0, // 0: AND ANY, 1: AND ALL, 2: NOT ANY, 3: NOT ALL
-
-                    // Grouping
-                    group: '',
-                    groupWeight: 100,
-                    preferential: false,
-
-                    // Timed Effects
-                    sticky: 0,
-                    cooldown: 0,
-                    delay: 0,
-
                     // Recursion
-                    prevent_recursion: false,
-                    delay_until_recursion: false,
+                    preventRecursion: false,
+                    delayUntilRecursion: false,
 
                     constant: false
                 };
@@ -6049,23 +5953,17 @@ image###生成的提示词###
                 if (data.matchWholeWords === undefined) data.matchWholeWords = true;
                 if (data.caseSensitive === undefined) data.caseSensitive = false;
                 if (data.scanDepth === undefined) data.scanDepth = 2;
-                if (!data.secondary_keys) data.secondary_keys = [];
-                if (data.selectiveLogic === undefined) data.selectiveLogic = 0;
-                if (!data.group) data.group = '';
-                if (data.preferential === undefined) data.preferential = false;
-                if (data.sticky === undefined) data.sticky = 0;
-                if (data.cooldown === undefined) data.cooldown = 0;
-                if (data.delay === undefined) data.delay = 0;
                 if (data.constant === undefined) data.constant = false;
 
-                editingWorldInfo.data = data;
+                editingWorldInfo.data = normalizeWorldInfoEntry(data);
                 showWorldInfoEditor.value = true;
             },
             saveWorldInfo: () => {
+                const data = normalizeWorldInfoEntry(editingWorldInfo.data);
                 if (editingWorldInfo.id !== undefined) {
-                    worldInfo.value[editingWorldInfo.id] = { ...editingWorldInfo.data };
+                    worldInfo.value[editingWorldInfo.id] = data;
                 } else {
-                    worldInfo.value.push({ ...editingWorldInfo.data });
+                    worldInfo.value.push(data);
                 }
                 // Sync back to current character
                 if (currentCharacterIndex.value !== -1) {
