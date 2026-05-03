@@ -651,6 +651,100 @@ opacity: 0;
             background-color: #cbd5e1;
         }
 
+        /* Native model reasoning UI */
+        .native-thinking-wrapper {
+            width: 100%;
+            margin: 0;
+        }
+
+        .native-thinking-card {
+            margin-top: 0.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .native-thinking-header {
+            width: 100%;
+            border: 0;
+            text-align: left;
+            font: inherit;
+            appearance: none;
+            -webkit-appearance: none;
+        }
+
+        .native-thinking-meta {
+            margin-left: auto;
+            padding: 0.18rem 0.5rem;
+            border-radius: 999px;
+            background: rgba(239, 246, 255, 0.85);
+            border: 1px solid rgba(191, 219, 254, 0.9);
+            color: #2563eb;
+            font-size: 0.68rem;
+            font-weight: 700;
+            white-space: nowrap;
+        }
+
+        .native-thinking-card.is-live {
+            border-color: #bfdbfe;
+            box-shadow: 0 4px 12px -2px rgba(59, 130, 246, 0.1), 0 2px 6px -2px rgba(59, 130, 246, 0.05);
+        }
+
+        .native-thinking-scroll {
+            max-height: 22rem;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
+            padding: 0.65rem 0.75rem 0.85rem;
+            line-height: 1.72;
+            font-family: inherit;
+            scroll-behavior: smooth;
+        }
+
+        .cot-thinking-scroll {
+            max-height: none;
+            overflow-y: visible;
+            white-space: normal;
+            padding-top: 0.45rem;
+            padding-bottom: 0.55rem;
+        }
+
+        .cot-thinking-scroll .markdown-body {
+            white-space: normal;
+        }
+
+        .cot-thinking-scroll .markdown-body > * {
+            margin-top: 0 !important;
+            margin-bottom: 0.65em !important;
+            padding-left: 0 !important;
+            padding-right: 0 !important;
+            padding-top: 0 !important;
+            padding-bottom: 0 !important;
+            text-align: left !important;
+        }
+
+        .cot-thinking-scroll .markdown-body p,
+        .cot-thinking-scroll .markdown-body li {
+            line-height: 1.72;
+            text-align: left !important;
+            word-break: normal;
+            overflow-wrap: anywhere;
+        }
+
+        .cot-thinking-scroll .markdown-body ul,
+        .cot-thinking-scroll .markdown-body ol {
+            padding-left: 1.25em !important;
+            margin-left: 0 !important;
+        }
+
+        .cot-thinking-scroll .markdown-body br {
+            display: block;
+            content: '';
+            margin-bottom: 0.15em;
+        }
+
+        .native-thinking-card.is-open .chevron {
+            transform: rotate(180deg);
+        }
+
 /* Performance Optimization: Disable backdrop-blur when no-blur class is present */
 .no-blur * {
     backdrop-filter: none !important;
