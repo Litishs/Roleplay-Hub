@@ -269,7 +269,6 @@ createApp({
             }
         });
 
-        // --- Scroll-reveal Animation Logic ---
         let scrollRevealObserver = null;
         const initScrollReveal = () => {
             if (window.IntersectionObserver) {
@@ -3335,12 +3334,17 @@ ${rawHtml}
                                             const reasoning = extractNativeReasoning(delta);
 
                                             if (content || reasoning) {
+                                                let seededContent = false;
+                                                let seededReasoning = false;
                                                 if (!assistantMessage) {
+                                                    if (reasoning) {
+                                                        isThinking.value = true;
+                                                    }
                                                     assistantMessage = reactive({
                                                         role: 'assistant',
                                                         name: currentCharacter.value.name,
-                                                        content: '',
-                                                        reasoning: '',
+                                                        content: content || '',
+                                                        reasoning: reasoning || '',
                                                         id: generateUUID(), // Assign ID
                                                         shouldAnimate: true, // Enable animation for new stream
                                                         isCotOpen: false, // Default collapsed for CoT
@@ -3350,16 +3354,23 @@ ${rawHtml}
                                                     });
                                                     chatHistory.value.push(assistantMessage);
                                                     isReceiving.value = true;
+                                                    seededContent = !!content;
+                                                    seededReasoning = !!reasoning;
+                                                    if (seededContent) {
+                                                        responseContent += content;
+                                                        isThinking.value = false;
+                                                        collapseNativeReasoning(assistantMessage);
+                                                    }
                                                     await nextTick();
                                                 }
 
-                                                if (reasoning) {
+                                                if (reasoning && !seededReasoning) {
                                                     pendingNativeReasoning += reasoning;
                                                     isThinking.value = true;
                                                     scheduleNativeReasoningFlush();
                                                 }
 
-                                                if (content) {
+                                                if (content && !seededContent) {
                                                     flushNativeReasoning();
                                                     assistantMessage.content += content;
                                                     responseContent += content;

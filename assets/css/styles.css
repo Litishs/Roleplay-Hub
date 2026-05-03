@@ -322,7 +322,7 @@ html {
                 transform: translateY(0) scale(1);
             }
         }
-        
+
         .typing-indicator {
             display: flex;
             align-items: center;
