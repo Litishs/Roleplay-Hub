@@ -1679,18 +1679,6 @@ createApp({
             return !!(lastMessage && lastMessage.role === 'assistant' && typeof lastMessage.reasoning === 'string' && lastMessage.reasoning.trim());
         });
 
-        let nativeReasoningScrollRaf = null;
-        const scrollNativeReasoningToBottom = () => {
-            if (nativeReasoningScrollRaf) return;
-            nativeReasoningScrollRaf = requestAnimationFrame(() => {
-                nativeReasoningScrollRaf = null;
-                const liveScroll = document.querySelector('.native-thinking-card.is-live.is-open .native-thinking-scroll');
-                const allScrolls = document.querySelectorAll('.native-thinking-scroll');
-                const target = liveScroll || allScrolls[allScrolls.length - 1];
-                if (target) target.scrollTop = target.scrollHeight;
-            });
-        };
-
         const collapseNativeReasoning = (message) => {
             if (message && message.role === 'assistant' && typeof message.reasoning === 'string' && message.reasoning.trim()) {
                 if (message.isReasoningUserToggled || message.isReasoningAutoCollapsed) return;
@@ -3277,18 +3265,16 @@ ${rawHtml}
                             let buffer = '';
                             let pendingNativeReasoning = '';
                             let nativeReasoningFlushRaf = null;
-                            const applyPendingNativeReasoning = async () => {
+                            const applyPendingNativeReasoning = () => {
                                 if (!assistantMessage || !pendingNativeReasoning) return;
                                 assistantMessage.reasoning += pendingNativeReasoning;
                                 pendingNativeReasoning = '';
-                                await nextTick();
-                                scrollNativeReasoningToBottom();
                             };
                             const scheduleNativeReasoningFlush = () => {
                                 if (!assistantMessage || !pendingNativeReasoning || nativeReasoningFlushRaf) return;
-                                nativeReasoningFlushRaf = requestAnimationFrame(async () => {
+                                nativeReasoningFlushRaf = requestAnimationFrame(() => {
                                     nativeReasoningFlushRaf = null;
-                                    await applyPendingNativeReasoning();
+                                    applyPendingNativeReasoning();
                                 });
                             };
                             const flushNativeReasoning = async (force = false) => {
@@ -3297,7 +3283,7 @@ ${rawHtml}
                                     cancelAnimationFrame(nativeReasoningFlushRaf);
                                     nativeReasoningFlushRaf = null;
                                 }
-                                await applyPendingNativeReasoning();
+                                applyPendingNativeReasoning();
                             };
 
                             while (true) {
@@ -3400,8 +3386,6 @@ ${rawHtml}
                                     chatHistory.value.push(assistantMessage);
                                     responseContent = content;
 
-                                    await nextTick();
-                                    scrollNativeReasoningToBottom();
                                     // scrollToBottom(); // Removed auto-scroll during generation
                                 }
                             } catch (e) {
@@ -3446,8 +3430,6 @@ ${rawHtml}
                                     });
                                     chatHistory.value.push(assistantMessage);
 
-                                    await nextTick();
-                                    scrollNativeReasoningToBottom();
                                     // scrollToBottom(); // Removed auto-scroll during generation
                                 }
                             }
