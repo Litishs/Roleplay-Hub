@@ -495,7 +495,7 @@
                             :class="['flex', msg.isEditing_Message ? 'w-full max-w-full' : ['md:max-w-[75%] lg:max-w-[70%]', settings.immersiveMode ? 'max-w-full' : 'max-w-[99%]'], (msg.reasoning || parseCot(msg.content).cot || msg.isEditing_Message || messageUsesHtmlFrame(msg)) ? 'w-full' : '', msg.isSelf ? 'flex-row-reverse' : 'flex-row']">
                             <!-- Avatar -->
                             <div v-show="!settings.immersiveMode"
-                                :class="['flex-shrink-0 select-none', msg.shouldAnimate ? 'animate-message-in' : '']">
+                                :class="['flex-shrink-0 select-none', msg.shouldAnimate ? 'animate-message-fade-in' : '']">
                                 <div v-if="msg.role === 'user'"
                                     :class="['w-9 h-9 rounded-full overflow-hidden shadow-sm transition-transform', msg.isSelf ? 'ml-1.5' : 'mr-1.5']">
                                     <img v-if="msg?.avatar || (msg?.isSelf && user?.avatar)"
@@ -516,7 +516,7 @@
                                 :class="['flex flex-col min-w-0', (msg.reasoning || parseCot(msg.content).cot || msg.isEditing_Message || messageUsesHtmlFrame(msg)) ? 'flex-1 w-full' : '', msg.isSelf ? 'items-end' : 'items-start']">
                                 <!-- Name (Outside Bubble) -->
                                 <div v-show="!settings.immersiveMode"
-                                    :class="['text-[10px] font-bold text-gray-600 mb-1 select-none px-1.5 py-0.5 rounded-md bg-white/50 backdrop-blur-sm border border-white/20 w-fit shadow-sm truncate max-w-[150px] md:max-w-[250px] msg-name-tag', msg.isSelf ? 'ml-auto mr-1' : 'mr-auto ml-1', msg.shouldAnimate ? 'animate-message-in' : '']">
+                                    :class="['text-[10px] font-bold text-gray-600 mb-1 select-none px-1.5 py-0.5 rounded-md bg-white/50 backdrop-blur-sm border border-white/20 w-fit shadow-sm truncate max-w-[150px] md:max-w-[250px] msg-name-tag', msg.isSelf ? 'ml-auto mr-1' : 'mr-auto ml-1', msg.shouldAnimate ? 'animate-message-fade-in' : '']">
                                     {{ msg.name || (msg.role === 'user' ? user.name : 'Unknown') }}
                                 </div>
                                 <!-- Message Bubble -->
