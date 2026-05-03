@@ -352,11 +352,13 @@ createApp({
             model: DEFAULT_API_CONFIG.qualityModel
         });
 
+        const MAX_CONTEXT_SIZE = 1000000;
+
         const settings = reactive({
             apiUrl: DEFAULT_API_CONFIG.apiUrl,
             apiKey: DEFAULT_API_CONFIG.apiKey,
             model: DEFAULT_API_CONFIG.qualityModel,
-            contextSize: 800000,
+            contextSize: MAX_CONTEXT_SIZE,
             temperature: 1.0,
             autoFetchModels: true,
             stream: true,
@@ -841,6 +843,7 @@ createApp({
         const saveData = async () => {
             try {
                 if (!db) await initDB();
+                settings.contextSize = MAX_CONTEXT_SIZE;
                 await dbSet('silly_tavern_characters', characters.value);
                 await dbSet('silly_tavern_settings', settings);
                 await dbSet('silly_tavern_presets', presets.value);
@@ -909,6 +912,7 @@ createApp({
                         characters.value = JSON.parse(localChar);
                         const localSettings = localStorage.getItem('silly_tavern_settings');
                         if (localSettings) Object.assign(settings, JSON.parse(localSettings));
+                        settings.contextSize = MAX_CONTEXT_SIZE;
 
                         const localPresets = localStorage.getItem('silly_tavern_presets');
                         if (localPresets) presets.value = JSON.parse(localPresets);
@@ -972,6 +976,7 @@ createApp({
 
                 const savedSettings = await dbGet('silly_tavern_settings');
                 if (savedSettings) Object.assign(settings, savedSettings);
+                settings.contextSize = MAX_CONTEXT_SIZE;
 
                 const savedPresets = await dbGet('silly_tavern_presets');
                 if (savedPresets) presets.value = savedPresets;
