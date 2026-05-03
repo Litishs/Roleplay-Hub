@@ -3546,16 +3546,28 @@ ${rawHtml}
                 if (error.name === 'AbortError') {
                     _wasCancelled = true;
                     showToast('生成已中止', 'info');
+                    const wasReceiving = isReceiving.value;
+                    isGenerating.value = false;
+                    isRemoteGenerating.value = false;
+                    isThinking.value = false;
                     const lastMessage = chatHistory.value[chatHistory.value.length - 1];
-                    if (lastMessage && lastMessage.role === 'assistant' && isReceiving.value) {
-                        if (lastMessage.content.trim() === '') {
-                            chatHistory.value.pop();
-                            chatHistory.value.push({ role: 'system', content: '生成已中止' });
+                    if (lastMessage && lastMessage.role === 'assistant' && wasReceiving) {
+                        const hasContent = !!(lastMessage.content || '').trim();
+                        const hasReasoning = !!(lastMessage.reasoning || '').trim();
+                        if (hasContent || hasReasoning) {
+                            if (hasContent) {
+                                lastMessage.content += '\n\n*-- 生成已中止 --*';
+                            } else {
+                                lastMessage.content = '*-- 生成已中止 --*';
+                            }
+                            lastMessage.shouldAnimate = false;
+                            collapseNativeReasoning(lastMessage);
                         } else {
-                            lastMessage.content += '\n\n*-- 生成已中止 --*';
+                            chatHistory.value.pop();
+                            chatHistory.value.push({ role: 'system', content: '生成已中止', skipReveal: true });
                         }
                     } else {
-                        chatHistory.value.push({ role: 'system', content: '生成已中止' });
+                        chatHistory.value.push({ role: 'system', content: '生成已中止', skipReveal: true });
                     }
                 } else {
                     showToast('生成失败: ' + error.message, 'error');

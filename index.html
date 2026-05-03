@@ -489,7 +489,7 @@
                     <div v-else v-for="(msg, index) in chatHistory" :key="index" ref="messageElements"
                         :data-role="msg.role"
                         v-show="!(msg.role === 'assistant' && index === chatHistory.length - 1 && isThinking && !(msg.reasoning || parseCot(msg.content).cot || parseCot(msg.content).main))"
-                        :class="['flex w-full scroll-reveal-container', msg.isSelf ? 'justify-end scroll-reveal-right' : 'justify-start scroll-reveal-left']"
+                        :class="['flex w-full scroll-reveal-container', msg.isSelf ? 'justify-end' : 'justify-start', msg.skipReveal ? 'reveal-active' : (msg.isSelf ? 'scroll-reveal-right' : 'scroll-reveal-left')]"
                         :style="{ transitionDelay: (index % 5) * 50 + 'ms' }">
                         <div
                             :class="['flex', msg.isEditing_Message ? 'w-full max-w-full' : ['md:max-w-[75%] lg:max-w-[70%]', settings.immersiveMode ? 'max-w-full' : 'max-w-[99%]'], (msg.reasoning || parseCot(msg.content).cot || msg.isEditing_Message || messageUsesHtmlFrame(msg)) ? 'w-full' : '', msg.isSelf ? 'flex-row-reverse' : 'flex-row']">
