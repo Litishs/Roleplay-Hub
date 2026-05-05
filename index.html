@@ -577,7 +577,7 @@
                                             :class="{'w-full': msg.reasoning || parseCot(msg.content).cot || msg.isEditing_Message || messageUsesHtmlFrame(msg)}"
                                             :style="index < chatHistory.length - (settings.renderLayerLimit > 100 ? 99999 : settings.renderLayerLimit) ? 'content-visibility: auto; contain-intrinsic-size: auto 150px;' : ''">
                                             <!-- Native Model Reasoning Part -->
-                                            <div v-if="msg.reasoning" class="native-thinking-wrapper">
+                                            <div v-if="msg.reasoning && settings.showNativeReasoning !== false" class="native-thinking-wrapper">
                                                 <div class="cot-ui native-thinking-card"
                                                     :class="{ 'is-live': index === chatHistory.length - 1 && isThinking, 'is-open': msg.isReasoningOpen !== false }">
                                                     <button type="button" class="cot-header native-thinking-header"
@@ -609,9 +609,27 @@
                                                     <div class="cot-body native-thinking-body"
                                                         :class="{ 'is-open': msg.isReasoningOpen !== false }">
                                                         <div class="cot-inner native-thinking-inner">
-                                                            <div class="cot-content native-thinking-scroll custom-scrollbar"
-                                                                :style="settings.fontSize ? { fontSize: (settings.fontSize - 1) + 'px' } : {}"
-                                                                v-text="msg.reasoning"></div>
+                                                            <div class="cot-content native-thinking-scroll cot-thinking-scroll custom-scrollbar"
+                                                                :style="settings.fontSize ? { fontSize: (settings.fontSize - 1) + 'px' } : {}">
+                                                                <div v-if="index >= chatHistory.length - (settings.renderLayerLimit > 100 ? 99999 : settings.renderLayerLimit)"
+                                                                    class="markdown-body"
+                                                                    v-html="renderMarkdown(msg.reasoning, 'assistant', true)">
+                                                                </div>
+                                                                <div v-else
+                                                                    class="markdown-body px-4 py-3 whitespace-pre-wrap text-gray-500"
+                                                                    v-text="msg.reasoning"></div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div v-else-if="msg.reasoning && index === chatHistory.length - 1 && isThinking"
+                                                class="native-thinking-wrapper">
+                                                <div class="cot-ui native-thinking-card is-live">
+                                                    <div class="cot-header native-thinking-header">
+                                                        <div class="flex items-center text-primary-600 min-w-0">
+                                                            <span class="live-dots mr-2" aria-hidden="true"><i></i><i></i><i></i></span>
+                                                            <span class="text-xs font-bold truncate">已响应，正在思考</span>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -2198,6 +2216,17 @@
                                     </div>
                                     <span
                                         class="text-sm font-medium text-gray-600 group-hover:text-gray-900 transition-colors">沉浸模式</span>
+                                </label>
+                                <label
+                                    class="flex items-center p-3 rounded-xl border-2 border-transparent hover:border-gray-100 hover:bg-gray-50 transition-all cursor-pointer group">
+                                    <div class="relative inline-flex items-center mr-2.5">
+                                        <input type="checkbox" v-model="settings.showNativeReasoning" class="sr-only peer">
+                                        <div
+                                            class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-500">
+                                        </div>
+                                    </div>
+                                    <span
+                                        class="text-sm font-medium text-gray-600 group-hover:text-gray-900 transition-colors">展示原生思考</span>
                                 </label>
                             </div>
 

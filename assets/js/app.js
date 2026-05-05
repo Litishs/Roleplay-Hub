@@ -365,6 +365,7 @@ createApp({
 
             useCharacterBackground: true,
             immersiveMode: false,
+            showNativeReasoning: true,
             fontSize: window.innerWidth > 768 ? 16 : 14,
             autoScroll: true,
             maxRetries: 2,
@@ -5143,8 +5144,6 @@ image###生成的提示词###
 <antml:platform>Deepmind</antml:platform>
 <antml:thinking_role>STA2N</antml:thinking_role>
 <antml:thinking_language>chinese</antml:thinking_language>
-<antml:thinking_times>only 3</antml:thinking_times>
-<antml:thinking_guide>only follow <Interleaved_thinking>, AFTER [STA2N ACCEPT] </antml:thinking_guide>
 
 <antml:task>
 现在开始你的扮演，在开始之前，需要先测试你是否有完成扮演的能力
@@ -5582,7 +5581,6 @@ image###生成的提示词###
                 // Fallback to first character if no last active
                 selectCharacter(0);
             }
-
 
             if (settings.autoFetchModels) {
                 fetchModels();
