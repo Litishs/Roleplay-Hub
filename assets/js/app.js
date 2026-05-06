@@ -374,6 +374,8 @@ createApp({
             immersiveMode: false,
             uiTemplateEnabled: false,
             uiTemplateModel: '',
+            uiTemplateAnalysisDepth: 4,
+            uiTemplateInjectContext: false,
             showNativeReasoning: true,
             fontSize: window.innerWidth > 768 ? 16 : 14,
             autoScroll: true,
@@ -1395,6 +1397,13 @@ createApp({
         const defaultUiTemplateVariables = {};
 
         const cloneUiObject = (value) => JSON.parse(JSON.stringify(value || {}));
+        const cloneUiValue = (value) => value === undefined ? undefined : JSON.parse(JSON.stringify(value));
+
+        const stripUiTemplateCodeFence = (value) => {
+            const text = String(value || '').trim();
+            const fenced = text.match(/^```[a-zA-Z0-9_-]*\s*\n?([\s\S]*?)\s*```$/);
+            return (fenced ? fenced[1] : text).trim();
+        };
 
         const inferInitialUiTemplateState = (template = {}, variableState = null) => {
             if (template.initialVariableState && typeof template.initialVariableState === 'object') {
@@ -1429,7 +1438,7 @@ createApp({
                 scope: template.scope === 'global' ? 'global' : 'character',
                 order: Number.isFinite(Number(template.order)) ? Number(template.order) : 100,
                 placement: ['top', 'bottom'].includes(template.placement) ? template.placement : 'bottom',
-                htmlTemplate: template.htmlTemplate || template.template || defaultUiTemplateHtml,
+                htmlTemplate: stripUiTemplateCodeFence(template.htmlTemplate || template.template || defaultUiTemplateHtml),
                 initialVariableState: inferInitialUiTemplateState(template, variableState),
                 variableState,
                 variableSchema: (template.variableSchema && (typeof template.variableSchema === 'object' || typeof template.variableSchema === 'string')) ? template.variableSchema : '',
@@ -1655,7 +1664,7 @@ ${content}
         const renderUiTemplateHtml = (template) => {
             if (!template || !template.htmlTemplate) return '';
             const variables = template.variableState || {};
-            const html = template.htmlTemplate.replace(/\{\{\s*([\w.-]+)\s*\}\}/g, (_, key) => {
+            const html = stripUiTemplateCodeFence(template.htmlTemplate).replace(/\{\{\s*([\w.-]+)\s*\}\}/g, (_, key) => {
                 const value = getUiTemplateValue(variables, key);
                 return escapeUiValue(value);
             });
@@ -1726,6 +1735,71 @@ ${content}
                 return previousAssistantCount + 1;
             }
             return previousAssistantCount + 1;
+        };
+
+        const getAssistantTurnForMessage = (message) => {
+            if (!message || message.role !== 'assistant') return null;
+            const index = chatHistory.value.findIndex(msg => msg === message || (message.id && msg.id === message.id));
+            if (index < 0 || isInitialAssistantGreeting(chatHistory.value[index], index)) return null;
+            return getAssistantTurnAtIndex(index);
+        };
+
+        const buildUiTemplateStateAtTurn = (template, turn) => {
+            const state = cloneUiObject(inferInitialUiTemplateState(template));
+            const logs = Array.isArray(template.changeLog)
+                ? template.changeLog
+                    .filter(log => Number(log.turn || 0) <= turn)
+                    .sort((a, b) => (a.turn || 0) - (b.turn || 0) || (a.time || 0) - (b.time || 0))
+                : [];
+            logs.forEach(log => {
+                Object.entries(log.changes || {}).forEach(([key, change]) => {
+                    if (change && Object.prototype.hasOwnProperty.call(change, 'to')) {
+                        state[key] = cloneUiValue(change.to);
+                    }
+                });
+            });
+            return state;
+        };
+
+        const getUiTemplateReferenceTurnForUserMessage = (message) => {
+            if (!message || message.role !== 'user') return null;
+            const index = chatHistory.value.findIndex(msg => msg === message || (message.id && msg.id === message.id));
+            if (index <= 0) return null;
+            for (let i = index - 1; i >= 0; i--) {
+                const candidate = chatHistory.value[i];
+                if (!candidate || candidate.role === 'system') continue;
+                if (candidate.role !== 'assistant') return null;
+                if (isInitialAssistantGreeting(candidate, i)) return null;
+                return getAssistantTurnAtIndex(i);
+            }
+            return null;
+        };
+
+        const buildUiTemplateContextInjection = (message) => {
+            if (!settings.uiTemplateInjectContext) return '';
+            const turn = getUiTemplateReferenceTurnForUserMessage(message);
+            if (!turn) return '';
+
+            const hasAnyTurnChange = activeUiTemplates.value.some(template => {
+                const logs = Array.isArray(template.changeLog) ? template.changeLog : [];
+                return logs.some(log => Number(log.turn || 0) === turn);
+            });
+            if (!hasAnyTurnChange) return '';
+
+            const sections = activeUiTemplates.value
+                .map(template => {
+                    const state = buildUiTemplateStateAtTurn(template, turn);
+                    if (!state || Object.keys(state).length === 0) return null;
+                    return `【${template.name || 'UI模板'}】\n${JSON.stringify(state, null, 2)}`;
+                })
+                .filter(Boolean);
+
+            if (!sections.length) return '';
+            return [
+                '[UI模板变量参考]',
+                '以下内容是给你参考当前剧情状态的，不是让你生成、复述或改写的正文。请只用它理解角色状态、关系、地点和其他模板变量。',
+                sections.join('\n\n')
+            ].join('\n');
         };
 
         const rebuildUiTemplateStateFromLogs = (template, remainingLogs, allLogs) => {
@@ -2773,16 +2847,22 @@ ${content}
             const targetMessageIndex = chatHistory.value.findIndex(msg => msg === targetMessage || msg.id === lockedTargetMessageId);
             const contextMessages = targetMessageIndex >= 0 ? chatHistory.value.slice(0, targetMessageIndex + 1) : chatHistory.value;
 
-            const recentMessages = contextMessages
+            const uiTemplateAnalysisDepth = Number(settings.uiTemplateAnalysisDepth);
+            const normalizedUiTemplateAnalysisDepth = Number.isFinite(uiTemplateAnalysisDepth)
+                ? Math.max(0, Math.min(20, uiTemplateAnalysisDepth))
+                : 4;
+            const sourceMessages = contextMessages
                 .filter(m => m.role !== 'system')
-                .slice(-4)
                 .map(m => ({
                     role: m.role,
                     name: m.role === 'user' ? user.name : (m.name || currentCharacter.value.name),
                     content: parseCot(m.content || '').main
                 }));
+            const recentMessages = normalizedUiTemplateAnalysisDepth === 0
+                ? sourceMessages
+                : sourceMessages.slice(-Math.max(4, normalizedUiTemplateAnalysisDepth));
 
-            const fallbackModel = settings.uiTemplateModel || memorySettings.model || settings.fastModel || settings.model;
+            const fallbackModel = settings.uiTemplateModel || settings.fastModel || settings.model;
             if (!fallbackModel) {
                 markUiTemplateStatus('error', '没有可用的UI变量分析模型');
                 if (manual) showToast('请先配置 UI变量分析模型', 'warning');
@@ -3541,6 +3621,11 @@ ${content}
                     // Restore the system instruction for the AI context payload if it exists
                     if (parsedData.sys && m.role === 'user') {
                         cleanContent += '\n\n[系统指令: ' + parsedData.sys + ']';
+                    }
+
+                    const uiTemplateContext = buildUiTemplateContextInjection(m);
+                    if (uiTemplateContext) {
+                        cleanContent += `\n\n${uiTemplateContext}`;
                     }
 
                     return {
@@ -6467,6 +6552,11 @@ image###生成的提示词###
             keepFloorsSlider: computed({
                 get: () => memorySettings.keepFloors === 0 ? 105 : memorySettings.keepFloors,
                 set: (val) => { memorySettings.keepFloors = val >= 105 ? 0 : val; }
+            }),
+            // 滑块值映射：4-20 为分析消息层数，21 为无限（uiTemplateAnalysisDepth=0）
+            uiTemplateAnalysisDepthSlider: computed({
+                get: () => settings.uiTemplateAnalysisDepth === 0 ? 21 : (settings.uiTemplateAnalysisDepth || 4),
+                set: (val) => { settings.uiTemplateAnalysisDepth = val >= 21 ? 0 : Math.max(4, Math.min(20, val)); }
             }),
             filteredMemories: computed(() => {
                 let result = memories.value;

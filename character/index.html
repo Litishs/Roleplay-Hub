@@ -2095,6 +2095,12 @@
 
                 const cloneUiObject = (value) => JSON.parse(JSON.stringify(value || {}));
 
+                const stripUiTemplateCodeFence = (value) => {
+                    const text = String(value || '').trim();
+                    const fenced = text.match(/^```[a-zA-Z0-9_-]*\s*\n?([\s\S]*?)\s*```$/);
+                    return (fenced ? fenced[1] : text).trim();
+                };
+
                 const inferInitialUiTemplateState = (template = {}, variableState = null) => {
                     if (template.initialVariableState && typeof template.initialVariableState === 'object') {
                         return cloneUiObject(template.initialVariableState);
@@ -2113,7 +2119,7 @@
                         scope: 'character',
                         order: Number.isFinite(Number(template.order)) ? Number(template.order) : 100,
                         placement: ['top', 'bottom'].includes(template.placement) ? template.placement : 'bottom',
-                        htmlTemplate: template.htmlTemplate || template.template || defaultUiTemplateHtml,
+                        htmlTemplate: stripUiTemplateCodeFence(template.htmlTemplate || template.template || defaultUiTemplateHtml),
                         initialVariableState: inferInitialUiTemplateState(template, variableState),
                         variableState,
                         variableSchema: (typeof template.variableSchema === 'string' || typeof template.variableSchema === 'object') ? template.variableSchema : '',

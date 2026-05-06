@@ -2626,27 +2626,45 @@
                             </div>
                         </div>
                         <div v-if="settings.uiTemplateEnabled"
+                            class="flex items-center justify-between mb-3 animate-fade-in">
+                            <div class="flex items-center space-x-3">
+                                <span class="text-sm font-bold text-gray-700">将变量注入上下文</span>
+                                <label class="relative inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" v-model="settings.uiTemplateInjectContext" class="sr-only peer">
+                                    <div
+                                        class="w-10 h-[22px] bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-[18px] peer-checked:after:border-white after:content-[''] after:absolute after:top-[3px] after:left-[3px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all after:shadow-sm peer-checked:bg-gradient-to-r peer-checked:from-primary-500 peer-checked:to-primary-600">
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+                        <div v-if="settings.uiTemplateEnabled"
                             class="space-y-3 pt-3 border-t border-gray-100 animate-fade-in">
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <div class="grid grid-cols-1 gap-3">
                                 <div>
-                                    <label class="text-xs font-medium text-gray-500 block mb-1.5">分析模型（留空使用记忆/快速模型）</label>
+                                    <label class="text-xs font-medium text-gray-500 block mb-1.5">分析模型（留空使用快速模型）</label>
                                     <div class="flex gap-2">
                                         <button @click="modelSelectionTarget = 'uiTemplateModel'; showModelSelector = true"
                                             class="flex-1 px-3 py-2 text-sm text-left bg-gray-50/80 border border-gray-200 rounded-xl hover:border-primary-300 hover:bg-white transition-all cursor-pointer truncate"
                                             :title="settings.uiTemplateModel || '自动选择'">
                                             <span
                                                 :class="settings.uiTemplateModel ? 'text-gray-800 font-mono' : 'text-gray-400'">{{
-                                                settings.uiTemplateModel || '自动选择：记忆模型 / 快速模型' }}</span>
+                                                settings.uiTemplateModel || '自动选择：快速模型' }}</span>
                                         </button>
                                     </div>
                                 </div>
                             </div>
-                            <div class="pt-3 border-t border-gray-100 mt-1">
-                                <div class="bg-gray-50/80 p-3 rounded-xl border border-gray-100">
-                                    <p class="text-[11px] text-gray-500 leading-relaxed">
-                                        角色回复结束后，模板会立刻调用配置模型，使用新变量刷新UI模板。
-                                    </p>
+                            <div class="bg-gray-50/80 p-3 rounded-xl border border-gray-100">
+                                <div class="flex justify-between items-center mb-2">
+                                    <label class="text-xs font-medium text-gray-500">分析对话层数</label>
+                                    <span
+                                        class="text-xs font-mono text-primary-600 bg-primary-50 px-1.5 py-0.5 rounded border border-primary-100">
+                                        {{ settings.uiTemplateAnalysisDepth === 0 ? '无限' : settings.uiTemplateAnalysisDepth + ' 层' }}
+                                    </span>
                                 </div>
+                                <input type="range" v-model.number="uiTemplateAnalysisDepthSlider" min="4" max="21"
+                                    step="1"
+                                    class="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary-500">
+                                <p class="text-[10px] text-gray-400 mt-1.5">发送给变量分析模型的最近对话层数，拖到最右侧使用全部可用历史</p>
                             </div>
                         </div>
                     </div>
