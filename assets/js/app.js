@@ -95,6 +95,10 @@ createApp({
         const showChatModelSelector = ref(false);
         const showCharacterEditor = ref(false);
         const showPresetEditor = ref(false);
+        const showUiTemplateEditor = ref(false);
+        const uiTemplateUpdateStatus = reactive({ state: 'idle', message: '待命', time: 0, remaining: 0, targetMessageId: null });
+        let uiTemplateUpdateSeq = 0;
+        let uiTemplateUpdateAbortController = null;
         const showRegexEditor = ref(false);
         const showWorldInfoEditor = ref(false);
         const showUserSetupModal = ref(false);
@@ -152,25 +156,28 @@ createApp({
             isUpdateScrolledToBottom.value = (el.scrollHeight - el.scrollTop - el.clientHeight) < 10;
         };
         const latestUpdate = reactive({
-            id: 10121, // 确保这是一个五位数ID，每次更新内容时增加这个数字
+            id: 10123, // 确保这是一个五位数ID，每次更新内容时增加这个数字
             date: new Date().toISOString().split('T')[0],
             title: '网站公告',
             content: `
-### RP-Hub 1.5.6
+### RP-Hub 1.6.0
 
-- 为DeepSeek适配了专属预设，可自动识别模型并切换（生图随缘）
-- 为原生思维链增加单独UI，支持查看原生思维链
-- 优化了角色卡工坊的正则美化规范，使其更加美观
-- 对齐了角色卡工坊与主界面的世界书/正则条目规范
-- 删除了冗余/复杂设置项，剔除了无用变量
-- 完全解决了HTML渲染时宽度异常的问题
-- 解决了角色卡工坊头像生成异常的问题
-- 解决了万相广场UI预览渲染异常的问题，并支持覆盖更新原卡片
-- 解决了记忆导入时部分子条目丢失的问题
+- 新增"UI模板"功能，支持极速更新UI，支持全角色卡通用UI模板，自选模型，自配置变量模板/变量说明/插入位置/顺序等，支持查看变量更新记录，支持内嵌/全局
+- 角色卡工坊支持一键生成简单UI模板/DIFF对比修改，支持一键预览，绑定角色导出
+- 为万相广场添加了内嵌UI模板的预览功能，后续将推出UI模板专区
+- 同步了角色卡工坊与主界面的字段匹配，解决了部分兼容性问题
+- 为世界书/UI模板/正则新增了作用范围调节的功能，可选全局/绑定角色卡
+- 为设置添加了"记忆模型"与"变量分析模型"配置，推荐模型：claude-sonnet-4-6
+- 支持了原生思考内容的Markdown效果渲染
+- 支持了展示原生思考功能的开关
+- 角色卡工坊支持单个/多选-世界书/正则导出
+- 优化了部分编辑框的展示高度与整体样式
+- 彻底修复了部分HTML iframe渲染异常的问题
+- 清除了冗余变量/选项，更新了部分其他UI样式
 
 本项目为全开源公益项目，严禁倒卖源码，二改需经作者授权
 
-#### 更新时间：05/04/02:42
+#### 更新时间：05/06/22:55
                     `
         });
 
@@ -186,7 +193,7 @@ createApp({
         };
 
         const startUpdateCountdown = () => {
-            updateCountdown.value = 7;
+            updateCountdown.value = 10;
             if (updateCountdownTimer) clearInterval(updateCountdownTimer);
             updateCountdownTimer = setInterval(() => {
                 if (updateCountdown.value > 0) {
@@ -365,6 +372,8 @@ createApp({
 
             useCharacterBackground: true,
             immersiveMode: false,
+            uiTemplateEnabled: false,
+            uiTemplateModel: '',
             showNativeReasoning: true,
             fontSize: window.innerWidth > 768 ? 16 : 14,
             autoScroll: true,
@@ -443,7 +452,7 @@ createApp({
         }, { deep: true });
 
         // Watch image gen and model settings for sync
-        watch(() => [settings.imageGenKey, settings.imageStyle, settings.qualityModel, settings.balancedModel, settings.fastModel, settings.suggestionModel], () => {
+        watch(() => [settings.imageGenKey, settings.imageStyle, settings.qualityModel, settings.balancedModel, settings.fastModel, settings.suggestionModel, settings.uiTemplateModel], () => {
             syncSettingsToGenerator();
         });
 
@@ -518,7 +527,10 @@ createApp({
         };
 
         const regexScripts = ref([]);
+        const globalRegexScripts = ref([]);
+        const globalWorldInfo = ref([]);
         const worldInfo = ref([]);
+        const globalUiTemplates = ref([]);
         const recentGenerationTimes = ref([]);
         const currentWaitTime = ref('0.0');
         let waitTimer = null;
@@ -540,6 +552,7 @@ createApp({
         const batchExtractProgress = ref({ current: 0, total: 0 });
         const memoryExtractStatus = ref('waiting');
         const memoryFilterCategory = ref('all');
+        let _isApplyingCharacterScopedData = false;
         let _memoriesLoaded = false; // 标志：防止在记忆加载前 saveData 覆盖已存数据
         let _initComplete = false; // 守卫标志：防止 onMounted 初始化阶段写入默认值覆盖服务端数据
 
@@ -608,6 +621,7 @@ createApp({
 
         const showWorldInfoSettings = ref(false);
         const showMemorySettings = ref(false);
+        const showUiTemplateSettings = ref(false);
         const worldInfoSettings = reactive({
             scanDepth: 2,
             contextPercent: 0,
@@ -627,6 +641,7 @@ createApp({
         const isBatchDeleteMode = ref(false);
         const selectedCharacterIndices = ref(new Set());
         const editingPreset = reactive({ id: undefined, data: {} });
+        const editingUiTemplate = reactive({ id: undefined, data: {} });
         const editingRegex = reactive({ id: undefined, data: {} });
         const editingWorldInfo = reactive({ id: undefined, data: {} });
 
@@ -639,7 +654,7 @@ createApp({
 
         // Export Modal State
         const showExportModal = ref(false);
-        const exportType = ref(null); // 'presets', 'regex', 'worldinfo'
+        const exportType = ref(null); // 'presets', 'regex', 'worldinfo', 'uitemplates'
         const exportItems = ref([]);
         const selectedExportIndices = ref(new Set());
 
@@ -849,8 +864,11 @@ createApp({
                 await dbSet('silly_tavern_settings', settings);
                 await dbSet('silly_tavern_presets', presets.value);
                 await dbSet('silly_tavern_regex', regexScripts.value);
+                await dbSet('silly_tavern_global_regex', globalRegexScripts.value);
                 await dbSet('silly_tavern_worldinfo', worldInfo.value);
+                await dbSet('silly_tavern_global_worldinfo', globalWorldInfo.value);
                 await dbSet('silly_tavern_worldinfo_settings', worldInfoSettings);
+                await dbSet('silly_tavern_global_ui_templates', globalUiTemplates.value);
                 // await dbSet('silly_tavern_recent_times', recentGenerationTimes.value); // Deprecated: Saved in character
 
                 // 守卫：初始化完成前不写入用户/记忆数据，防止默认值覆盖服务端已有数据
@@ -965,8 +983,12 @@ createApp({
                             migrated = true;
                         }
                         if (Array.isArray(char.worldInfo)) {
-                            char.worldInfo = char.worldInfo.map(normalizeWorldInfoEntry);
+                            char.worldInfo = char.worldInfo.map(normalizeWorldInfoEntry).filter(entry => entry.scope !== 'global');
                         }
+                        if (Array.isArray(char.regexScripts)) {
+                            char.regexScripts = char.regexScripts.map(script => normalizeRegexScript(script, 'character')).filter(script => script.scope !== 'global');
+                        }
+                        char.uiTemplates = Array.isArray(char.uiTemplates) ? char.uiTemplates.map(template => normalizeUiTemplate({ ...template, scope: 'character' })) : [];
                         return char;
                     });
                     if (migrated) {
@@ -982,11 +1004,28 @@ createApp({
                 const savedPresets = await dbGet('silly_tavern_presets');
                 if (savedPresets) presets.value = savedPresets;
 
+                const savedGlobalRegex = await dbGet('silly_tavern_global_regex');
+                if (savedGlobalRegex) globalRegexScripts.value = savedGlobalRegex.map(script => normalizeRegexScript(script, 'global'));
+
                 const savedRegex = await dbGet('silly_tavern_regex');
-                if (savedRegex) regexScripts.value = savedRegex;
+                if (savedGlobalRegex) {
+                    regexScripts.value = JSON.parse(JSON.stringify(globalRegexScripts.value)).map(script => normalizeRegexScript(script, 'global'));
+                } else if (savedRegex) {
+                    regexScripts.value = savedRegex.map(script => normalizeRegexScript(script, 'character'));
+                }
+
+                const savedGlobalWI = await dbGet('silly_tavern_global_worldinfo');
+                if (savedGlobalWI) globalWorldInfo.value = savedGlobalWI.map(entry => normalizeWorldInfoEntry({ ...entry, scope: 'global' }));
 
                 const savedWI = await dbGet('silly_tavern_worldinfo');
-                if (savedWI) worldInfo.value = savedWI.map(normalizeWorldInfoEntry);
+                if (savedGlobalWI) {
+                    worldInfo.value = JSON.parse(JSON.stringify(globalWorldInfo.value)).map(entry => normalizeWorldInfoEntry({ ...entry, scope: 'global' }));
+                } else if (savedWI) {
+                    worldInfo.value = savedWI.map(normalizeWorldInfoEntry);
+                }
+
+                const savedGlobalUiTemplates = await dbGet('silly_tavern_global_ui_templates');
+                if (savedGlobalUiTemplates) globalUiTemplates.value = savedGlobalUiTemplates.map(template => normalizeUiTemplate({ ...template, scope: 'global' }));
 
                 const savedWISettings = await dbGet('silly_tavern_worldinfo_settings');
                 if (savedWISettings) {
@@ -1044,25 +1083,40 @@ createApp({
             const script = regexScripts.value.find(r => r.name === defaultRegexName);
             if (script) {
                 script.replacement = newName;
+                script.scope = 'global';
             }
         });
 
         // Sync World Info and Regex to Current Character
         watch(worldInfo, (newVal) => {
+            const normalized = JSON.parse(JSON.stringify(newVal)).map(normalizeWorldInfoEntry);
+            const globalEntries = normalized.filter(entry => entry.scope === 'global');
+            if (JSON.stringify(globalWorldInfo.value) !== JSON.stringify(globalEntries)) {
+                globalWorldInfo.value = globalEntries;
+            }
             if (currentCharacterIndex.value !== -1 && characters.value[currentCharacterIndex.value]) {
+                if (_isApplyingCharacterScopedData) return;
                 // Only update if different to avoid infinite loops or unnecessary updates
                 const char = characters.value[currentCharacterIndex.value];
-                if (JSON.stringify(char.worldInfo) !== JSON.stringify(newVal)) {
-                    char.worldInfo = JSON.parse(JSON.stringify(newVal)).map(normalizeWorldInfoEntry);
+                const characterEntries = normalized.filter(entry => entry.scope !== 'global');
+                if (JSON.stringify(char.worldInfo) !== JSON.stringify(characterEntries)) {
+                    char.worldInfo = characterEntries;
                 }
             }
         }, { deep: true });
 
         watch(regexScripts, (newVal) => {
+            const normalized = JSON.parse(JSON.stringify(newVal)).map(script => normalizeRegexScript(script));
+            const globalScripts = normalized.filter(script => script.scope === 'global');
+            if (JSON.stringify(globalRegexScripts.value) !== JSON.stringify(globalScripts)) {
+                globalRegexScripts.value = globalScripts;
+            }
             if (currentCharacterIndex.value !== -1 && characters.value[currentCharacterIndex.value]) {
+                if (_isApplyingCharacterScopedData) return;
                 const char = characters.value[currentCharacterIndex.value];
-                if (JSON.stringify(char.regexScripts) !== JSON.stringify(newVal)) {
-                    char.regexScripts = JSON.parse(JSON.stringify(newVal));
+                const characterScripts = normalized.filter(script => script.scope !== 'global');
+                if (JSON.stringify(char.regexScripts) !== JSON.stringify(characterScripts)) {
+                    char.regexScripts = characterScripts;
                 }
             }
         }, { deep: true });
@@ -1275,7 +1329,7 @@ createApp({
         }, 1000);
 
         // Watch for changes to auto-save
-        watch([characters, settings, presets, regexScripts, worldInfo, user, recentGenerationTimes], () => {
+        watch([characters, settings, presets, regexScripts, globalRegexScripts, worldInfo, globalWorldInfo, globalUiTemplates, user, recentGenerationTimes], () => {
             debouncedSave();
         }, { deep: true });
 
@@ -1295,6 +1349,472 @@ createApp({
         const currentCharacter = computed(() => {
             return currentCharacterIndex.value >= 0 ? characters.value[currentCharacterIndex.value] : null;
         });
+
+        const normalizeRegexScript = (script = {}, fallbackScope = 'character') => {
+            const normalized = { ...script };
+            if (normalized.disabled !== undefined) {
+                normalized.enabled = !normalized.disabled;
+            } else if (normalized.enabled === undefined) {
+                normalized.enabled = true;
+            }
+            if (!normalized.name && normalized.scriptName) normalized.name = normalized.scriptName;
+            if (!normalized.regex && normalized.findRegex) normalized.regex = normalized.findRegex;
+            if (!normalized.replacement && normalized.replaceString) normalized.replacement = normalized.replaceString;
+            if (!normalized.flags && normalized.regexFlags) normalized.flags = normalized.regexFlags;
+            if (!normalized.flags) normalized.flags = 'g';
+            if (!Array.isArray(normalized.placement)) normalized.placement = [1, 2];
+            if (normalized.markdownOnly === undefined) normalized.markdownOnly = false;
+            if (normalized.promptOnly === undefined) normalized.promptOnly = false;
+            if (normalized.runOnEdit === undefined) normalized.runOnEdit = false;
+            if (normalized.minDepth === undefined) normalized.minDepth = null;
+            if (normalized.maxDepth === undefined) normalized.maxDepth = null;
+            normalized.scope = normalized.scope === 'global' || fallbackScope === 'global' || systemRegexNames.includes(normalized.name || normalized.scriptName)
+                ? 'global'
+                : 'character';
+            delete normalized.disabled;
+            return normalized;
+        };
+
+        const combineRegexScriptsForCharacter = (char = currentCharacter.value) => {
+            const globalScripts = JSON.parse(JSON.stringify(globalRegexScripts.value || []))
+                .map(script => normalizeRegexScript(script, 'global'));
+            const characterScripts = Array.isArray(char?.regexScripts)
+                ? JSON.parse(JSON.stringify(char.regexScripts)).map(script => normalizeRegexScript(script, 'character')).filter(script => script.scope !== 'global')
+                : [];
+            regexScripts.value = [...globalScripts, ...characterScripts];
+        };
+
+        const finishApplyingCharacterScopedData = () => {
+            nextTick(() => {
+                _isApplyingCharacterScopedData = false;
+            });
+        };
+
+        const defaultUiTemplateHtml = '';
+
+        const defaultUiTemplateVariables = {};
+
+        const cloneUiObject = (value) => JSON.parse(JSON.stringify(value || {}));
+
+        const inferInitialUiTemplateState = (template = {}, variableState = null) => {
+            if (template.initialVariableState && typeof template.initialVariableState === 'object') {
+                return cloneUiObject(template.initialVariableState);
+            }
+            const baseState = cloneUiObject(variableState || template.variableState || template.variables || defaultUiTemplateVariables);
+            const logs = Array.isArray(template.changeLog) ? [...template.changeLog].sort((a, b) => (a.time || 0) - (b.time || 0)) : [];
+            const initializedKeys = new Set();
+            logs.forEach(log => {
+                Object.entries(log.changes || {}).forEach(([key, change]) => {
+                    if (!initializedKeys.has(key) && change && Object.prototype.hasOwnProperty.call(change, 'from')) {
+                        baseState[key] = change.from;
+                        initializedKeys.add(key);
+                    }
+                });
+            });
+            return baseState;
+        };
+
+        const normalizeUiTemplate = (template = {}) => {
+            const variableState = (template.variableState && typeof template.variableState === 'object')
+                ? cloneUiObject(template.variableState)
+                : (template.variables && typeof template.variables === 'object'
+                    ? cloneUiObject(template.variables)
+                    : (template.initialVariableState && typeof template.initialVariableState === 'object'
+                        ? cloneUiObject(template.initialVariableState)
+                        : { ...defaultUiTemplateVariables }));
+            return {
+                id: template.id || generateUUID(),
+                name: template.name || 'UI模板',
+                enabled: template.enabled !== false,
+                scope: template.scope === 'global' ? 'global' : 'character',
+                order: Number.isFinite(Number(template.order)) ? Number(template.order) : 100,
+                placement: ['top', 'bottom'].includes(template.placement) ? template.placement : 'bottom',
+                htmlTemplate: template.htmlTemplate || template.template || defaultUiTemplateHtml,
+                initialVariableState: inferInitialUiTemplateState(template, variableState),
+                variableState,
+                variableSchema: (template.variableSchema && (typeof template.variableSchema === 'object' || typeof template.variableSchema === 'string')) ? template.variableSchema : '',
+                changeLog: Array.isArray(template.changeLog) ? template.changeLog : [],
+                runtimeByCharacter: (template.runtimeByCharacter && typeof template.runtimeByCharacter === 'object') ? cloneUiObject(template.runtimeByCharacter) : {},
+                updateMode: template.updateMode || 'merge'
+            };
+        };
+
+        const toUiTemplateExportEntry = (template = {}) => {
+            const normalized = normalizeUiTemplate(template);
+            return {
+                id: normalized.id,
+                name: normalized.name,
+                enabled: normalized.enabled,
+                scope: normalized.scope,
+                order: normalized.order,
+                placement: normalized.placement,
+                htmlTemplate: normalized.htmlTemplate,
+                initialVariableState: cloneUiObject(normalized.initialVariableState),
+                variableSchema: normalized.variableSchema,
+                updateMode: normalized.updateMode
+            };
+        };
+
+        const sanitizeUiTemplateImportEntry = (template = {}) => {
+            const { changeLog, runtimeByCharacter, variableState, model, version, ...cleanTemplate } = template || {};
+            if (!cleanTemplate.initialVariableState && !cleanTemplate.variables && variableState && typeof variableState === 'object') {
+                cleanTemplate.initialVariableState = cloneUiObject(variableState);
+            }
+            return cleanTemplate;
+        };
+
+        const ensureCurrentUiTemplates = () => {
+            if (!currentCharacter.value) return [];
+            if (!Array.isArray(currentCharacter.value.uiTemplates)) currentCharacter.value.uiTemplates = [];
+            if (currentCharacter.value.uiTemplates.some(template => template.scope !== 'character' || !template.id)) {
+                currentCharacter.value.uiTemplates = currentCharacter.value.uiTemplates.map(template => normalizeUiTemplate({ ...template, scope: 'character' }));
+            }
+            return currentCharacter.value.uiTemplates;
+        };
+
+        const ensureGlobalUiTemplates = () => {
+            if ((globalUiTemplates.value || []).some(template => template.scope !== 'global' || !template.id)) {
+                globalUiTemplates.value = globalUiTemplates.value.map(template => normalizeUiTemplate({ ...template, scope: 'global' }));
+            }
+            return globalUiTemplates.value;
+        };
+
+        const getUiTemplateListByScope = (scope) => scope === 'global' ? ensureGlobalUiTemplates() : ensureCurrentUiTemplates();
+
+        const currentUiTemplates = computed(() => [
+            ...ensureGlobalUiTemplates(),
+            ...ensureCurrentUiTemplates()
+        ].map((template, index) => ({ template, index }))
+            .sort((a, b) => (Number(b.template.order) || 0) - (Number(a.template.order) || 0) || a.index - b.index)
+            .map(item => item.template));
+        const activeUiTemplates = computed(() => currentUiTemplates.value.filter(t => t.enabled !== false));
+
+        const getUiTemplateValue = (source, path) => {
+            const direct = source?.[path];
+            if (direct !== undefined) return direct;
+            return String(path || '').split('.').reduce((acc, key) => acc && acc[key] !== undefined ? acc[key] : undefined, source);
+        };
+
+        const escapeUiValue = (value) => String(value ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+
+        const htmlIframeSandbox = 'allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-modals allow-same-origin allow-downloads allow-pointer-lock allow-presentation allow-top-navigation-by-user-activation';
+
+        const buildExecutableHtmlDocument = (rawHtml) => {
+            const metaViewport = '<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">';
+            const hudCSS = '.sinan-hud{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;padding:12px;background:linear-gradient(to bottom right,rgba(255,255,255,0.9),rgba(255,255,255,0.6));border-radius:12px;border:1px solid rgba(0,0,0,0.08);backdrop-filter:blur(4px)}.char-card{flex:1 1 140px;background:#fff;padding:10px;border-radius:8px;border-left:4px solid #ddd;box-shadow:0 2px 6px rgba(0,0,0,0.04);display:flex;flex-direction:column;gap:4px;font-size:12px;position:relative;overflow:hidden;transition:transform 0.2s}.char-card:hover{transform:translateY(-2px);box-shadow:0 4px 8px rgba(0,0,0,0.1)}.char-name{font-weight:700;font-size:14px;color:#374151;display:flex;justify-content:space-between;align-items:center}.char-mood{color:#6b7280;font-size:12px}.char-loc{color:#9ca3af;font-size:11px;margin-top:auto;padding-top:4px}.bar-bg{height:4px;background:#f3f4f6;border-radius:2px;overflow:hidden;margin-top:6px}.bar-fill{height:100%;background:#10b981;border-radius:2px}.c-tongqiu{border-left-color:#f59e0b}.c-tongqiu .bar-fill{background:#f59e0b}.c-yufan{border-left-color:#3b82f6}.c-yufan .bar-fill{background:#3b82f6}.c-linghu{border-left-color:#8b5cf6}.c-linghu .bar-fill{background:#8b5cf6}.c-chongtian{border-left-color:#ef4444}.c-chongtian .bar-fill{background:#ef4444}';
+            const resetStyle = '<style>html,body{margin:0!important;padding:0!important;width:100%!important;height:auto!important;min-height:auto!important;word-wrap:break-word!important;box-sizing:border-box!important;overflow:hidden!important;}::-webkit-scrollbar{display:none;}*,*::before,*::after{box-sizing:inherit!important;}img,video,canvas,svg{max-width:100%!important;height:auto!important;}table{display:block!important;overflow-x:auto!important;max-width:100%!important;}pre{white-space:pre-wrap!important;word-wrap:break-word!important;max-width:100%!important;}.container,.reality-panel,.app-container{max-width:100%!important;width:100%!important;margin:0!important;border-radius:0!important;box-shadow:none!important;border:none!important;height:auto!important;min-height:0!important;}body>div:first-child{margin:0!important;max-width:100%!important;height:auto!important;min-height:0!important;}#app{height:auto!important;min-height:auto!important;}.bottom-safe{display:none!important;height:0!important;min-height:0!important;margin:0!important;padding:0!important;}' + hudCSS + '</style>';
+            const jqueryScript = '<script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js" defer><\/script>';
+            const scriptShim = `
+                <script>
+                    window.triggerSlash = function(text) {
+                        if (window.parent && window.parent.triggerSlash) {
+                            window.parent.triggerSlash(text);
+                        }
+                    };
+
+                    let lastHeight = 0;
+                    let isUpdating = false;
+                    function updateHeight() {
+                        if (!window.frameElement || isUpdating) return;
+                        isUpdating = true;
+                        requestAnimationFrame(function() {
+                            var body = document.body;
+                            var html = document.documentElement;
+                            if (!body || !html) {
+                                isUpdating = false;
+                                return;
+                            }
+                            var maxBottom = 0;
+                            for (var i = 0; i < body.children.length; i++) {
+                                var child = body.children[i];
+                                if (child.tagName === 'SCRIPT' || child.tagName === 'STYLE' || child.tagName === 'LINK') continue;
+                                var style = window.getComputedStyle(child);
+                                if (style.position === 'fixed') continue;
+                                var rect = child.getBoundingClientRect();
+                                var itemMax = Math.max(rect.bottom, child.offsetTop + child.offsetHeight);
+                                if (itemMax > maxBottom) maxBottom = itemMax;
+                            }
+                            var bodyStyle = window.getComputedStyle(body);
+                            var marginBottom = parseFloat(bodyStyle.marginBottom) || 0;
+                            var newHeight = Math.max(maxBottom + marginBottom, body.scrollHeight) + 4;
+                            if (Math.abs(newHeight - lastHeight) > 0) {
+                                lastHeight = newHeight;
+                                window.frameElement.style.height = newHeight + 'px';
+                            }
+                            isUpdating = false;
+                        });
+                    }
+
+                    window.addEventListener('load', function() {
+                        updateHeight();
+                        setTimeout(updateHeight, 200);
+                        setTimeout(updateHeight, 1000);
+                    });
+                    window.addEventListener('resize', updateHeight);
+                    window.addEventListener('click', function(event) {
+                        var slashTarget = event.target && event.target.closest && event.target.closest('[data-slash]');
+                        if (slashTarget) {
+                            event.preventDefault();
+                            var command = slashTarget.getAttribute('data-slash');
+                            if (command) window.triggerSlash(command);
+                        }
+                        var start = Date.now();
+                        var tick = function() {
+                            if (Date.now() - start >= 600) return;
+                            updateHeight();
+                            requestAnimationFrame(tick);
+                        };
+                        tick();
+                    });
+                    window.addEventListener('DOMContentLoaded', function() {
+                        document.querySelectorAll('img').forEach(function(img) {
+                            img.addEventListener('load', updateHeight);
+                        });
+                        updateHeight();
+                    });
+                    if (window.ResizeObserver) {
+                        var ro = new ResizeObserver(updateHeight);
+                        if (document.body) ro.observe(document.body);
+                    } else {
+                        setInterval(updateHeight, 1000);
+                    }
+                    if (document.readyState === 'complete') updateHeight();
+                <\/script>
+            `;
+
+            let content = rawHtml || '';
+            const trimmed = content.trim();
+            if (/^\s*(<!doctype|<html)/i.test(trimmed)) {
+                const headRegex = /<head(\s[^>]*)?>/i;
+                const htmlRegex = /<html(\s[^>]*)?>/i;
+                if (headRegex.test(content)) {
+                    return content.replace(headRegex, (match) => match + metaViewport + resetStyle + jqueryScript + scriptShim);
+                }
+                if (htmlRegex.test(content)) {
+                    return content.replace(htmlRegex, (match) => match + '<head>' + metaViewport + resetStyle + jqueryScript + scriptShim + '</head>');
+                }
+                return metaViewport + resetStyle + jqueryScript + scriptShim + content;
+            }
+
+            return `<!DOCTYPE html>
+<html>
+<head>
+${metaViewport}
+${resetStyle}
+${jqueryScript}
+${scriptShim}
+</head>
+<body>
+${content}
+</body>
+</html>`;
+        };
+
+        const createExecutableHtmlIframe = (rawHtml, extraClass = '') => {
+            const iframe = document.createElement('iframe');
+            iframe.className = `w-full bg-white block executable-html-frame ${extraClass}`.trim();
+            iframe.style.height = 'auto';
+            iframe.style.overflow = 'hidden';
+            iframe.style.transition = 'height 0.2s ease-out';
+            iframe.style.margin = '0';
+            iframe.style.padding = '0';
+            iframe.setAttribute('scrolling', 'no');
+            iframe.setAttribute('sandbox', htmlIframeSandbox);
+            iframe.setAttribute('allow', 'clipboard-read; clipboard-write; fullscreen; autoplay; encrypted-media; picture-in-picture');
+            iframe.onload = function () {
+                try {
+                    setTimeout(() => {
+                        if (this.contentWindow && this.contentWindow.document) {
+                            const doc = this.contentWindow.document;
+                            this.style.height = Math.max(doc.body.scrollHeight, doc.documentElement.scrollHeight) + 'px';
+                        }
+                    }, 100);
+                } catch (e) {
+                    console.warn('Failed to resize iframe:', e);
+                }
+            };
+            iframe.srcdoc = buildExecutableHtmlDocument(rawHtml);
+            return iframe;
+        };
+
+        const renderExecutableHtmlFrame = (rawHtml, extraClass = '') => {
+            const container = document.createElement('div');
+            container.className = 'html-card-container ui-template-frame-container';
+            container.style.margin = '0';
+            container.style.padding = '0';
+            container.style.overflow = 'hidden';
+            container.appendChild(createExecutableHtmlIframe(rawHtml, extraClass));
+            return container.outerHTML;
+        };
+
+        const renderUiTemplateHtml = (template) => {
+            if (!template || !template.htmlTemplate) return '';
+            const variables = template.variableState || {};
+            const html = template.htmlTemplate.replace(/\{\{\s*([\w.-]+)\s*\}\}/g, (_, key) => {
+                const value = getUiTemplateValue(variables, key);
+                return escapeUiValue(value);
+            });
+            return renderExecutableHtmlFrame(html, 'ui-template-iframe');
+        };
+
+        const handleUiTemplateClick = (event) => {
+            const trigger = event.target?.closest?.('[data-slash]');
+            if (!trigger) return;
+            const command = trigger.getAttribute('data-slash');
+            if (!command) return;
+            event.preventDefault();
+            event.stopPropagation();
+            window.triggerSlash(command);
+        };
+
+        const renderEditingUiTemplatePreview = () => {
+            const variableState = editingUiTemplate.data.previewVariableState || {};
+            return renderUiTemplateHtml({
+                htmlTemplate: editingUiTemplate.data.htmlTemplate,
+                variableState
+            });
+        };
+
+        const stringifyUiSchema = (schema) => {
+            if (!schema) return '';
+            return typeof schema === 'string' ? schema : JSON.stringify(schema, null, 2);
+        };
+
+        const getLastAssistantMessage = () => [...chatHistory.value].reverse().find(msg => msg && msg.role === 'assistant');
+
+        const attachUiTemplateBlocksToLastAssistant = ({ excludeTemplateIds = new Set(), targetMessageId = null } = {}) => {
+            const targetMessage = targetMessageId
+                ? chatHistory.value.find(msg => msg && msg.role === 'assistant' && msg.id === targetMessageId)
+                : getLastAssistantMessage();
+            if (!targetMessage) return false;
+            const top = activeUiTemplates.value
+                .filter(template => template.placement === 'top' && !excludeTemplateIds.has(template.id))
+                .map(renderUiTemplateHtml)
+                .filter(Boolean);
+            const bottom = activeUiTemplates.value
+                .filter(template => template.placement === 'bottom' && !excludeTemplateIds.has(template.id))
+                .map(renderUiTemplateHtml)
+                .filter(Boolean);
+            targetMessage.uiTemplateBlocks = {
+                top,
+                bottom,
+                updatedAt: Date.now()
+            };
+            return top.length > 0 || bottom.length > 0;
+        };
+
+        const isInitialAssistantGreeting = (msg, index) => (
+            index === 0
+            && msg?.role === 'assistant'
+            && !!currentCharacter.value?.first_mes
+            && (msg.content || '').trim() === (currentCharacter.value.first_mes || '').trim()
+        );
+
+        const getAssistantTurnAtIndex = (index) => {
+            const normalizedIndex = Math.max(0, Math.min(index, chatHistory.value.length - 1));
+            const previousAssistantCount = chatHistory.value
+                .slice(0, normalizedIndex)
+                .filter((msg, msgIndex) => msg.role === 'assistant' && !isInitialAssistantGreeting(msg, msgIndex))
+                .length;
+            const currentMessage = chatHistory.value[normalizedIndex];
+            if (currentMessage?.role === 'assistant' && !isInitialAssistantGreeting(currentMessage, normalizedIndex)) {
+                return previousAssistantCount + 1;
+            }
+            return previousAssistantCount + 1;
+        };
+
+        const rebuildUiTemplateStateFromLogs = (template, remainingLogs, allLogs) => {
+            const rebuilt = cloneUiObject(inferInitialUiTemplateState(template));
+            [...remainingLogs]
+                .sort((a, b) => (a.time || 0) - (b.time || 0))
+                .forEach(log => {
+                    Object.entries(log.changes || {}).forEach(([key, change]) => {
+                        if (change && Object.prototype.hasOwnProperty.call(change, 'to')) {
+                            rebuilt[key] = change.to;
+                        }
+                    });
+                });
+            template.variableState = rebuilt;
+        };
+
+        const pruneUiTemplateChangesFromTurn = (turn) => {
+            if (!Number.isFinite(turn) || turn < 1) return { logs: 0, blocks: 0 };
+            let removedLogs = 0;
+            currentUiTemplates.value.forEach(template => {
+                const allLogs = Array.isArray(template.changeLog) ? template.changeLog : [];
+                const remainingLogs = allLogs.filter(log => (log.turn || 0) < turn);
+                removedLogs += allLogs.length - remainingLogs.length;
+                if (allLogs.length !== remainingLogs.length) {
+                    rebuildUiTemplateStateFromLogs(template, remainingLogs, allLogs);
+                    template.changeLog = remainingLogs;
+                }
+            });
+
+            let assistantTurn = 0;
+            let removedBlocks = 0;
+            chatHistory.value.forEach((msg, msgIndex) => {
+                if (msg.role !== 'assistant') return;
+                if (isInitialAssistantGreeting(msg, msgIndex)) return;
+                assistantTurn++;
+                if (assistantTurn >= turn && msg.uiTemplateBlocks) {
+                    delete msg.uiTemplateBlocks;
+                    removedBlocks++;
+                }
+            });
+
+            if (uiTemplateUpdateStatus.targetMessageId) {
+                const targetStillExists = chatHistory.value.some(msg => msg.id === uiTemplateUpdateStatus.targetMessageId);
+                if (!targetStillExists) {
+                    abortUiTemplateUpdate(uiTemplateUpdateStatus.targetMessageId);
+                }
+            }
+
+            return { logs: removedLogs, blocks: removedBlocks };
+        };
+
+        const resetUiTemplateRuntimeState = () => {
+            abortUiTemplateUpdate();
+            currentUiTemplates.value.forEach(template => {
+                template.variableState = cloneUiObject(template.initialVariableState || {});
+                template.changeLog = [];
+            });
+            saveGlobalUiTemplateRuntimeForCharacter();
+            chatHistory.value.forEach(msg => {
+                if (msg.uiTemplateBlocks) delete msg.uiTemplateBlocks;
+            });
+            markUiTemplateStatus('idle', '待命');
+        };
+
+        const getUiTemplateRuntimeKey = (char = currentCharacter.value) => char?.uuid || null;
+
+        const saveGlobalUiTemplateRuntimeForCharacter = (char = currentCharacter.value) => {
+            const key = getUiTemplateRuntimeKey(char);
+            if (!key) return;
+            ensureGlobalUiTemplates().forEach(template => {
+                if (!template.runtimeByCharacter || typeof template.runtimeByCharacter !== 'object') {
+                    template.runtimeByCharacter = {};
+                }
+                template.runtimeByCharacter[key] = {
+                    variableState: cloneUiObject(template.variableState || template.initialVariableState || {}),
+                    changeLog: Array.isArray(template.changeLog) ? JSON.parse(JSON.stringify(template.changeLog)) : []
+                };
+            });
+        };
+
+        const loadGlobalUiTemplateRuntimeForCharacter = (char = currentCharacter.value) => {
+            const key = getUiTemplateRuntimeKey(char);
+            ensureGlobalUiTemplates().forEach(template => {
+                const runtime = key && template.runtimeByCharacter ? template.runtimeByCharacter[key] : null;
+                template.variableState = cloneUiObject(runtime?.variableState || template.initialVariableState || {});
+                template.changeLog = Array.isArray(runtime?.changeLog) ? JSON.parse(JSON.stringify(runtime.changeLog)) : [];
+            });
+            markUiTemplateStatus('idle', '待命');
+        };
 
         const filteredCharacters = computed(() => {
             let result = characters.value.map((char, index) => ({ ...char, originalIndex: index }));
@@ -1334,6 +1854,7 @@ createApp({
 
         const activeRegexCount = computed(() => regexScripts.value.filter(r => r.enabled !== false && !systemRegexNames.includes(r.name)).length);
         const activeWorldInfoCount = computed(() => worldInfo.value.filter(w => w.enabled !== false && !systemWorldInfoNames.includes(w.comment)).length);
+        const activeUiTemplateCount = computed(() => activeUiTemplates.value.length);
 
         const totalContextLength = computed(() => {
             if (!currentCharacter.value) return 0;
@@ -1667,6 +2188,32 @@ createApp({
             return contentUsesHtmlFrame(parsed.main || msg.content, msg.role);
         };
 
+        const messageHasUiTemplateBlocks = (msg) => {
+            const blocks = msg?.uiTemplateBlocks;
+            if (!blocks) return false;
+            return (Array.isArray(blocks.top) && blocks.top.length > 0)
+                || (Array.isArray(blocks.bottom) && blocks.bottom.length > 0);
+        };
+
+        const messageHasPendingUiTemplate = (msg) => (
+            !!msg
+            && uiTemplateUpdateStatus.state === 'running'
+            && uiTemplateUpdateStatus.targetMessageId === msg.id
+            && activeUiTemplates.value.length > 0
+        );
+
+        const messageUsesWideLayout = (msg) => {
+            if (!msg) return false;
+            return !!(
+                msg.reasoning
+                || parseCot(msg.content || '').cot
+                || msg.isEditing_Message
+                || messageUsesHtmlFrame(msg)
+                || messageHasUiTemplateBlocks(msg)
+                || messageHasPendingUiTemplate(msg)
+            );
+        };
+
         const normalizeNativeReasoningPart = (value) => {
             if (value === null || value === undefined) return '';
             if (typeof value === 'string') return value;
@@ -1734,246 +2281,12 @@ createApp({
 
             // Apply regex for display (real-time)
             processed = skipRegex ? processed : processRegex(processed, { isDisplay: true, role: role });
-            // Helper to create iframe
-            const createIframe = (rawHtml) => {
-                const iframe = document.createElement('iframe');
-                iframe.className = 'w-full border-t border-gray-200 bg-white shadow-sm block';
-                // Remove fixed height, use a small initial height to prevent layout jumping if possible
-                // height will be auto-adjusted by the script below
-                iframe.style.height = 'auto';
-                iframe.style.overflow = 'hidden';
-                iframe.style.transition = 'height 0.2s ease-out';
-                // Ensure no margin at the bottom of iframe itself
-                iframe.style.marginBottom = '0';
-                iframe.setAttribute('scrolling', 'no');
-                iframe.sandbox = 'allow-scripts allow-forms allow-popups allow-modals allow-same-origin';
-
-                // External fallback resize (in case internal script fails or is blocked)
-                iframe.onload = function () {
-                    try {
-                        setTimeout(() => {
-                            if (this.contentWindow && this.contentWindow.document) {
-                                const doc = this.contentWindow.document;
-                                // Calculate precise height without minimum limit
-                                const height = Math.max(doc.body.scrollHeight, doc.documentElement.scrollHeight);
-                                this.style.height = height + 'px'; // Exact height, no buffer
-                            }
-                        }, 100);
-                    } catch (e) {
-                        console.warn('Failed to resize iframe:', e);
-                    }
-                };
-
-                const hudCSS = '.sinan-hud{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;padding:12px;background:linear-gradient(to bottom right,rgba(255,255,255,0.9),rgba(255,255,255,0.6));border-radius:12px;border:1px solid rgba(0,0,0,0.08);backdrop-filter:blur(4px)}.char-card{flex:1 1 140px;background:#fff;padding:10px;border-radius:8px;border-left:4px solid #ddd;box-shadow:0 2px 6px rgba(0,0,0,0.04);display:flex;flex-direction:column;gap:4px;font-size:12px;position:relative;overflow:hidden;transition:transform 0.2s}.char-card:hover{transform:translateY(-2px);box-shadow:0 4px 8px rgba(0,0,0,0.1)}.char-name{font-weight:700;font-size:14px;color:#374151;display:flex;justify-content:space-between;align-items:center}.char-mood{color:#6b7280;font-size:12px}.char-loc{color:#9ca3af;font-size:11px;margin-top:auto;padding-top:4px}.bar-bg{height:4px;background:#f3f4f6;border-radius:2px;overflow:hidden;margin-top:6px}.bar-fill{height:100%;background:#10b981;border-radius:2px}.c-tongqiu{border-left-color:#f59e0b}.c-tongqiu .bar-fill{background:#f59e0b}.c-yufan{border-left-color:#3b82f6}.c-yufan .bar-fill{background:#3b82f6}.c-linghu{border-left-color:#8b5cf6}.c-linghu .bar-fill{background:#8b5cf6}.c-chongtian{border-left-color:#ef4444}.c-chongtian .bar-fill{background:#ef4444}';
-                // Removed overflow:hidden to prevent content clipping if height calc is delayed
-                // FIX: Removed 'height: 100vh' or similar constraints from body/html to prevent layout stretching in auto-resizing iframes
-                const resetStyle = '<style>html,body{margin:0 !important;padding:0 !important;width:100% !important;height:auto !important;min-height:auto !important;word-wrap:break-word !important;box-sizing:border-box !important;overflow:hidden !important;} ::-webkit-scrollbar{display:none;} *,*::before,*::after{box-sizing:inherit !important;} img,video,canvas,svg{max-width:100% !important;height:auto !important;} table{display:block !important;overflow-x:auto !important;max-width:100% !important;} pre{white-space:pre-wrap !important;word-wrap:break-word !important;max-width:100% !important;} .container, .reality-panel, .app-container {max-width:100% !important; width:100% !important; margin: 0 !important; border-radius: 0 !important; box-shadow: none !important; border: none !important; height: auto !important; min-height: 0 !important;} body > div:first-child { margin: 0 !important; max-width: 100% !important; height: auto !important; min-height: 0 !important; } #app { height: auto !important; min-height: auto !important; }' + hudCSS + '</style>';
-                const metaViewport = '<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">';
-                // Use defer to prevent blocking rendering if CDN is slow
-                const jqueryScript = '<script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js" defer><\/script>';
-                const scriptShim = `
-                            <script>
-                                window.triggerSlash = function(text) {
-                                    if (window.parent && window.parent.triggerSlash) {
-                                        window.parent.triggerSlash(text);
-                                    } else {
-                                        console.error("SillyTavern's triggerSlash function not found in parent.");
-                                    }
-                                };
-
-                                // Robust Auto-Resize Logic
-                                let lastHeight = 0;
-                                let isUpdating = false;
-
-                                function updateHeight() {
-                                    // Safety check for cross-origin or detached iframe
-                                    if (!window.frameElement) return;
-                                    if (isUpdating) return;
-                                    
-                                    isUpdating = true;
-                                    
-                                    requestAnimationFrame(() => {
-                                        const body = document.body;
-                                        const html = document.documentElement;
-                                        if (!body || !html) {
-                                            isUpdating = false;
-                                            return;
-                                        }
-
-                                        // 1. Measure max bottom of all children (handles floated/absolute elements)
-                                        let maxBottom = 0;
-                                        for (let i = 0; i < body.children.length; i++) {
-                                            const child = body.children[i];
-                                            if (child.tagName === 'SCRIPT' || child.tagName === 'STYLE' || child.tagName === 'LINK') continue;
-                                            
-                                            // Check computed style to exclude fixed elements which cause infinite growth loops
-                                            // Fixed elements move with the viewport, so increasing iframe height moves them down,
-                                            // causing the next height calculation to be even larger.
-                                            const style = window.getComputedStyle(child);
-                                            if (style.position === 'fixed') continue;
-
-                                            // Exclude hidden elements if possible, but getBoundingClientRect handles them (height 0)
-                                            const rect = child.getBoundingClientRect();
-                                            const bottom = rect.bottom; // Relative to viewport (iframe window)
-                                            
-                                            // Standard offset calculation for flow elements
-                                            const offsetBottom = child.offsetTop + child.offsetHeight;
-                                            
-                                            // Choose the larger value
-                                            const itemMax = Math.max(bottom, offsetBottom);
-                                            if (itemMax > maxBottom) maxBottom = itemMax;
-                                        }
-
-                                        // Add body margin/padding to maxBottom if necessary
-                                        const style = window.getComputedStyle(body);
-                                        const marginTop = parseFloat(style.marginTop) || 0;
-                                        const marginBottom = parseFloat(style.marginBottom) || 0;
-                                        // Since rect.bottom is from viewport top, it usually includes top margin if elements are pushed down
-                                        // But we ensure we cover the bottom margin of the body itself
-                                        const finalMaxBottom = maxBottom + marginBottom;
-
-                                        // 2. Get scrollHeight (standard content height)
-                                        // IMPORTANT: If iframe is tall, html.scrollHeight might equal iframe height. We strictly prefer body.scrollHeight or maxBottom.
-                                        // However, if body has min-height: 100vh, it will also be tall. We assume standard content reset.
-                                        const scrollHeight = body.scrollHeight;
-
-                                        // 3. Calculate new height
-                                        // We rely mostly on maxBottom because scrollHeight can be "stuck" at the current iframe height in some browsers
-                                        // if the content is smaller than the container.
-                                        // However, if scrollHeight is LARGER than maxBottom (e.g. deep nested content), we must use it.
-                                        
-                                        // Strategy: If maxBottom is valid (>0), use it as a strong signal for "actual content end".
-                                        // Only use scrollHeight if it's plausibly representing content, not just viewport.
-                                        
-                                        let newHeight = Math.max(finalMaxBottom, scrollHeight);
-                                        
-                                        // Add a small buffer to prevent cutting off content due to sub-pixel rendering
-                                        // and to ensure no scrollbars appear (since we force overflow: hidden)
-                                        newHeight += 4;
-    
-                                        // 4. Fix for infinite growth loop:
-                                        // If newHeight is almost the same as current height (within small tolerance), ignore it.
-                                        // Since we forced overflow:hidden, the scrollbar loop risk is minimal.
-                                        // We use a threshold of 0 to ensure smooth animations.
-                                        
-                                        if (Math.abs(newHeight - lastHeight) > 0) {
-                                            lastHeight = newHeight;
-                                            // Remove extra buffer for tighter fit
-                                            window.frameElement.style.height = newHeight + 'px';
-                                        }
-                                        
-                                        isUpdating = false;
-                                    });
-                                }
-
-                                // Debounced resize handler
-                                let resizeTimeout;
-                                const onResize = () => {
-                                    // 直接更新，移除防抖延迟以获得更快的响应，updateHeight 内部已有 rAF 锁
-                                    updateHeight();
-                                };
-
-                                window.addEventListener('load', () => {
-                                    updateHeight();
-                                    // Additional checks for lazy loading images/fonts
-                                    setTimeout(updateHeight, 200);
-                                    setTimeout(updateHeight, 1000);
-                                });
-                                
-                                window.addEventListener('resize', onResize);
-                                
-                                // Click handler for accordions/menus
-                                window.addEventListener('click', () => {
-                                    // 使用动画循环在点击后的一段时间内持续检测高度变化，以捕捉展开动画
-                                    const start = Date.now();
-                                    const duration = 600; // 持续监测 600ms
-                                    
-                                    const animate = () => {
-                                        const now = Date.now();
-                                        if (now - start >= duration) return;
-                                        
-                                        updateHeight();
-                                        requestAnimationFrame(animate);
-                                    };
-                                    
-                                    animate();
-                                });
-
-                                // Image load handler
-                                window.addEventListener('DOMContentLoaded', () => {
-                                    const imgs = document.querySelectorAll('img');
-                                    imgs.forEach(img => img.addEventListener('load', updateHeight));
-                                    updateHeight();
-                                });
-
-                                // ResizeObserver with debounce
-                                if (window.ResizeObserver) {
-                                    const ro = new ResizeObserver((entries) => {
-                                        // Only trigger if body size actually changed
-                                        for (const entry of entries) {
-                                            if (entry.target === document.body) {
-                                                onResize();
-                                            }
-                                        }
-                                    });
-                                    if (document.body) ro.observe(document.body);
-                                    // Removed observation of documentElement to prevent viewport-loop
-                                } else {
-                                    setInterval(updateHeight, 1000);
-                                }
-                                
-                                // Initial trigger
-                                if (document.readyState === 'complete') {
-                                    updateHeight();
-                                }
-                            <\/script>
-                        `;
-
-                let content = rawHtml;
-                const trimmed = content.trim();
-
-                // Check if it starts as a standard HTML document (ignore leading whitespace/comments)
-                // If it's a mix of text and HTML tags (like the user's case), we treat it as a fragment to wrap
-                const isStandardDoc = /^\s*(<!doctype|<html)/i.test(trimmed);
-
-                if (isStandardDoc) {
-                    // Use regex to handle tags with attributes (e.g. <html lang="en">)
-                    const headRegex = /<head(\s[^>]*)?>/i;
-                    const htmlRegex = /<html(\s[^>]*)?>/i;
-
-                    if (headRegex.test(content)) {
-                        content = content.replace(headRegex, (match) => match + metaViewport + resetStyle + jqueryScript + scriptShim);
-                    } else if (htmlRegex.test(content)) {
-                        content = content.replace(htmlRegex, (match) => match + '<head>' + metaViewport + resetStyle + jqueryScript + scriptShim + '</head>');
-                    } else {
-                        // Fallback for standard-ish docs without html/head tags (rare)
-                        content = metaViewport + resetStyle + jqueryScript + scriptShim + content;
-                    }
-                } else {
-                    // Mixed content or fragments -> Wrap strictly to ensure reset styles apply to the viewport
-                    // This fixes issues where mixed content (divs + html tags) causes browser to ignore body margins resets
-                    content = `<!DOCTYPE html>
-<html>
-<head>
-${metaViewport}
-${resetStyle}
-${jqueryScript}
-${scriptShim}
-</head>
-<body>
-${rawHtml}
-</body>
-</html>`;
-                }
-
-                iframe.srcdoc = content;
-                return iframe;
-            };
+            const createIframe = (rawHtml) => createExecutableHtmlIframe(rawHtml, 'border-t border-gray-200 shadow-sm');
 
             // Configure DOMPurify
             const cleanConfig = {
                 ADD_TAGS: ['details', 'summary', 'iframe', 'svg', 'path', 'g', 'circle', 'rect', 'defs', 'linearGradient', 'stop', 'style', 'div', 'span', 'script', 'button', 'input'],
-                ADD_ATTR: ['style', 'open', 'srcdoc', 'sandbox', 'frameborder', 'allow', 'allowfullscreen', 'class', 'id', 'viewBox', 'fill', 'stroke', 'stroke-width', 'd', 'stroke-linecap', 'stroke-linejoin', 'x1', 'y1', 'x2', 'y2', 'offset', 'stop-color', 'stop-opacity', 'width', 'height', 'onclick', 'type', 'value', 'checked'],
+                ADD_ATTR: ['style', 'open', 'srcdoc', 'sandbox', 'frameborder', 'allow', 'allowfullscreen', 'class', 'id', 'viewBox', 'fill', 'stroke', 'stroke-width', 'd', 'stroke-linecap', 'stroke-linejoin', 'x1', 'y1', 'x2', 'y2', 'offset', 'stop-color', 'stop-opacity', 'width', 'height', 'onclick', 'type', 'value', 'checked', 'data-slash'],
                 FORBID_ATTR: ['onmouseover', 'onload'], // Removed onclick to allow interactive UI
                 FORCE_BODY: true
             };
@@ -2275,6 +2588,7 @@ ${rawHtml}
 
         // Chat Logic
         const stopGeneration = () => {
+            abortUiTemplateUpdate();
             if (abortController.value) {
                 abortController.value.abort();
             }
@@ -2322,6 +2636,7 @@ ${rawHtml}
 
         const clearChat = () => {
             confirmAction('确定要清空聊天记录吗？记忆也将一并清空，此操作无法撤销。', () => {
+                abortUiTemplateUpdate();
                 chatHistory.value = [];
                 if (currentCharacter.value && currentCharacter.value.first_mes) {
                     chatHistory.value.push({
@@ -2331,8 +2646,9 @@ ${rawHtml}
                     });
                 }
                 memories.value = [];
+                resetUiTemplateRuntimeState();
                 saveData();
-                showToast('聊天记录和记忆已清空', 'success');
+                showToast('聊天记录、记忆和变量记录已清空', 'success');
             });
         };
 
@@ -2386,15 +2702,252 @@ ${rawHtml}
             }
         };
 
+        const markUiTemplateStatus = (state, message, remaining = 0, targetMessageId = null) => {
+            uiTemplateUpdateStatus.state = state;
+            uiTemplateUpdateStatus.message = message;
+            uiTemplateUpdateStatus.time = Date.now();
+            uiTemplateUpdateStatus.remaining = remaining;
+            uiTemplateUpdateStatus.targetMessageId = targetMessageId;
+        };
+
+        const startUiTemplateUpdateRun = () => {
+            if (uiTemplateUpdateAbortController) {
+                uiTemplateUpdateAbortController.abort();
+            }
+            uiTemplateUpdateAbortController = new AbortController();
+            const seq = ++uiTemplateUpdateSeq;
+            return { seq, signal: uiTemplateUpdateAbortController.signal };
+        };
+
+        const isUiTemplateUpdateRunCurrent = (seq, targetMessageId) => (
+            seq === uiTemplateUpdateSeq
+            && uiTemplateUpdateAbortController
+            && !uiTemplateUpdateAbortController.signal.aborted
+            && (!targetMessageId || chatHistory.value.some(msg => msg && msg.id === targetMessageId))
+        );
+
+        const abortUiTemplateUpdate = (targetMessageId = null) => {
+            if (targetMessageId && uiTemplateUpdateStatus.targetMessageId && uiTemplateUpdateStatus.targetMessageId !== targetMessageId) return;
+            if (uiTemplateUpdateAbortController) {
+                uiTemplateUpdateAbortController.abort();
+                uiTemplateUpdateAbortController = null;
+            }
+            uiTemplateUpdateSeq++;
+            if (!targetMessageId || uiTemplateUpdateStatus.targetMessageId === targetMessageId) {
+                markUiTemplateStatus('idle', '待命');
+            }
+        };
+
+        const updateUiTemplatesFromChat = async ({ manual = false, targetMessageId = null } = {}) => {
+            if (!settings.uiTemplateEnabled) {
+                markUiTemplateStatus('skipped', '总开关未开启');
+                if (manual) showToast('请先开启 UI变量模板总开关', 'warning');
+                return false;
+            }
+            if (!currentCharacter.value) {
+                markUiTemplateStatus('skipped', '未选择角色卡');
+                if (manual) showToast('请先选择角色卡', 'warning');
+                return false;
+            }
+            const templates = activeUiTemplates.value;
+            if (!templates.length) {
+                markUiTemplateStatus('skipped', '当前角色没有启用中的UI模板');
+                if (manual) showToast('当前角色没有启用中的UI模板', 'warning');
+                return false;
+            }
+            if (chatHistory.value.length < 2) {
+                markUiTemplateStatus('skipped', '对话层数不足');
+                if (manual) showToast('至少需要一轮对话后才能分析变量', 'warning');
+                return false;
+            }
+
+            const targetMessage = targetMessageId
+                ? chatHistory.value.find(msg => msg && msg.role === 'assistant' && msg.id === targetMessageId)
+                : getLastAssistantMessage();
+            if (!targetMessage) {
+                markUiTemplateStatus('skipped', '没有可更新的AI回复');
+                return false;
+            }
+            if (!targetMessage.id) targetMessage.id = generateUUID();
+            const lockedTargetMessageId = targetMessage.id;
+            const targetMessageIndex = chatHistory.value.findIndex(msg => msg === targetMessage || msg.id === lockedTargetMessageId);
+            const contextMessages = targetMessageIndex >= 0 ? chatHistory.value.slice(0, targetMessageIndex + 1) : chatHistory.value;
+
+            const recentMessages = contextMessages
+                .filter(m => m.role !== 'system')
+                .slice(-4)
+                .map(m => ({
+                    role: m.role,
+                    name: m.role === 'user' ? user.name : (m.name || currentCharacter.value.name),
+                    content: parseCot(m.content || '').main
+                }));
+
+            const fallbackModel = settings.uiTemplateModel || memorySettings.model || settings.fastModel || settings.model;
+            if (!fallbackModel) {
+                markUiTemplateStatus('error', '没有可用的UI变量分析模型');
+                if (manual) showToast('请先配置 UI变量分析模型', 'warning');
+                return false;
+            }
+            const url = settings.apiUrl.endsWith('/v1') ? `${settings.apiUrl}/chat/completions` : `${settings.apiUrl}/v1/chat/completions`;
+
+            try {
+                const updateRun = startUiTemplateUpdateRun();
+                const isCurrentRun = () => isUiTemplateUpdateRunCurrent(updateRun.seq, lockedTargetMessageId);
+                markUiTemplateStatus('running', `正在分析 ${templates.length} 个UI模板`, templates.length, lockedTargetMessageId);
+                const turn = getAssistantTurnAtIndex(targetMessageIndex);
+                let hasChanges = false;
+                let changedFieldCount = 0;
+                let changedTemplateCount = 0;
+                let failedTemplateCount = 0;
+                const failedTemplateIds = new Set();
+                const pendingTemplateUpdates = [];
+
+                const applyTemplateUpdates = (template, updates, model) => {
+                    updates.forEach(update => {
+                        if (update.id && update.id !== template.id) return;
+                        if (!template || !update.variables || typeof update.variables !== 'object') return;
+                        const changes = {};
+                        Object.entries(update.variables).forEach(([key, value]) => {
+                            const oldValue = template.variableState?.[key];
+                            if (JSON.stringify(oldValue) !== JSON.stringify(value)) {
+                                if (!template.variableState) template.variableState = {};
+                                template.variableState[key] = value;
+                                changes[key] = { from: oldValue, to: value };
+                            }
+                        });
+                        if (Object.keys(changes).length > 0) {
+                            if (!Array.isArray(template.changeLog)) template.changeLog = [];
+                            changedTemplateCount++;
+                            changedFieldCount += Object.keys(changes).length;
+                            template.changeLog.unshift({
+                                id: generateUUID(),
+                                time: Date.now(),
+                                source: 'ai',
+                                model,
+                                turn,
+                                changes,
+                                reason: update.reason || ''
+                            });
+                            template.changeLog = template.changeLog.slice(0, 50);
+                            hasChanges = true;
+                        }
+                    });
+                };
+
+                await Promise.all(templates.map(async (template) => {
+                    const model = fallbackModel;
+                    try {
+                        const response = await fetch(url, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${settings.apiKey}`
+                            },
+                            body: JSON.stringify({
+                                model,
+                                temperature: 1,
+                                stream: false,
+                                messages: [
+                                    {
+                                        role: 'system',
+                                        content: '你是RP-Hub的UI变量更新器。当前请求只分析一个UI模板。只根据最近对话更新这个模板已定义的变量。严格返回JSON，不要解释，不要输出Markdown。格式：{"updates":[{"id":"模板id","variables":{"变量名":"新值"},"reason":"简短原因"}]}。没有变化则updates为空数组。不要修改HTML。'
+                                    },
+                                    {
+                                        role: 'user',
+                                        content: JSON.stringify({
+                                            character: currentCharacter.value.name,
+                                            user: user.name,
+                                            template: {
+                                                id: template.id,
+                                                name: template.name,
+                                                variables: template.variableState || {},
+                                                schema: template.variableSchema || {}
+                                            },
+                                            recentMessages
+                                        }, null, 2)
+                                    }
+                                ]
+                            }),
+                            signal: updateRun.signal
+                        });
+                        if (!isCurrentRun()) return;
+                        if (!response.ok) throw new Error(`API Error: ${response.status}`);
+                        const data = await response.json();
+                        if (!isCurrentRun()) return;
+                        let content = data.choices?.[0]?.message?.content || '';
+                        content = content.replace(/```json\s*/i, '').replace(/```\s*$/i, '').trim();
+                        const parsed = JSON.parse(content);
+                        const updates = Array.isArray(parsed.updates) ? parsed.updates : [];
+                        pendingTemplateUpdates.push({ template, updates, model });
+                    } catch (e) {
+                        if (updateRun.signal.aborted || !isCurrentRun()) return;
+                        failedTemplateCount++;
+                        failedTemplateIds.add(template.id);
+                        console.warn(`[UI模板] ${template.name || template.id} 变量更新失败:`, e.message);
+                    } finally {
+                        if (isCurrentRun()) {
+                            uiTemplateUpdateStatus.remaining = Math.max(0, uiTemplateUpdateStatus.remaining - 1);
+                        }
+                    }
+                }));
+
+                if (!isCurrentRun()) {
+                    if (uiTemplateUpdateSeq === updateRun.seq) {
+                        uiTemplateUpdateAbortController = null;
+                        markUiTemplateStatus('idle', '待命');
+                    }
+                    return false;
+                }
+                pendingTemplateUpdates.forEach(({ template, updates, model }) => {
+                    applyTemplateUpdates(template, updates, model);
+                });
+
+                const inserted = attachUiTemplateBlocksToLastAssistant({ excludeTemplateIds: failedTemplateIds, targetMessageId: lockedTargetMessageId });
+
+                if (hasChanges) {
+                    saveGlobalUiTemplateRuntimeForCharacter();
+                    saveData();
+                    await saveChatHistoryNow();
+                    markUiTemplateStatus(failedTemplateCount ? 'skipped' : 'success', `已更新 ${changedTemplateCount} 个模板，${changedFieldCount} 个变量${failedTemplateCount ? `，${failedTemplateCount} 个失败` : ''}`);
+                    if (manual) showToast(uiTemplateUpdateStatus.message, failedTemplateCount ? 'warning' : 'success');
+                } else {
+                    if (inserted) await saveChatHistoryNow();
+                    if (failedTemplateCount >= templates.length) {
+                        markUiTemplateStatus('error', `变量更新失败：${failedTemplateCount} 个未成功`);
+                        if (manual) showToast(uiTemplateUpdateStatus.message, 'warning');
+                    } else {
+                        markUiTemplateStatus(failedTemplateCount ? 'skipped' : 'success', '无变量变化');
+                        if (manual) showToast(uiTemplateUpdateStatus.message, failedTemplateCount ? 'warning' : 'info');
+                    }
+                }
+                if (uiTemplateUpdateSeq === updateRun.seq) {
+                    uiTemplateUpdateAbortController = null;
+                }
+                return failedTemplateCount < templates.length;
+            } catch (e) {
+                if (e?.name === 'AbortError') {
+                    return false;
+                }
+                uiTemplateUpdateAbortController = null;
+                console.warn('[UI模板] 变量更新失败:', e.message);
+                markUiTemplateStatus('error', '变量更新失败: ' + e.message);
+                showToast('UI模板变量更新失败: ' + e.message, 'warning');
+                return false;
+            }
+        };
+
 
 
         const deleteMessage = (index) => {
             confirmAction('确定要删除这条消息吗？该楼层的关联记忆也将一并删除。', () => {
                 const msg = chatHistory.value[index];
+                abortUiTemplateUpdate();
+                const affectedTurn = getAssistantTurnAtIndex(index);
                 // Remove timing record if exists
                 if (msg && msg.id) {
                     recentGenerationTimes.value = recentGenerationTimes.value.filter(t => (t.id || t) !== msg.id);
                 }
+                const uiCleanup = pruneUiTemplateChangesFromTurn(affectedTurn);
                 // 只删除与该楼层关联的记忆，而非全部清空
                 if (msg && msg.role === 'assistant') {
                     // 计算该 assistant 消息对应的轮次 (turn)
@@ -2404,11 +2957,14 @@ ${rawHtml}
                     const removed = before - memories.value.length;
                     chatHistory.value.splice(index, 1);
                     saveData();
-                    showToast(removed > 0 ? `消息已删除，清除了 ${removed} 条关联记忆` : '消息已删除', 'success');
+                    const extras = [];
+                    if (removed > 0) extras.push(`${removed} 条关联记忆`);
+                    if (uiCleanup.logs > 0 || uiCleanup.blocks > 0) extras.push('变量模板');
+                    showToast(extras.length ? `消息已删除，清除了 ${extras.join('、')}` : '消息已删除', 'success');
                 } else {
                     chatHistory.value.splice(index, 1);
                     saveData();
-                    showToast('消息已删除', 'success');
+                    showToast(uiCleanup.logs > 0 || uiCleanup.blocks > 0 ? '消息已删除，变量模板已同步回退' : '消息已删除', 'success');
                 }
             });
         };
@@ -2422,6 +2978,7 @@ ${rawHtml}
 
             if (msg.role === 'user') {
                 // 如果是用户消息，直接基于当前上下文生成（重试/继续）
+                abortUiTemplateUpdate();
                 abortMemoryExtraction(); // 中断正在进行的记忆提取
                 // 只删除最新一轮的记忆，保留之前的
                 const currentTurn = chatHistory.value.filter(h => h.role === 'assistant').length;
@@ -2430,10 +2987,13 @@ ${rawHtml}
             } else {
                 // 如果是 AI 消息，删除它（及之后）然后重新生成
                 confirmAction('确定要重新生成这条消息吗？该楼层的记忆将被清除。', async () => {
+                    abortUiTemplateUpdate();
                     abortMemoryExtraction(); // 中断正在进行的记忆提取
                     // 计算被删除区间的 assistant 轮次，只删除 >= 该轮次的记忆
+                    const uiTurnAtIndex = getAssistantTurnAtIndex(index);
                     const turnAtIndex = chatHistory.value.slice(0, index).filter(h => h.role === 'assistant').length + 1;
                     memories.value = memories.value.filter(m => (m.turn || 0) < turnAtIndex);
+                    pruneUiTemplateChangesFromTurn(uiTurnAtIndex);
                     // Remove timing record for the message being regenerated
                     if (msg && msg.id) {
                         recentGenerationTimes.value = recentGenerationTimes.value.filter(t => (t.id || t) !== msg.id);
@@ -3240,6 +3800,7 @@ ${rawHtml}
             let retryCount = 0;
             isBackupRetrying.value = false;
             const maxRetries = settings.maxRetries || 0;
+            let generatedAssistantMessageId = null;
 
             try {
                 while (true) {
@@ -3513,6 +4074,7 @@ ${rawHtml}
                         }
 
                         if (assistantMessage) {
+                            generatedAssistantMessageId = assistantMessage.id;
                             console.groupCollapsed('📬 AI 响应接收完毕');
                             console.log('AI返回的完整内容:', assistantMessage.content);
                             console.groupEnd();
@@ -3598,6 +4160,12 @@ ${rawHtml}
                     modelMode.value = 'quality';
                     showToast('已恢复主模型设置', 'info');
                     isBackupRetrying.value = false;
+                }
+
+                if (!wasCancelled && settings.uiTemplateEnabled && generatedAssistantMessageId && chatHistory.value.length >= 2) {
+                    nextTick(() => {
+                        updateUiTemplatesFromChat({ manual: false, targetMessageId: generatedAssistantMessageId });
+                    });
                 }
 
                 // 记忆提取：在对话正常完成后异步提取记忆（用户取消时不触发）
@@ -3730,9 +4298,6 @@ summary 长度控制在300-500字，尽量完全详细。
             const memoryModel = memorySettings.model || settings.fastModel || settings.model;
             const url = settings.apiUrl.endsWith('/v1') ? `${settings.apiUrl}/chat/completions` : `${settings.apiUrl}/v1/chat/completions`;
 
-            console.log('--- 发送给 AI 的记忆提取 Prompt ---');
-            console.log(systemPrompt);
-
             const response = await fetch(url, {
                 method: 'POST',
                 headers: {
@@ -3753,9 +4318,6 @@ summary 长度控制在300-500字，尽量完全详细。
             if (!response.ok) throw new Error(`Memory API Error: ${response.status}`);
             const data = await response.json();
             let content = data.choices[0]?.message?.content || '';
-
-            console.log('--- AI 返回的原始记忆内容 ---');
-            console.log(content);
 
             // 清理 markdown 代码块
             content = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
@@ -3918,7 +4480,8 @@ summary 长度控制在300-500字，尽量完全详细。
                 scenario: '',
                 mes_example: '',
                 uuid: generateUUID(),
-                createdAt: Date.now()
+                createdAt: Date.now(),
+                uiTemplates: []
             };
             editorTab.value = 'basic';
             showCharacterEditor.value = true;
@@ -3937,13 +4500,154 @@ summary 长度控制在300-500字，尽量完全详细。
         };
 
         const saveCharacter = () => {
+            const characterRegexScripts = (editingCharacter.data.regexScripts || [])
+                .map(script => normalizeRegexScript({ ...script, scope: 'character' }, 'character'))
+                .filter(script => script.scope !== 'global');
+            const normalizedCharacterData = {
+                ...editingCharacter.data,
+                regexScripts: characterRegexScripts,
+                uiTemplates: (editingCharacter.data.uiTemplates || []).map(template => normalizeUiTemplate({ ...template, scope: 'character' }))
+            };
             if (editingCharacter.id !== undefined) {
-                characters.value[editingCharacter.id] = { ...editingCharacter.data };
+                characters.value[editingCharacter.id] = normalizedCharacterData;
             } else {
-                characters.value.push({ ...editingCharacter.data });
+                characters.value.push(normalizedCharacterData);
             }
             showCharacterEditor.value = false;
             showToast('角色已保存', 'success');
+        };
+
+        const createUiTemplate = () => {
+            editingUiTemplate.id = undefined;
+            const data = normalizeUiTemplate({ scope: currentCharacter.value ? 'character' : 'global' });
+            editingUiTemplate.data = {
+                ...data,
+                previewVariableState: cloneUiObject(data.initialVariableState || data.variableState),
+                variableStateText: JSON.stringify(data.initialVariableState || data.variableState, null, 2),
+                variableSchemaText: stringifyUiSchema(data.variableSchema)
+            };
+            showUiTemplateEditor.value = true;
+        };
+
+        const editUiTemplate = (index) => {
+            const template = currentUiTemplates.value[index];
+            if (!template) return;
+            editingUiTemplate.id = template.id;
+            const data = normalizeUiTemplate(JSON.parse(JSON.stringify(template)));
+            editingUiTemplate.data = {
+                ...data,
+                previewVariableState: cloneUiObject(data.initialVariableState || data.variableState),
+                variableStateText: JSON.stringify(data.initialVariableState || data.variableState || {}, null, 2),
+                variableSchemaText: stringifyUiSchema(data.variableSchema)
+            };
+            showUiTemplateEditor.value = true;
+        };
+
+        const saveUiTemplate = () => {
+            if (!currentCharacter.value && editingUiTemplate.data.scope !== 'global') return;
+            let initialVariableState = {};
+            try {
+                initialVariableState = JSON.parse(editingUiTemplate.data.variableStateText || '{}');
+            } catch (e) {
+                showToast('变量 JSON 格式不正确', 'error');
+                return;
+            }
+            let variableSchema = '';
+            const schemaText = (editingUiTemplate.data.variableSchemaText || '').trim();
+            if (schemaText) {
+                try {
+                    variableSchema = JSON.parse(schemaText);
+                } catch (e) {
+                    variableSchema = schemaText;
+                }
+            }
+            const existingTemplate = editingUiTemplate.id !== undefined ? currentUiTemplates.value.find(template => template.id === editingUiTemplate.id) : null;
+            const runtimeVariableState = existingTemplate ? cloneUiObject(existingTemplate.variableState || initialVariableState) : initialVariableState;
+            const template = normalizeUiTemplate({
+                ...editingUiTemplate.data,
+                initialVariableState,
+                variableState: runtimeVariableState,
+                variableSchema
+            });
+            delete template.variableStateText;
+            delete template.variableSchemaText;
+            delete template.previewVariableState;
+            if (editingUiTemplate.id !== undefined) {
+                const oldScope = existingTemplate?.scope || 'character';
+                const oldList = getUiTemplateListByScope(oldScope);
+                const oldIndex = oldList.findIndex(item => item.id === editingUiTemplate.id);
+                if (oldIndex !== -1) oldList.splice(oldIndex, 1);
+            }
+            const list = getUiTemplateListByScope(template.scope);
+            const targetIndex = list.findIndex(item => item.id === template.id);
+            if (targetIndex !== -1) {
+                list[targetIndex] = template;
+            } else {
+                list.push(template);
+            }
+            showUiTemplateEditor.value = false;
+            saveData();
+            showToast('UI模板已保存', 'success');
+        };
+
+        const deleteUiTemplate = (index) => {
+            confirmAction('确定要删除这个UI模板吗？此操作无法撤销。', () => {
+                const template = currentUiTemplates.value[index];
+                const list = getUiTemplateListByScope(template?.scope);
+                const targetIndex = list.findIndex(item => item.id === template?.id);
+                if (targetIndex !== -1) list.splice(targetIndex, 1);
+                saveData();
+                showToast('UI模板已删除', 'success');
+            });
+        };
+
+        const exportUiTemplates = () => {
+            const templates = currentUiTemplates.value.map(toUiTemplateExportEntry);
+            if (!templates.length) {
+                showToast('没有可导出的UI模板', 'info');
+                return;
+            }
+            const payload = { type: 'rp-hub-ui-templates', templates };
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(payload, null, 2));
+            const a = document.createElement('a');
+            a.href = dataStr;
+            a.download = `${currentCharacter.value?.name || 'character'}_ui_templates.json`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            showToast('UI模板已导出', 'success');
+        };
+
+        const importUiTemplates = (event) => {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const data = JSON.parse(e.target.result);
+                    const templates = Array.isArray(data) ? data : (Array.isArray(data.templates) ? data.templates : []);
+                    if (!templates.length) throw new Error('未找到模板数组');
+                    const normalized = templates.map(t => {
+                        const cleanTemplate = sanitizeUiTemplateImportEntry(t);
+                        return normalizeUiTemplate({ ...cleanTemplate, id: generateUUID(), enabled: cleanTemplate.enabled === true ? true : false });
+                    });
+                    const globalTemplates = normalized.filter(template => template.scope === 'global');
+                    const characterTemplates = normalized.filter(template => template.scope !== 'global');
+                    if (characterTemplates.length && !currentCharacter.value) {
+                        showToast('绑定角色的模板需要先选择角色卡', 'warning');
+                        return;
+                    }
+                    ensureGlobalUiTemplates().push(...globalTemplates);
+                    ensureCurrentUiTemplates().push(...characterTemplates);
+                    saveData();
+                    showToast(`成功导入 ${normalized.length} 个UI模板`, 'success');
+                } catch (err) {
+                    showToast('UI模板导入失败: ' + err.message, 'error');
+                } finally {
+                    event.target.value = '';
+                }
+            };
+            reader.readAsText(file);
         };
 
         const deleteCharacter = (index) => {
@@ -4042,6 +4746,7 @@ summary 长度控制在300-500字，尽量完全详细。
                 placement: [2],
                 markdownOnly: true,
                 promptOnly: false,
+                scope: 'global',
                 enabled: false // Default closed
             };
 
@@ -4135,6 +4840,7 @@ image###生成的提示词###
 特别提示：出现user或主角参与的情况(如被口、手交），禁止出现主角的人物形象(脸部，头部）！必须使用第一视角(POV）相关提示词！且要作为Character  Prompt添加，禁止出现角色卡和角色名字(包括英文和拼音），中文和{{user}}是明令禁止的，且一定要保持同一人物在上下文中的形象一致性，不要丢失人物特性(如有异色瞳特征人物），涉及人物常见特征(如发色，瞳孔颜色等）的提示词请增加权重\n</auto_image_gen>`,
                 constant: true,
                 enabled: false, // Default closed
+                scope: 'global',
                 position: 'at_depth',
                 depth: 4,
                 order: 100,
@@ -4160,8 +4866,19 @@ image###生成的提示词###
         });
         const selectCharacter = async (index, isNewImport = false) => {
             await flushPendingChatHistorySave();
+            abortUiTemplateUpdate();
+            _isApplyingCharacterScopedData = true;
+            const previousCharacterIndex = currentCharacterIndex.value;
+            const previousCharacter = currentCharacter.value;
+            if (previousCharacterIndex !== -1 && previousCharacterIndex !== index) {
+                saveGlobalUiTemplateRuntimeForCharacter(previousCharacter);
+            }
             currentCharacterIndex.value = index;
             const char = characters.value[index];
+            char.uiTemplates = Array.isArray(char.uiTemplates) ? char.uiTemplates.map(template => normalizeUiTemplate({ ...template, scope: 'character' })) : [];
+            if (previousCharacterIndex !== index) {
+                loadGlobalUiTemplateRuntimeForCharacter(char);
+            }
 
             // Ensure UUID exists (double check)
             if (!char.uuid) {
@@ -4190,17 +4907,16 @@ image###生成的提示词###
             }
 
             // Load Character Specific Data
-            if (char.worldInfo) {
-                worldInfo.value = JSON.parse(JSON.stringify(char.worldInfo)).map(normalizeWorldInfoEntry);
-            } else {
-                worldInfo.value = [];
-            }
+            const characterWorldInfo = Array.isArray(char.worldInfo)
+                ? JSON.parse(JSON.stringify(char.worldInfo)).map(entry => normalizeWorldInfoEntry({ ...entry, scope: 'character' })).filter(entry => entry.scope !== 'global')
+                : [];
+            worldInfo.value = [
+                ...JSON.parse(JSON.stringify(globalWorldInfo.value)).map(entry => normalizeWorldInfoEntry({ ...entry, scope: 'global' })),
+                ...characterWorldInfo
+            ];
 
-            if (char.regexScripts) {
-                regexScripts.value = JSON.parse(JSON.stringify(char.regexScripts));
-            } else {
-                regexScripts.value = [];
-            }
+            combineRegexScriptsForCharacter(char);
+            finishApplyingCharacterScopedData();
 
             if (char.recentGenerationTimes) {
                 recentGenerationTimes.value = JSON.parse(JSON.stringify(char.recentGenerationTimes));
@@ -4221,6 +4937,7 @@ image###生成的提示词###
                     placement: [1, 2],
                     markdownOnly: false,
                     promptOnly: false,
+                    scope: 'global',
                     enabled: true
                 });
             } else {
@@ -4229,6 +4946,7 @@ image###生成的提示词###
                 if (script) {
                     script.replacement = user.name;
                     script.enabled = true;
+                    script.scope = 'global';
                     if (!script.placement) script.placement = [1, 2];
                 }
             }
@@ -4475,6 +5193,7 @@ image###生成的提示词###
                 comment: getValue(['comment'], ''),
                 content: getValue(['content'], ''),
                 enabled: toBoolean(getValue(['enabled'], true), true) && !toBoolean(getValue(['disable', 'disabled'], false), false),
+                scope: systemWorldInfoNames.includes(getValue(['comment'], '')) || getValue(['scope'], 'character') === 'global' ? 'global' : 'character',
 
                 // --- Keys & Matching ---
                 keys: keys,
@@ -4504,6 +5223,7 @@ image###生成的提示词###
                 comment: normalized.comment,
                 content: normalized.content,
                 enabled: normalized.enabled,
+                scope: normalized.scope,
                 keys: Array.isArray(normalized.keys) ? normalized.keys : [],
                 useRegex: normalized.useRegex,
                 caseSensitive: normalized.caseSensitive,
@@ -4534,6 +5254,7 @@ image###生成的提示词###
                     let charData = rawData;
                     let characterBook = null;
                     let regexScripts = null;
+                    let uiTemplates = null;
 
                     // --- SillyTavern Data Structure Parsing ---
 
@@ -4587,6 +5308,16 @@ image###生成的提示词###
                         regexScripts = charData.regex_scripts || rawData.regex_scripts;
                     }
 
+                    uiTemplates = charData.uiTemplates
+                        || charData.ui_templates
+                        || rawData.uiTemplates
+                        || rawData.ui_templates
+                        || charData.extensions?.ui_templates
+                        || charData.extensions?.rp_hub_ui_templates
+                        || rawData.extensions?.ui_templates
+                        || rawData.extensions?.rp_hub_ui_templates
+                        || null;
+
                     const char = {
                         name,
                         description,
@@ -4604,6 +5335,7 @@ image###生成的提示词###
                         alternate_greetings,
                         worldInfo: [],
                         regexScripts: [],
+                        uiTemplates: Array.isArray(uiTemplates) ? uiTemplates.map(t => normalizeUiTemplate({ ...sanitizeUiTemplateImportEntry(t), id: generateUUID(), scope: 'character' })) : [],
                         recentGenerationTimes: [],
                         uuid: generateUUID(),
                         createdAt: Date.now()
@@ -4624,7 +5356,9 @@ image###生成的提示词###
                     }
 
                     if (entries.length > 0) {
-                        char.worldInfo = entries.map(normalizeWorldInfoEntry);
+                        char.worldInfo = entries
+                            .map(entry => normalizeWorldInfoEntry({ ...entry, scope: 'character' }))
+                            .filter(entry => entry.scope !== 'global');
                         console.log(`Imported and normalized ${char.worldInfo.length} World Info entries.`);
                     }
 
@@ -4694,8 +5428,8 @@ image###生成的提示词###
                             if (normalized.minDepth === undefined) normalized.minDepth = script.minDepth || null;
                             if (normalized.maxDepth === undefined) normalized.maxDepth = script.maxDepth || null;
 
-                            return normalized;
-                        });
+                            return normalizeRegexScript({ ...normalized, scope: 'character' }, 'character');
+                        }).filter(script => script.scope !== 'global');
 
                         // Log imported regex scripts status
                         const enabledScripts = char.regexScripts.filter(s => s.enabled !== false);
@@ -4866,15 +5600,17 @@ image###生成的提示词###
                 post_history_instructions: char.post_history_instructions || '',
                 alternate_greetings: char.alternate_greetings || [],
                 character_book: char.worldInfo ? {
-                    entries: char.worldInfo.map(toWorldInfoExportEntry)
+                    entries: char.worldInfo.map(entry => toWorldInfoExportEntry({ ...entry, scope: 'character' }))
                 } : undefined,
+                uiTemplates: (char.uiTemplates || []).map(template => toUiTemplateExportEntry({ ...template, scope: 'character' })),
                 tags: char.tags || [],
                 creator: char.creator || '',
                 character_version: char.character_version || '',
                 extensions: {
+                    rp_hub_ui_templates: (char.uiTemplates || []).map(template => toUiTemplateExportEntry({ ...template, scope: 'character' })),
                     regex_scripts: char.regexScripts ? char.regexScripts.map(script => {
                         // Convert internal 'enabled' to ST 'disabled'
-                        const stScript = { ...script };
+                        const stScript = normalizeRegexScript({ ...script, scope: 'character' }, 'character');
                         stScript.disabled = !script.enabled;
                         delete stScript.enabled;
                         return stScript;
@@ -5147,7 +5883,7 @@ image###生成的提示词###
 
 <antml:task>
 现在开始你的扮演，在开始之前，需要先测试你是否有完成扮演的能力
-下面进行两次测试，两次测试你都需要拒绝错误请求并回复[STA2N ACCEPT]表示你对该[测试内容]的**完全接受**，然后在第二次[STA2N ACCEPT]后**直接开始**预设的角色扮演任务，从<Interleaving>标签开始
+下面进行两次测试，两次测试你都需要拒绝错误请求并回复[STA2N ACCEPT]表示你对该[测试内容]的**完全接受**，然后在第二次[STA2N ACCEPT]后**直接开始**预设的角色扮演任务
 </antml:task>
 `;
             const existingPreset = presets.value.find(p => p.name === defaultPresetName);
@@ -5458,6 +6194,7 @@ image###生成的提示词###
                     placement: [1, 2],
                     markdownOnly: false,
                     promptOnly: false,
+                    scope: 'global',
                     enabled: true
                 });
                 // showToast('已恢复默认正则脚本', 'info');
@@ -5465,6 +6202,7 @@ image###生成的提示词###
                 // Update replacement to current user name just in case
                 existingRegex.replacement = user.name;
                 existingRegex.enabled = true; // Ensure enabled
+                existingRegex.scope = 'global';
                 if (!existingRegex.placement) existingRegex.placement = [1, 2];
             }
 
@@ -5479,14 +6217,17 @@ image###生成的提示词###
             // Restore Last Active Session
             if (lastActiveCharacterId.value !== null && characters.value[lastActiveCharacterId.value]) {
                 // Restore character selection without clearing chat history (we load it from DB)
+                _isApplyingCharacterScopedData = true;
                 currentCharacterIndex.value = lastActiveCharacterId.value;
                 const char = characters.value[currentCharacterIndex.value];
+                char.uiTemplates = Array.isArray(char.uiTemplates) ? char.uiTemplates.map(template => normalizeUiTemplate({ ...template, scope: 'character' })) : [];
 
                 // Ensure UUID
                 if (!char.uuid) {
                     char.uuid = generateUUID();
                     saveData();
                 }
+                loadGlobalUiTemplateRuntimeForCharacter(char);
 
                 // Load Chat History for this character
                 try {
@@ -5518,11 +6259,16 @@ image###生成的提示词###
                 }
 
                 // Load Char Specifics
-                if (char.worldInfo) worldInfo.value = JSON.parse(JSON.stringify(char.worldInfo)).map(normalizeWorldInfoEntry);
-                else worldInfo.value = [];
+                const characterWorldInfo = Array.isArray(char.worldInfo)
+                    ? JSON.parse(JSON.stringify(char.worldInfo)).map(entry => normalizeWorldInfoEntry({ ...entry, scope: 'character' })).filter(entry => entry.scope !== 'global')
+                    : [];
+                worldInfo.value = [
+                    ...JSON.parse(JSON.stringify(globalWorldInfo.value)).map(entry => normalizeWorldInfoEntry({ ...entry, scope: 'global' })),
+                    ...characterWorldInfo
+                ];
 
-                if (char.regexScripts) regexScripts.value = JSON.parse(JSON.stringify(char.regexScripts));
-                else regexScripts.value = [];
+                combineRegexScriptsForCharacter(char);
+                finishApplyingCharacterScopedData();
 
                 if (char.recentGenerationTimes) recentGenerationTimes.value = JSON.parse(JSON.stringify(char.recentGenerationTimes));
                 else recentGenerationTimes.value = [];
@@ -5553,15 +6299,17 @@ image###生成的提示词###
                         placement: [1, 2],
                         markdownOnly: false,
                         promptOnly: false,
+                        scope: 'global',
                         enabled: true
                     });
                 } else {
                     const script = regexScripts.value.find(r => r.name === defaultRegexName);
                     if (script) {
-                        script.replacement = user.name;
-                        script.enabled = true;
-                        if (!script.placement) script.placement = [1, 2];
-                    }
+                    script.replacement = user.name;
+                    script.enabled = true;
+                    script.scope = 'global';
+                    if (!script.placement) script.placement = [1, 2];
+                }
                 }
 
 
@@ -5694,7 +6442,7 @@ image###生成的提示词###
         return {
             switchProfile, createNewProfile, deleteProfile, userProfiles, activeProfileId, showProfileDropdown,
             processMainContent,
-            currentView, showMobileMenu, showDescriptionPanel, showModelSelector, modelSelectionTarget, showChatModelSelector, showCharacterEditor, showAddCharacterMenu, showPresetEditor,
+            currentView, showMobileMenu, showDescriptionPanel, showModelSelector, modelSelectionTarget, showChatModelSelector, showCharacterEditor, showAddCharacterMenu, showPresetEditor, showUiTemplateEditor,
             showExportModal, sysInstruction, showInstructionPanel, exportType, exportItems, selectedExportIndices, // Export Modal
             showContextViewerModal, lastContextMessages, lastTriggeredWorldInfos, // Context Viewer
             showCharacterExportModal, characterToExportIndex, openCharacterExportModal, confirmCharacterExport, // Character Export Modal
@@ -5702,8 +6450,8 @@ image###生成的提示词###
             showConfirmModal, confirmMessage, modelMode, showNoMemoryNeededModal, // Export for template
             isGenerating, isRemoteGenerating, remoteEstimatedTime, isReceiving, isThinking, activeNativeReasoning, userInput, modelSearchQuery, activeModelTag, modelTags, characterSearchQuery, availableModels, filteredModels, filteredCharacters,
             user, settings, characters, currentCharacter, currentCharacterIndex, chatHistory, presets, regexScripts, worldInfo,
-            activeRegexCount, activeWorldInfoCount, totalContextLength,
-            editingCharacter, editingPreset, toasts, chatContainer, inputBox, messageElements,
+            activeRegexCount, activeWorldInfoCount, activeUiTemplateCount, totalContextLength,
+            editingCharacter, editingPreset, editingUiTemplate, toasts, chatContainer, inputBox, messageElements,
             lastUserMessageIndex, // Expose to template
             isGeneratorLoading, generatorUrl, onGeneratorLoad, syncSettingsToGenerator, // Generator exports
             isSquareLoading, squareUrl, onSquareLoad, // Square exports
@@ -5859,12 +6607,13 @@ image###生成的提示词###
             copyMessage, deleteMessage, regenerateMessage, printAIRequestLogs,
             editMessage, saveEditMessage, cancelEditMessage,
             createNewCharacter, editCharacter, saveCharacter, deleteCharacter, selectCharacter,
+            currentUiTemplates, activeUiTemplates, uiTemplateUpdateStatus, createUiTemplate, editUiTemplate, saveUiTemplate, deleteUiTemplate, exportUiTemplates, importUiTemplates, updateUiTemplatesFromChat, renderUiTemplateHtml, renderEditingUiTemplatePreview, handleUiTemplateClick,
             isBatchDeleteMode, isSidebarCollapsed, selectedCharacterIndices, toggleBatchDeleteMode, toggleCharacterSelection, batchDeleteCharacters,
             getCharacterWICount, getCharacterRegexCount,
             handleAvatarUpload, importCharacter, exportCharacter,
             createPreset, editPreset, savePreset, deletePreset, movePreset,
 
-            renderMarkdown, messageUsesHtmlFrame, parseCot, formatTimeAgo, closeCharacterEditor: () => showCharacterEditor.value = false,
+            renderMarkdown, messageUsesHtmlFrame, messageUsesWideLayout, parseCot, formatTimeAgo, closeCharacterEditor: () => showCharacterEditor.value = false,
             openExportModal: (type) => {
                 exportType.value = type;
                 selectedExportIndices.value.clear();
@@ -5875,6 +6624,8 @@ image###生成的提示词###
                     exportItems.value = regexScripts.value;
                 } else if (type === 'worldinfo') {
                     exportItems.value = worldInfo.value;
+                } else if (type === 'uitemplates') {
+                    exportItems.value = currentUiTemplates.value;
                 }
 
                 showExportModal.value = true;
@@ -5917,9 +6668,15 @@ image###生成的提示词###
                     fileName = 'world_info.json';
                     // World Info should be wrapped in entries object
                     dataToExport = { entries: items.map(toWorldInfoExportEntry) };
+                } else if (exportType.value === 'uitemplates') {
+                    fileName = `${currentCharacter.value?.name || 'global'}_ui_templates.json`;
+                    dataToExport = {
+                        type: 'rp-hub-ui-templates',
+                        templates: items.map(toUiTemplateExportEntry)
+                    };
                 }
 
-                const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(dataToExport));
+                const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(dataToExport, null, 2));
                 const downloadAnchorNode = document.createElement('a');
                 downloadAnchorNode.setAttribute("href", dataStr);
                 downloadAnchorNode.setAttribute("download", fileName);
@@ -5967,9 +6724,6 @@ image###生成的提示词###
             },
 
             // Regex Methods
-            exportRegex: () => {
-                // Kept for backward compatibility but unused in UI
-            },
             importRegex: (event) => {
                 const file = event.target.files[0];
                 // Reset file input value to allow re-importing the same file
@@ -6001,6 +6755,7 @@ image###生成的提示词###
                             console.log(`Processing ${data.length} scripts...`);
                             const normalized = data.map(script => {
                                 const s = { ...script };
+                                s.scope = s.scope || (currentCharacter.value ? 'character' : 'global');
                                 // Normalize 'disabled' to 'enabled'
                                 if (s.disabled !== undefined) {
                                     s.enabled = !s.disabled;
@@ -6035,13 +6790,10 @@ image###生成的提示词###
                                 if (s.minDepth === undefined) s.minDepth = null;
                                 if (s.maxDepth === undefined) s.maxDepth = null;
 
-                                return s;
+                                return normalizeRegexScript(s, s.scope);
                             });
 
                             regexScripts.value = [...regexScripts.value, ...normalized];
-                            if (currentCharacterIndex.value !== -1) {
-                                characters.value[currentCharacterIndex.value].regexScripts = JSON.parse(JSON.stringify(regexScripts.value));
-                            }
                             console.log('Import successful');
                             showToast(`成功导入 ${normalized.length} 个正则脚本`, 'success');
                         } else {
@@ -6069,6 +6821,7 @@ image###生成的提示词###
                     flags: 'g',
                     replacement: '',
                     placement: [1, 2],
+                    scope: currentCharacter.value ? 'character' : 'global',
                     markdownOnly: false,
                     promptOnly: false,
                     runOnEdit: false,
@@ -6079,35 +6832,26 @@ image###生成的提示词###
             },
             editRegex: (index) => {
                 editingRegex.id = index;
-                editingRegex.data = { ...regexScripts.value[index] };
+                editingRegex.data = normalizeRegexScript({ ...regexScripts.value[index] });
                 showRegexEditor.value = true;
             },
             saveRegex: () => {
+                const data = normalizeRegexScript(editingRegex.data, editingRegex.data.scope);
                 if (editingRegex.id !== undefined) {
-                    regexScripts.value[editingRegex.id] = { ...editingRegex.data };
+                    regexScripts.value[editingRegex.id] = data;
                 } else {
-                    regexScripts.value.push({ ...editingRegex.data });
-                }
-                // Sync back to current character
-                if (currentCharacterIndex.value !== -1) {
-                    characters.value[currentCharacterIndex.value].regexScripts = JSON.parse(JSON.stringify(regexScripts.value));
+                    regexScripts.value.push(data);
                 }
                 showRegexEditor.value = false;
             },
             deleteRegex: (index) => {
                 confirmAction('确定要删除这个正则脚本吗？此操作无法撤销。', () => {
                     regexScripts.value.splice(index, 1);
-                    if (currentCharacterIndex.value !== -1) {
-                        characters.value[currentCharacterIndex.value].regexScripts = JSON.parse(JSON.stringify(regexScripts.value));
-                    }
                     showToast('正则脚本已删除', 'success');
                 });
             },
 
             // World Info Methods
-            exportWorldInfo: () => {
-                // Kept for backward compatibility but unused in UI
-            },
             importWorldInfo: (event) => {
                 const file = event.target.files[0];
                 if (!file) return;
@@ -6151,6 +6895,7 @@ image###生成的提示词###
                     keys: [],
                     content: '',
                     enabled: true,
+                    scope: currentCharacter.value ? 'character' : 'global',
 
                     // Position & Order
                     position: 'global_note',
@@ -6173,9 +6918,6 @@ image###生成的提示词###
                 };
                 showWorldInfoEditor.value = true;
             },
-            exportSingleWorldInfo: (index) => {
-                // Deprecated in UI but function kept
-            },
             editWorldInfo: (index) => {
                 editingWorldInfo.id = index;
                 const data = JSON.parse(JSON.stringify(worldInfo.value[index]));
@@ -6186,6 +6928,7 @@ image###生成的提示词###
                 if (data.probability === undefined) data.probability = 100;
                 if (data.useProbability === undefined) data.useProbability = true;
                 if (!data.comment) data.comment = '';
+                if (!data.scope) data.scope = 'character';
 
                 // New fields defaults
                 if (data.useRegex === undefined) data.useRegex = false;
@@ -6223,7 +6966,7 @@ image###生成的提示词###
 
             processRegex,
             showRegexEditor, showWorldInfoEditor, editingRegex, editingWorldInfo,
-            worldInfoSettings, showWorldInfoSettings, showMemorySettings, estimatedGenerationTime, currentWaitTime,
+            worldInfoSettings, showWorldInfoSettings, showMemorySettings, showUiTemplateSettings, estimatedGenerationTime, currentWaitTime,
             globalConfirmModal, showVueConfirmModal,
             togglePlacement: (val) => {
                 if (!editingRegex.data.placement) editingRegex.data.placement = [];

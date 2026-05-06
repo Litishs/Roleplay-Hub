@@ -137,9 +137,11 @@
             <!-- Sidebar Header -->
             <div class="h-16 flex items-center border-b border-gray-100 transition-all duration-300"
                 :class="isSidebarCollapsed ? 'justify-center px-0' : 'justify-between px-6'">
-                <div v-show="!isSidebarCollapsed"
-                    class="font-bold text-xl bg-gradient-to-r from-primary-600 to-purple-600 bg-clip-text text-transparent whitespace-nowrap overflow-hidden">
-                    RolePlay Hub</div>
+                <div v-show="!isSidebarCollapsed" class="relative inline-flex items-baseline gap-1.5 pr-1 min-w-0">
+                    <span class="text-[21px] font-extrabold text-gray-800 tracking-[0.08em] leading-none">RP</span>
+                    <span class="text-[16px] font-semibold text-primary-600 tracking-[0.18em] leading-none">HUB</span>
+                    <span class="absolute -bottom-1 left-0 h-[2px] w-11 rounded-full bg-primary-500/60"></span>
+                </div>
                 <button @click="isSidebarCollapsed = !isSidebarCollapsed"
                     class="hidden md:flex p-1.5 hover:bg-gray-100 rounded-lg text-gray-500 transition-colors"
                     :title="isSidebarCollapsed ? '展开侧边栏' : '收起侧边栏'">
@@ -220,6 +222,19 @@
                         </path>
                     </svg>
                     <span v-show="!isSidebarCollapsed" class="whitespace-nowrap overflow-hidden">预设</span>
+                </button>
+                <button @click="currentView = 'uitemplates'; showMobileMenu = false"
+                    :class="['w-full flex items-center rounded-lg transition-all duration-200 font-medium', currentView === 'uitemplates' ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900', isSidebarCollapsed ? 'justify-center px-0 py-3' : 'px-3 py-2']">
+                    <svg class="w-5 h-5" :class="isSidebarCollapsed ? 'mr-0' : 'mr-3'" fill="none" stroke="currentColor"
+                        viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M4 5a2 2 0 012-2h12a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm4 3h8M8 12h8M8 16h5">
+                        </path>
+                    </svg>
+                    <span v-show="!isSidebarCollapsed" class="whitespace-nowrap overflow-hidden">UI模板</span>
+                    <span v-if="!isSidebarCollapsed && uiTemplateUpdateStatus.state === 'running' && uiTemplateUpdateStatus.remaining > 0"
+                        class="ml-auto text-[10px] px-1.5 py-0.5 rounded-full bg-primary-100 text-primary-600 font-bold">{{
+                        uiTemplateUpdateStatus.remaining }}</span>
                 </button>
                 <button @click="currentView = 'worldinfo'; showMobileMenu = false"
                     :class="['w-full flex items-center rounded-lg transition-all duration-200 font-medium', currentView === 'worldinfo' ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900', isSidebarCollapsed ? 'justify-center px-0 py-3' : 'px-3 py-2']">
@@ -486,13 +501,14 @@
                         <p>开始与 {{ currentCharacter.name }} 对话吧</p>
                     </div>
 
-                    <div v-else v-for="(msg, index) in chatHistory" :key="index" ref="messageElements"
+                    <template v-if="currentCharacter && chatHistory.length > 0">
+                    <div v-for="(msg, index) in chatHistory" :key="index" ref="messageElements"
                         :data-role="msg.role"
                         v-show="!(msg.role === 'assistant' && index === chatHistory.length - 1 && isThinking && !(msg.reasoning || parseCot(msg.content).cot || parseCot(msg.content).main))"
                         :class="['flex w-full scroll-reveal-container', msg.isSelf ? 'justify-end' : 'justify-start', msg.skipReveal ? 'reveal-active' : (msg.isSelf ? 'scroll-reveal-right' : 'scroll-reveal-left')]"
                         :style="{ transitionDelay: (index % 5) * 50 + 'ms' }">
                         <div
-                            :class="['flex', msg.isEditing_Message ? 'w-full max-w-full' : ['md:max-w-[75%] lg:max-w-[70%]', settings.immersiveMode ? 'max-w-full' : 'max-w-[99%]'], (msg.reasoning || parseCot(msg.content).cot || msg.isEditing_Message || messageUsesHtmlFrame(msg)) ? 'w-full' : '', msg.isSelf ? 'flex-row-reverse' : 'flex-row']">
+                            :class="['flex', msg.isEditing_Message ? 'w-full max-w-full' : ['md:max-w-[75%] lg:max-w-[70%]', settings.immersiveMode ? 'max-w-full' : 'max-w-[99%]'], messageUsesWideLayout(msg) ? 'w-full' : '', msg.isSelf ? 'flex-row-reverse' : 'flex-row']">
                             <!-- Avatar -->
                             <div v-show="!settings.immersiveMode"
                                 :class="['flex-shrink-0 select-none', msg.shouldAnimate ? 'animate-message-fade-in' : '']">
@@ -513,7 +529,7 @@
                             </div>
 
                             <div
-                                :class="['flex flex-col min-w-0', (msg.reasoning || parseCot(msg.content).cot || msg.isEditing_Message || messageUsesHtmlFrame(msg)) ? 'flex-1 w-full' : '', msg.isSelf ? 'items-end' : 'items-start']">
+                                :class="['flex flex-col min-w-0', messageUsesWideLayout(msg) ? 'flex-1 w-full' : '', msg.isSelf ? 'items-end' : 'items-start']">
                                 <!-- Name (Outside Bubble) -->
                                 <div v-show="!settings.immersiveMode"
                                     :class="['text-[10px] font-bold text-gray-600 mb-1 select-none px-1.5 py-0.5 rounded-md bg-white/50 backdrop-blur-sm border border-white/20 w-fit shadow-sm truncate max-w-[150px] md:max-w-[250px] msg-name-tag', msg.isSelf ? 'ml-auto mr-1' : 'mr-auto ml-1', msg.shouldAnimate ? 'animate-message-fade-in' : '']">
@@ -521,11 +537,11 @@
                                 </div>
                                 <!-- Message Bubble -->
                                 <div class="group relative"
-                                    :class="{'w-full': msg.reasoning || parseCot(msg.content).cot || msg.isEditing_Message || messageUsesHtmlFrame(msg)}">
+                                    :class="{'w-full': messageUsesWideLayout(msg)}">
                                     <div
                                         :class="['p-0 rounded-2xl shadow-sm text-sm md:text-base leading-relaxed overflow-hidden',
                                         msg.shouldAnimate && !(msg.role === 'assistant' && msg.reasoning) ? 'animate-message-in' : '',
-                                        (msg.reasoning || parseCot(msg.content).cot || msg.isEditing_Message || messageUsesHtmlFrame(msg)) ? 'w-full' : '',
+                                        messageUsesWideLayout(msg) ? 'w-full' : '',
                                         msg.role === 'user' ? (msg.isSelf ? 'bg-blue-50/85 text-gray-900 shadow-[0_4px_12px_rgba(59,130,246,0.1)] border border-primary-300/50' : 'bg-white/70 text-gray-800 border border-white/40 shadow-card') :
                                         msg.role === 'system' ? 'bg-red-50/70 text-red-800 border border-red-200/40' :
                                         'bg-white/70 text-gray-800 border border-white/40 shadow-card',
@@ -574,7 +590,7 @@
                                         </div>
 
                                         <div v-else class="message-content-wrapper"
-                                            :class="{'w-full': msg.reasoning || parseCot(msg.content).cot || msg.isEditing_Message || messageUsesHtmlFrame(msg)}"
+                                            :class="{'w-full': messageUsesWideLayout(msg)}"
                                             :style="index < chatHistory.length - (settings.renderLayerLimit > 100 ? 99999 : settings.renderLayerLimit) ? 'content-visibility: auto; contain-intrinsic-size: auto 150px;' : ''">
                                             <!-- Native Model Reasoning Part -->
                                             <div v-if="msg.reasoning && settings.showNativeReasoning !== false" class="native-thinking-wrapper">
@@ -681,6 +697,38 @@
                                                     </div>
                                                 </div>
                                             </div>
+                                            <div v-if="msg.role === 'assistant' && msg.uiTemplateBlocks && msg.uiTemplateBlocks.top && msg.uiTemplateBlocks.top.length"
+                                                class="ui-template-message-block ui-template-message-block-top">
+                                                <div v-for="(html, tIndex) in msg.uiTemplateBlocks.top"
+                                                    :key="'msg-ui-top-' + index + '-' + tIndex"
+                                                    class="w-full ui-template-render" @click="handleUiTemplateClick"
+                                                    v-html="html"></div>
+                                            </div>
+                                            <div v-if="msg.role === 'assistant' && uiTemplateUpdateStatus.state === 'running' && uiTemplateUpdateStatus.targetMessageId === msg.id && activeUiTemplates.some(t => t.placement === 'top')"
+                                                class="ui-template-message-block ui-template-message-block-top">
+                                                <div class="ui-template-pending-card" role="status" aria-live="polite">
+                                                    <div class="ui-template-pending-icon" aria-hidden="true">
+                                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                                d="M4 5a2 2 0 012-2h12a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm4 3h8M8 12h8M8 16h5">
+                                                            </path>
+                                                        </svg>
+                                                        <span class="live-dots"><i></i><i></i><i></i></span>
+                                                    </div>
+                                                    <div class="ui-template-pending-content">
+                                                        <div class="ui-template-pending-row">
+                                                            <span class="ui-template-pending-title">变量同步中</span>
+                                                            <span class="ui-template-pending-count">剩余 {{ uiTemplateUpdateStatus.remaining }}</span>
+                                                        </div>
+                                                        <div class="ui-template-pending-subtitle">
+                                                            {{ uiTemplateUpdateStatus.message || '正在读取最近剧情，整理状态栏变量' }}
+                                                        </div>
+                                                        <div class="ui-template-pending-bars" aria-hidden="true">
+                                                            <i></i><i></i><i></i>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
                                             <!-- Main Part -->
                                             <template v-if="parseCot(msg.content).main">
                                                 <template
@@ -728,6 +776,38 @@
                                                 <div class="text-gray-600 leading-relaxed font-medium markdown-body relative z-10"
                                                     :style="settings.fontSize ? { fontSize: (settings.fontSize - 1) + 'px' } : { fontSize: '13px' }"
                                                     v-html="renderMarkdown(parseCot(msg.content).sys, 'user', true)">
+                                                </div>
+                                            </div>
+                                            <div v-if="msg.role === 'assistant' && msg.uiTemplateBlocks && msg.uiTemplateBlocks.bottom && msg.uiTemplateBlocks.bottom.length"
+                                                class="ui-template-message-block ui-template-message-block-bottom">
+                                                <div v-for="(html, tIndex) in msg.uiTemplateBlocks.bottom"
+                                                    :key="'msg-ui-bottom-' + index + '-' + tIndex"
+                                                    class="w-full ui-template-render" @click="handleUiTemplateClick"
+                                                    v-html="html"></div>
+                                            </div>
+                                            <div v-if="msg.role === 'assistant' && uiTemplateUpdateStatus.state === 'running' && uiTemplateUpdateStatus.targetMessageId === msg.id && activeUiTemplates.some(t => t.placement === 'bottom')"
+                                                class="ui-template-message-block ui-template-message-block-bottom">
+                                                <div class="ui-template-pending-card" role="status" aria-live="polite">
+                                                    <div class="ui-template-pending-icon" aria-hidden="true">
+                                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                                d="M4 5a2 2 0 012-2h12a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm4 3h8M8 12h8M8 16h5">
+                                                            </path>
+                                                        </svg>
+                                                        <span class="live-dots"><i></i><i></i><i></i></span>
+                                                    </div>
+                                                    <div class="ui-template-pending-content">
+                                                        <div class="ui-template-pending-row">
+                                                            <span class="ui-template-pending-title">变量同步中</span>
+                                                            <span class="ui-template-pending-count">剩余 {{ uiTemplateUpdateStatus.remaining }}</span>
+                                                        </div>
+                                                        <div class="ui-template-pending-subtitle">
+                                                            {{ uiTemplateUpdateStatus.message || '正在读取最近剧情，整理状态栏变量' }}
+                                                        </div>
+                                                        <div class="ui-template-pending-bars" aria-hidden="true">
+                                                            <i></i><i></i><i></i>
+                                                        </div>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
@@ -782,6 +862,7 @@
                             </div>
                         </div>
                     </div>
+                    </template>
 
                     <!-- Typing Indicator -->
                     <div v-if="(isGenerating || isRemoteGenerating) && !isReceiving && !isThinking"
@@ -2030,6 +2111,60 @@
                                             </div>
                                         </div>
                                     </div>
+                                    <div class="group">
+                                        <label
+                                            class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 ml-1">记忆引擎模型配置</label>
+                                        <div class="relative flex-1 group"
+                                            @click="modelSelectionTarget = 'memoryModel'; showModelSelector = true">
+                                            <div
+                                                class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-hover:text-teal-500 transition-colors pointer-events-none z-10">
+                                                <svg class="w-5 h-5" fill="none" stroke="currentColor"
+                                                    viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round"
+                                                        stroke-width="2"
+                                                        d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z">
+                                                    </path>
+                                                </svg>
+                                            </div>
+                                            <div
+                                                class="w-full bg-gray-50 border-2 border-gray-100 rounded-xl pl-11 pr-4 py-3 text-gray-800 font-medium flex items-center justify-between cursor-pointer hover:bg-white hover:border-teal-300 hover:shadow-md transition-all active:scale-[0.99]">
+                                                <span class="truncate mr-2 font-mono text-sm">{{
+                                                    memorySettings.model || '自动选择：快速模型' }}</span>
+                                                <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor"
+                                                    viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round"
+                                                        stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                                                </svg>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="group">
+                                        <label
+                                            class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 ml-1">UI模板模型配置</label>
+                                        <div class="relative flex-1 group"
+                                            @click="modelSelectionTarget = 'uiTemplateModel'; showModelSelector = true">
+                                            <div
+                                                class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-hover:text-teal-500 transition-colors pointer-events-none z-10">
+                                                <svg class="w-5 h-5" fill="none" stroke="currentColor"
+                                                    viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round"
+                                                        stroke-width="2"
+                                                        d="M4 5a2 2 0 012-2h12a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm4 3h8M8 12h8M8 16h5">
+                                                    </path>
+                                                </svg>
+                                            </div>
+                                            <div
+                                                class="w-full bg-gray-50 border-2 border-gray-100 rounded-xl pl-11 pr-4 py-3 text-gray-800 font-medium flex items-center justify-between cursor-pointer hover:bg-white hover:border-teal-300 hover:shadow-md transition-all active:scale-[0.99]">
+                                                <span class="truncate mr-2 font-mono text-sm">{{
+                                                    settings.uiTemplateModel || '自动选择' }}</span>
+                                                <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor"
+                                                    viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round"
+                                                        stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                                                </svg>
+                                            </div>
+                                        </div>
+                                    </div>
                                     <div class="group col-span-1 md:col-span-2 mt-2">
                                         <button @click="fetchModels(true)"
                                             class="w-full px-4 py-3 bg-white hover:bg-teal-50 text-gray-600 hover:text-teal-700 rounded-lg border border-gray-200 hover:border-teal-200 transition-all shadow-sm active:scale-95 whitespace-nowrap font-medium flex items-center justify-center text-sm"
@@ -2377,6 +2512,205 @@
                 </div>
             </div>
 
+            <!-- UI Templates View -->
+            <div v-if="currentView === 'uitemplates'" class="p-4 md:p-6 h-full overflow-y-auto animate-fade-in">
+                <div class="flex justify-between items-center mb-4 md:mb-6">
+                    <div class="flex items-center">
+                        <button @click="toggleMobileMenu"
+                            class="md:hidden mr-3 text-gray-500 md:hover:text-gray-700 active:text-gray-700 transition-colors">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M4 6h16M4 12h16m-7 6h7"></path>
+                            </svg>
+                        </button>
+                        <h2 class="text-xl md:text-2xl font-bold text-gray-800 flex items-center">
+                            <svg class="w-6 h-6 md:w-7 md:h-7 mr-2 text-primary-600" fill="none" stroke="currentColor"
+                                viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M4 5a2 2 0 012-2h12a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm4 3h8M8 12h8M8 16h5">
+                                </path>
+                            </svg>
+                            UI模板
+                        </h2>
+                    </div>
+                    <div class="flex space-x-2 md:space-x-3">
+                        <button @click="openExportModal('uitemplates')" :disabled="currentUiTemplates.length === 0"
+                            class="p-2.5 bg-white hover:bg-gray-50 text-gray-600 rounded-xl border border-gray-200 transition-all shadow-sm hover:shadow-md active:scale-95 disabled:opacity-40"
+                            title="导出">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
+                            </svg>
+                        </button>
+                        <label
+                            class="cursor-pointer p-2.5 bg-white hover:bg-gray-50 text-gray-600 rounded-xl border border-gray-200 transition-all shadow-sm hover:shadow-md active:scale-95"
+                            title="导入">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                            </svg>
+                            <input type="file" accept=".json" @change="importUiTemplates" class="hidden">
+                        </label>
+                        <button @click="createUiTemplate"
+                            class="p-2.5 bg-primary-600 hover:bg-primary-700 text-white rounded-xl transition-all shadow-sm hover:shadow-md active:scale-95"
+                            title="新建模板">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M12 4v16m8-8H4"></path>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+
+                <div
+                    class="bg-white/70 backdrop-blur-sm p-1 rounded-2xl border border-gray-200 shadow-sm mb-4 overflow-hidden">
+                    <button @click="showUiTemplateSettings = !showUiTemplateSettings"
+                        :class="['w-full flex justify-between items-center px-4 py-3 rounded-xl transition-all font-bold',
+                                     showUiTemplateSettings ? 'bg-primary-50 text-primary-700' : 'text-gray-700 hover:bg-gray-50']">
+                        <span class="flex items-center min-w-0">
+                            <span
+                                :class="['p-1.5 rounded-lg mr-3 transition-colors', showUiTemplateSettings ? 'bg-primary-100 text-primary-600' : 'bg-gray-100 text-gray-500']">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M4 5a2 2 0 012-2h12a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm4 3h8M8 12h8M8 16h5">
+                                    </path>
+                                </svg>
+                            </span>
+                            <span class="truncate">变量系统设置</span>
+                            <span v-if="uiTemplateUpdateStatus.state !== 'idle'"
+                                class="ml-2 inline-flex items-center text-[11px] font-bold px-2 py-0.5 rounded-full border"
+                                :class="{
+                                    'bg-blue-50 text-blue-700 border-blue-200': uiTemplateUpdateStatus.state === 'running',
+                                    'bg-green-50 text-green-700 border-green-200': uiTemplateUpdateStatus.state === 'success',
+                                    'bg-yellow-50 text-yellow-700 border-yellow-200': uiTemplateUpdateStatus.state === 'skipped',
+                                    'bg-red-50 text-red-700 border-red-200': uiTemplateUpdateStatus.state === 'error',
+                                    'bg-gray-50 text-gray-500 border-gray-200': uiTemplateUpdateStatus.state === 'idle'
+                                }">
+                                {{ uiTemplateUpdateStatus.message }}
+                            </span>
+                        </span>
+                        <span class="flex items-center gap-3 flex-shrink-0">
+                            <span class="text-xs font-bold"
+                                :class="settings.uiTemplateEnabled ? 'text-primary-600' : 'text-gray-400'">
+                                {{ settings.uiTemplateEnabled ? '已开启' : '已关闭' }}
+                            </span>
+                            <svg :class="{'transform rotate-180': showUiTemplateSettings}"
+                                class="w-5 h-5 transition-transform duration-300" fill="none" stroke="currentColor"
+                                viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7">
+                                </path>
+                            </svg>
+                        </span>
+                    </button>
+                    <div v-show="showUiTemplateSettings" class="px-4 pb-4 pt-3 border-t border-gray-100 animate-fade-in">
+                        <div class="flex items-center justify-between mb-3">
+                            <div class="flex items-center space-x-3">
+                                <span class="text-sm font-bold text-gray-700">变量分析</span>
+                                <label class="relative inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" v-model="settings.uiTemplateEnabled" class="sr-only peer">
+                                    <div
+                                        class="w-10 h-[22px] bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-[18px] peer-checked:after:border-white after:content-[''] after:absolute after:top-[3px] after:left-[3px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all after:shadow-sm peer-checked:bg-gradient-to-r peer-checked:from-primary-500 peer-checked:to-primary-600">
+                                    </div>
+                                </label>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <button @click="updateUiTemplatesFromChat({ manual: true })"
+                                    :disabled="!settings.uiTemplateEnabled"
+                                    class="inline-flex items-center text-xs px-3 py-1.5 bg-gradient-to-r from-primary-50 to-blue-50 hover:from-primary-100 hover:to-blue-100 text-primary-700 rounded-lg border border-primary-200/80 transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-sm hover:shadow font-medium active:scale-95">
+                                    <svg class="w-3.5 h-3.5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                                    </svg>
+                                    <span>立即分析</span>
+                                </button>
+                            </div>
+                        </div>
+                        <div v-if="settings.uiTemplateEnabled"
+                            class="space-y-3 pt-3 border-t border-gray-100 animate-fade-in">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <div>
+                                    <label class="text-xs font-medium text-gray-500 block mb-1.5">分析模型（留空使用记忆/快速模型）</label>
+                                    <div class="flex gap-2">
+                                        <button @click="modelSelectionTarget = 'uiTemplateModel'; showModelSelector = true"
+                                            class="flex-1 px-3 py-2 text-sm text-left bg-gray-50/80 border border-gray-200 rounded-xl hover:border-primary-300 hover:bg-white transition-all cursor-pointer truncate"
+                                            :title="settings.uiTemplateModel || '自动选择'">
+                                            <span
+                                                :class="settings.uiTemplateModel ? 'text-gray-800 font-mono' : 'text-gray-400'">{{
+                                                settings.uiTemplateModel || '自动选择：记忆模型 / 快速模型' }}</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="pt-3 border-t border-gray-100 mt-1">
+                                <div class="bg-gray-50/80 p-3 rounded-xl border border-gray-100">
+                                    <p class="text-[11px] text-gray-500 leading-relaxed">
+                                        角色回复结束后，模板会立刻调用配置模型，使用新变量刷新UI模板。
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div v-if="!currentCharacter && currentUiTemplates.length === 0" class="py-24 text-center text-gray-400">请先选择角色卡</div>
+                <div v-else-if="currentUiTemplates.length === 0" class="py-24 text-center text-gray-400">
+                    当前没有UI模板
+                </div>
+                <div v-else class="space-y-4">
+                    <div v-for="(template, index) in currentUiTemplates" :key="template.id"
+                        class="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+                        <div class="p-4 flex items-start justify-between gap-3">
+                            <div class="min-w-0">
+                                <div class="flex items-center gap-2 flex-wrap">
+                                    <h3 class="font-bold text-gray-800 truncate">{{ template.name }}</h3>
+                                    <span class="text-[10px] px-2 py-0.5 rounded-full border"
+                                        :class="template.scope === 'global' ? 'bg-purple-50 text-purple-700 border-purple-200' : 'bg-yellow-50 text-yellow-700 border-yellow-200'">
+                                        {{ template.scope === 'global' ? '全局' : '绑定角色' }}
+                                    </span>
+                                </div>
+                                <p class="text-xs text-gray-500 mt-1">{{ Object.keys(template.variableState || {}).length }} 个变量 · {{ (template.changeLog || []).length }} 条记录</p>
+                            </div>
+                            <div class="flex items-center gap-1">
+                                <label class="relative inline-flex items-center cursor-pointer mr-2">
+                                    <input type="checkbox" v-model="template.enabled" class="sr-only peer">
+                                    <div class="w-10 h-[22px] bg-gray-200 rounded-full peer peer-checked:after:translate-x-[18px] after:content-[''] after:absolute after:top-[3px] after:left-[3px] after:bg-white after:border after:border-gray-300 after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary-600"></div>
+                                </label>
+                                <button @click="editUiTemplate(index)" class="p-2 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors" title="编辑">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z">
+                                        </path>
+                                    </svg>
+                                </button>
+                                <button @click="deleteUiTemplate(index)" class="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="删除">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16">
+                                        </path>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="px-4 pb-4">
+                            <details class="text-xs">
+                                <summary class="cursor-pointer text-gray-500 font-bold">变更记录</summary>
+                                <div class="mt-2 space-y-2 max-h-[30rem] overflow-y-auto custom-scrollbar">
+                                    <div v-if="!(template.changeLog || []).length" class="text-gray-400">暂无变更</div>
+                                    <div v-for="log in (template.changeLog || []).slice(0, 10)" :key="log.id"
+                                        class="bg-gray-50 border border-gray-100 rounded-lg p-3 text-gray-600 leading-relaxed">
+                                        <div class="font-bold mb-1.5">第 {{ log.turn || '?' }} 轮</div>
+                                        <div class="space-y-1">
+                                            <div v-for="(change, key) in log.changes" :key="key">{{ key }}：{{ change.from }} → {{ change.to }}</div>
+                                        </div>
+                                        <div v-if="log.reason" class="text-gray-400 mt-2 leading-relaxed">{{ log.reason }}</div>
+                                    </div>
+                                </div>
+                            </details>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Regex View -->
             <div v-if="currentView === 'regex'" class="p-4 md:p-6 h-full overflow-y-auto animate-fade-in">
                 <div class="flex justify-between items-center mb-4 md:mb-6">
@@ -2435,7 +2769,15 @@
                                         d="M4 8h16M4 16h16"></path>
                                 </svg>
                             </div>
-                            <h3 class="font-bold text-gray-800 truncate">{{ script.name }}</h3>
+                            <div class="min-w-0">
+                                <div class="flex items-center gap-2">
+                                    <h3 class="font-bold text-gray-800 truncate">{{ script.name }}</h3>
+                                    <span class="text-[10px] px-2 py-0.5 rounded-full border flex-shrink-0"
+                                        :class="script.scope === 'global' ? 'bg-purple-50 text-purple-700 border-purple-200' : 'bg-yellow-50 text-yellow-700 border-yellow-200'">
+                                        {{ script.scope === 'global' ? '全局' : '绑定角色' }}
+                                    </span>
+                                </div>
+                            </div>
                         </div>
                         <div class="flex items-center space-x-4 flex-shrink-0">
                             <label class="relative inline-flex items-center cursor-pointer">
@@ -2583,12 +2925,18 @@
                             </div>
                             记忆引擎设置
                         </span>
-                        <svg :class="{'transform rotate-180': showMemorySettings}"
-                            class="w-5 h-5 transition-transform duration-300" fill="none" stroke="currentColor"
-                            viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7">
-                            </path>
-                        </svg>
+                        <span class="flex items-center gap-3 flex-shrink-0">
+                            <span class="text-xs font-bold"
+                                :class="memorySettings.enabled ? 'text-primary-600' : 'text-gray-400'">
+                                {{ memorySettings.enabled ? '已开启' : '已关闭' }}
+                            </span>
+                            <svg :class="{'transform rotate-180': showMemorySettings}"
+                                class="w-5 h-5 transition-transform duration-300" fill="none" stroke="currentColor"
+                                viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7">
+                                </path>
+                            </svg>
+                        </span>
                     </button>
                     <div v-show="showMemorySettings" class="px-4 pb-4 pt-3 border-t border-gray-100 animate-fade-in">
                         <!-- System Toggle & Extract -->
@@ -2844,10 +3192,6 @@
                     <p class="text-lg font-black text-gray-700 mb-2 tracking-wide">暂无记忆数据</p>
                     <p class="text-sm text-gray-400 max-w-[280px] text-center leading-relaxed">开启记忆系统后，AI
                         会在对话中自动提取摘要，构建长期记忆网络。</p>
-                    <button v-if="!memorySettings.enabled" @click="memorySettings.enabled = true"
-                        class="mt-6 px-5 py-2 bg-gradient-to-r from-primary-600 to-blue-600 text-white text-sm font-bold rounded-xl hover:from-primary-700 hover:to-blue-700 transition-all shadow-md shadow-primary-500/20 active:scale-95">
-                        启用记忆系统
-                    </button>
                 </div>
 
             </div>
@@ -3170,6 +3514,10 @@
                             <div class="min-w-0">
                                 <div class="flex items-center">
                                     <h3 class="font-bold text-gray-800 truncate">{{ entry.comment || '未命名条目' }}</h3>
+                                    <span class="ml-2 text-[10px] px-2 py-0.5 rounded-full border flex-shrink-0"
+                                        :class="entry.scope === 'global' ? 'bg-purple-50 text-purple-700 border-purple-200' : 'bg-yellow-50 text-yellow-700 border-yellow-200'">
+                                        {{ entry.scope === 'global' ? '全局' : '绑定角色' }}
+                                    </span>
                                 </div>
                             </div>
                         </div>
@@ -3715,6 +4063,126 @@
             </div>
         </div>
 
+        <!-- UI Template Editor Modal -->
+        <div v-if="showUiTemplateEditor"
+            class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fade-in">
+            <div
+                class="bg-white rounded-2xl border border-gray-200 w-full max-w-4xl flex flex-col shadow-2xl max-h-[90vh] overflow-hidden">
+                <div
+                    class="p-4 md:p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50/80 backdrop-blur-sm flex-shrink-0">
+                    <div class="flex items-center gap-3">
+                        <div class="p-2 bg-primary-50 text-primary-600 rounded-lg">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M4 5a2 2 0 012-2h12a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm4 3h8M8 12h8M8 16h5">
+                                </path>
+                            </svg>
+                        </div>
+                        <div>
+                            <h3 class="text-lg font-bold text-gray-800 leading-tight">{{ editingUiTemplate.id !== undefined
+                                ? '编辑UI模板' : '新建UI模板' }}</h3>
+                            <p class="text-xs text-gray-500">HTML状态栏 + 变量JSON</p>
+                        </div>
+                    </div>
+                    <button @click="showUiTemplateEditor = false"
+                        class="text-gray-400 hover:text-gray-600 hover:bg-gray-100 p-2 rounded-full transition-all">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
+
+                <div class="flex-1 overflow-y-auto custom-scrollbar p-5 bg-gray-50/30 space-y-5">
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <div>
+                            <label class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">模板名称</label>
+                            <input v-model="editingUiTemplate.data.name" type="text"
+                                class="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:outline-none transition-all shadow-sm"
+                                placeholder="例如：角色状态栏">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">作用范围</label>
+                            <select v-model="editingUiTemplate.data.scope"
+                                class="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:outline-none transition-all shadow-sm">
+                                <option value="character" :disabled="!currentCharacter">绑定当前角色</option>
+                                <option value="global">全局生效</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">插入位置</label>
+                            <select v-model="editingUiTemplate.data.placement"
+                                class="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:outline-none transition-all shadow-sm">
+                                <option value="top">对话顶部</option>
+                                <option value="bottom">对话底部</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">排序</label>
+                            <input v-model.number="editingUiTemplate.data.order" type="number"
+                                class="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:outline-none transition-all shadow-sm"
+                                placeholder="100">
+                        </div>
+                    </div>
+
+                    <details class="group bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+                        <summary
+                            class="list-none cursor-pointer select-none px-4 py-3 flex items-center justify-between gap-3 hover:bg-gray-50 transition-colors">
+                            <span class="text-xs font-bold text-gray-500 uppercase tracking-wide">
+                                HTML模板
+                                <span class="normal-case font-normal text-gray-400">使用 <code v-pre>{{变量名}}</code> 插入变量</span>
+                            </span>
+                            <span class="flex items-center gap-2 text-[11px] font-bold text-gray-400">
+                                <span class="group-open:hidden">展开</span>
+                                <span class="hidden group-open:inline">折叠</span>
+                                <svg class="w-4 h-4 transition-transform group-open:rotate-180" fill="none"
+                                    stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M19 9l-7 7-7-7"></path>
+                                </svg>
+                            </span>
+                        </summary>
+                        <textarea v-model="editingUiTemplate.data.htmlTemplate" rows="22"
+                            class="w-full bg-white border-0 border-t border-gray-100 rounded-none px-4 py-3 text-gray-800 focus:ring-2 focus:ring-inset focus:ring-primary-500 focus:outline-none font-mono text-sm shadow-inner leading-relaxed resize-y min-h-[460px]"
+                            placeholder="<section>...</section>"></textarea>
+                    </details>
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                        <div>
+                            <label class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">变量JSON</label>
+                            <textarea v-model="editingUiTemplate.data.variableStateText" rows="22"
+                                class="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-gray-800 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:outline-none font-mono text-sm shadow-inner leading-relaxed resize-y min-h-[460px]"
+                                placeholder='{"status":"平稳"}'></textarea>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">变量说明（给AI参考，可选）</label>
+                            <textarea v-model="editingUiTemplate.data.variableSchemaText" rows="22"
+                                class="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-gray-800 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:outline-none text-sm shadow-inner leading-relaxed resize-y min-h-[460px]"
+                                placeholder="例如：status 表示角色当前身体和情绪状态；location 表示当前场景地点；relationship 表示双方关系变化。"></textarea>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">原始状态预览</label>
+                        <div class="ui-template-preview w-full bg-white p-0 overflow-visible min-h-[460px]"
+                            v-html="renderEditingUiTemplatePreview()"></div>
+                    </div>
+                </div>
+
+                <div
+                    class="p-4 md:p-5 border-t border-gray-100 flex justify-end space-x-3 bg-gray-50/80 backdrop-blur-sm flex-shrink-0">
+                    <button @click="showUiTemplateEditor = false"
+                        class="px-5 py-2.5 bg-white hover:bg-gray-100 text-gray-700 border border-gray-200 rounded-xl transition-all shadow-sm font-medium text-sm active:scale-95">取消</button>
+                    <button @click="saveUiTemplate"
+                        class="px-6 py-2.5 bg-primary-600 hover:bg-primary-700 text-white rounded-xl transition-all shadow-md hover:shadow-lg font-bold text-sm active:scale-95 flex items-center">
+                        <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7">
+                            </path>
+                        </svg>
+                        保存模板
+                    </button>
+                </div>
+            </div>
+        </div>
+
         <!-- Regex Editor Modal -->
         <div v-if="showRegexEditor"
             class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
@@ -3739,6 +4207,14 @@
                         <input v-model="editingRegex.data.name" type="text"
                             class="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:outline-none transition-all shadow-sm"
                             placeholder="例如：去除多余空行">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">作用范围</label>
+                        <select v-model="editingRegex.data.scope"
+                            class="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:outline-none transition-all shadow-sm">
+                            <option value="character" :disabled="!currentCharacter">绑定当前角色</option>
+                            <option value="global">全局生效</option>
+                        </select>
                     </div>
 
                     <!-- Regex & Flags -->
@@ -3769,8 +4245,8 @@
                     <div>
                         <label class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">替换内容
                             (Replacement)</label>
-                        <textarea v-model="editingRegex.data.replacement" rows="6"
-                            class="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 font-mono text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:outline-none transition-all shadow-sm resize-y min-h-[120px]"
+                        <textarea v-model="editingRegex.data.replacement" rows="9"
+                            class="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 font-mono text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:outline-none transition-all shadow-sm resize-y min-h-[190px]"
                             placeholder="支持 $1, $2 等捕获组引用"></textarea>
                     </div>
 
@@ -4102,6 +4578,14 @@
                                     placeholder="例如：主城描述">
                             </div>
                             <div>
+                                <label class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">作用范围</label>
+                                <select v-model="editingWorldInfo.data.scope"
+                                    class="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:outline-none transition-all shadow-sm">
+                                    <option value="character" :disabled="!currentCharacter">绑定当前角色</option>
+                                    <option value="global">全局生效</option>
+                                </select>
+                            </div>
+                            <div>
                                 <label class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">主关键词
                                     (Keys)</label>
                                 <div class="relative">
@@ -4253,8 +4737,8 @@
                                 class="text-[10px] font-normal normal-case bg-gray-100 px-1.5 rounded text-gray-500">{{
                                 (editingWorldInfo.data.content || '').length }} 字符</span>
                         </label>
-                        <textarea v-model="editingWorldInfo.data.content" rows="8"
-                            class="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-gray-800 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:outline-none font-mono text-sm shadow-inner leading-relaxed resize-y min-h-[150px]"
+                        <textarea v-model="editingWorldInfo.data.content" rows="12"
+                            class="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-gray-800 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:outline-none font-mono text-sm shadow-inner leading-relaxed resize-y min-h-[260px]"
                             placeholder="在此输入世界书条目的具体内容..."></textarea>
                     </div>
 
