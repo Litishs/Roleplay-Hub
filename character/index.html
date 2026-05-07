@@ -3437,6 +3437,299 @@ ${uiTemplatePrompt.value.trim() || '根据当前角色自动设计一个状态�
                     }
                 };
 
+                const jsonDiffFields = ['worldInfo', 'regexScripts', 'uiTemplates'];
+                const isJsonDiffField = (field) => jsonDiffFields.includes(field);
+
+                const getJsonDiffFieldArray = (field) => {
+                    const current = currentCharacter.value[field];
+                    if (!Array.isArray(current)) return [];
+                    if (field === 'worldInfo') return current.map((entry, idx) => toWorldInfoExportEntry(entry, idx));
+                    if (field === 'regexScripts') return current.map(script => toRegexExportEntry(script));
+                    if (field === 'uiTemplates') return current.map(template => toUiTemplateExportEntry(template));
+                    return current;
+                };
+
+                const getJsonDiffFieldString = (field) => JSON.stringify(getJsonDiffFieldArray(field), null, 2);
+
+                const normalizeJsonDiffArray = (field, value) => {
+                    if (!Array.isArray(value)) throw new Error('JSON字段必须是数组');
+                    if (field === 'worldInfo') return value.map(normalizeWorldInfoEntry);
+                    if (field === 'regexScripts') return value.map(normalizeRegexScript);
+                    if (field === 'uiTemplates') return value.map(normalizeUiTemplate);
+                    return value;
+                };
+
+                const uniqueJsonCandidates = (values) => {
+                    const seen = new Set();
+                    return values
+                        .map(value => String(value ?? '').trim())
+                        .filter(value => {
+                            if (!value || seen.has(value)) return false;
+                            seen.add(value);
+                            return true;
+                        });
+                };
+
+                const stripJsonDiffCodeFence = (value) => stripCodeFence(String(value ?? '').trim()).trim();
+
+                const extractJsonBounds = (text) => {
+                    const trimmed = String(text ?? '').trim();
+                    const arrayStart = trimmed.indexOf('[');
+                    const arrayEnd = trimmed.lastIndexOf(']');
+                    const objectStart = trimmed.indexOf('{');
+                    const objectEnd = trimmed.lastIndexOf('}');
+
+                    if (arrayStart !== -1 && arrayEnd > arrayStart && (objectStart === -1 || arrayStart < objectStart)) {
+                        return trimmed.slice(arrayStart, arrayEnd + 1);
+                    }
+                    if (objectStart !== -1 && objectEnd > objectStart) {
+                        return trimmed.slice(objectStart, objectEnd + 1);
+                    }
+                    return trimmed;
+                };
+
+                const escapeBareControlCharsInJsonStrings = (text) => {
+                    let output = '';
+                    let inString = false;
+                    let escaped = false;
+
+                    for (const char of String(text ?? '')) {
+                        if (inString) {
+                            if (escaped) {
+                                output += char;
+                                escaped = false;
+                            } else if (char === '\\') {
+                                output += char;
+                                escaped = true;
+                            } else if (char === '"') {
+                                output += char;
+                                inString = false;
+                            } else if (char === '\n') {
+                                output += '\\n';
+                            } else if (char === '\r') {
+                                output += '\\r';
+                            } else if (char === '\t') {
+                                output += '\\t';
+                            } else {
+                                output += char;
+                            }
+                            continue;
+                        }
+
+                        output += char;
+                        if (char === '"') inString = true;
+                    }
+
+                    return output;
+                };
+
+                const repairCommonJsonText = (text) => {
+                    const stringFieldPattern = /("(?:content|comment|keys|name|regex|replacement|scriptName|findRegex|replaceString|htmlTemplate|variableSchema)"\s*:\s*")([\s\S]*?)("\s*[,\]}])/g;
+                    return escapeBareControlCharsInJsonStrings(String(text ?? '').trim())
+                        .replace(/^\uFEFF/, '')
+                        .replace(/,\s*([}\]])/g, '$1')
+                        .replace(stringFieldPattern, (match, prefix, body, suffix) => {
+                            const escapedBody = body
+                                .replace(/(^|[^\\])"/g, '$1\\"')
+                                .replace(/\n/g, '\\n')
+                                .replace(/\r/g, '\\r')
+                                .replace(/\t/g, '\\t');
+                            return prefix + escapedBody + suffix;
+                        });
+                };
+
+                const parseJsonLoose = (value) => {
+                    const text = stripJsonDiffCodeFence(value);
+                    const bounded = extractJsonBounds(text);
+                    const candidates = uniqueJsonCandidates([
+                        text,
+                        bounded,
+                        repairCommonJsonText(text),
+                        repairCommonJsonText(bounded)
+                    ]);
+                    let lastError = null;
+
+                    for (const candidate of candidates) {
+                        try {
+                            return JSON.parse(candidate);
+                        } catch (error) {
+                            lastError = error;
+                        }
+                    }
+
+                    throw lastError || new Error('JSON为空');
+                };
+
+                const trimJsonFragmentComma = (value) => stripJsonDiffCodeFence(value)
+                    .replace(/^\s*,\s*/, '')
+                    .replace(/\s*,\s*$/, '')
+                    .trim();
+
+                const decodeLooseJsonStringContent = (value) => {
+                    const normalized = String(value ?? '')
+                        .replace(/\r/g, '\\r')
+                        .replace(/\n/g, '\\n')
+                        .replace(/\t/g, '\\t')
+                        .replace(/(^|[^\\])"/g, '$1\\"');
+                    try {
+                        return JSON.parse(`"${normalized}"`);
+                    } catch (error) {
+                        return String(value ?? '')
+                            .replace(/\\n/g, '\n')
+                            .replace(/\\r/g, '\r')
+                            .replace(/\\t/g, '\t')
+                            .replace(/\\"/g, '"');
+                    }
+                };
+
+                const parseSingleJsonProperty = (value) => {
+                    const text = trimJsonFragmentComma(value);
+                    const match = text.match(/^"((?:\\.|[^"\\])*)"\s*:\s*([\s\S]*?)\s*,?$/);
+                    if (!match) return null;
+
+                    let key = match[1];
+                    try {
+                        key = JSON.parse(`"${match[1]}"`);
+                    } catch (error) { }
+
+                    let rawValue = match[2].trim();
+                    if (rawValue.endsWith(',')) rawValue = rawValue.slice(0, -1).trim();
+
+                    try {
+                        return { [key]: parseJsonLoose(rawValue) };
+                    } catch (error) {
+                        if (rawValue.startsWith('"')) {
+                            const lastQuote = rawValue.lastIndexOf('"');
+                            const body = lastQuote > 0 ? rawValue.slice(1, lastQuote) : rawValue.slice(1);
+                            return { [key]: decodeLooseJsonStringContent(body) };
+                        }
+                        if (/^(true|false)$/i.test(rawValue)) return { [key]: rawValue.toLowerCase() === 'true' };
+                        if (/^-?\d+(?:\.\d+)?$/.test(rawValue)) return { [key]: Number(rawValue) };
+                        return { [key]: rawValue };
+                    }
+                };
+
+                const isPlainJsonObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
+
+                const parseJsonDiffSnippet = (value) => {
+                    const text = stripJsonDiffCodeFence(value);
+                    if (!text) return { kind: 'empty', value: null };
+
+                    try {
+                        const parsed = parseJsonLoose(text);
+                        return {
+                            kind: Array.isArray(parsed) ? 'array' : (isPlainJsonObject(parsed) ? 'object' : 'value'),
+                            value: parsed
+                        };
+                    } catch (directError) {
+                        const fragmentText = trimJsonFragmentComma(text);
+                        try {
+                            const parsed = parseJsonLoose(`{${fragmentText}}`);
+                            if (isPlainJsonObject(parsed)) return { kind: 'fragment', value: parsed };
+                        } catch (wrappedError) { }
+
+                        const property = parseSingleJsonProperty(fragmentText);
+                        if (property) return { kind: 'fragment', value: property };
+
+                        throw directError;
+                    }
+                };
+
+                const deepJsonEqual = (a, b) => {
+                    if (a === b) return true;
+                    if (Array.isArray(a) || Array.isArray(b)) {
+                        if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
+                        return a.every((item, index) => deepJsonEqual(item, b[index]));
+                    }
+                    if (isPlainJsonObject(a) || isPlainJsonObject(b)) {
+                        if (!isPlainJsonObject(a) || !isPlainJsonObject(b)) return false;
+                        const aKeys = Object.keys(a);
+                        const bKeys = Object.keys(b);
+                        if (aKeys.length !== bKeys.length) return false;
+                        return aKeys.every(key => bKeys.includes(key) && deepJsonEqual(a[key], b[key]));
+                    }
+                    return false;
+                };
+
+                const jsonObjectMatchesSubset = (entry, subset) => {
+                    if (!isPlainJsonObject(entry) || !isPlainJsonObject(subset)) return false;
+                    return Object.keys(subset).every(key => deepJsonEqual(entry[key], subset[key]));
+                };
+
+                const findJsonDiffEntryIndex = (exportedArray, findValue) => {
+                    if (!isPlainJsonObject(findValue)) return -1;
+
+                    let index = exportedArray.findIndex(entry => deepJsonEqual(entry, findValue));
+                    if (index !== -1) return index;
+
+                    index = exportedArray.findIndex(entry => jsonObjectMatchesSubset(entry, findValue));
+                    return index;
+                };
+
+                const applyJsonValuePatch = (field, finder, replacement) => {
+                    if (!finder || !replacement || (finder.kind !== 'value' && finder.kind !== 'array')) return false;
+                    if (typeof finder.value === 'string' && finder.value.length < 8) return false;
+
+                    const exportedArray = getJsonDiffFieldArray(field);
+                    for (let entryIndex = 0; entryIndex < exportedArray.length; entryIndex++) {
+                        const entry = exportedArray[entryIndex];
+                        for (const key of Object.keys(entry)) {
+                            if (deepJsonEqual(entry[key], finder.value)) {
+                                const nextArray = exportedArray.slice();
+                                nextArray[entryIndex] = { ...entry, [key]: replacement.value };
+                                currentCharacter.value[field] = normalizeJsonDiffArray(field, nextArray);
+                                return true;
+                            }
+                        }
+                    }
+
+                    return false;
+                };
+
+                const applyStructuredJsonDiff = (diff) => {
+                    try {
+                        const exportedArray = getJsonDiffFieldArray(diff.field);
+                        const finder = parseJsonDiffSnippet(diff.find);
+                        const replacement = parseJsonDiffSnippet(diff.replace);
+
+                        if (replacement.kind === 'array') {
+                            if (finder.kind === 'array' && deepJsonEqual(finder.value, exportedArray)) {
+                                currentCharacter.value[diff.field] = normalizeJsonDiffArray(diff.field, replacement.value);
+                                return true;
+                            }
+                            return applyJsonValuePatch(diff.field, finder, replacement);
+                        }
+
+                        if (replacement.kind === 'value') {
+                            return applyJsonValuePatch(diff.field, finder, replacement);
+                        }
+
+                        if (!isPlainJsonObject(replacement.value)) return false;
+
+                        const targetIndex = findJsonDiffEntryIndex(exportedArray, finder.value);
+                        if (targetIndex === -1) return false;
+
+                        const findText = stripJsonDiffCodeFence(diff.find);
+                        const replaceText = stripJsonDiffCodeFence(diff.replace);
+                        const replaceWholeObject = finder.kind === 'object'
+                            && replacement.kind === 'object'
+                            && findText.startsWith('{')
+                            && findText.endsWith('}')
+                            && replaceText.startsWith('{')
+                            && replaceText.endsWith('}');
+
+                        const nextArray = exportedArray.slice();
+                        nextArray[targetIndex] = replaceWholeObject
+                            ? replacement.value
+                            : { ...nextArray[targetIndex], ...replacement.value };
+                        currentCharacter.value[diff.field] = normalizeJsonDiffArray(diff.field, nextArray);
+                        return true;
+                    } catch (error) {
+                        console.warn('Structured JSON diff apply failed:', error);
+                        return false;
+                    }
+                };
+
                 const processDiffs = (fullText) => {
                     // 增强正则，容错处理：
                     // 1. 允许 FIND/END/REPLACE 后面有任意字符（防止 AI 写成 <<<<<<<FIND: 或其他变体）
@@ -3476,14 +3769,8 @@ ${uiTemplatePrompt.value.trim() || '根据当前角色自动设计一个状态�
                             let content = '';
                             let isJson = false;
 
-                            if (key === 'worldInfo' || key === 'regexScripts' || key === 'uiTemplates') {
-                                if (key === 'worldInfo') {
-                                    content = JSON.stringify(currentCharacter.value.worldInfo.map((entry, idx) => toWorldInfoExportEntry(entry, idx)), null, 2);
-                                } else if (key === 'regexScripts') {
-                                    content = JSON.stringify(currentCharacter.value.regexScripts.map(script => toRegexExportEntry(script)), null, 2);
-                                } else {
-                                    content = JSON.stringify(currentCharacter.value.uiTemplates.map(template => toUiTemplateExportEntry(template)), null, 2);
-                                }
+                            if (isJsonDiffField(key)) {
+                                content = getJsonDiffFieldString(key);
                                 isJson = true;
                             } else {
                                 content = currentCharacter.value[key];
@@ -3553,20 +3840,13 @@ ${uiTemplatePrompt.value.trim() || '根据当前角色自动设计一个状态�
                         }
 
                         if (foundField) {
-                            let originalVal = currentCharacter.value[foundField];
                             let originalStr = '';
-                            let isJson = (foundField === 'worldInfo' || foundField === 'regexScripts' || foundField === 'uiTemplates');
+                            let isJson = isJsonDiffField(foundField);
 
                             if (isJson) {
-                                if (foundField === 'worldInfo') {
-                                    originalStr = JSON.stringify(originalVal.map((entry, idx) => toWorldInfoExportEntry(entry, idx)), null, 2);
-                                } else if (foundField === 'regexScripts') {
-                                    originalStr = JSON.stringify(originalVal.map(script => toRegexExportEntry(script)), null, 2);
-                                } else {
-                                    originalStr = JSON.stringify(originalVal.map(template => toUiTemplateExportEntry(template)), null, 2);
-                                }
+                                originalStr = getJsonDiffFieldString(foundField);
                             } else {
-                                originalStr = originalVal;
+                                originalStr = currentCharacter.value[foundField];
                             }
 
                             // 执行字符串替换
@@ -3637,47 +3917,29 @@ ${uiTemplatePrompt.value.trim() || '根据当前角色自动设计一个状态�
                                 applyCount++;
                             } else if (diff.isJson) {
                                 // JSON 字段处理：先转字符串，替换，再转回 JSON
-                                const currentObj = currentCharacter.value[diff.field];
-                                let currentStr = '';
-                                if (diff.field === 'worldInfo') {
-                                    currentStr = JSON.stringify(currentObj.map((entry, idx) => toWorldInfoExportEntry(entry, idx)), null, 2);
-                                } else if (diff.field === 'regexScripts') {
-                                    currentStr = JSON.stringify(currentObj.map(script => toRegexExportEntry(script)), null, 2);
-                                } else {
-                                    currentStr = JSON.stringify(currentObj.map(template => toUiTemplateExportEntry(template)), null, 2);
-                                }
+                                const currentStr = getJsonDiffFieldString(diff.field);
 
                                 if (currentStr.includes(diff.find)) {
                                     let newStr = currentStr.replace(diff.find, diff.replace);
                                     try {
-                                        let newObj;
-                                        try {
-                                            newObj = JSON.parse(newStr);
-                                        } catch (err) {
-                                            // 自动尝试修复 AI 输出的未转义换行符、引号和制表符
-                                            const fixedStr = newStr.replace(/("(?:content|comment|name|keys|regex|replacement|scriptName|findRegex|replaceString)"\s*:\s*")([\s\S]*?)("\s*[,\]}])/g, (m, p1, p2, p3) => {
-                                                const escapedP2 = p2.replace(/(?<!\\)"/g, '\\"').replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t');
-                                                return p1 + escapedP2 + p3;
-                                            });
-                                            newObj = JSON.parse(fixedStr);
-                                        }
-
-                                        if (diff.field === 'worldInfo' && Array.isArray(newObj)) {
-                                            newObj = newObj.map(normalizeWorldInfoEntry);
-                                        } else if (diff.field === 'regexScripts' && Array.isArray(newObj)) {
-                                            newObj = newObj.map(normalizeRegexScript);
-                                        } else if (diff.field === 'uiTemplates' && Array.isArray(newObj)) {
-                                            newObj = newObj.map(normalizeUiTemplate);
-                                        }
-                                        currentCharacter.value[diff.field] = newObj;
+                                        const newObj = parseJsonLoose(newStr);
+                                        currentCharacter.value[diff.field] = normalizeJsonDiffArray(diff.field, newObj);
                                         applyCount++;
                                     } catch (e) {
-                                        showToast(`${diff.fieldName} 修改后 JSON 格式无效，已跳过`, 'error');
-                                        console.error('JSON Parse Error during diff apply:', e);
-                                        console.error('Failed JSON string:', newStr);
+                                        if (applyStructuredJsonDiff(diff)) {
+                                            applyCount++;
+                                        } else {
+                                            showToast(`${diff.fieldName} 修改后 JSON 格式无效，已跳过`, 'error');
+                                            console.error('JSON Parse Error during diff apply:', e);
+                                            console.error('Failed JSON string:', newStr);
+                                        }
                                     }
                                 } else {
-                                    console.warn(`Could not apply diff for ${diff.fieldName} (content mismatch)`);
+                                    if (applyStructuredJsonDiff(diff)) {
+                                        applyCount++;
+                                    } else {
+                                        console.warn(`Could not apply diff for ${diff.fieldName} (content mismatch)`);
+                                    }
                                 }
                             } else {
                                 // 文本字段局部替换
