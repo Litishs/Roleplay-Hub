@@ -3113,6 +3113,7 @@ ${content}
                         const data = await response.json();
                         if (!isCurrentRun()) return;
                         let content = data.choices?.[0]?.message?.content || '';
+                        console.log(`[UI模板变量分析] ${template.name || template.id} 原始返回:`, content);
                         content = content.replace(/```json\s*/i, '').replace(/```\s*$/i, '').trim();
                         const parsed = JSON.parse(content);
                         const updates = Array.isArray(parsed.updates) ? parsed.updates : [];
