@@ -1932,13 +1932,12 @@ ${content}
                 .map(template => {
                     const state = buildUiTemplateStateAtTurn(template, turn);
                     if (!state || Object.keys(state).length === 0) return null;
-                    return `【${template.name || 'UI模板'}】\n${JSON.stringify(state, null, 2)}`;
+                    return JSON.stringify(state, null, 2);
                 })
                 .filter(Boolean);
 
             if (!sections.length) return '';
             return [
-                '[UI模板变量参考]',
                 '以下内容是给你参考当前剧情状态的，不是让你生成、复述或改写的正文。请只用它理解角色状态、关系、地点和其他模板变量。',
                 sections.join('\n\n')
             ].join('\n');
@@ -3063,6 +3062,16 @@ ${content}
                 await Promise.all(templates.map(async (template) => {
                     const model = fallbackModel;
                     try {
+                        const templatePromptData = JSON.stringify({
+                            character: currentCharacter.value.name,
+                            user: user.name,
+                            template: {
+                                id: template.id,
+                                name: template.name,
+                                variables: template.variableState || {},
+                                schema: template.variableSchema || {}
+                            }
+                        }, null, 2);
                         const response = await fetch(url, {
                             method: 'POST',
                             headers: {
@@ -3076,19 +3085,22 @@ ${content}
                                 messages: [
                                     {
                                         role: 'system',
-                                        content: '你是RP-Hub的UI变量更新器。当前请求只分析一个UI模板。只根据最近对话更新这个模板已定义的变量。严格返回JSON，不要解释，不要输出Markdown。格式：{"updates":[{"id":"模板id","variables":{"变量名":"新值"},"reason":"简短原因"}]}。variables 的值可以是文字、数字、对象或JSON数组；装备栏、背包、日志这类列表请直接返回完整数组字段，例如 {"equipment":[{"slot":"武器","name":"短剑"}]}。如果只改数组里的一个小项，也可以返回 "equipment.0.name" 这种路径。没有变化则updates为空数组。不要修改HTML。'
+                                        content: [
+                                            '你是RP-Hub的UI变量更新器。当前请求只分析一个UI模板。',
+                                            '只根据用户消息里提供的最近对话，更新下方模板已定义的变量。',
+                                            '严格返回JSON，不要解释，不要输出Markdown。',
+                                            '返回格式：{"updates":[{"id":"模板id","variables":{"变量名":"新值"},"reason":"简短原因"}]}。',
+                                            'variables 的值可以是文字、数字、对象或JSON数组；装备栏、背包、日志这类列表请直接返回完整数组字段，例如 {"equipment":[{"slot":"武器","name":"短剑"}]}。',
+                                            '如果只改数组里的一个小项，也可以返回 "equipment.0.name" 这种路径。',
+                                            '没有变化则updates为空数组。不要修改HTML。',
+                                            '',
+                                            '当前模板数据如下：',
+                                            templatePromptData
+                                        ].join('\n')
                                     },
                                     {
                                         role: 'user',
                                         content: JSON.stringify({
-                                            character: currentCharacter.value.name,
-                                            user: user.name,
-                                            template: {
-                                                id: template.id,
-                                                name: template.name,
-                                                variables: template.variableState || {},
-                                                schema: template.variableSchema || {}
-                                            },
                                             recentMessages
                                         }, null, 2)
                                     }
