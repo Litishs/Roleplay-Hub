@@ -4148,7 +4148,7 @@
                             class="list-none cursor-pointer select-none px-4 py-3 flex items-center justify-between gap-3 hover:bg-gray-50 transition-colors">
                             <span class="text-xs font-bold text-gray-500 uppercase tracking-wide">
                                 HTML模板
-                                <span class="normal-case font-normal text-gray-400">使用 <code v-pre>{{变量名}}</code> 插入变量</span>
+                                <span class="normal-case font-normal text-gray-400">使用 <code v-pre>{{变量名}}</code> 插入变量，数组可用 <code v-pre>{{#each equipment}}</code></span>
                             </span>
                             <span class="flex items-center gap-2 text-[11px] font-bold text-gray-400">
                                 <span class="group-open:hidden">展开</span>
@@ -4169,7 +4169,7 @@
                             <label class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">变量JSON</label>
                             <textarea v-model="editingUiTemplate.data.variableStateText" rows="22"
                                 class="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-gray-800 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:outline-none font-mono text-sm shadow-inner leading-relaxed resize-y min-h-[460px]"
-                                placeholder='{"status":"平稳"}'></textarea>
+                                placeholder='{"status":"平稳","equipment":[{"slot":"武器","name":"短剑","durability":80}]}'></textarea>
                         </div>
                         <div>
                             <label class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">变量说明（给AI参考，可选）</label>

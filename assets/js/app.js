@@ -1498,18 +1498,158 @@ createApp({
             .map(item => item.template));
         const activeUiTemplates = computed(() => currentUiTemplates.value.filter(t => t.enabled !== false));
 
-        const getUiTemplateValue = (source, path) => {
-            const direct = source?.[path];
-            if (direct !== undefined) return direct;
-            return String(path || '').split('.').reduce((acc, key) => acc && acc[key] !== undefined ? acc[key] : undefined, source);
+        const isUiTemplateObject = (value) => value !== null && typeof value === 'object';
+
+        const splitUiTemplatePath = (path) => String(path || '')
+            .trim()
+            .replace(/\[(?:'([^']+)'|"([^"]+)"|([^\]]+))\]/g, (_, single, double, bare) => `.${single ?? double ?? String(bare || '').trim()}`)
+            .split('.')
+            .map(part => part.trim())
+            .filter(Boolean);
+
+        const readUiTemplatePath = (source, path) => {
+            const normalizedPath = String(path || '').trim();
+            if (!normalizedPath || normalizedPath === 'this' || normalizedPath === '.') return source;
+            if (isUiTemplateObject(source) && Object.prototype.hasOwnProperty.call(source, normalizedPath)) {
+                return source[normalizedPath];
+            }
+            return splitUiTemplatePath(normalizedPath).reduce((acc, key) => (
+                acc !== undefined && acc !== null && acc[key] !== undefined ? acc[key] : undefined
+            ), source);
         };
 
-        const escapeUiValue = (value) => String(value ?? '')
+        const getUiTemplateValue = (source, path, context = null) => {
+            const expression = String(path || '').trim();
+            if (!expression) return undefined;
+            if (context) {
+                if (expression === 'this' || expression === '.') return context.current;
+                if (expression === '@index') return context.index ?? 0;
+                if (expression === '@number') return (context.index ?? 0) + 1;
+                if (expression === '@first') return (context.index ?? 0) === 0;
+                if (expression === '@last') return (context.index ?? 0) === (context.length ?? 0) - 1;
+                if (expression === '@key') return context.key ?? context.index ?? '';
+                if (expression.startsWith('root.')) return readUiTemplatePath(context.root, expression.slice(5));
+                if (expression === 'root') return context.root;
+                if (expression.startsWith('../')) {
+                    let parentContext = context.parentContext;
+                    let parentPath = expression;
+                    while (parentPath.startsWith('../')) {
+                        parentPath = parentPath.slice(3);
+                        if (parentPath.startsWith('../') && parentContext?.parentContext) {
+                            parentContext = parentContext.parentContext;
+                        }
+                    }
+                    const fallbackParent = { root: context.root, current: context.root, parentContext: null };
+                    return getUiTemplateValue(context.root, parentPath, parentContext || fallbackParent);
+                }
+                if (context.alias && (expression === context.alias || expression.startsWith(`${context.alias}.`))) {
+                    return expression === context.alias
+                        ? context.current
+                        : readUiTemplatePath(context.current, expression.slice(context.alias.length + 1));
+                }
+                const localValue = readUiTemplatePath(context.current, expression);
+                if (localValue !== undefined) return localValue;
+            }
+            return readUiTemplatePath(source, expression);
+        };
+
+        const setUiTemplateValue = (source, path, value) => {
+            const expression = String(path || '').trim();
+            if (!expression) return source;
+            if (expression === '$root' || expression === 'this' || expression === '.') return cloneUiValue(value);
+            const root = isUiTemplateObject(source) ? source : {};
+            if (Object.prototype.hasOwnProperty.call(root, expression) || !/[.[\]]/.test(expression)) {
+                root[expression] = cloneUiValue(value);
+                return root;
+            }
+            const parts = splitUiTemplatePath(expression);
+            if (!parts.length) return root;
+            let target = root;
+            parts.forEach((part, index) => {
+                if (index === parts.length - 1) {
+                    target[part] = cloneUiValue(value);
+                    return;
+                }
+                const nextPart = parts[index + 1];
+                if (!isUiTemplateObject(target[part])) {
+                    target[part] = /^\d+$/.test(nextPart) ? [] : {};
+                }
+                target = target[part];
+            });
+            return root;
+        };
+
+        const stringifyUiTemplateValue = (value) => {
+            if (value === undefined || value === null) return '';
+            if (typeof value === 'string') return value;
+            if (typeof value === 'object') {
+                try {
+                    return JSON.stringify(value, null, 2);
+                } catch (e) {
+                    return String(value);
+                }
+            }
+            return String(value);
+        };
+
+        const escapeUiValue = (value) => stringifyUiTemplateValue(value)
             .replace(/&/g, '&amp;')
             .replace(/</g, '&lt;')
             .replace(/>/g, '&gt;')
             .replace(/"/g, '&quot;')
             .replace(/'/g, '&#39;');
+
+        const createUiTemplateRenderContext = (variables, overrides = {}) => ({
+            root: variables,
+            current: variables,
+            parentContext: null,
+            index: 0,
+            key: '',
+            length: 1,
+            alias: '',
+            ...overrides
+        });
+
+        const renderUiTemplateString = (templateText, variables = {}, context = null) => {
+            const activeContext = context || createUiTemplateRenderContext(variables);
+            const withArrays = renderUiTemplateEachBlocks(String(templateText || ''), variables, activeContext);
+            return withArrays.replace(/\{\{\s*([^{}]+?)\s*\}\}/g, (match, expression) => {
+                const key = String(expression || '').trim();
+                if (!key || key === 'else' || key.startsWith('#') || key.startsWith('/')) return match;
+                return escapeUiValue(getUiTemplateValue(variables, key, activeContext));
+            });
+        };
+
+        const renderUiTemplateEachBlocks = (templateText, variables = {}, context = null) => {
+            let output = String(templateText || '');
+            const eachBlockPattern = /\{\{\s*#each\s+([^\s}]+)(?:\s+as\s+([A-Za-z_$][\w$]*))?\s*\}\}((?:(?!\{\{\s*#each\b)[\s\S])*?)\{\{\s*\/each\s*\}\}/g;
+            for (let pass = 0; pass < 50; pass++) {
+                let replaced = false;
+                output = output.replace(eachBlockPattern, (match, path, alias, body) => {
+                    replaced = true;
+                    const value = getUiTemplateValue(variables, path, context);
+                    const [itemTemplate, emptyTemplate = ''] = String(body || '').split(/\{\{\s*else\s*\}\}/i);
+                    const entries = Array.isArray(value)
+                        ? value.map((item, index) => ({ item, key: index, index }))
+                        : (isUiTemplateObject(value)
+                            ? Object.entries(value).map(([key, item], index) => ({ item, key, index }))
+                            : []);
+                    if (!entries.length) {
+                        return renderUiTemplateString(emptyTemplate, variables, context);
+                    }
+                    return entries.map(({ item, key, index }) => renderUiTemplateString(itemTemplate, variables, createUiTemplateRenderContext(variables, {
+                        current: item,
+                        parentContext: context,
+                        index,
+                        key,
+                        length: entries.length,
+                        alias: alias || ''
+                    }))).join('');
+                });
+                if (!replaced) break;
+            }
+            return output;
+        };
 
         const htmlIframeSandbox = 'allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-modals allow-same-origin allow-downloads allow-pointer-lock allow-presentation allow-top-navigation-by-user-activation';
 
@@ -1664,10 +1804,7 @@ ${content}
         const renderUiTemplateHtml = (template) => {
             if (!template || !template.htmlTemplate) return '';
             const variables = template.variableState || {};
-            const html = stripUiTemplateCodeFence(template.htmlTemplate).replace(/\{\{\s*([\w.-]+)\s*\}\}/g, (_, key) => {
-                const value = getUiTemplateValue(variables, key);
-                return escapeUiValue(value);
-            });
+            const html = renderUiTemplateString(stripUiTemplateCodeFence(template.htmlTemplate), variables);
             return renderExecutableHtmlFrame(html, 'ui-template-iframe');
         };
 
@@ -1682,7 +1819,12 @@ ${content}
         };
 
         const renderEditingUiTemplatePreview = () => {
-            const variableState = editingUiTemplate.data.previewVariableState || {};
+            let variableState = editingUiTemplate.data.previewVariableState || {};
+            try {
+                variableState = JSON.parse(editingUiTemplate.data.variableStateText || '{}');
+            } catch (e) {
+                // 预览里 JSON 写错时，先沿用打开弹窗时的变量，避免整个弹窗空掉。
+            }
             return renderUiTemplateHtml({
                 htmlTemplate: editingUiTemplate.data.htmlTemplate,
                 variableState
@@ -1745,7 +1887,7 @@ ${content}
         };
 
         const buildUiTemplateStateAtTurn = (template, turn) => {
-            const state = cloneUiObject(inferInitialUiTemplateState(template));
+            let state = cloneUiObject(inferInitialUiTemplateState(template));
             const logs = Array.isArray(template.changeLog)
                 ? template.changeLog
                     .filter(log => Number(log.turn || 0) <= turn)
@@ -1754,7 +1896,7 @@ ${content}
             logs.forEach(log => {
                 Object.entries(log.changes || {}).forEach(([key, change]) => {
                     if (change && Object.prototype.hasOwnProperty.call(change, 'to')) {
-                        state[key] = cloneUiValue(change.to);
+                        state = setUiTemplateValue(state, key, change.to);
                     }
                 });
             });
@@ -1803,13 +1945,13 @@ ${content}
         };
 
         const rebuildUiTemplateStateFromLogs = (template, remainingLogs, allLogs) => {
-            const rebuilt = cloneUiObject(inferInitialUiTemplateState(template));
+            let rebuilt = cloneUiObject(inferInitialUiTemplateState(template));
             [...remainingLogs]
                 .sort((a, b) => (a.time || 0) - (b.time || 0))
                 .forEach(log => {
                     Object.entries(log.changes || {}).forEach(([key, change]) => {
                         if (change && Object.prototype.hasOwnProperty.call(change, 'to')) {
-                            rebuilt[key] = change.to;
+                            rebuilt = setUiTemplateValue(rebuilt, key, change.to);
                         }
                     });
                 });
@@ -2887,11 +3029,15 @@ ${content}
                         if (update.id && update.id !== template.id) return;
                         if (!template || !update.variables || typeof update.variables !== 'object') return;
                         const changes = {};
-                        Object.entries(update.variables).forEach(([key, value]) => {
-                            const oldValue = template.variableState?.[key];
+                        const variableEntries = Array.isArray(update.variables)
+                            ? [['$root', update.variables]]
+                            : Object.entries(update.variables);
+                        variableEntries.forEach(([key, value]) => {
+                            const oldValue = key === '$root'
+                                ? template.variableState
+                                : getUiTemplateValue(template.variableState || {}, key);
                             if (JSON.stringify(oldValue) !== JSON.stringify(value)) {
-                                if (!template.variableState) template.variableState = {};
-                                template.variableState[key] = value;
+                                template.variableState = setUiTemplateValue(template.variableState || {}, key, value);
                                 changes[key] = { from: oldValue, to: value };
                             }
                         });
@@ -2930,7 +3076,7 @@ ${content}
                                 messages: [
                                     {
                                         role: 'system',
-                                        content: '你是RP-Hub的UI变量更新器。当前请求只分析一个UI模板。只根据最近对话更新这个模板已定义的变量。严格返回JSON，不要解释，不要输出Markdown。格式：{"updates":[{"id":"模板id","variables":{"变量名":"新值"},"reason":"简短原因"}]}。没有变化则updates为空数组。不要修改HTML。'
+                                        content: '你是RP-Hub的UI变量更新器。当前请求只分析一个UI模板。只根据最近对话更新这个模板已定义的变量。严格返回JSON，不要解释，不要输出Markdown。格式：{"updates":[{"id":"模板id","variables":{"变量名":"新值"},"reason":"简短原因"}]}。variables 的值可以是文字、数字、对象或JSON数组；装备栏、背包、日志这类列表请直接返回完整数组字段，例如 {"equipment":[{"slot":"武器","name":"短剑"}]}。如果只改数组里的一个小项，也可以返回 "equipment.0.name" 这种路径。没有变化则updates为空数组。不要修改HTML。'
                                     },
                                     {
                                         role: 'user',

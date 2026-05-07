@@ -2657,13 +2657,137 @@
                     }
                 };
 
+                const isUiTemplateObject = (value) => value !== null && typeof value === 'object';
+
+                const splitUiTemplatePath = (path) => String(path || '')
+                    .trim()
+                    .replace(/\[(?:'([^']+)'|"([^"]+)"|([^\]]+))\]/g, (_, single, double, bare) => `.${single ?? double ?? String(bare || '').trim()}`)
+                    .split('.')
+                    .map(part => part.trim())
+                    .filter(Boolean);
+
+                const readUiTemplatePath = (source, path) => {
+                    const normalizedPath = String(path || '').trim();
+                    if (!normalizedPath || normalizedPath === 'this' || normalizedPath === '.') return source;
+                    if (isUiTemplateObject(source) && Object.prototype.hasOwnProperty.call(source, normalizedPath)) {
+                        return source[normalizedPath];
+                    }
+                    return splitUiTemplatePath(normalizedPath).reduce((acc, key) => (
+                        acc !== undefined && acc !== null && acc[key] !== undefined ? acc[key] : undefined
+                    ), source);
+                };
+
+                const getUiTemplateValue = (source, path, context = null) => {
+                    const expression = String(path || '').trim();
+                    if (!expression) return undefined;
+                    if (context) {
+                        if (expression === 'this' || expression === '.') return context.current;
+                        if (expression === '@index') return context.index ?? 0;
+                        if (expression === '@number') return (context.index ?? 0) + 1;
+                        if (expression === '@first') return (context.index ?? 0) === 0;
+                        if (expression === '@last') return (context.index ?? 0) === (context.length ?? 0) - 1;
+                        if (expression === '@key') return context.key ?? context.index ?? '';
+                        if (expression.startsWith('root.')) return readUiTemplatePath(context.root, expression.slice(5));
+                        if (expression === 'root') return context.root;
+                        if (expression.startsWith('../')) {
+                            let parentContext = context.parentContext;
+                            let parentPath = expression;
+                            while (parentPath.startsWith('../')) {
+                                parentPath = parentPath.slice(3);
+                                if (parentPath.startsWith('../') && parentContext?.parentContext) {
+                                    parentContext = parentContext.parentContext;
+                                }
+                            }
+                            const fallbackParent = { root: context.root, current: context.root, parentContext: null };
+                            return getUiTemplateValue(context.root, parentPath, parentContext || fallbackParent);
+                        }
+                        if (context.alias && (expression === context.alias || expression.startsWith(`${context.alias}.`))) {
+                            return expression === context.alias
+                                ? context.current
+                                : readUiTemplatePath(context.current, expression.slice(context.alias.length + 1));
+                        }
+                        const localValue = readUiTemplatePath(context.current, expression);
+                        if (localValue !== undefined) return localValue;
+                    }
+                    return readUiTemplatePath(source, expression);
+                };
+
+                const stringifyUiTemplateValue = (value) => {
+                    if (value === undefined || value === null) return '';
+                    if (typeof value === 'string') return value;
+                    if (typeof value === 'object') {
+                        try {
+                            return JSON.stringify(value, null, 2);
+                        } catch (e) {
+                            return String(value);
+                        }
+                    }
+                    return String(value);
+                };
+
+                const escapeUiTemplateValue = (value) => stringifyUiTemplateValue(value)
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#39;');
+
+                const createUiTemplateRenderContext = (variables, overrides = {}) => ({
+                    root: variables,
+                    current: variables,
+                    parentContext: null,
+                    index: 0,
+                    key: '',
+                    length: 1,
+                    alias: '',
+                    ...overrides
+                });
+
+                const renderUiTemplateString = (templateText, variables = {}, context = null) => {
+                    const activeContext = context || createUiTemplateRenderContext(variables);
+                    const withArrays = renderUiTemplateEachBlocks(String(templateText || ''), variables, activeContext);
+                    return withArrays.replace(/\{\{\s*([^{}]+?)\s*\}\}/g, (match, expression) => {
+                        const key = String(expression || '').trim();
+                        if (!key || key === 'else' || key.startsWith('#') || key.startsWith('/')) return match;
+                        return escapeUiTemplateValue(getUiTemplateValue(variables, key, activeContext));
+                    });
+                };
+
+                const renderUiTemplateEachBlocks = (templateText, variables = {}, context = null) => {
+                    let output = String(templateText || '');
+                    const eachBlockPattern = /\{\{\s*#each\s+([^\s}]+)(?:\s+as\s+([A-Za-z_$][\w$]*))?\s*\}\}((?:(?!\{\{\s*#each\b)[\s\S])*?)\{\{\s*\/each\s*\}\}/g;
+                    for (let pass = 0; pass < 50; pass++) {
+                        let replaced = false;
+                        output = output.replace(eachBlockPattern, (match, path, alias, body) => {
+                            replaced = true;
+                            const value = getUiTemplateValue(variables, path, context);
+                            const [itemTemplate, emptyTemplate = ''] = String(body || '').split(/\{\{\s*else\s*\}\}/i);
+                            const entries = Array.isArray(value)
+                                ? value.map((item, index) => ({ item, key: index, index }))
+                                : (isUiTemplateObject(value)
+                                    ? Object.entries(value).map(([key, item], index) => ({ item, key, index }))
+                                    : []);
+                            if (!entries.length) {
+                                return renderUiTemplateString(emptyTemplate, variables, context);
+                            }
+                            return entries.map(({ item, key, index }) => renderUiTemplateString(itemTemplate, variables, createUiTemplateRenderContext(variables, {
+                                current: item,
+                                parentContext: context,
+                                index,
+                                key,
+                                length: entries.length,
+                                alias: alias || ''
+                            }))).join('');
+                        });
+                        if (!replaced) break;
+                    }
+                    return output;
+                };
+
                 const renderUiTemplatePreview = (template) => {
                     const normalized = normalizeUiTemplate(template);
                     const vars = normalized.initialVariableState || normalized.variableState || {};
-                    return (normalized.htmlTemplate || '').replace(/\{\{\s*([\w.-]+)\s*\}\}/g, (_, key) => {
-                        const value = key.split('.').reduce((obj, part) => obj && obj[part], vars);
-                        return value === undefined || value === null ? '' : String(value);
-                    });
+                    return renderUiTemplateString(normalized.htmlTemplate || '', vars);
                 };
 
                 const wrapUiTemplatePreview = (html) => `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><style>html,body{margin:0;min-height:100%;background:#fff;font-family:'PingFang SC','Microsoft YaHei',system-ui,sans-serif;}body{padding:16px;box-sizing:border-box;}*{box-sizing:border-box;}</style></head><body>${html || ''}</body></html>`;
@@ -2779,12 +2903,14 @@
 - 剧情交互才允许使用 window.triggerSlash('/指令')：例如使用物品、发动技能、发起攻击、身体互动、提交用户自定义行动等。
 - 如果有输入框，应支持用户输入后组合成 triggerSlash 指令；不要生成无法发送的输入框。
 - 可以把固定文本、数值、百分比、等级、进度条宽度、SVG进度参数、按钮指令、日志内容、角色信息等替换为 {{变量名}}。
+- 装备栏、背包、任务日志这类重复内容可以用数组变量，并在HTML里用 {{#each equipment}}...{{name}}...{{/each}} 循环渲染。
 - 对带 id 的元素优先按 id 命名变量，例如 dateDisplay、favorVal、stateBadge、barInner_width、ringPct、ringProgress_offset、todayFavor、eventCD、streakDays、storyDay、charName、charSubtitle、userNameDisplay。对没有 id 但明显可变的重复项，使用语义化编号，例如 log1_title、log1_desc、quick_action_1、char_tag_1。
 - 变量条目不能抽样、不能只挑核心项、不能只输出“代表性变量”。HTML里每一个会随剧情变化的显示文本、数值、CSS宽度/颜色、SVG参数、按钮文案、按钮指令、状态标签、列表项、日志项、弹窗规则数值，都必须出现在 Initial Variable State 和 Variable Schema。
 
 变量规则：
 - 变量使用 {{变量名}} 占位，变量名简单稳定，使用英文、数字和下划线，例如 time、location、status、relationship、mood、hp_percent。
-- initialVariableState 必须是对象，提供模板刚创建时的原始状态示例值。系统会自动把它复制成当前变量状态，不需要你单独输出 Variable State。
+- initialVariableState 必须是JSON对象，提供模板刚创建时的原始状态示例值。对象里的字段可以是文字、数字、对象或数组；装备栏建议写成 "equipment": [{"slot":"武器","name":"短剑","durability":80}]。
+- 数组循环中可用 {{@number}} 显示从1开始的序号，{{@index}} 显示从0开始的序号；没有数据时可以写 {{else}} 作为空状态。
 - variableSchema 可以写成给AI看的自然语言说明，不强制JSON，但必须逐条说明每个变量对应哪个界面位置、如何更新、值的格式是什么。
 - placement 只能是 "top" 或 "bottom"，默认 "bottom"；order 数字越大越靠前，默认100。
 - 如果模式是 diff，请在保留原有风格的基础上做用户要求的改造，并返回完整新模板，不要返回补丁。
