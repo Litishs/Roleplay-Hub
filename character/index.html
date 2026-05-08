@@ -1776,9 +1776,8 @@
                 });
 
                 // Persist active index
-                watch(currentCharacterIndex, async (newVal) => {
+                watch(currentCharacterIndex, (newVal) => {
                     localStorage.setItem('ai_chargen_active_index', newVal);
-                    await flushCloudSync();
                 });
 
                 // Virtual List State
@@ -1877,16 +1876,6 @@
                 // Call sync setup
                 setupSyncListener();
 
-                const flushCloudSync = async () => {
-                    try {
-                        if (typeof window !== 'undefined' && typeof window.__rphubFlushSync === 'function') {
-                            await window.__rphubFlushSync();
-                        }
-                    } catch (e) {
-                        console.error('Cloud sync flush failed:', e);
-                    }
-                };
-
                 // Options with persistence
                 const savedOptions = localStorage.getItem('ai_chargen_options');
                 const defaultOptions = {
@@ -1915,9 +1904,8 @@
                 // Ensure generateExtra is always true if loaded from old save where it might be false
                 options.generateExtra = true;
 
-                watch(options, async (newVal) => {
+                watch(options, (newVal) => {
                     localStorage.setItem('ai_chargen_options', JSON.stringify(newVal));
-                    await flushCloudSync();
                 }, { deep: true });
 
                 // Check if we also need to persist api config... API keys are not in `options` natively here.
@@ -1937,9 +1925,8 @@
                 // Make sure activeModelType mapping updates correctly
                 api.model = options.customModels[activeModelType.value] || api.model;
 
-                watch(api, async (newVal) => {
+                watch(api, (newVal) => {
                     localStorage.setItem('ai_chargen_api', JSON.stringify(newVal));
-                    await flushCloudSync();
                 }, { deep: true });
 
                 const targetFields = ['name', 'description', 'personality', 'scenario', 'first_mes', 'creator_notes', 'system_prompt', 'post_history_instructions'];
@@ -2275,7 +2262,6 @@
                                     characters.value = parsed;
                                     // Save to IndexedDB
                                     await localforage.setItem('ai_chargen_characters', lsSaved);
-                                    await flushCloudSync();
                                     showToast('已成功迁移数据至大容量存储', 'success');
                                     // Optional: Clear old localStorage to free up space, but keeping for safety for now
                                 } catch (e) {
@@ -2312,7 +2298,6 @@
                         const start = performance.now();
                         const json = JSON.stringify(newVal);
                         await localforage.setItem('ai_chargen_characters', json);
-                        await flushCloudSync();
                         const end = performance.now();
                         if (end - start > 100) {
                             console.log(`%c[Performance] Data save took ${Math.round(end - start)}ms`, 'color: #f59e0b');
@@ -2549,7 +2534,6 @@
                     currentCharacterIndex.value = 0;
                     // Force update storage
                     await localforage.setItem('ai_chargen_characters', JSON.stringify(characters.value));
-                    await flushCloudSync();
                     showToast('所有角色已清空', 'success');
                 };
 

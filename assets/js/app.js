@@ -715,7 +715,7 @@ createApp({
                         new Sortable(el, {
                             handle: '.cursor-move',
                             animation: 150,
-                            onEnd: async function (evt) {
+                            onEnd: function (evt) {
                                 // Revert SortableJS DOM manipulation before updating Vue data
                                 // to avoid conflict between SortableJS and Vue's virtual DOM
                                 const movedEl = el.children[evt.newIndex];
@@ -727,7 +727,7 @@ createApp({
                                 // Now update Vue reactive data — Vue will handle the DOM update
                                 const item = presets.value.splice(evt.oldIndex, 1)[0];
                                 presets.value.splice(evt.newIndex, 0, item);
-                                await saveData();
+                                saveData();
                             }
                         });
                     }
@@ -739,7 +739,7 @@ createApp({
                         new Sortable(el, {
                             handle: '.cursor-move',
                             animation: 150,
-                            onEnd: async function (evt) {
+                            onEnd: function (evt) {
                                 const movedEl = el.children[evt.newIndex];
                                 if (evt.oldIndex < evt.newIndex) {
                                     el.insertBefore(movedEl, el.children[evt.oldIndex]);
@@ -748,7 +748,7 @@ createApp({
                                 }
                                 const item = regexScripts.value.splice(evt.oldIndex, 1)[0];
                                 regexScripts.value.splice(evt.newIndex, 0, item);
-                                await saveData();
+                                saveData();
                             }
                         });
                     }
@@ -760,7 +760,7 @@ createApp({
                         new Sortable(el, {
                             handle: '.cursor-move',
                             animation: 150,
-                            onEnd: async function (evt) {
+                            onEnd: function (evt) {
                                 // Revert SortableJS DOM manipulation before updating Vue data
                                 const movedEl = el.children[evt.newIndex];
                                 if (evt.oldIndex < evt.newIndex) {
@@ -771,7 +771,7 @@ createApp({
                                 // Now update Vue reactive data
                                 const item = worldInfo.value.splice(evt.oldIndex, 1)[0];
                                 worldInfo.value.splice(evt.newIndex, 0, item);
-                                await saveData();
+                                saveData();
                             }
                         });
                     }
@@ -829,20 +829,6 @@ createApp({
 
         let chatHistorySaveTimer = null;
 
-        const flushCloudSync = async () => {
-            try {
-                if (typeof window !== 'undefined' && typeof window.__rphubFlushSync === 'function') {
-                    const flushed = await window.__rphubFlushSync();
-                    if (flushed === false) {
-                        throw new Error('Cloud sync queue was not fully saved');
-                    }
-                }
-            } catch (e) {
-                console.error('Cloud sync flush failed:', e);
-                throw e;
-            }
-        };
-
         const saveChatHistoryNow = async () => {
             if (chatHistorySaveTimer) {
                 clearTimeout(chatHistorySaveTimer);
@@ -853,7 +839,6 @@ createApp({
             try {
                 const historyToSave = cloneForStorage(chatHistory.value);
                 await dbSet(`silly_tavern_chat_${currentCharacter.value.uuid}`, historyToSave, { clone: false });
-                await flushCloudSync();
             } catch (e) {
                 console.error('Failed to save chat history:', e);
             }
@@ -873,106 +858,19 @@ createApp({
             await saveChatHistoryNow();
         };
 
-        const syncScopedCollectionsForStorage = () => {
-            try {
-                if (activeProfileId.value && Array.isArray(userProfiles.value) && userProfiles.value.length > 0) {
-                    const profileIndex = userProfiles.value.findIndex(profile => profile.uuid === activeProfileId.value);
-                    if (profileIndex !== -1) {
-                        userProfiles.value[profileIndex] = {
-                            ...JSON.parse(JSON.stringify(user)),
-                            uuid: activeProfileId.value
-                        };
-                    }
-                }
-
-                const normalizedWorldInfo = Array.isArray(worldInfo.value)
-                    ? JSON.parse(JSON.stringify(worldInfo.value)).map(normalizeWorldInfoEntry)
-                    : [];
-                const globalEntries = normalizedWorldInfo.filter(entry => entry.scope === 'global');
-                if (JSON.stringify(globalWorldInfo.value) !== JSON.stringify(globalEntries)) {
-                    globalWorldInfo.value = globalEntries;
-                }
-                if (currentCharacterIndex.value !== -1 && characters.value[currentCharacterIndex.value]) {
-                    if (Array.isArray(recentGenerationTimes.value)) {
-                        characters.value[currentCharacterIndex.value].recentGenerationTimes = JSON.parse(JSON.stringify(recentGenerationTimes.value));
-                    }
-
-                    const characterEntries = normalizedWorldInfo.filter(entry => entry.scope !== 'global');
-                    if (JSON.stringify(characters.value[currentCharacterIndex.value].worldInfo) !== JSON.stringify(characterEntries)) {
-                        characters.value[currentCharacterIndex.value].worldInfo = characterEntries;
-                    }
-                }
-
-                const normalizedRegexScripts = Array.isArray(regexScripts.value)
-                    ? JSON.parse(JSON.stringify(regexScripts.value)).map(script => normalizeRegexScript(script))
-                    : [];
-                const defaultRegex = normalizedRegexScripts.find(script => script.name === 'Auto Replace {{user}}');
-                if (defaultRegex) {
-                    defaultRegex.replacement = user.name;
-                    defaultRegex.scope = 'global';
-                }
-                const globalScripts = normalizedRegexScripts.filter(script => script.scope === 'global');
-                if (JSON.stringify(globalRegexScripts.value) !== JSON.stringify(globalScripts)) {
-                    globalRegexScripts.value = globalScripts;
-                }
-                if (currentCharacterIndex.value !== -1 && characters.value[currentCharacterIndex.value]) {
-                    const characterScripts = normalizedRegexScripts.filter(script => script.scope !== 'global');
-                    if (JSON.stringify(characters.value[currentCharacterIndex.value].regexScripts) !== JSON.stringify(characterScripts)) {
-                        characters.value[currentCharacterIndex.value].regexScripts = characterScripts;
-                    }
-                }
-
-                const uiTemplateKey = (template) => template.id || template.name || template.htmlTemplate || JSON.stringify(template.initialVariableState || {});
-                const globalTemplateMap = new Map();
-                const addGlobalTemplate = (template) => {
-                    const normalized = normalizeUiTemplate({ ...template, scope: 'global' });
-                    globalTemplateMap.set(uiTemplateKey(normalized), normalized);
-                };
-
-                if (Array.isArray(globalUiTemplates.value)) {
-                    globalUiTemplates.value.forEach(addGlobalTemplate);
-                }
-                characters.value.forEach((char) => {
-                    if (!Array.isArray(char.uiTemplates)) {
-                        char.uiTemplates = [];
-                        return;
-                    }
-                    const characterTemplates = [];
-                    char.uiTemplates.forEach((template) => {
-                        const normalized = normalizeUiTemplate(template);
-                        if (normalized.scope === 'global') {
-                            addGlobalTemplate(normalized);
-                        } else {
-                            characterTemplates.push(normalizeUiTemplate({ ...normalized, scope: 'character' }));
-                        }
-                    });
-                    char.uiTemplates = characterTemplates;
-                });
-                globalUiTemplates.value = Array.from(globalTemplateMap.values());
-            } catch (e) {
-                console.error('Failed to sync scoped data before save:', e);
-            }
-        };
-
         const saveData = async () => {
             try {
                 if (!db) await initDB();
-                syncScopedCollectionsForStorage();
                 settings.contextSize = MAX_CONTEXT_SIZE;
-
-                // Save global-scoped collections first, so a later large character/chat
-                // write cannot stop global world info or UI templates from reaching cloud.
-                await dbSet('silly_tavern_global_regex', globalRegexScripts.value);
-                await dbSet('silly_tavern_global_worldinfo', globalWorldInfo.value);
-                await dbSet('silly_tavern_global_ui_templates', globalUiTemplates.value);
-                await flushCloudSync();
-
                 await dbSet('silly_tavern_characters', characters.value);
                 await dbSet('silly_tavern_settings', settings);
                 await dbSet('silly_tavern_presets', presets.value);
                 await dbSet('silly_tavern_regex', regexScripts.value);
+                await dbSet('silly_tavern_global_regex', globalRegexScripts.value);
                 await dbSet('silly_tavern_worldinfo', worldInfo.value);
+                await dbSet('silly_tavern_global_worldinfo', globalWorldInfo.value);
                 await dbSet('silly_tavern_worldinfo_settings', worldInfoSettings);
+                await dbSet('silly_tavern_global_ui_templates', globalUiTemplates.value);
                 // await dbSet('silly_tavern_recent_times', recentGenerationTimes.value); // Deprecated: Saved in character
 
                 // 守卫：初始化完成前不写入用户/记忆数据，防止默认值覆盖服务端已有数据
@@ -995,7 +893,6 @@ createApp({
                 if (_memoriesLoaded && currentCharacter.value && currentCharacter.value.uuid) {
                     await dbSet(`silly_tavern_memories_${currentCharacter.value.uuid}`, JSON.parse(JSON.stringify(memories.value)));
                 }
-                await flushCloudSync();
             } catch (e) {
                 console.error('Save failed:', e);
                 if (e.name === 'QuotaExceededError') {
@@ -1067,23 +964,20 @@ createApp({
 
                 // Load from DB
                 const savedChars = await dbGet('silly_tavern_characters');
-                const legacyGlobalWorldInfo = [];
-                const legacyGlobalUiTemplates = [];
                 if (savedChars) {
                     // Migration: Ensure all characters have a UUID and createdAt
                     let migrated = false;
-                    const legacyChatMigrations = [];
                     characters.value = savedChars.filter(char => char).map((char, index) => {
                         if (!char.uuid) {
                             char.uuid = generateUUID();
                             migrated = true;
                             // Try to migrate old index-based chat history to UUID-based
-                            legacyChatMigrations.push(dbGet(`silly_tavern_chat_${index}`).then(async oldChat => {
+                            dbGet(`silly_tavern_chat_${index}`).then(oldChat => {
                                 if (oldChat) {
-                                    await dbSet(`silly_tavern_chat_${char.uuid}`, oldChat);
-                                    await dbDelete(`silly_tavern_chat_${index}`); // Clean up old key
+                                    dbSet(`silly_tavern_chat_${char.uuid}`, oldChat);
+                                    dbDelete(`silly_tavern_chat_${index}`); // Clean up old key
                                 }
-                            }).catch(() => { }));
+                            }).catch(() => { });
                         }
                         if (!char.createdAt) {
                             // Use a slightly offset timestamp based on index to preserve some order for old cards
@@ -1091,28 +985,16 @@ createApp({
                             migrated = true;
                         }
                         if (Array.isArray(char.worldInfo)) {
-                            const normalizedWorldInfo = char.worldInfo.map(normalizeWorldInfoEntry);
-                            legacyGlobalWorldInfo.push(...normalizedWorldInfo.filter(entry => entry.scope === 'global'));
-                            char.worldInfo = normalizedWorldInfo.filter(entry => entry.scope !== 'global');
+                            char.worldInfo = char.worldInfo.map(normalizeWorldInfoEntry).filter(entry => entry.scope !== 'global');
                         }
                         if (Array.isArray(char.regexScripts)) {
                             char.regexScripts = char.regexScripts.map(script => normalizeRegexScript(script, 'character')).filter(script => script.scope !== 'global');
                         }
-                        if (Array.isArray(char.uiTemplates)) {
-                            const normalizedUiTemplates = char.uiTemplates.map(template => normalizeUiTemplate(template));
-                            legacyGlobalUiTemplates.push(...normalizedUiTemplates.filter(template => template.scope === 'global'));
-                            char.uiTemplates = normalizedUiTemplates
-                                .filter(template => template.scope !== 'global')
-                                .map(template => normalizeUiTemplate({ ...template, scope: 'character' }));
-                        } else {
-                            char.uiTemplates = [];
-                        }
+                        char.uiTemplates = Array.isArray(char.uiTemplates) ? char.uiTemplates.map(template => normalizeUiTemplate({ ...template, scope: 'character' })) : [];
                         return char;
                     });
                     if (migrated) {
-                        await Promise.all(legacyChatMigrations);
                         await dbSet('silly_tavern_characters', characters.value);
-                        await flushCloudSync();
                         console.log('Migrated characters to UUID and timestamp system');
                     }
                 }
@@ -1124,67 +1006,28 @@ createApp({
                 const savedPresets = await dbGet('silly_tavern_presets');
                 if (savedPresets) presets.value = savedPresets;
 
-                const mergeStoredItems = (primaryItems, fallbackItems, getKey) => {
-                    const seen = new Set();
-                    return [...primaryItems, ...fallbackItems].filter(item => {
-                        const key = getKey(item);
-                        if (seen.has(key)) return false;
-                        seen.add(key);
-                        return true;
-                    });
-                };
-
                 const savedGlobalRegex = await dbGet('silly_tavern_global_regex');
+                if (savedGlobalRegex) globalRegexScripts.value = savedGlobalRegex.map(script => normalizeRegexScript(script, 'global'));
+
                 const savedRegex = await dbGet('silly_tavern_regex');
-                const savedRegexList = Array.isArray(savedRegex)
-                    ? savedRegex.map(script => normalizeRegexScript(script, 'character'))
-                    : [];
-                const legacyGlobalRegex = savedRegexList.filter(script => script.scope === 'global');
-                const savedGlobalRegexList = Array.isArray(savedGlobalRegex)
-                    ? savedGlobalRegex.map(script => normalizeRegexScript(script, 'global'))
-                    : [];
-                globalRegexScripts.value = mergeStoredItems(
-                    savedGlobalRegexList,
-                    legacyGlobalRegex,
-                    script => script.id || script.uuid || script.name || script.scriptName || `${script.regex || ''}:${script.replacement || ''}`
-                );
-                if (globalRegexScripts.value.length > 0 || Array.isArray(savedGlobalRegex)) {
+                if (savedGlobalRegex) {
                     regexScripts.value = JSON.parse(JSON.stringify(globalRegexScripts.value)).map(script => normalizeRegexScript(script, 'global'));
-                } else if (savedRegexList.length > 0) {
-                    regexScripts.value = savedRegexList;
+                } else if (savedRegex) {
+                    regexScripts.value = savedRegex.map(script => normalizeRegexScript(script, 'character'));
                 }
 
                 const savedGlobalWI = await dbGet('silly_tavern_global_worldinfo');
+                if (savedGlobalWI) globalWorldInfo.value = savedGlobalWI.map(entry => normalizeWorldInfoEntry({ ...entry, scope: 'global' }));
+
                 const savedWI = await dbGet('silly_tavern_worldinfo');
-                const savedWIList = Array.isArray(savedWI) ? savedWI.map(normalizeWorldInfoEntry) : [];
-                const legacyGlobalWI = savedWIList.filter(entry => entry.scope === 'global');
-                const savedGlobalWIList = Array.isArray(savedGlobalWI)
-                    ? savedGlobalWI.map(entry => normalizeWorldInfoEntry({ ...entry, scope: 'global' }))
-                    : [];
-                globalWorldInfo.value = mergeStoredItems(
-                    savedGlobalWIList,
-                    mergeStoredItems(
-                        legacyGlobalWI,
-                        legacyGlobalWorldInfo,
-                        entry => entry.id || entry.uid || entry.comment || `${JSON.stringify(entry.key || entry.keys || [])}:${entry.content || ''}`
-                    ),
-                    entry => entry.id || entry.uid || entry.comment || `${JSON.stringify(entry.key || entry.keys || [])}:${entry.content || ''}`
-                );
-                if (globalWorldInfo.value.length > 0 || Array.isArray(savedGlobalWI)) {
+                if (savedGlobalWI) {
                     worldInfo.value = JSON.parse(JSON.stringify(globalWorldInfo.value)).map(entry => normalizeWorldInfoEntry({ ...entry, scope: 'global' }));
-                } else if (savedWIList.length > 0) {
-                    worldInfo.value = savedWIList;
+                } else if (savedWI) {
+                    worldInfo.value = savedWI.map(normalizeWorldInfoEntry);
                 }
 
                 const savedGlobalUiTemplates = await dbGet('silly_tavern_global_ui_templates');
-                const savedGlobalUiTemplateList = Array.isArray(savedGlobalUiTemplates)
-                    ? savedGlobalUiTemplates.map(template => normalizeUiTemplate({ ...template, scope: 'global' }))
-                    : [];
-                globalUiTemplates.value = mergeStoredItems(
-                    savedGlobalUiTemplateList,
-                    legacyGlobalUiTemplates,
-                    template => template.id || template.name || template.htmlTemplate || JSON.stringify(template.initialVariableState || {})
-                );
+                if (savedGlobalUiTemplates) globalUiTemplates.value = savedGlobalUiTemplates.map(template => normalizeUiTemplate({ ...template, scope: 'global' }));
 
                 const savedWISettings = await dbGet('silly_tavern_worldinfo_settings');
                 if (savedWISettings) {
@@ -1488,7 +1331,7 @@ createApp({
         }, 1000);
 
         // Watch for changes to auto-save
-        watch([characters, settings, presets, regexScripts, globalRegexScripts, worldInfo, globalWorldInfo, globalUiTemplates, worldInfoSettings, user, recentGenerationTimes], () => {
+        watch([characters, settings, presets, regexScripts, globalRegexScripts, worldInfo, globalWorldInfo, globalUiTemplates, user, recentGenerationTimes], () => {
             debouncedSave();
         }, { deep: true });
 
@@ -1499,8 +1342,8 @@ createApp({
         }, { deep: true });
 
         // Manual Save Feedback (Optional, can be bound to a button)
-        const manualSave = async () => {
-            await saveData();
+        const manualSave = () => {
+            saveData();
             showToast('设置已保存', 'success');
         };
 
@@ -3007,7 +2850,7 @@ ${content}
         };
 
         const clearChat = () => {
-            confirmAction('确定要清空聊天记录吗？记忆也将一并清空，此操作无法撤销。', async () => {
+            confirmAction('确定要清空聊天记录吗？记忆也将一并清空，此操作无法撤销。', () => {
                 abortUiTemplateUpdate();
                 chatHistory.value = [];
                 if (currentCharacter.value && currentCharacter.value.first_mes) {
@@ -3019,7 +2862,7 @@ ${content}
                 }
                 memories.value = [];
                 resetUiTemplateRuntimeState();
-                await saveData();
+                saveData();
                 showToast('聊天记录、记忆和变量记录已清空', 'success');
             });
         };
@@ -3044,7 +2887,7 @@ ${content}
             }
         };
 
-        const saveEditMessage = async (index) => {
+        const saveEditMessage = (index) => {
             const msg = chatHistory.value[index];
             if (msg) {
                 let finalContent = msg.editMessageContent;
@@ -3059,7 +2902,7 @@ ${content}
                 delete msg.editMessageContent;
                 delete msg.originalCot;
                 delete msg.originalSys;
-                await saveData();
+                saveData();
                 showToast('消息已保存', 'success');
             }
         };
@@ -3302,7 +3145,7 @@ ${content}
 
                 if (hasChanges) {
                     saveGlobalUiTemplateRuntimeForCharacter();
-                    await saveData();
+                    saveData();
                     await saveChatHistoryNow();
                     markUiTemplateStatus(failedTemplateCount ? 'skipped' : 'success', `已更新 ${changedTemplateCount} 个模板，${changedFieldCount} 个变量${failedTemplateCount ? `，${failedTemplateCount} 个失败` : ''}`);
                     if (manual) showToast(uiTemplateUpdateStatus.message, failedTemplateCount ? 'warning' : 'success');
@@ -3335,7 +3178,7 @@ ${content}
 
 
         const deleteMessage = (index) => {
-            confirmAction('确定要删除这条消息吗？该楼层的关联记忆也将一并删除。', async () => {
+            confirmAction('确定要删除这条消息吗？该楼层的关联记忆也将一并删除。', () => {
                 const msg = chatHistory.value[index];
                 abortUiTemplateUpdate();
                 const affectedTurn = getAssistantTurnAtIndex(index);
@@ -3352,14 +3195,14 @@ ${content}
                     memories.value = memories.value.filter(m => (m.turn || 0) !== turnAtIndex);
                     const removed = before - memories.value.length;
                     chatHistory.value.splice(index, 1);
-                    await saveData();
+                    saveData();
                     const extras = [];
                     if (removed > 0) extras.push(`${removed} 条关联记忆`);
                     if (uiCleanup.logs > 0 || uiCleanup.blocks > 0) extras.push('变量模板');
                     showToast(extras.length ? `消息已删除，清除了 ${extras.join('、')}` : '消息已删除', 'success');
                 } else {
                     chatHistory.value.splice(index, 1);
-                    await saveData();
+                    saveData();
                     showToast(uiCleanup.logs > 0 || uiCleanup.blocks > 0 ? '消息已删除，变量模板已同步回退' : '消息已删除', 'success');
                 }
             });
@@ -4756,7 +4599,6 @@ summary 长度控制在300-500字，尽量完全详细。
                     memories.value.push(...uniqueNewMemories);
                     if (currentCharacter.value?.uuid) {
                         await dbSet(`silly_tavern_memories_${currentCharacter.value.uuid}`, JSON.parse(JSON.stringify(memories.value)));
-                        await flushCloudSync();
                     }
                     console.log(`%c[Memory] 提取了 ${uniqueNewMemories.length} 条新记忆`, 'color: #a855f7; font-weight: bold;');
                     return uniqueNewMemories.length;
@@ -4901,7 +4743,7 @@ summary 长度控制在300-500字，尽量完全详细。
             showCharacterEditor.value = true;
         };
 
-        const saveCharacter = async () => {
+        const saveCharacter = () => {
             const characterRegexScripts = (editingCharacter.data.regexScripts || [])
                 .map(script => normalizeRegexScript({ ...script, scope: 'character' }, 'character'))
                 .filter(script => script.scope !== 'global');
@@ -4916,7 +4758,6 @@ summary 长度控制在300-500字，尽量完全详细。
                 characters.value.push(normalizedCharacterData);
             }
             showCharacterEditor.value = false;
-            await saveData();
             showToast('角色已保存', 'success');
         };
 
@@ -4946,7 +4787,7 @@ summary 长度控制在300-500字，尽量完全详细。
             showUiTemplateEditor.value = true;
         };
 
-        const saveUiTemplate = async () => {
+        const saveUiTemplate = () => {
             if (!currentCharacter.value && editingUiTemplate.data.scope !== 'global') return;
             let initialVariableState = {};
             try {
@@ -4989,17 +4830,17 @@ summary 长度控制在300-500字，尽量完全详细。
                 list.push(template);
             }
             showUiTemplateEditor.value = false;
-            await saveData();
+            saveData();
             showToast('UI模板已保存', 'success');
         };
 
         const deleteUiTemplate = (index) => {
-            confirmAction('确定要删除这个UI模板吗？此操作无法撤销。', async () => {
+            confirmAction('确定要删除这个UI模板吗？此操作无法撤销。', () => {
                 const template = currentUiTemplates.value[index];
                 const list = getUiTemplateListByScope(template?.scope);
                 const targetIndex = list.findIndex(item => item.id === template?.id);
                 if (targetIndex !== -1) list.splice(targetIndex, 1);
-                await saveData();
+                saveData();
                 showToast('UI模板已删除', 'success');
             });
         };
@@ -5025,7 +4866,7 @@ summary 长度控制在300-500字，尽量完全详细。
             const file = event.target.files[0];
             if (!file) return;
             const reader = new FileReader();
-            reader.onload = async (e) => {
+            reader.onload = (e) => {
                 try {
                     const data = JSON.parse(e.target.result);
                     const templates = Array.isArray(data) ? data : (Array.isArray(data.templates) ? data.templates : []);
@@ -5042,7 +4883,7 @@ summary 长度控制在300-500字，尽量完全详细。
                     }
                     ensureGlobalUiTemplates().push(...globalTemplates);
                     ensureCurrentUiTemplates().push(...characterTemplates);
-                    await saveData();
+                    saveData();
                     showToast(`成功导入 ${normalized.length} 个UI模板`, 'success');
                 } catch (err) {
                     showToast('UI模板导入失败: ' + err.message, 'error');
@@ -5068,7 +4909,6 @@ summary 长度控制在300-500字，尽量完全详细。
                     } else if (currentCharacterIndex.value > index) {
                         currentCharacterIndex.value--;
                     }
-                    await saveData();
                     showToast('角色已删除', 'success');
                 } catch (err) {
                     console.error('Failed to delete character or associated data:', err);
@@ -5114,7 +4954,6 @@ summary 长度控制在300-500字，尽量完全详细。
                         currentCharacterIndex.value = -1;
                     }
 
-                    await saveData();
                     showToast('删除成功', 'success');
                     toggleBatchDeleteMode();
                 } catch (err) {
@@ -5264,9 +5103,9 @@ image###生成的提示词###
 
         };
 
-        watch(() => settings.imageGenKey, async () => {
+        watch(() => settings.imageGenKey, () => {
             enforceSpecialRules();
-            await saveData();
+            saveData();
             fetchQuota();
         });
         const selectCharacter = async (index, isNewImport = false) => {
@@ -5288,7 +5127,7 @@ image###生成的提示词###
             // Ensure UUID exists (double check)
             if (!char.uuid) {
                 char.uuid = generateUUID();
-                await saveData();
+                saveData();
             }
 
             // Try to load saved chat history for this character
@@ -5391,7 +5230,7 @@ image###生成的提示词###
                 showAutoImageGenModal.value = true;
             }
 
-            await saveData(); // Save the switch immediately
+            saveData(); // Save the switch immediately
         };
 
         const handleAvatarUpload = (event) => {
@@ -5862,7 +5701,7 @@ image###生成的提示词###
 
             if (file.type === 'application/json') {
                 const reader = new FileReader();
-                reader.onload = async (e) => {
+                reader.onload = (e) => {
                     try {
                         const data = JSON.parse(e.target.result);
                         processCharacterData(data, null);
@@ -5873,7 +5712,7 @@ image###生成的提示词###
                 reader.readAsText(file);
             } else if (file.type === 'image/png' || file.name.endsWith('.png')) {
                 const reader = new FileReader();
-                reader.onload = async (e) => {
+                reader.onload = (e) => {
                     try {
                         const buffer = e.target.result;
                         const chunks = readPngChunks(buffer);
@@ -5950,7 +5789,6 @@ image###生成的提示词###
                                 } else {
                                     await dbSet(`silly_tavern_chat_${currentCharacterIndex.value}`, chatHistory.value);
                                 }
-                                await flushCloudSync();
 
                                 showToast(`成功为 ${char.name} 导入 ${importedChat.length} 条聊天记录`, 'success');
                                 await nextTick();
@@ -6172,31 +6010,28 @@ image###生成的提示词###
             showPresetEditor.value = true;
         };
 
-        const savePreset = async () => {
+        const savePreset = () => {
             if (editingPreset.id !== undefined) {
                 presets.value[editingPreset.id] = { ...editingPreset.data };
             } else {
                 presets.value.push({ ...editingPreset.data });
             }
             showPresetEditor.value = false;
-            await saveData();
         };
 
         const deletePreset = (index) => {
-            confirmAction('确定要删除这个预设吗？此操作无法撤销。', async () => {
+            confirmAction('确定要删除这个预设吗？此操作无法撤销。', () => {
                 presets.value.splice(index, 1);
-                await saveData();
                 showToast('预设已删除', 'success');
             });
         };
 
-        const movePreset = async (index, direction) => {
+        const movePreset = (index, direction) => {
             const newIndex = index + direction;
             if (newIndex >= 0 && newIndex < presets.value.length) {
                 const temp = presets.value[index];
                 presets.value[index] = presets.value[newIndex];
                 presets.value[newIndex] = temp;
-                await saveData();
             }
         };
 
@@ -6250,7 +6085,7 @@ image###生成的提示词###
 
             if (cleanedCount > 0 || regexScripts.value.length < currentOriginalLength) {
                 console.log(`[Cleanup] 已完成系统清理: ${obsoleteRegexNames.join(', ')}`);
-                await saveData(); // 持久化清理结果
+                saveData(); // 持久化清理结果
             }
 
             // 每次刷新检查有无名为“默认”的预设，如果有则去除
@@ -6618,7 +6453,7 @@ image###生成的提示词###
 
 
             // Save enforced defaults immediately (仅保存预设/正则等结构性数据)
-            await saveData();
+            saveData();
 
             // 初始化守卫解除：此后 saveData 才允许写入 user / memorySettings
             _initComplete = true;
@@ -6634,7 +6469,7 @@ image###生成的提示词###
                 // Ensure UUID
                 if (!char.uuid) {
                     char.uuid = generateUUID();
-                    await saveData();
+                    saveData();
                 }
                 loadGlobalUiTemplateRuntimeForCharacter(char);
 
@@ -6801,12 +6636,12 @@ image###生成的提示词###
             return { text: mainText, showSpinner: false };
         };
 
-        const switchProfile = async (id) => {
+        const switchProfile = (id) => {
             const profile = userProfiles.value.find(p => p.uuid === id);
             if (profile) {
                 activeProfileId.value = id;
                 Object.assign(user, JSON.parse(JSON.stringify(profile)));
-                await saveData();
+                saveData();
                 showToast(`已切换为人设: ${user.name}`, 'success');
             }
         };
@@ -6832,14 +6667,14 @@ image###生成的提示词###
             }
 
             confirmMessage.value = '确定要删除此人设吗？此操作不可逆。';
-            confirmCallback.value = async () => {
+            confirmCallback.value = () => {
                 const index = userProfiles.value.findIndex(p => p.uuid === id);
                 if (index !== -1) {
                     userProfiles.value.splice(index, 1);
                     if (activeProfileId.value === id) {
-                        await switchProfile(userProfiles.value[0].uuid);
+                        switchProfile(userProfiles.value[0].uuid);
                     } else {
-                        await saveData();
+                        saveData();
                     }
                     showToast('人设已删除', 'success');
                 }
@@ -6922,7 +6757,7 @@ image###生成的提示词###
                 editingMemory.data = JSON.parse(JSON.stringify(memories.value[realIndex]));
                 showMemoryEditor.value = true;
             },
-            saveMemory: async () => {
+            saveMemory: () => {
                 if (!editingMemory.data.summary || !editingMemory.data.summary.trim()) {
                     showToast('记忆内容不能为空', 'error');
                     return;
@@ -6944,27 +6779,27 @@ image###生成的提示词###
                     });
                 }
                 showMemoryEditor.value = false;
-                await saveData();
+                saveData();
                 showToast('记忆已保存', 'success');
             },
             deleteMemory: (id) => {
-                confirmAction('确定要删除这条记忆吗？', async () => {
+                confirmAction('确定要删除这条记忆吗？', () => {
                     memories.value = memories.value.filter(m => m.id !== id);
-                    await saveData();
+                    saveData();
                     showToast('记忆已删除', 'success');
                 });
             },
-            toggleMemory: async (id) => {
+            toggleMemory: (id) => {
                 const mem = memories.value.find(m => m.id === id);
                 if (mem) {
                     mem.enabled = !mem.enabled;
-                    await saveData();
+                    saveData();
                 }
             },
             clearAllMemories: () => {
-                confirmAction('确定要清空所有记忆吗？此操作无法撤销。', async () => {
+                confirmAction('确定要清空所有记忆吗？此操作无法撤销。', () => {
                     memories.value = [];
-                    await saveData();
+                    saveData();
                     showToast('所有记忆已清空', 'success');
                 });
             },
@@ -6981,7 +6816,7 @@ image###生成的提示词###
                 const file = event.target.files[0];
                 if (!file) return;
                 const reader = new FileReader();
-                reader.onload = async (e) => {
+                reader.onload = (e) => {
                     try {
                         const data = JSON.parse(e.target.result);
                         if (Array.isArray(data)) {
@@ -6998,9 +6833,9 @@ image###生成的提示词###
                                         summary: memoryData.summary.trim(),
                                         enabled: memoryData.enabled !== false
                                     };
-                            });
+                                });
                             memories.value = [...memories.value, ...normalized];
-                            await saveData();
+                            saveData();
                             showToast(`成功导入 ${normalized.length} 条记忆`, 'success');
                         } else {
                             showToast('导入失败: 文件内容需为数组', 'error');
@@ -7115,7 +6950,7 @@ image###生成的提示词###
                 const file = event.target.files[0];
                 if (!file) return;
                 const reader = new FileReader();
-                reader.onload = async (e) => {
+                reader.onload = (e) => {
                     try {
                         let data = JSON.parse(e.target.result);
                         // Support single object import
@@ -7125,7 +6960,6 @@ image###生成的提示词###
 
                         if (data.length > 0) {
                             presets.value = [...presets.value, ...data];
-                            await saveData();
                             showToast(`成功导入 ${data.length} 条预设`, 'success');
                         }
                         // Reset file input
@@ -7154,7 +6988,7 @@ image###生成的提示词###
                 console.log('Starting regex import for file:', file.name);
 
                 const reader = new FileReader();
-                reader.onload = async (e) => {
+                reader.onload = (e) => {
                     try {
                         console.log('File content read, parsing JSON...');
                         let data = JSON.parse(e.target.result);
@@ -7210,7 +7044,6 @@ image###生成的提示词###
 
                             regexScripts.value = [...regexScripts.value, ...normalized];
                             console.log('Import successful');
-                            await saveData();
                             showToast(`成功导入 ${normalized.length} 个正则脚本`, 'success');
                         } else {
                             throw new Error('Invalid data format');
@@ -7251,7 +7084,7 @@ image###生成的提示词###
                 editingRegex.data = normalizeRegexScript({ ...regexScripts.value[index] });
                 showRegexEditor.value = true;
             },
-            saveRegex: async () => {
+            saveRegex: () => {
                 const data = normalizeRegexScript(editingRegex.data, editingRegex.data.scope);
                 if (editingRegex.id !== undefined) {
                     regexScripts.value[editingRegex.id] = data;
@@ -7259,12 +7092,10 @@ image###生成的提示词###
                     regexScripts.value.push(data);
                 }
                 showRegexEditor.value = false;
-                await saveData();
             },
             deleteRegex: (index) => {
-                confirmAction('确定要删除这个正则脚本吗？此操作无法撤销。', async () => {
+                confirmAction('确定要删除这个正则脚本吗？此操作无法撤销。', () => {
                     regexScripts.value.splice(index, 1);
-                    await saveData();
                     showToast('正则脚本已删除', 'success');
                 });
             },
@@ -7274,7 +7105,7 @@ image###生成的提示词###
                 const file = event.target.files[0];
                 if (!file) return;
                 const reader = new FileReader();
-                reader.onload = async (e) => {
+                reader.onload = (e) => {
                     try {
                         const data = JSON.parse(e.target.result);
                         let entries = [];
@@ -7292,9 +7123,8 @@ image###生成的提示词###
                             const normalizedEntries = entries.map(normalizeWorldInfoEntry);
                             worldInfo.value = [...worldInfo.value, ...normalizedEntries];
                             if (currentCharacterIndex.value !== -1) {
-                                characters.value[currentCharacterIndex.value].worldInfo = JSON.parse(JSON.stringify(worldInfo.value.filter(entry => entry.scope !== 'global')));
+                                characters.value[currentCharacterIndex.value].worldInfo = JSON.parse(JSON.stringify(worldInfo.value));
                             }
-                            await saveData();
                             showToast('世界书导入成功', 'success');
                         }
                         // Reset file input
@@ -7359,7 +7189,7 @@ image###生成的提示词###
                 editingWorldInfo.data = normalizeWorldInfoEntry(data);
                 showWorldInfoEditor.value = true;
             },
-            saveWorldInfo: async () => {
+            saveWorldInfo: () => {
                 const data = normalizeWorldInfoEntry(editingWorldInfo.data);
                 if (editingWorldInfo.id !== undefined) {
                     worldInfo.value[editingWorldInfo.id] = data;
@@ -7368,19 +7198,17 @@ image###生成的提示词###
                 }
                 // Sync back to current character
                 if (currentCharacterIndex.value !== -1) {
-                    characters.value[currentCharacterIndex.value].worldInfo = JSON.parse(JSON.stringify(worldInfo.value.filter(entry => entry.scope !== 'global')));
+                    characters.value[currentCharacterIndex.value].worldInfo = JSON.parse(JSON.stringify(worldInfo.value));
                 }
                 showWorldInfoEditor.value = false;
-                await saveData();
 
             },
             deleteWorldInfo: (index) => {
-                confirmAction('确定要删除这个世界书条目吗？此操作无法撤销。', async () => {
+                confirmAction('确定要删除这个世界书条目吗？此操作无法撤销。', () => {
                     worldInfo.value.splice(index, 1);
                     if (currentCharacterIndex.value !== -1) {
-                        characters.value[currentCharacterIndex.value].worldInfo = JSON.parse(JSON.stringify(worldInfo.value.filter(entry => entry.scope !== 'global')));
+                        characters.value[currentCharacterIndex.value].worldInfo = JSON.parse(JSON.stringify(worldInfo.value));
                     }
-                    await saveData();
                     showToast('世界书条目已删除', 'success');
                 });
             },
@@ -7411,13 +7239,13 @@ image###生成的提示词###
                         } catch (err) {
                             user.avatar = e.target.result;
                         }
-                        await saveData();
+                        saveData();
                         // Removed updatePresence();
                     };
                     reader.readAsDataURL(file);
                 }
             },
-            saveUserSetup: async () => {
+            saveUserSetup: () => {
                 if (!tempUserSetup.name || tempUserSetup.name === '请前往设置自定义你的名称') {
                     showToast('请输入有效的名称', 'error');
                     return;
@@ -7438,13 +7266,13 @@ image###生成的提示词###
                 }
 
                 showUserSetupModal.value = false;
-                await saveData();
+                saveData();
                 showToast('用户信息已保存', 'success');
             },
 
             // Person Toggle Logic
             isSecondPerson: computed(() => user.person !== 'third'),
-            togglePerson: async (person) => {
+            togglePerson: (person) => {
                 user.person = person; // 更新偏好
 
                 // 应用到预设
@@ -7460,13 +7288,13 @@ image###生成的提示词###
                     if (thirdPersonPreset) thirdPersonPreset.enabled = true;
                     showToast('已切换至第三人称视角', 'success');
                 }
-                await saveData();
+                saveData();
             },
 
             // Auto Image Gen Inquiry
             showAutoImageGenModal,
 
-            setAutoImageGen: async (enabled) => {
+            setAutoImageGen: (enabled) => {
                 const autoImageGenWIName = '自动生图';
                 const entry = worldInfo.value.find(w => w.comment === autoImageGenWIName);
                 if (entry) {
@@ -7474,7 +7302,7 @@ image###生成的提示词###
                     showToast(enabled ? '自动生图已开启' : '已保持关闭状态', enabled ? 'success' : 'info');
                 }
                 showAutoImageGenModal.value = false;
-                await saveData();
+                saveData();
             }
         };
     }
