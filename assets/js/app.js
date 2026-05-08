@@ -869,9 +869,63 @@ createApp({
             await saveChatHistoryNow();
         };
 
+        const syncScopedCollectionsForStorage = () => {
+            try {
+                if (activeProfileId.value && Array.isArray(userProfiles.value) && userProfiles.value.length > 0) {
+                    const profileIndex = userProfiles.value.findIndex(profile => profile.uuid === activeProfileId.value);
+                    if (profileIndex !== -1) {
+                        userProfiles.value[profileIndex] = {
+                            ...JSON.parse(JSON.stringify(user)),
+                            uuid: activeProfileId.value
+                        };
+                    }
+                }
+
+                const normalizedWorldInfo = Array.isArray(worldInfo.value)
+                    ? JSON.parse(JSON.stringify(worldInfo.value)).map(normalizeWorldInfoEntry)
+                    : [];
+                const globalEntries = normalizedWorldInfo.filter(entry => entry.scope === 'global');
+                if (JSON.stringify(globalWorldInfo.value) !== JSON.stringify(globalEntries)) {
+                    globalWorldInfo.value = globalEntries;
+                }
+                if (currentCharacterIndex.value !== -1 && characters.value[currentCharacterIndex.value]) {
+                    if (Array.isArray(recentGenerationTimes.value)) {
+                        characters.value[currentCharacterIndex.value].recentGenerationTimes = JSON.parse(JSON.stringify(recentGenerationTimes.value));
+                    }
+
+                    const characterEntries = normalizedWorldInfo.filter(entry => entry.scope !== 'global');
+                    if (JSON.stringify(characters.value[currentCharacterIndex.value].worldInfo) !== JSON.stringify(characterEntries)) {
+                        characters.value[currentCharacterIndex.value].worldInfo = characterEntries;
+                    }
+                }
+
+                const normalizedRegexScripts = Array.isArray(regexScripts.value)
+                    ? JSON.parse(JSON.stringify(regexScripts.value)).map(script => normalizeRegexScript(script))
+                    : [];
+                const defaultRegex = normalizedRegexScripts.find(script => script.name === 'Auto Replace {{user}}');
+                if (defaultRegex) {
+                    defaultRegex.replacement = user.name;
+                    defaultRegex.scope = 'global';
+                }
+                const globalScripts = normalizedRegexScripts.filter(script => script.scope === 'global');
+                if (JSON.stringify(globalRegexScripts.value) !== JSON.stringify(globalScripts)) {
+                    globalRegexScripts.value = globalScripts;
+                }
+                if (currentCharacterIndex.value !== -1 && characters.value[currentCharacterIndex.value]) {
+                    const characterScripts = normalizedRegexScripts.filter(script => script.scope !== 'global');
+                    if (JSON.stringify(characters.value[currentCharacterIndex.value].regexScripts) !== JSON.stringify(characterScripts)) {
+                        characters.value[currentCharacterIndex.value].regexScripts = characterScripts;
+                    }
+                }
+            } catch (e) {
+                console.error('Failed to sync scoped data before save:', e);
+            }
+        };
+
         const saveData = async () => {
             try {
                 if (!db) await initDB();
+                syncScopedCollectionsForStorage();
                 settings.contextSize = MAX_CONTEXT_SIZE;
                 await dbSet('silly_tavern_characters', characters.value);
                 await dbSet('silly_tavern_settings', settings);
@@ -979,17 +1033,18 @@ createApp({
                 if (savedChars) {
                     // Migration: Ensure all characters have a UUID and createdAt
                     let migrated = false;
+                    const legacyChatMigrations = [];
                     characters.value = savedChars.filter(char => char).map((char, index) => {
                         if (!char.uuid) {
                             char.uuid = generateUUID();
                             migrated = true;
                             // Try to migrate old index-based chat history to UUID-based
-                            dbGet(`silly_tavern_chat_${index}`).then(oldChat => {
+                            legacyChatMigrations.push(dbGet(`silly_tavern_chat_${index}`).then(async oldChat => {
                                 if (oldChat) {
-                                    dbSet(`silly_tavern_chat_${char.uuid}`, oldChat);
-                                    dbDelete(`silly_tavern_chat_${index}`); // Clean up old key
+                                    await dbSet(`silly_tavern_chat_${char.uuid}`, oldChat);
+                                    await dbDelete(`silly_tavern_chat_${index}`); // Clean up old key
                                 }
-                            }).catch(() => { });
+                            }).catch(() => { }));
                         }
                         if (!char.createdAt) {
                             // Use a slightly offset timestamp based on index to preserve some order for old cards
@@ -1006,7 +1061,9 @@ createApp({
                         return char;
                     });
                     if (migrated) {
+                        await Promise.all(legacyChatMigrations);
                         await dbSet('silly_tavern_characters', characters.value);
+                        await flushCloudSync();
                         console.log('Migrated characters to UUID and timestamp system');
                     }
                 }
@@ -1018,24 +1075,52 @@ createApp({
                 const savedPresets = await dbGet('silly_tavern_presets');
                 if (savedPresets) presets.value = savedPresets;
 
-                const savedGlobalRegex = await dbGet('silly_tavern_global_regex');
-                if (savedGlobalRegex) globalRegexScripts.value = savedGlobalRegex.map(script => normalizeRegexScript(script, 'global'));
+                const mergeStoredItems = (primaryItems, fallbackItems, getKey) => {
+                    const seen = new Set();
+                    return [...primaryItems, ...fallbackItems].filter(item => {
+                        const key = getKey(item);
+                        if (seen.has(key)) return false;
+                        seen.add(key);
+                        return true;
+                    });
+                };
 
+                const savedGlobalRegex = await dbGet('silly_tavern_global_regex');
                 const savedRegex = await dbGet('silly_tavern_regex');
-                if (savedGlobalRegex) {
+                const savedRegexList = Array.isArray(savedRegex)
+                    ? savedRegex.map(script => normalizeRegexScript(script, 'character'))
+                    : [];
+                const legacyGlobalRegex = savedRegexList.filter(script => script.scope === 'global');
+                const savedGlobalRegexList = Array.isArray(savedGlobalRegex)
+                    ? savedGlobalRegex.map(script => normalizeRegexScript(script, 'global'))
+                    : [];
+                globalRegexScripts.value = mergeStoredItems(
+                    savedGlobalRegexList,
+                    legacyGlobalRegex,
+                    script => script.id || script.uuid || script.name || script.scriptName || `${script.regex || ''}:${script.replacement || ''}`
+                );
+                if (globalRegexScripts.value.length > 0 || Array.isArray(savedGlobalRegex)) {
                     regexScripts.value = JSON.parse(JSON.stringify(globalRegexScripts.value)).map(script => normalizeRegexScript(script, 'global'));
-                } else if (savedRegex) {
-                    regexScripts.value = savedRegex.map(script => normalizeRegexScript(script, 'character'));
+                } else if (savedRegexList.length > 0) {
+                    regexScripts.value = savedRegexList;
                 }
 
                 const savedGlobalWI = await dbGet('silly_tavern_global_worldinfo');
-                if (savedGlobalWI) globalWorldInfo.value = savedGlobalWI.map(entry => normalizeWorldInfoEntry({ ...entry, scope: 'global' }));
-
                 const savedWI = await dbGet('silly_tavern_worldinfo');
-                if (savedGlobalWI) {
+                const savedWIList = Array.isArray(savedWI) ? savedWI.map(normalizeWorldInfoEntry) : [];
+                const legacyGlobalWI = savedWIList.filter(entry => entry.scope === 'global');
+                const savedGlobalWIList = Array.isArray(savedGlobalWI)
+                    ? savedGlobalWI.map(entry => normalizeWorldInfoEntry({ ...entry, scope: 'global' }))
+                    : [];
+                globalWorldInfo.value = mergeStoredItems(
+                    savedGlobalWIList,
+                    legacyGlobalWI,
+                    entry => entry.id || entry.uid || entry.comment || `${JSON.stringify(entry.key || [])}:${entry.content || ''}`
+                );
+                if (globalWorldInfo.value.length > 0 || Array.isArray(savedGlobalWI)) {
                     worldInfo.value = JSON.parse(JSON.stringify(globalWorldInfo.value)).map(entry => normalizeWorldInfoEntry({ ...entry, scope: 'global' }));
-                } else if (savedWI) {
-                    worldInfo.value = savedWI.map(normalizeWorldInfoEntry);
+                } else if (savedWIList.length > 0) {
+                    worldInfo.value = savedWIList;
                 }
 
                 const savedGlobalUiTemplates = await dbGet('silly_tavern_global_ui_templates');
@@ -4611,6 +4696,7 @@ summary 长度控制在300-500字，尽量完全详细。
                     memories.value.push(...uniqueNewMemories);
                     if (currentCharacter.value?.uuid) {
                         await dbSet(`silly_tavern_memories_${currentCharacter.value.uuid}`, JSON.parse(JSON.stringify(memories.value)));
+                        await flushCloudSync();
                     }
                     console.log(`%c[Memory] 提取了 ${uniqueNewMemories.length} 条新记忆`, 'color: #a855f7; font-weight: bold;');
                     return uniqueNewMemories.length;
@@ -5804,6 +5890,7 @@ image###生成的提示词###
                                 } else {
                                     await dbSet(`silly_tavern_chat_${currentCharacterIndex.value}`, chatHistory.value);
                                 }
+                                await flushCloudSync();
 
                                 showToast(`成功为 ${char.name} 导入 ${importedChat.length} 条聊天记录`, 'success');
                                 await nextTick();
