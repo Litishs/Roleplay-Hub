@@ -715,7 +715,7 @@ createApp({
                         new Sortable(el, {
                             handle: '.cursor-move',
                             animation: 150,
-                            onEnd: function (evt) {
+                            onEnd: async function (evt) {
                                 // Revert SortableJS DOM manipulation before updating Vue data
                                 // to avoid conflict between SortableJS and Vue's virtual DOM
                                 const movedEl = el.children[evt.newIndex];
@@ -727,7 +727,7 @@ createApp({
                                 // Now update Vue reactive data — Vue will handle the DOM update
                                 const item = presets.value.splice(evt.oldIndex, 1)[0];
                                 presets.value.splice(evt.newIndex, 0, item);
-                                saveData();
+                                await saveData();
                             }
                         });
                     }
@@ -739,7 +739,7 @@ createApp({
                         new Sortable(el, {
                             handle: '.cursor-move',
                             animation: 150,
-                            onEnd: function (evt) {
+                            onEnd: async function (evt) {
                                 const movedEl = el.children[evt.newIndex];
                                 if (evt.oldIndex < evt.newIndex) {
                                     el.insertBefore(movedEl, el.children[evt.oldIndex]);
@@ -748,7 +748,7 @@ createApp({
                                 }
                                 const item = regexScripts.value.splice(evt.oldIndex, 1)[0];
                                 regexScripts.value.splice(evt.newIndex, 0, item);
-                                saveData();
+                                await saveData();
                             }
                         });
                     }
@@ -760,7 +760,7 @@ createApp({
                         new Sortable(el, {
                             handle: '.cursor-move',
                             animation: 150,
-                            onEnd: function (evt) {
+                            onEnd: async function (evt) {
                                 // Revert SortableJS DOM manipulation before updating Vue data
                                 const movedEl = el.children[evt.newIndex];
                                 if (evt.oldIndex < evt.newIndex) {
@@ -771,7 +771,7 @@ createApp({
                                 // Now update Vue reactive data
                                 const item = worldInfo.value.splice(evt.oldIndex, 1)[0];
                                 worldInfo.value.splice(evt.newIndex, 0, item);
-                                saveData();
+                                await saveData();
                             }
                         });
                     }
@@ -829,6 +829,16 @@ createApp({
 
         let chatHistorySaveTimer = null;
 
+        const flushCloudSync = async () => {
+            try {
+                if (typeof window !== 'undefined' && typeof window.__rphubFlushSync === 'function') {
+                    await window.__rphubFlushSync();
+                }
+            } catch (e) {
+                console.error('Cloud sync flush failed:', e);
+            }
+        };
+
         const saveChatHistoryNow = async () => {
             if (chatHistorySaveTimer) {
                 clearTimeout(chatHistorySaveTimer);
@@ -839,6 +849,7 @@ createApp({
             try {
                 const historyToSave = cloneForStorage(chatHistory.value);
                 await dbSet(`silly_tavern_chat_${currentCharacter.value.uuid}`, historyToSave, { clone: false });
+                await flushCloudSync();
             } catch (e) {
                 console.error('Failed to save chat history:', e);
             }
@@ -893,6 +904,7 @@ createApp({
                 if (_memoriesLoaded && currentCharacter.value && currentCharacter.value.uuid) {
                     await dbSet(`silly_tavern_memories_${currentCharacter.value.uuid}`, JSON.parse(JSON.stringify(memories.value)));
                 }
+                await flushCloudSync();
             } catch (e) {
                 console.error('Save failed:', e);
                 if (e.name === 'QuotaExceededError') {
@@ -1331,7 +1343,7 @@ createApp({
         }, 1000);
 
         // Watch for changes to auto-save
-        watch([characters, settings, presets, regexScripts, globalRegexScripts, worldInfo, globalWorldInfo, globalUiTemplates, user, recentGenerationTimes], () => {
+        watch([characters, settings, presets, regexScripts, globalRegexScripts, worldInfo, globalWorldInfo, globalUiTemplates, worldInfoSettings, user, recentGenerationTimes], () => {
             debouncedSave();
         }, { deep: true });
 
@@ -1342,8 +1354,8 @@ createApp({
         }, { deep: true });
 
         // Manual Save Feedback (Optional, can be bound to a button)
-        const manualSave = () => {
-            saveData();
+        const manualSave = async () => {
+            await saveData();
             showToast('设置已保存', 'success');
         };
 
@@ -2850,7 +2862,7 @@ ${content}
         };
 
         const clearChat = () => {
-            confirmAction('确定要清空聊天记录吗？记忆也将一并清空，此操作无法撤销。', () => {
+            confirmAction('确定要清空聊天记录吗？记忆也将一并清空，此操作无法撤销。', async () => {
                 abortUiTemplateUpdate();
                 chatHistory.value = [];
                 if (currentCharacter.value && currentCharacter.value.first_mes) {
@@ -2862,7 +2874,7 @@ ${content}
                 }
                 memories.value = [];
                 resetUiTemplateRuntimeState();
-                saveData();
+                await saveData();
                 showToast('聊天记录、记忆和变量记录已清空', 'success');
             });
         };
@@ -2887,7 +2899,7 @@ ${content}
             }
         };
 
-        const saveEditMessage = (index) => {
+        const saveEditMessage = async (index) => {
             const msg = chatHistory.value[index];
             if (msg) {
                 let finalContent = msg.editMessageContent;
@@ -2902,7 +2914,7 @@ ${content}
                 delete msg.editMessageContent;
                 delete msg.originalCot;
                 delete msg.originalSys;
-                saveData();
+                await saveData();
                 showToast('消息已保存', 'success');
             }
         };
@@ -3145,7 +3157,7 @@ ${content}
 
                 if (hasChanges) {
                     saveGlobalUiTemplateRuntimeForCharacter();
-                    saveData();
+                    await saveData();
                     await saveChatHistoryNow();
                     markUiTemplateStatus(failedTemplateCount ? 'skipped' : 'success', `已更新 ${changedTemplateCount} 个模板，${changedFieldCount} 个变量${failedTemplateCount ? `，${failedTemplateCount} 个失败` : ''}`);
                     if (manual) showToast(uiTemplateUpdateStatus.message, failedTemplateCount ? 'warning' : 'success');
@@ -3178,7 +3190,7 @@ ${content}
 
 
         const deleteMessage = (index) => {
-            confirmAction('确定要删除这条消息吗？该楼层的关联记忆也将一并删除。', () => {
+            confirmAction('确定要删除这条消息吗？该楼层的关联记忆也将一并删除。', async () => {
                 const msg = chatHistory.value[index];
                 abortUiTemplateUpdate();
                 const affectedTurn = getAssistantTurnAtIndex(index);
@@ -3195,14 +3207,14 @@ ${content}
                     memories.value = memories.value.filter(m => (m.turn || 0) !== turnAtIndex);
                     const removed = before - memories.value.length;
                     chatHistory.value.splice(index, 1);
-                    saveData();
+                    await saveData();
                     const extras = [];
                     if (removed > 0) extras.push(`${removed} 条关联记忆`);
                     if (uiCleanup.logs > 0 || uiCleanup.blocks > 0) extras.push('变量模板');
                     showToast(extras.length ? `消息已删除，清除了 ${extras.join('、')}` : '消息已删除', 'success');
                 } else {
                     chatHistory.value.splice(index, 1);
-                    saveData();
+                    await saveData();
                     showToast(uiCleanup.logs > 0 || uiCleanup.blocks > 0 ? '消息已删除，变量模板已同步回退' : '消息已删除', 'success');
                 }
             });
@@ -4743,7 +4755,7 @@ summary 长度控制在300-500字，尽量完全详细。
             showCharacterEditor.value = true;
         };
 
-        const saveCharacter = () => {
+        const saveCharacter = async () => {
             const characterRegexScripts = (editingCharacter.data.regexScripts || [])
                 .map(script => normalizeRegexScript({ ...script, scope: 'character' }, 'character'))
                 .filter(script => script.scope !== 'global');
@@ -4758,6 +4770,7 @@ summary 长度控制在300-500字，尽量完全详细。
                 characters.value.push(normalizedCharacterData);
             }
             showCharacterEditor.value = false;
+            await saveData();
             showToast('角色已保存', 'success');
         };
 
@@ -4787,7 +4800,7 @@ summary 长度控制在300-500字，尽量完全详细。
             showUiTemplateEditor.value = true;
         };
 
-        const saveUiTemplate = () => {
+        const saveUiTemplate = async () => {
             if (!currentCharacter.value && editingUiTemplate.data.scope !== 'global') return;
             let initialVariableState = {};
             try {
@@ -4830,17 +4843,17 @@ summary 长度控制在300-500字，尽量完全详细。
                 list.push(template);
             }
             showUiTemplateEditor.value = false;
-            saveData();
+            await saveData();
             showToast('UI模板已保存', 'success');
         };
 
         const deleteUiTemplate = (index) => {
-            confirmAction('确定要删除这个UI模板吗？此操作无法撤销。', () => {
+            confirmAction('确定要删除这个UI模板吗？此操作无法撤销。', async () => {
                 const template = currentUiTemplates.value[index];
                 const list = getUiTemplateListByScope(template?.scope);
                 const targetIndex = list.findIndex(item => item.id === template?.id);
                 if (targetIndex !== -1) list.splice(targetIndex, 1);
-                saveData();
+                await saveData();
                 showToast('UI模板已删除', 'success');
             });
         };
@@ -4866,7 +4879,7 @@ summary 长度控制在300-500字，尽量完全详细。
             const file = event.target.files[0];
             if (!file) return;
             const reader = new FileReader();
-            reader.onload = (e) => {
+            reader.onload = async (e) => {
                 try {
                     const data = JSON.parse(e.target.result);
                     const templates = Array.isArray(data) ? data : (Array.isArray(data.templates) ? data.templates : []);
@@ -4883,7 +4896,7 @@ summary 长度控制在300-500字，尽量完全详细。
                     }
                     ensureGlobalUiTemplates().push(...globalTemplates);
                     ensureCurrentUiTemplates().push(...characterTemplates);
-                    saveData();
+                    await saveData();
                     showToast(`成功导入 ${normalized.length} 个UI模板`, 'success');
                 } catch (err) {
                     showToast('UI模板导入失败: ' + err.message, 'error');
@@ -4909,6 +4922,7 @@ summary 长度控制在300-500字，尽量完全详细。
                     } else if (currentCharacterIndex.value > index) {
                         currentCharacterIndex.value--;
                     }
+                    await saveData();
                     showToast('角色已删除', 'success');
                 } catch (err) {
                     console.error('Failed to delete character or associated data:', err);
@@ -4954,6 +4968,7 @@ summary 长度控制在300-500字，尽量完全详细。
                         currentCharacterIndex.value = -1;
                     }
 
+                    await saveData();
                     showToast('删除成功', 'success');
                     toggleBatchDeleteMode();
                 } catch (err) {
@@ -5103,9 +5118,9 @@ image###生成的提示词###
 
         };
 
-        watch(() => settings.imageGenKey, () => {
+        watch(() => settings.imageGenKey, async () => {
             enforceSpecialRules();
-            saveData();
+            await saveData();
             fetchQuota();
         });
         const selectCharacter = async (index, isNewImport = false) => {
@@ -5127,7 +5142,7 @@ image###生成的提示词###
             // Ensure UUID exists (double check)
             if (!char.uuid) {
                 char.uuid = generateUUID();
-                saveData();
+                await saveData();
             }
 
             // Try to load saved chat history for this character
@@ -5230,7 +5245,7 @@ image###生成的提示词###
                 showAutoImageGenModal.value = true;
             }
 
-            saveData(); // Save the switch immediately
+            await saveData(); // Save the switch immediately
         };
 
         const handleAvatarUpload = (event) => {
@@ -5701,7 +5716,7 @@ image###生成的提示词###
 
             if (file.type === 'application/json') {
                 const reader = new FileReader();
-                reader.onload = (e) => {
+                reader.onload = async (e) => {
                     try {
                         const data = JSON.parse(e.target.result);
                         processCharacterData(data, null);
@@ -5712,7 +5727,7 @@ image###生成的提示词###
                 reader.readAsText(file);
             } else if (file.type === 'image/png' || file.name.endsWith('.png')) {
                 const reader = new FileReader();
-                reader.onload = (e) => {
+                reader.onload = async (e) => {
                     try {
                         const buffer = e.target.result;
                         const chunks = readPngChunks(buffer);
@@ -6010,28 +6025,31 @@ image###生成的提示词###
             showPresetEditor.value = true;
         };
 
-        const savePreset = () => {
+        const savePreset = async () => {
             if (editingPreset.id !== undefined) {
                 presets.value[editingPreset.id] = { ...editingPreset.data };
             } else {
                 presets.value.push({ ...editingPreset.data });
             }
             showPresetEditor.value = false;
+            await saveData();
         };
 
         const deletePreset = (index) => {
-            confirmAction('确定要删除这个预设吗？此操作无法撤销。', () => {
+            confirmAction('确定要删除这个预设吗？此操作无法撤销。', async () => {
                 presets.value.splice(index, 1);
+                await saveData();
                 showToast('预设已删除', 'success');
             });
         };
 
-        const movePreset = (index, direction) => {
+        const movePreset = async (index, direction) => {
             const newIndex = index + direction;
             if (newIndex >= 0 && newIndex < presets.value.length) {
                 const temp = presets.value[index];
                 presets.value[index] = presets.value[newIndex];
                 presets.value[newIndex] = temp;
+                await saveData();
             }
         };
 
@@ -6085,7 +6103,7 @@ image###生成的提示词###
 
             if (cleanedCount > 0 || regexScripts.value.length < currentOriginalLength) {
                 console.log(`[Cleanup] 已完成系统清理: ${obsoleteRegexNames.join(', ')}`);
-                saveData(); // 持久化清理结果
+                await saveData(); // 持久化清理结果
             }
 
             // 每次刷新检查有无名为“默认”的预设，如果有则去除
@@ -6453,7 +6471,7 @@ image###生成的提示词###
 
 
             // Save enforced defaults immediately (仅保存预设/正则等结构性数据)
-            saveData();
+            await saveData();
 
             // 初始化守卫解除：此后 saveData 才允许写入 user / memorySettings
             _initComplete = true;
@@ -6469,7 +6487,7 @@ image###生成的提示词###
                 // Ensure UUID
                 if (!char.uuid) {
                     char.uuid = generateUUID();
-                    saveData();
+                    await saveData();
                 }
                 loadGlobalUiTemplateRuntimeForCharacter(char);
 
@@ -6636,12 +6654,12 @@ image###生成的提示词###
             return { text: mainText, showSpinner: false };
         };
 
-        const switchProfile = (id) => {
+        const switchProfile = async (id) => {
             const profile = userProfiles.value.find(p => p.uuid === id);
             if (profile) {
                 activeProfileId.value = id;
                 Object.assign(user, JSON.parse(JSON.stringify(profile)));
-                saveData();
+                await saveData();
                 showToast(`已切换为人设: ${user.name}`, 'success');
             }
         };
@@ -6667,14 +6685,14 @@ image###生成的提示词###
             }
 
             confirmMessage.value = '确定要删除此人设吗？此操作不可逆。';
-            confirmCallback.value = () => {
+            confirmCallback.value = async () => {
                 const index = userProfiles.value.findIndex(p => p.uuid === id);
                 if (index !== -1) {
                     userProfiles.value.splice(index, 1);
                     if (activeProfileId.value === id) {
-                        switchProfile(userProfiles.value[0].uuid);
+                        await switchProfile(userProfiles.value[0].uuid);
                     } else {
-                        saveData();
+                        await saveData();
                     }
                     showToast('人设已删除', 'success');
                 }
@@ -6757,7 +6775,7 @@ image###生成的提示词###
                 editingMemory.data = JSON.parse(JSON.stringify(memories.value[realIndex]));
                 showMemoryEditor.value = true;
             },
-            saveMemory: () => {
+            saveMemory: async () => {
                 if (!editingMemory.data.summary || !editingMemory.data.summary.trim()) {
                     showToast('记忆内容不能为空', 'error');
                     return;
@@ -6779,27 +6797,27 @@ image###生成的提示词###
                     });
                 }
                 showMemoryEditor.value = false;
-                saveData();
+                await saveData();
                 showToast('记忆已保存', 'success');
             },
             deleteMemory: (id) => {
-                confirmAction('确定要删除这条记忆吗？', () => {
+                confirmAction('确定要删除这条记忆吗？', async () => {
                     memories.value = memories.value.filter(m => m.id !== id);
-                    saveData();
+                    await saveData();
                     showToast('记忆已删除', 'success');
                 });
             },
-            toggleMemory: (id) => {
+            toggleMemory: async (id) => {
                 const mem = memories.value.find(m => m.id === id);
                 if (mem) {
                     mem.enabled = !mem.enabled;
-                    saveData();
+                    await saveData();
                 }
             },
             clearAllMemories: () => {
-                confirmAction('确定要清空所有记忆吗？此操作无法撤销。', () => {
+                confirmAction('确定要清空所有记忆吗？此操作无法撤销。', async () => {
                     memories.value = [];
-                    saveData();
+                    await saveData();
                     showToast('所有记忆已清空', 'success');
                 });
             },
@@ -6816,7 +6834,7 @@ image###生成的提示词###
                 const file = event.target.files[0];
                 if (!file) return;
                 const reader = new FileReader();
-                reader.onload = (e) => {
+                reader.onload = async (e) => {
                     try {
                         const data = JSON.parse(e.target.result);
                         if (Array.isArray(data)) {
@@ -6833,9 +6851,9 @@ image###生成的提示词###
                                         summary: memoryData.summary.trim(),
                                         enabled: memoryData.enabled !== false
                                     };
-                                });
+                            });
                             memories.value = [...memories.value, ...normalized];
-                            saveData();
+                            await saveData();
                             showToast(`成功导入 ${normalized.length} 条记忆`, 'success');
                         } else {
                             showToast('导入失败: 文件内容需为数组', 'error');
@@ -6950,7 +6968,7 @@ image###生成的提示词###
                 const file = event.target.files[0];
                 if (!file) return;
                 const reader = new FileReader();
-                reader.onload = (e) => {
+                reader.onload = async (e) => {
                     try {
                         let data = JSON.parse(e.target.result);
                         // Support single object import
@@ -6960,6 +6978,7 @@ image###生成的提示词###
 
                         if (data.length > 0) {
                             presets.value = [...presets.value, ...data];
+                            await saveData();
                             showToast(`成功导入 ${data.length} 条预设`, 'success');
                         }
                         // Reset file input
@@ -6988,7 +7007,7 @@ image###生成的提示词###
                 console.log('Starting regex import for file:', file.name);
 
                 const reader = new FileReader();
-                reader.onload = (e) => {
+                reader.onload = async (e) => {
                     try {
                         console.log('File content read, parsing JSON...');
                         let data = JSON.parse(e.target.result);
@@ -7044,6 +7063,7 @@ image###生成的提示词###
 
                             regexScripts.value = [...regexScripts.value, ...normalized];
                             console.log('Import successful');
+                            await saveData();
                             showToast(`成功导入 ${normalized.length} 个正则脚本`, 'success');
                         } else {
                             throw new Error('Invalid data format');
@@ -7084,7 +7104,7 @@ image###生成的提示词###
                 editingRegex.data = normalizeRegexScript({ ...regexScripts.value[index] });
                 showRegexEditor.value = true;
             },
-            saveRegex: () => {
+            saveRegex: async () => {
                 const data = normalizeRegexScript(editingRegex.data, editingRegex.data.scope);
                 if (editingRegex.id !== undefined) {
                     regexScripts.value[editingRegex.id] = data;
@@ -7092,10 +7112,12 @@ image###生成的提示词###
                     regexScripts.value.push(data);
                 }
                 showRegexEditor.value = false;
+                await saveData();
             },
             deleteRegex: (index) => {
-                confirmAction('确定要删除这个正则脚本吗？此操作无法撤销。', () => {
+                confirmAction('确定要删除这个正则脚本吗？此操作无法撤销。', async () => {
                     regexScripts.value.splice(index, 1);
+                    await saveData();
                     showToast('正则脚本已删除', 'success');
                 });
             },
@@ -7105,7 +7127,7 @@ image###生成的提示词###
                 const file = event.target.files[0];
                 if (!file) return;
                 const reader = new FileReader();
-                reader.onload = (e) => {
+                reader.onload = async (e) => {
                     try {
                         const data = JSON.parse(e.target.result);
                         let entries = [];
@@ -7123,8 +7145,9 @@ image###生成的提示词###
                             const normalizedEntries = entries.map(normalizeWorldInfoEntry);
                             worldInfo.value = [...worldInfo.value, ...normalizedEntries];
                             if (currentCharacterIndex.value !== -1) {
-                                characters.value[currentCharacterIndex.value].worldInfo = JSON.parse(JSON.stringify(worldInfo.value));
+                                characters.value[currentCharacterIndex.value].worldInfo = JSON.parse(JSON.stringify(worldInfo.value.filter(entry => entry.scope !== 'global')));
                             }
+                            await saveData();
                             showToast('世界书导入成功', 'success');
                         }
                         // Reset file input
@@ -7189,7 +7212,7 @@ image###生成的提示词###
                 editingWorldInfo.data = normalizeWorldInfoEntry(data);
                 showWorldInfoEditor.value = true;
             },
-            saveWorldInfo: () => {
+            saveWorldInfo: async () => {
                 const data = normalizeWorldInfoEntry(editingWorldInfo.data);
                 if (editingWorldInfo.id !== undefined) {
                     worldInfo.value[editingWorldInfo.id] = data;
@@ -7198,17 +7221,19 @@ image###生成的提示词###
                 }
                 // Sync back to current character
                 if (currentCharacterIndex.value !== -1) {
-                    characters.value[currentCharacterIndex.value].worldInfo = JSON.parse(JSON.stringify(worldInfo.value));
+                    characters.value[currentCharacterIndex.value].worldInfo = JSON.parse(JSON.stringify(worldInfo.value.filter(entry => entry.scope !== 'global')));
                 }
                 showWorldInfoEditor.value = false;
+                await saveData();
 
             },
             deleteWorldInfo: (index) => {
-                confirmAction('确定要删除这个世界书条目吗？此操作无法撤销。', () => {
+                confirmAction('确定要删除这个世界书条目吗？此操作无法撤销。', async () => {
                     worldInfo.value.splice(index, 1);
                     if (currentCharacterIndex.value !== -1) {
-                        characters.value[currentCharacterIndex.value].worldInfo = JSON.parse(JSON.stringify(worldInfo.value));
+                        characters.value[currentCharacterIndex.value].worldInfo = JSON.parse(JSON.stringify(worldInfo.value.filter(entry => entry.scope !== 'global')));
                     }
+                    await saveData();
                     showToast('世界书条目已删除', 'success');
                 });
             },
@@ -7239,13 +7264,13 @@ image###生成的提示词###
                         } catch (err) {
                             user.avatar = e.target.result;
                         }
-                        saveData();
+                        await saveData();
                         // Removed updatePresence();
                     };
                     reader.readAsDataURL(file);
                 }
             },
-            saveUserSetup: () => {
+            saveUserSetup: async () => {
                 if (!tempUserSetup.name || tempUserSetup.name === '请前往设置自定义你的名称') {
                     showToast('请输入有效的名称', 'error');
                     return;
@@ -7266,13 +7291,13 @@ image###生成的提示词###
                 }
 
                 showUserSetupModal.value = false;
-                saveData();
+                await saveData();
                 showToast('用户信息已保存', 'success');
             },
 
             // Person Toggle Logic
             isSecondPerson: computed(() => user.person !== 'third'),
-            togglePerson: (person) => {
+            togglePerson: async (person) => {
                 user.person = person; // 更新偏好
 
                 // 应用到预设
@@ -7288,13 +7313,13 @@ image###生成的提示词###
                     if (thirdPersonPreset) thirdPersonPreset.enabled = true;
                     showToast('已切换至第三人称视角', 'success');
                 }
-                saveData();
+                await saveData();
             },
 
             // Auto Image Gen Inquiry
             showAutoImageGenModal,
 
-            setAutoImageGen: (enabled) => {
+            setAutoImageGen: async (enabled) => {
                 const autoImageGenWIName = '自动生图';
                 const entry = worldInfo.value.find(w => w.comment === autoImageGenWIName);
                 if (entry) {
@@ -7302,7 +7327,7 @@ image###生成的提示词###
                     showToast(enabled ? '自动生图已开启' : '已保持关闭状态', enabled ? 'success' : 'info');
                 }
                 showAutoImageGenModal.value = false;
-                saveData();
+                await saveData();
             }
         };
     }
