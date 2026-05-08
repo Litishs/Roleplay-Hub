@@ -832,10 +832,14 @@ createApp({
         const flushCloudSync = async () => {
             try {
                 if (typeof window !== 'undefined' && typeof window.__rphubFlushSync === 'function') {
-                    await window.__rphubFlushSync();
+                    const flushed = await window.__rphubFlushSync();
+                    if (flushed === false) {
+                        throw new Error('Cloud sync queue was not fully saved');
+                    }
                 }
             } catch (e) {
                 console.error('Cloud sync flush failed:', e);
+                throw e;
             }
         };
 
@@ -955,15 +959,20 @@ createApp({
                 if (!db) await initDB();
                 syncScopedCollectionsForStorage();
                 settings.contextSize = MAX_CONTEXT_SIZE;
+
+                // Save global-scoped collections first, so a later large character/chat
+                // write cannot stop global world info or UI templates from reaching cloud.
+                await dbSet('silly_tavern_global_regex', globalRegexScripts.value);
+                await dbSet('silly_tavern_global_worldinfo', globalWorldInfo.value);
+                await dbSet('silly_tavern_global_ui_templates', globalUiTemplates.value);
+                await flushCloudSync();
+
                 await dbSet('silly_tavern_characters', characters.value);
                 await dbSet('silly_tavern_settings', settings);
                 await dbSet('silly_tavern_presets', presets.value);
                 await dbSet('silly_tavern_regex', regexScripts.value);
-                await dbSet('silly_tavern_global_regex', globalRegexScripts.value);
                 await dbSet('silly_tavern_worldinfo', worldInfo.value);
-                await dbSet('silly_tavern_global_worldinfo', globalWorldInfo.value);
                 await dbSet('silly_tavern_worldinfo_settings', worldInfoSettings);
-                await dbSet('silly_tavern_global_ui_templates', globalUiTemplates.value);
                 // await dbSet('silly_tavern_recent_times', recentGenerationTimes.value); // Deprecated: Saved in character
 
                 // 守卫：初始化完成前不写入用户/记忆数据，防止默认值覆盖服务端已有数据
@@ -1058,6 +1067,7 @@ createApp({
 
                 // Load from DB
                 const savedChars = await dbGet('silly_tavern_characters');
+                const legacyGlobalWorldInfo = [];
                 const legacyGlobalUiTemplates = [];
                 if (savedChars) {
                     // Migration: Ensure all characters have a UUID and createdAt
@@ -1081,7 +1091,9 @@ createApp({
                             migrated = true;
                         }
                         if (Array.isArray(char.worldInfo)) {
-                            char.worldInfo = char.worldInfo.map(normalizeWorldInfoEntry).filter(entry => entry.scope !== 'global');
+                            const normalizedWorldInfo = char.worldInfo.map(normalizeWorldInfoEntry);
+                            legacyGlobalWorldInfo.push(...normalizedWorldInfo.filter(entry => entry.scope === 'global'));
+                            char.worldInfo = normalizedWorldInfo.filter(entry => entry.scope !== 'global');
                         }
                         if (Array.isArray(char.regexScripts)) {
                             char.regexScripts = char.regexScripts.map(script => normalizeRegexScript(script, 'character')).filter(script => script.scope !== 'global');
@@ -1151,8 +1163,12 @@ createApp({
                     : [];
                 globalWorldInfo.value = mergeStoredItems(
                     savedGlobalWIList,
-                    legacyGlobalWI,
-                    entry => entry.id || entry.uid || entry.comment || `${JSON.stringify(entry.key || [])}:${entry.content || ''}`
+                    mergeStoredItems(
+                        legacyGlobalWI,
+                        legacyGlobalWorldInfo,
+                        entry => entry.id || entry.uid || entry.comment || `${JSON.stringify(entry.key || entry.keys || [])}:${entry.content || ''}`
+                    ),
+                    entry => entry.id || entry.uid || entry.comment || `${JSON.stringify(entry.key || entry.keys || [])}:${entry.content || ''}`
                 );
                 if (globalWorldInfo.value.length > 0 || Array.isArray(savedGlobalWI)) {
                     worldInfo.value = JSON.parse(JSON.stringify(globalWorldInfo.value)).map(entry => normalizeWorldInfoEntry({ ...entry, scope: 'global' }));
