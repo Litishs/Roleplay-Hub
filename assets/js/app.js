@@ -917,6 +917,34 @@ createApp({
                         characters.value[currentCharacterIndex.value].regexScripts = characterScripts;
                     }
                 }
+
+                const uiTemplateKey = (template) => template.id || template.name || template.htmlTemplate || JSON.stringify(template.initialVariableState || {});
+                const globalTemplateMap = new Map();
+                const addGlobalTemplate = (template) => {
+                    const normalized = normalizeUiTemplate({ ...template, scope: 'global' });
+                    globalTemplateMap.set(uiTemplateKey(normalized), normalized);
+                };
+
+                if (Array.isArray(globalUiTemplates.value)) {
+                    globalUiTemplates.value.forEach(addGlobalTemplate);
+                }
+                characters.value.forEach((char) => {
+                    if (!Array.isArray(char.uiTemplates)) {
+                        char.uiTemplates = [];
+                        return;
+                    }
+                    const characterTemplates = [];
+                    char.uiTemplates.forEach((template) => {
+                        const normalized = normalizeUiTemplate(template);
+                        if (normalized.scope === 'global') {
+                            addGlobalTemplate(normalized);
+                        } else {
+                            characterTemplates.push(normalizeUiTemplate({ ...normalized, scope: 'character' }));
+                        }
+                    });
+                    char.uiTemplates = characterTemplates;
+                });
+                globalUiTemplates.value = Array.from(globalTemplateMap.values());
             } catch (e) {
                 console.error('Failed to sync scoped data before save:', e);
             }
@@ -1030,6 +1058,7 @@ createApp({
 
                 // Load from DB
                 const savedChars = await dbGet('silly_tavern_characters');
+                const legacyGlobalUiTemplates = [];
                 if (savedChars) {
                     // Migration: Ensure all characters have a UUID and createdAt
                     let migrated = false;
@@ -1057,7 +1086,15 @@ createApp({
                         if (Array.isArray(char.regexScripts)) {
                             char.regexScripts = char.regexScripts.map(script => normalizeRegexScript(script, 'character')).filter(script => script.scope !== 'global');
                         }
-                        char.uiTemplates = Array.isArray(char.uiTemplates) ? char.uiTemplates.map(template => normalizeUiTemplate({ ...template, scope: 'character' })) : [];
+                        if (Array.isArray(char.uiTemplates)) {
+                            const normalizedUiTemplates = char.uiTemplates.map(template => normalizeUiTemplate(template));
+                            legacyGlobalUiTemplates.push(...normalizedUiTemplates.filter(template => template.scope === 'global'));
+                            char.uiTemplates = normalizedUiTemplates
+                                .filter(template => template.scope !== 'global')
+                                .map(template => normalizeUiTemplate({ ...template, scope: 'character' }));
+                        } else {
+                            char.uiTemplates = [];
+                        }
                         return char;
                     });
                     if (migrated) {
@@ -1124,7 +1161,14 @@ createApp({
                 }
 
                 const savedGlobalUiTemplates = await dbGet('silly_tavern_global_ui_templates');
-                if (savedGlobalUiTemplates) globalUiTemplates.value = savedGlobalUiTemplates.map(template => normalizeUiTemplate({ ...template, scope: 'global' }));
+                const savedGlobalUiTemplateList = Array.isArray(savedGlobalUiTemplates)
+                    ? savedGlobalUiTemplates.map(template => normalizeUiTemplate({ ...template, scope: 'global' }))
+                    : [];
+                globalUiTemplates.value = mergeStoredItems(
+                    savedGlobalUiTemplateList,
+                    legacyGlobalUiTemplates,
+                    template => template.id || template.name || template.htmlTemplate || JSON.stringify(template.initialVariableState || {})
+                );
 
                 const savedWISettings = await dbGet('silly_tavern_worldinfo_settings');
                 if (savedWISettings) {
