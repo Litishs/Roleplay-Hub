@@ -4812,6 +4812,10 @@ JSON 字段（世界书/正则脚本）必须输出为合法的 JSON 数组，**
                     const canvas = document.createElement('canvas');
                     const ctx = canvas.getContext('2d');
                     const img = new Image();
+                    if (/^https?:\/\//i.test(currentCharacter.value.avatar)) {
+                        img.crossOrigin = 'anonymous';
+                        img.referrerPolicy = 'no-referrer';
+                    }
 
                     await new Promise((resolve, reject) => {
                         img.onload = resolve;
