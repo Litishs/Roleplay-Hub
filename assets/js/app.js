@@ -5515,13 +5515,32 @@ image###生成的提示词###
 
                     // --- SillyTavern Data Structure Parsing ---
 
-                    // 1. V2 Spec: Data is wrapped in a 'data' object
-                    // V1 Spec: Data is at the root
-                    const isV2 = rawData.spec === 'chara_card_v2' || rawData.spec === 'chara_card_v3' || !!rawData.data;
-
-                    if (isV2 && rawData.data) {
+                    // Wrapped cards store the actual character fields in a 'data' object.
+                    if (rawData.data) {
                         charData = rawData.data;
                     }
+
+                    const discardRemovedCardFields = (target) => {
+                        if (!target || typeof target !== 'object') return;
+                        [
+                            'mes_example',
+                            'system_prompt',
+                            'post_history_instructions',
+                            'alternate_greetings',
+                            'tags',
+                            'creator',
+                            'character_version',
+                            'spec',
+                            'spec_version'
+                        ].forEach(field => delete target[field]);
+                        if (target.extensions && typeof target.extensions === 'object') {
+                            delete target.extensions.world;
+                            delete target.extensions.depth_prompt;
+                        }
+                    };
+                    discardRemovedCardFields(rawData);
+                    discardRemovedCardFields(rawData.data);
+                    discardRemovedCardFields(charData);
 
                     // --- Extract Core Character Fields ---
                     // SillyTavern uses specific field names. We map them to our internal structure.
@@ -5532,14 +5551,7 @@ image###生成的提示词###
                     const personality = charData.personality || '';
                     const scenario = charData.scenario || '';
                     const first_mes = charData.first_mes || '';
-                    const mes_example = charData.mes_example || '';
                     const creator_notes = charData.creator_notes || charData.creatorcomment || charData.creator_comment || '';
-                    const creator = charData.creator || '';
-                    const character_version = charData.character_version || '';
-                    const tags = charData.tags || [];
-                    const system_prompt = charData.system_prompt || '';
-                    const post_history_instructions = charData.post_history_instructions || '';
-                    const alternate_greetings = charData.alternate_greetings || [];
 
                     // --- Extract World Info (Character Book) ---
                     // In V2, this is explicitly 'character_book'
@@ -5582,14 +5594,7 @@ image###生成的提示词###
                         avatar: avatarUrl || defaultAvatar,
                         personality,
                         scenario,
-                        mes_example,
                         creator_notes,
-                        creator,
-                        character_version,
-                        tags,
-                        system_prompt,
-                        post_history_instructions,
-                        alternate_greetings,
                         worldInfo: [],
                         regexScripts: [],
                         uiTemplates: Array.isArray(uiTemplates) ? uiTemplates.map(t => normalizeUiTemplate({ ...sanitizeUiTemplateImportEntry(t), id: generateUUID(), scope: 'character' })) : [],
@@ -5851,19 +5856,13 @@ image###生成的提示词###
                 personality: char.personality,
                 scenario: char.scenario,
                 first_mes: char.first_mes,
-                mes_example: char.mes_example,
                 creator_notes: char.creator_notes || 'Exported from RolePlay Hub',
-                system_prompt: char.system_prompt || '',
-                post_history_instructions: char.post_history_instructions || '',
-                alternate_greetings: char.alternate_greetings || [],
-                character_book: char.worldInfo ? {
+                character_book: Array.isArray(char.worldInfo) && char.worldInfo.length > 0 ? {
                     entries: char.worldInfo.map(entry => toWorldInfoExportEntry({ ...entry, scope: 'character' }))
                 } : undefined,
                 uiTemplates: (char.uiTemplates || []).map(template => toUiTemplateExportEntry({ ...template, scope: 'character' })),
-                tags: char.tags || [],
-                creator: char.creator || '',
-                character_version: char.character_version || '',
                 extensions: {
+                    rp_hub_watermark: 'rp-hub',
                     rp_hub_ui_templates: (char.uiTemplates || []).map(template => toUiTemplateExportEntry({ ...template, scope: 'character' })),
                     regex_scripts: char.regexScripts ? char.regexScripts.map(script => {
                         // Convert internal 'enabled' to ST 'disabled'
@@ -5876,8 +5875,6 @@ image###生成的提示词###
             };
 
             const v2Data = {
-                spec: 'chara_card_v2',
-                spec_version: '2.0',
                 data: cardData
             };
 

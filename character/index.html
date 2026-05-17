@@ -2197,7 +2197,6 @@
                     const rawTemplates = Array.isArray(char.uiTemplates) ? char.uiTemplates : (Array.isArray(char.ui_templates) ? char.ui_templates : extensionTemplates);
                     char.uiTemplates = Array.isArray(rawTemplates) ? rawTemplates.map(template => normalizeUiTemplate(sanitizeUiTemplateImportEntry(template))) : [];
                     if (!Array.isArray(char.tags)) char.tags = [];
-                    if (!char.depth_prompt) char.depth_prompt = { prompt: '', depth: 4, role: 'system' };
                     return char;
                 };
 
@@ -2216,11 +2215,6 @@
                     tags: [],
                     avatar: null,
                     avatar_prompt: '',
-                    depth_prompt: {
-                        prompt: '',
-                        depth: 4,
-                        role: 'system'
-                    },
                     worldInfo: [],
                     regexScripts: [],
                     uiTemplates: []
@@ -4728,31 +4722,16 @@ JSON 字段（世界书/正则脚本）必须输出为合法的 JSON 数组，**
                 const getCardData = () => {
                     const char = currentCharacter.value;
                     return {
-                        spec: 'chara_card_v3',
-                        spec_version: '3.0',
                         data: {
                             name: char.name,
                             description: char.description,
                             personality: char.personality,
                             scenario: char.scenario,
                             first_mes: char.first_mes,
-                            mes_example: char.mes_example,
                             creator_notes: char.creator_notes,
-                            system_prompt: char.system_prompt,
-                            post_history_instructions: char.post_history_instructions,
-                            tags: char.tags,
                             uiTemplates: char.uiTemplates.length > 0 ? char.uiTemplates.map(template => toUiTemplateExportEntry(template)) : [],
-                            creator: "AI CharGen",
-                            character_version: "0.9",
-                            alternate_greetings: [],
                             extensions: {
-                                avatar_prompt: char.avatar_prompt,
-                                world: "",
-                                depth_prompt: {
-                                    prompt: char.depth_prompt.prompt,
-                                    depth: char.depth_prompt.depth,
-                                    role: char.depth_prompt.role
-                                },
+                                rp_hub_watermark: 'rp-hub',
                                 regex_scripts: char.regexScripts.length > 0 ? char.regexScripts.map(s => toRegexExportEntry(s)) : [],
                                 rp_hub_ui_templates: char.uiTemplates.length > 0 ? char.uiTemplates.map(template => toUiTemplateExportEntry(template)) : []
                             },
