@@ -380,7 +380,6 @@ createApp({
             fontSize: window.innerWidth > 768 ? 16 : 14,
             autoScroll: true,
             maxRetries: 2,
-            renderLayerLimit: 25,
             imageGenKey: '',
             imageStyle: 'vertical',
             imageSize: '竖图',
@@ -483,6 +482,11 @@ createApp({
         const currentCharacterIndex = ref(-1);
 
         const chatHistory = ref([]);
+        const CHAT_RENDER_INITIAL_LIMIT = 25;
+        const CHAT_RENDER_BATCH_SIZE = 10;
+        const chatRenderLimit = ref(CHAT_RENDER_INITIAL_LIMIT);
+        let isLoadingEarlierChatMessages = false;
+        let isChatTopUnlockArmed = true;
         const lastActiveCharacterId = ref(null); // For persistence
 
         const presets = ref([]);
@@ -948,6 +952,7 @@ createApp({
                         characters.value = JSON.parse(localChar);
                         const localSettings = localStorage.getItem('silly_tavern_settings');
                         if (localSettings) Object.assign(settings, JSON.parse(localSettings));
+                        delete settings.renderLayerLimit;
                         settings.contextSize = MAX_CONTEXT_SIZE;
 
                         const localPresets = localStorage.getItem('silly_tavern_presets');
@@ -1016,6 +1021,7 @@ createApp({
 
                 const savedSettings = await dbGet('silly_tavern_settings');
                 if (savedSettings) Object.assign(settings, savedSettings);
+                delete settings.renderLayerLimit;
                 settings.contextSize = MAX_CONTEXT_SIZE;
 
                 const savedPresets = await dbGet('silly_tavern_presets');
@@ -1238,6 +1244,7 @@ createApp({
 
             const defaultArtists = '[[[artist:dishwasher1910]]], {{yd_(orange_maru)}}, [artist:ciloranko], [artist:sho_(sho_lwlw)], [ningen mame], year 2024,';
             const r18Artists = "0.9::misaka_12003-gou ::, dino_(dinoartforame), wanke, liduke, year 2025, realistic, 4k, -2::green ::, textless version, The image is highly intricate finished drawn. Only the character's face is in anime style, but their body is in realistic style. 1.35::A highly finished photo-style artwork that has lively color, graphic texture, realistic skin surface, and lifelike flesh with little obliques::. 1.63::photorealistic::, 1.63::photo(medium)::, \\n20::best quality, absurdres, very aesthetic, detailed, masterpiece::,, very aesthetic, masterpiece, no text,";
+            const lolita25dArtists = "0.9::misaka_12003-gou & dino, rurudo,  mignon,wanke & liduk::, white hair, red eyes, year 2025, realistic, 4k, -2::green ::, textless version, The image is highly intricate finished drawn. Only the character's face is in anime style, but their body is in realistic style. 1.35::A highly finished photo-style artwork that has lively color, graphic texture, realistic skin surface, and lifelike flesh with little obliques::. 1.63::photorealistic::, 1.63::photo(medium)::, \\n20::best quality, absurdres, very aesthetic, detailed, masterpiece::,, very aesthetic, masterpiece, no text,";
             const animeArtists = '1.4::asanagi::,{{{{{artist:asanagi}}}}},1.2::xiaoluo_xl::,1.3::Artist: misaka_12003-gou::,1.2::Artist:shexyo::,0.7::Artist:b.sa_(bbbs)::,1::Artist:qiandaiyiyu::,1.05::artist:natedecock::,1.05::artist:kunaboto::,0.75::artist:kandata_nijou::,1.05::artist:zer0.zer0 ::,1.05::artist:jasony::,0.75::misaka_12003-gou ::, dino_(dinoartforame), wanke, liduke, year 2025, realistic, 4k, -2::green ::, {textless version, The image is highly intricate finished drawn,write realistically,true to life}, 1.35::A highly finished photo-style artwork that has lively color, graphic texture, realistic skin surface, and lifelike flesh with little obliques::, 1.63::photorealistic::,3::age slider::,1.63::photo(medium)::, 2::best quality, absurdres, very aesthetic, detailed, masterpiece::,-4::Muscle definition, abs::';
             const galgameArtists = 'artist:ningen_mame,, noyu_(noyu23386566),, toosaka asagi,, location,\\n20::best quality, absurdres, very aesthetic, detailed, masterpiece::,:,, very aesthetic, masterpiece, no text,';
 
@@ -1246,6 +1253,9 @@ createApp({
             if (settings.imageStyle === 'r18') {
                 targetArtists = r18Artists;
                 styleName = '2.5D唯美风';
+            } else if (settings.imageStyle === 'lolita25d') {
+                targetArtists = lolita25dArtists;
+                styleName = '2.5D唯美风（萝）';
             } else if (settings.imageStyle === 'anime') {
                 targetArtists = animeArtists;
                 styleName = '本子动漫风';
@@ -1255,15 +1265,19 @@ createApp({
             }
 
             // 动态替换 URL 中的 artist 和 size 参数
+            const encodedTargetArtists = encodeURIComponent(targetArtists);
             const oldReplacement = regex.replacement;
-            let newReplacement = oldReplacement.replace(/artist=[^&]+/, 'artist=' + targetArtists);
+            let newReplacement = oldReplacement.replace(/artist=[\s\S]*?(&size=)/, 'artist=' + encodedTargetArtists + '$1');
+            if (newReplacement === oldReplacement) {
+                newReplacement = oldReplacement.replace(/artist=[^&]+/, 'artist=' + encodedTargetArtists);
+            }
             newReplacement = newReplacement.replace(/size=[^&]+/, 'size=' + settings.imageSize);
             regex.replacement = newReplacement;
 
             let messages = [];
             // 检查 Artist 变化
-            const oldArtist = oldReplacement.match(/artist=([^&]+)/)?.[1];
-            if (oldArtist !== targetArtists) {
+            const oldArtist = oldReplacement.match(/artist=([\s\S]*?)&size=/)?.[1] || oldReplacement.match(/artist=([^&]+)/)?.[1];
+            if (oldArtist !== encodedTargetArtists) {
                 messages.push(`画风: ${styleName}`);
             }
             // 检查 Size 变化
@@ -1350,11 +1364,12 @@ createApp({
             debouncedSave();
         }, { deep: true });
 
-        // Watch chat history separately, but batch writes so streaming chunks do not
-        // repeatedly clone and persist the full conversation.
-        watch(chatHistory, () => {
+        // Watch chat history length only so large histories do not get traversed on load.
+        // Message edits and generation completion still call saveData/saveChatHistoryNow directly.
+        watch(() => chatHistory.value.length, () => {
+            if (_isApplyingCharacterScopedData) return;
             scheduleChatHistorySave();
-        }, { deep: true });
+        });
 
         // Manual Save Feedback (Optional, can be bound to a button)
         const manualSave = () => {
@@ -2075,6 +2090,79 @@ ${content}
 
         const loadMoreCharacters = () => {
             characterDisplayLimit.value += 20;
+        };
+
+        const resetChatRenderWindow = () => {
+            chatRenderLimit.value = CHAT_RENDER_INITIAL_LIMIT;
+            isChatTopUnlockArmed = true;
+        };
+
+        const hiddenChatMessageCount = computed(() => Math.max(0, chatHistory.value.length - chatRenderLimit.value));
+
+        const displayedChatMessages = computed(() => {
+            const startIndex = Math.max(0, chatHistory.value.length - chatRenderLimit.value);
+            return chatHistory.value.slice(startIndex).map((msg, offset) => ({
+                msg,
+                index: startIndex + offset
+            }));
+        });
+
+        const getChatScrollAnchor = () => {
+            const container = chatContainer.value;
+            const elements = (messageElements.value || [])
+                .filter(el => el && el.dataset && el.dataset.chatIndex)
+                .sort((a, b) => Number(a.dataset.chatIndex) - Number(b.dataset.chatIndex));
+            if (!container || elements.length === 0) return null;
+
+            const containerTop = container.getBoundingClientRect().top;
+            const anchorElement = elements.find(el => el.getBoundingClientRect().bottom >= containerTop + 8) || elements[0];
+
+            return {
+                index: anchorElement.dataset.chatIndex,
+                topOffset: anchorElement.getBoundingClientRect().top - containerTop
+            };
+        };
+
+        const restoreChatScrollAnchor = async (anchor) => {
+            const container = chatContainer.value;
+            if (!container || !anchor) return;
+
+            await nextTick();
+            await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+
+            const anchorElement = container.querySelector(`[data-chat-index="${anchor.index}"]`);
+            if (!anchorElement) return;
+
+            const containerTop = container.getBoundingClientRect().top;
+            const newTopOffset = anchorElement.getBoundingClientRect().top - containerTop;
+            container.scrollTop += newTopOffset - anchor.topOffset;
+        };
+
+        const loadEarlierChatMessages = async (batchSize = CHAT_RENDER_BATCH_SIZE) => {
+            if (hiddenChatMessageCount.value <= 0 || isLoadingEarlierChatMessages) return;
+            isLoadingEarlierChatMessages = true;
+            const anchor = getChatScrollAnchor();
+
+            chatRenderLimit.value = Math.min(
+                chatHistory.value.length,
+                chatRenderLimit.value + batchSize
+            );
+
+            await restoreChatScrollAnchor(anchor);
+            isLoadingEarlierChatMessages = false;
+        };
+
+        const handleChatScroll = () => {
+            const container = chatContainer.value;
+            if (!container || hiddenChatMessageCount.value <= 0) return;
+            if (container.scrollTop > 160) {
+                isChatTopUnlockArmed = true;
+                return;
+            }
+            if (isChatTopUnlockArmed && container.scrollTop <= 80) {
+                isChatTopUnlockArmed = false;
+                loadEarlierChatMessages();
+            }
         };
 
         // Reset limit when search query changes
@@ -2867,6 +2955,7 @@ ${content}
         const clearChat = () => {
             confirmAction('确定要清空聊天记录吗？记忆也将一并清空，此操作无法撤销。', () => {
                 abortUiTemplateUpdate();
+                resetChatRenderWindow();
                 chatHistory.value = [];
                 if (currentCharacter.value && currentCharacter.value.first_mes) {
                     chatHistory.value.push({
@@ -5005,22 +5094,26 @@ summary 长度控制在300-500字，尽量完全详细。
             const imageGenRegexName = 'NAI画图正则';
             const defaultArtists = '[[[artist:dishwasher1910]]], {{yd_(orange_maru)}}, [artist:ciloranko], [artist:sho_(sho_lwlw)], [ningen mame], year 2024,';
             const r18Artists = "0.9::misaka_12003-gou ::, dino_(dinoartforame), wanke, liduke, year 2025, realistic, 4k, -2::green ::, textless version, The image is highly intricate finished drawn. Only the character's face is in anime style, but their body is in realistic style. 1.35::A highly finished photo-style artwork that has lively color, graphic texture, realistic skin surface, and lifelike flesh with little obliques::. 1.63::photorealistic::, 1.63::photo(medium)::, \\n20::best quality, absurdres, very aesthetic, detailed, masterpiece::,, very aesthetic, masterpiece, no text,";
+            const lolita25dArtists = "0.9::misaka_12003-gou & dino, rurudo,  mignon,wanke & liduk::, white hair, red eyes, year 2025, realistic, 4k, -2::green ::, textless version, The image is highly intricate finished drawn. Only the character's face is in anime style, but their body is in realistic style. 1.35::A highly finished photo-style artwork that has lively color, graphic texture, realistic skin surface, and lifelike flesh with little obliques::. 1.63::photorealistic::, 1.63::photo(medium)::, \\n20::best quality, absurdres, very aesthetic, detailed, masterpiece::,, very aesthetic, masterpiece, no text,";
             const animeArtists = '1.4::asanagi::,{{{{{artist:asanagi}}}}},1.2::xiaoluo_xl::,1.3::Artist: misaka_12003-gou::,1.2::Artist:shexyo::,0.7::Artist:b.sa_(bbbs)::,1::Artist:qiandaiyiyu::,1.05::artist:natedecock::,1.05::artist:kunaboto::,0.75::artist:kandata_nijou::,1.05::artist:zer0.zer0 ::,1.05::artist:jasony::,0.75::misaka_12003-gou ::, dino_(dinoartforame), wanke, liduke, year 2025, realistic, 4k, -2::green ::, {textless version, The image is highly intricate finished drawn,write realistically,true to life}, 1.35::A highly finished photo-style artwork that has lively color, graphic texture, realistic skin surface, and lifelike flesh with little obliques::, 1.63::photorealistic::,3::age slider::,1.63::photo(medium)::, 2::best quality, absurdres, very aesthetic, detailed, masterpiece::,-4::Muscle definition, abs::';
             const galgameArtists = 'artist:ningen_mame,, noyu_(noyu23386566),, toosaka asagi,, location,\\n20::best quality, absurdres, very aesthetic, detailed, masterpiece::,:,, very aesthetic, masterpiece, no text,';
 
             let targetArtists = defaultArtists;
             if (settings.imageStyle === 'r18') {
                 targetArtists = r18Artists;
+            } else if (settings.imageStyle === 'lolita25d') {
+                targetArtists = lolita25dArtists;
             } else if (settings.imageStyle === 'anime') {
                 targetArtists = animeArtists;
             } else if (settings.imageStyle === 'galgame') {
                 targetArtists = galgameArtists;
             }
 
+            const encodedTargetArtists = encodeURIComponent(targetArtists);
             const imageGenRegexContent = {
                 name: imageGenRegexName,
                 regex: '/image###([\\s\\S]*?)###/g',
-                replacement: '<div style="width: auto; height: auto; max-width: 100%; border: 8px solid transparent; background-image: linear-gradient(45deg, #FFC9D9, #CCE5FF); position: relative; border-radius: 16px; overflow: hidden; display: flex; justify-content: center; align-items: center; animation: gradientBG 3s ease infinite; box-shadow: 0 4px 15px rgba(204,229,255,0.3);"><div style="background: rgba(255,255,255,0.85); backdrop-filter: blur(5px); width: 100%; height: 100%; position: absolute; top: 0; left: 0;"></div><img src="' + baseUrl + '/generate?tag=$1&token=' + imageGenToken + '&model=nai-diffusion-4-5-full&artist=' + targetArtists + '&size=' + settings.imageSize + '&steps=40&scale=6&cfg=0&sampler=k_dpmpp_2m_sde&negative={{{{bad anatomy}}}},{bad feet},bad hands,{{{bad proportions}}},{blurry},cloned face,cropped,{{{deformed}}},{{{disfigured}}},error,{{{extra arms}}},{extra digit},{{{extra legs}}},extra limbs,{{extra limbs}},{fewer digits},{{{fused fingers}}},gross proportions,ink eyes,ink hair,jpeg artifacts,{{{{long neck}}}},low quality,{malformed limbs},{{missing arms}},{missing fingers},{{missing legs}},{{{more than 2 nipples}}},mutated hands,{{{mutation}}},normal quality,owres,{{poorly drawn face}},{{poorly drawn hands}},reen eyes,signature,text,{{too many fingers}},{{{ugly}}},username,uta,watermark,worst quality,{{{more than 2 legs}}},awkward hand sign,weird hand gesture,contorted hand,unnatural finger pose,deformed hand gesture,{shaka},{hang loose},{{rock on}},{shaka sign}&nocache=0&noise_schedule=karras"  alt="生成图片" style="max-width: 100%; height: auto; width: auto; display: block; object-fit: contain; transition: transform 0.3s ease; position: relative; z-index: 1;"></div><style>@keyframes gradientBG {0% {background-image: linear-gradient(45deg, #FFC9D9, #CCE5FF);}50% {background-image: linear-gradient(225deg, #FFC9D9, #CCE5FF);}100% {background-image: linear-gradient(45deg, #FFC9D9, #CCE5FF);}}</style>',
+                replacement: '<div style="width: auto; height: auto; max-width: 100%; border: 8px solid transparent; background-image: linear-gradient(45deg, #FFC9D9, #CCE5FF); position: relative; border-radius: 16px; overflow: hidden; display: flex; justify-content: center; align-items: center; animation: gradientBG 3s ease infinite; box-shadow: 0 4px 15px rgba(204,229,255,0.3);"><div style="background: rgba(255,255,255,0.85); backdrop-filter: blur(5px); width: 100%; height: 100%; position: absolute; top: 0; left: 0;"></div><img src="' + baseUrl + '/generate?tag=$1&token=' + imageGenToken + '&model=nai-diffusion-4-5-full&artist=' + encodedTargetArtists + '&size=' + settings.imageSize + '&steps=40&scale=6&cfg=0&sampler=k_dpmpp_2m_sde&negative={{{{bad anatomy}}}},{bad feet},bad hands,{{{bad proportions}}},{blurry},cloned face,cropped,{{{deformed}}},{{{disfigured}}},error,{{{extra arms}}},{extra digit},{{{extra legs}}},extra limbs,{{extra limbs}},{fewer digits},{{{fused fingers}}},gross proportions,ink eyes,ink hair,jpeg artifacts,{{{{long neck}}}},low quality,{malformed limbs},{{missing arms}},{missing fingers},{{missing legs}},{{{more than 2 nipples}}},mutated hands,{{{mutation}}},normal quality,owres,{{poorly drawn face}},{{poorly drawn hands}},reen eyes,signature,text,{{too many fingers}},{{{ugly}}},username,uta,watermark,worst quality,{{{more than 2 legs}}},awkward hand sign,weird hand gesture,contorted hand,unnatural finger pose,deformed hand gesture,{shaka},{hang loose},{{rock on}},{shaka sign}&nocache=0&noise_schedule=karras"  alt="生成图片" style="max-width: 100%; height: auto; width: auto; display: block; object-fit: contain; transition: transform 0.3s ease; position: relative; z-index: 1;"></div><style>@keyframes gradientBG {0% {background-image: linear-gradient(45deg, #FFC9D9, #CCE5FF);}50% {background-image: linear-gradient(225deg, #FFC9D9, #CCE5FF);}100% {background-image: linear-gradient(45deg, #FFC9D9, #CCE5FF);}}</style>',
                 placement: [2],
                 markdownOnly: true,
                 promptOnly: false,
@@ -5152,6 +5245,7 @@ image###生成的提示词###
                 saveGlobalUiTemplateRuntimeForCharacter(previousCharacter);
             }
             currentCharacterIndex.value = index;
+            resetChatRenderWindow();
             const char = characters.value[index];
             char.uiTemplates = Array.isArray(char.uiTemplates) ? char.uiTemplates.map(template => normalizeUiTemplate({ ...template, scope: 'character' })) : [];
             if (previousCharacterIndex !== index) {
@@ -6508,6 +6602,7 @@ image###生成的提示词###
                 // Restore character selection without clearing chat history (we load it from DB)
                 _isApplyingCharacterScopedData = true;
                 currentCharacterIndex.value = lastActiveCharacterId.value;
+                resetChatRenderWindow();
                 const char = characters.value[currentCharacterIndex.value];
                 char.uiTemplates = Array.isArray(char.uiTemplates) ? char.uiTemplates.map(template => normalizeUiTemplate({ ...template, scope: 'character' })) : [];
 
@@ -6738,7 +6833,7 @@ image###生成的提示词###
             showUpdateModal, updateCountdown, latestUpdate, closeUpdateModal, isUpdateScrolledToBottom, checkUpdateScroll, // Update Modal
             showConfirmModal, confirmMessage, modelMode, showNoMemoryNeededModal, // Export for template
             isGenerating, isRemoteGenerating, remoteEstimatedTime, isReceiving, isThinking, activeNativeReasoning, userInput, modelSearchQuery, activeModelTag, modelTags, characterSearchQuery, availableModels, filteredModels, filteredCharacters,
-            user, settings, characters, currentCharacter, currentCharacterIndex, chatHistory, presets, regexScripts, worldInfo,
+            user, settings, characters, currentCharacter, currentCharacterIndex, chatHistory, displayedChatMessages, handleChatScroll, presets, regexScripts, worldInfo,
             activeRegexCount, activeWorldInfoCount, activeUiTemplateCount, totalContextLength,
             editingCharacter, editingPreset, editingUiTemplate, toasts, chatContainer, inputBox, messageElements,
             lastUserMessageIndex, // Expose to template
