@@ -345,12 +345,6 @@ createApp({
             }
         }, { deep: true });
 
-        const savedMainConfig = reactive({
-            apiUrl: DEFAULT_API_CONFIG.apiUrl,
-            apiKey: DEFAULT_API_CONFIG.apiKey,
-            model: DEFAULT_API_CONFIG.qualityModel
-        });
-
         const MAX_CONTEXT_SIZE = 1000000;
 
         const settings = reactive({
@@ -371,7 +365,6 @@ createApp({
             showNativeReasoning: true,
             fontSize: window.innerWidth > 768 ? 16 : 14,
             autoScroll: true,
-            maxRetries: 2,
             imageGenKey: '',
             imageStyle: 'vertical',
             imageSize: '竖图',
@@ -403,13 +396,8 @@ createApp({
             }
         });
 
-        const isBackupRetrying = ref(false);
-
-        watch(() => [settings.apiUrl, settings.apiKey, settings.model], ([newUrl, newKey, newModel]) => {
-            if (newModel !== settings.fastModel && newModel !== settings.balancedModel && !isBackupRetrying.value) {
-                savedMainConfig.apiUrl = newUrl;
-                savedMainConfig.apiKey = newKey;
-                savedMainConfig.model = newModel;
+        watch(() => [settings.apiUrl, settings.apiKey, settings.model], ([, , newModel]) => {
+            if (newModel !== settings.fastModel && newModel !== settings.balancedModel) {
                 settings.qualityModel = newModel; // 确保 qualityModel 也同步更新
             }
 
@@ -2562,6 +2550,59 @@ ${content}
             return '';
         };
 
+        const stringifyErrorDetail = (detail) => {
+            if (detail === null || detail === undefined) return '';
+            if (typeof detail === 'string') return detail;
+            try {
+                return JSON.stringify(detail, null, 2);
+            } catch (e) {
+                return String(detail);
+            }
+        };
+
+        const getApiErrorStatus = (payload, fallbackStatus) => {
+            const candidates = [
+                payload?.status,
+                payload?.statusCode,
+                payload?.code,
+                payload?.error?.status,
+                payload?.error?.statusCode,
+                payload?.error?.code,
+                fallbackStatus
+            ];
+            return candidates.find(value => value !== undefined && value !== null && value !== '' && /^\d+$/.test(String(value))) || '';
+        };
+
+        const formatApiErrorMessage = (status, detail) => {
+            const lines = [];
+            if (status !== undefined && status !== null && status !== '') {
+                lines.push(`API Error: ${status}`);
+            }
+            const detailText = stringifyErrorDetail(detail).trim();
+            lines.push(detailText || '请求失败');
+            return lines.join('\n');
+        };
+
+        const extractApiErrorMessage = (payload, fallbackStatus = '') => {
+            if (!payload || typeof payload !== 'object') return '';
+            const error = payload.error;
+            const status = getApiErrorStatus(payload, fallbackStatus);
+            if (typeof error === 'string') return formatApiErrorMessage(status, error);
+            if (error && typeof error === 'object') {
+                const detail = error.message || error.detail || payload.message || payload.detail || error;
+                return formatApiErrorMessage(status, detail);
+            }
+            const detail = payload.message || payload.detail;
+            if (!detail) return '';
+            return formatApiErrorMessage(status, detail);
+        };
+
+        const throwApiError = (message) => {
+            const error = new Error(message);
+            error.isApiError = true;
+            throw error;
+        };
+
         const activeNativeReasoning = computed(() => {
             const lastMessage = chatHistory.value[chatHistory.value.length - 1];
             return !!(lastMessage && lastMessage.role === 'assistant' && typeof lastMessage.reasoning === 'string' && lastMessage.reasoning.trim());
@@ -3377,13 +3418,6 @@ ${content}
                 return;
             }
 
-            // 保存原始设置，用于自动切换备用模型后恢复
-            const originalSettings = {
-                apiUrl: settings.apiUrl,
-                apiKey: settings.apiKey,
-                model: settings.model
-            };
-
             isGenerating.value = true;
             isReceiving.value = false;
             isThinking.value = false;
@@ -4156,17 +4190,10 @@ ${content}
             printAIRequestLogs(messages, settings.model);
             // ---------------------------
 
-            let retryCount = 0;
-            isBackupRetrying.value = false;
-            const maxRetries = settings.maxRetries || 0;
             let generatedAssistantMessageId = null;
+            let assistantMessage = null;
 
             try {
-                while (true) {
-                    let assistantMessage = null;
-                    let responseContent = '';
-
-                    try {
                         const url = settings.apiUrl.endsWith('/v1') ? `${settings.apiUrl}/chat/completions` : `${settings.apiUrl}/v1/chat/completions`;
                         const response = await fetch(url, {
                             method: 'POST',
@@ -4184,26 +4211,24 @@ ${content}
                         });
 
                         if (!response.ok) {
-                            let errorMsg = `API Error: ${response.status}`;
+                            let errorDetail = '';
                             try {
                                 const errorText = await response.text();
                                 try {
                                     const errorJson = JSON.parse(errorText);
-                                    if (errorJson.error && errorJson.error.message) {
-                                        errorMsg += `\n${errorJson.error.message}`;
-                                    } else if (errorJson.message) {
-                                        errorMsg += `\n${errorJson.message}`;
-                                    } else {
-                                        errorMsg += `\n${JSON.stringify(errorJson, null, 2)}`;
-                                    }
+                                    const apiError = extractApiErrorMessage(errorJson, response.status);
+                                    if (apiError) throwApiError(apiError);
+                                    errorDetail = errorJson;
                                 } catch (e) {
+                                    if (e.isApiError) throw e;
                                     // Not JSON, use text directly
-                                    if (errorText) errorMsg += `\n${errorText}`;
+                                    if (errorText) errorDetail = errorText;
                                 }
                             } catch (e) {
+                                if (e.isApiError) throw e;
                                 // Cannot read body
                             }
-                            throw new Error(errorMsg);
+                            throw new Error(formatApiErrorMessage(response.status, errorDetail));
                         }
 
                         // Check Content-Type to determine if we should stream
@@ -4255,7 +4280,13 @@ ${content}
 
                                         try {
                                             const data = JSON.parse(dataStr);
-                                            const delta = data.choices[0]?.delta || {};
+                                            const apiError = extractApiErrorMessage(data, response.status);
+                                            if (apiError) throwApiError(apiError);
+
+                                            const choice = data.choices?.[0];
+                                            if (!choice) continue;
+
+                                            const delta = choice.delta || choice.message || {};
                                             const content = delta.content || '';
                                             const reasoning = extractNativeReasoning(delta);
 
@@ -4283,7 +4314,6 @@ ${content}
                                                     seededContent = !!content;
                                                     seededReasoning = !!reasoning;
                                                     if (seededContent) {
-                                                        responseContent += content;
                                                         isThinking.value = false;
                                                         collapseNativeReasoning(assistantMessage);
                                                     }
@@ -4299,7 +4329,6 @@ ${content}
                                                 if (content && !seededContent) {
                                                     flushNativeReasoning();
                                                     assistantMessage.content += content;
-                                                    responseContent += content;
                                                     isThinking.value = false;
                                                     collapseNativeReasoning(assistantMessage);
                                                 }
@@ -4307,6 +4336,8 @@ ${content}
                                                 // scrollToBottom(); // Removed auto-scroll during generation
                                             }
                                         } catch (e) {
+                                            if (e.isApiError) throw e;
+                                            if (/error/i.test(dataStr)) throw new Error(formatApiErrorMessage(response.status, dataStr));
                                             console.warn('Error parsing stream chunk:', e);
                                         }
                                     }
@@ -4323,7 +4354,10 @@ ${content}
                             try {
                                 // 1. Try parsing as standard JSON
                                 const data = JSON.parse(rawText);
-                                const msg = data.choices[0]?.message || {};
+                                const apiError = extractApiErrorMessage(data, response.status);
+                                if (apiError) throwApiError(apiError);
+
+                                const msg = data.choices?.[0]?.message || {};
                                 content = msg.content || '';
                                 const reasoning = extractNativeReasoning(msg);
 
@@ -4347,11 +4381,10 @@ ${content}
                                         isReasoningAutoCollapsed: !!(reasoning && content)
                                     });
                                     chatHistory.value.push(assistantMessage);
-                                    responseContent = content;
-
                                     // scrollToBottom(); // Removed auto-scroll during generation
                                 }
                             } catch (e) {
+                                if (e.isApiError) throw e;
                                 // 2. If JSON fails, try parsing as SSE text (data: {...})
                                 // This handles cases where API returns stream format even if stream=false
                                 console.log('Non-standard JSON response detected, attempting manual SSE parsing...');
@@ -4364,19 +4397,25 @@ ${content}
                                         if (dataStr === '[DONE]') continue;
                                         try {
                                             const chunk = JSON.parse(dataStr);
-                                            const delta = chunk.choices[0]?.delta || chunk.choices[0]?.message || {};
+                                            const apiError = extractApiErrorMessage(chunk, response.status);
+                                            if (apiError) throwApiError(apiError);
+
+                                            const choice = chunk.choices?.[0];
+                                            if (!choice) continue;
+
+                                            const delta = choice.delta || choice.message || {};
                                             const chunkContent = delta.content || '';
                                             const chunkReasoning = extractNativeReasoning(delta);
 
                                             if (chunkContent) content += chunkContent;
                                             if (chunkReasoning) finalReasoning += chunkReasoning;
                                         } catch (err) {
+                                            if (err.isApiError) throw err;
+                                            if (/error/i.test(dataStr)) throw new Error(formatApiErrorMessage(response.status, dataStr));
                                             // Ignore invalid chunks
                                         }
                                     }
                                 }
-
-                                responseContent = content;
 
                                 if (content || finalReasoning) {
                                     assistantMessage = reactive({
@@ -4395,40 +4434,6 @@ ${content}
 
                                     // scrollToBottom(); // Removed auto-scroll during generation
                                 }
-                            }
-                        }
-
-                        // Check for empty content
-                        if (!responseContent || responseContent.trim().length === 0) {
-                            // Clean up empty message if it was added
-                            if (assistantMessage) {
-                                const idx = chatHistory.value.indexOf(assistantMessage);
-                                if (idx !== -1) chatHistory.value.splice(idx, 1);
-                            }
-
-                            // Retry Logic
-                            if (retryCount < maxRetries) {
-                                retryCount++;
-                                showToast(`回复为空，正在自动重试 (${retryCount}/${maxRetries})...`, 'warning', 5000);
-                                console.log(`Retry attempt ${retryCount}/${maxRetries}`);
-
-                                // Reset Timer
-                                generationStartTime = Date.now();
-                                startTimer();
-
-                                continue; // Retry loop
-                            } else {
-                                const doRetry = await confirmActionAsync('回复为空重试失败。<br><strong>是否继续重试？</strong>');
-                                if (!doRetry) {
-                                    break; // 停止生成
-                                }
-                                retryCount = Math.max(0, maxRetries - 1); // 允许再重试一次
-
-                                // Reset Timer
-                                generationStartTime = Date.now();
-                                startTimer();
-
-                                continue;
                             }
                         }
 
@@ -4451,24 +4456,6 @@ ${content}
                             // -----------------------------
                         }
 
-                        break; // Success
-
-                    } catch (error) {
-                        if (error.name === 'AbortError') throw error;
-
-                        const doRetry = await confirmActionAsync(`API请求失败: ${error.message}\n<br><strong>是否继续重试？</strong>`);
-                        if (!doRetry) {
-                            throw error; // 不重试，抛出错误结束
-                        }
-                        retryCount = Math.max(0, maxRetries - 1);
-
-                        // Reset Timer
-                        generationStartTime = Date.now();
-                        startTimer();
-
-                        continue;
-                    }
-                }
             } catch (error) {
                 if (error.name === 'AbortError') {
                     _wasCancelled = true;
@@ -4497,8 +4484,7 @@ ${content}
                         chatHistory.value.push({ role: 'system', content: '生成已中止', skipReveal: true });
                     }
                 } else {
-                    showToast('生成失败: ' + error.message, 'error');
-                    chatHistory.value.push({ role: 'system', content: `Error: ${error.message}` });
+                    chatHistory.value.push({ role: 'system', content: error.message });
                 }
             } finally {
                 collapseActiveNativeReasoning();
@@ -4512,13 +4498,6 @@ ${content}
                 if (waitTimer) {
                     clearInterval(waitTimer);
                     waitTimer = null;
-                }
-
-                // 如果在生成过程中被切到了备用模型（因为重试），无论成功失败，都恢复原主模型设置
-                if (isBackupRetrying.value) {
-                    modelMode.value = 'quality';
-                    showToast('已恢复主模型设置', 'info');
-                    isBackupRetrying.value = false;
                 }
 
                 if (!wasCancelled && settings.uiTemplateEnabled && generatedAssistantMessageId && chatHistory.value.length >= 2) {

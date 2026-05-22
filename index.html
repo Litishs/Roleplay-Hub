@@ -2197,21 +2197,6 @@
                                                 class="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-teal-500 hover:accent-teal-400 transition-all">
                                         </div>
 
-                                        <!-- Max Retries -->
-                                        <div
-                                            class="bg-gray-50 p-4 rounded-xl border border-gray-100 hover:bg-white hover:border-gray-200 hover:shadow-sm transition-all duration-200">
-                                            <div class="flex justify-between items-center mb-3">
-                                                <label
-                                                    class="text-xs font-bold text-gray-500 uppercase tracking-wider">最大重试次数</label>
-                                                <span
-                                                    class="text-xs font-mono text-teal-600 bg-teal-50 px-1.5 py-0.5 rounded border border-teal-100">{{
-                                                    settings.maxRetries }}</span>
-                                            </div>
-                                            <input v-model.number="settings.maxRetries" type="range" min="0" max="5"
-                                                step="1"
-                                                class="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-teal-500 hover:accent-teal-400 transition-all">
-                                        </div>
-
                                         <!-- Image Key -->
                                         <div
                                             class="bg-gray-50 p-4 rounded-xl border border-gray-100 hover:bg-white hover:border-gray-200 hover:shadow-sm transition-all duration-200 flex flex-col justify-center">
@@ -4375,7 +4360,6 @@
                             <h4 class="ml-2 text-sm font-bold text-yellow-800">注意事项</h4>
                         </div>
                         <ul class="list-disc list-outside ml-9 space-y-1.5 text-sm text-yellow-700">
-                            <li>此功能有概率触发模型 <strong>“空回”</strong> 现象，如遇到请尝试重新生成或更换模型。</li>
                             <li>您可以在 “世界书 -> 自动生图” 手动管理此功能。</li>
                             <li>前往 “设置” 可以切换生图风格与比例。</li>
                         </ul>
