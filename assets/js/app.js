@@ -4478,13 +4478,13 @@ ${content}
                             collapseNativeReasoning(lastMessage);
                         } else {
                             chatHistory.value.pop();
-                            chatHistory.value.push({ role: 'system', content: '生成已中止', skipReveal: true });
+                            chatHistory.value.push({ role: 'system', name: currentCharacter.value.name, content: '生成已中止', skipReveal: true });
                         }
                     } else {
-                        chatHistory.value.push({ role: 'system', content: '生成已中止', skipReveal: true });
+                        chatHistory.value.push({ role: 'system', name: currentCharacter.value.name, content: '生成已中止', skipReveal: true });
                     }
                 } else {
-                    chatHistory.value.push({ role: 'system', content: error.message });
+                    chatHistory.value.push({ role: 'system', name: currentCharacter.value.name, content: error.message });
                 }
             } finally {
                 collapseActiveNativeReasoning();

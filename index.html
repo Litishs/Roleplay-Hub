@@ -536,7 +536,7 @@
                                 <!-- Name (Outside Bubble) -->
                                 <div v-show="!settings.immersiveMode"
                                     :class="['text-[10px] font-bold text-gray-600 mb-1 select-none px-1.5 py-0.5 rounded-md bg-white/50 backdrop-blur-sm border border-white/20 w-fit shadow-sm truncate max-w-[150px] md:max-w-[250px] msg-name-tag', msg.isSelf ? 'ml-auto mr-1' : 'mr-auto ml-1', msg.shouldAnimate ? 'animate-message-fade-in' : '']">
-                                    {{ msg.name || (msg.role === 'user' ? user.name : 'Unknown') }}
+                                    {{ msg.name || (msg.role === 'user' ? user.name : (currentCharacter?.name || 'Unknown')) }}
                                 </div>
                                 <!-- Message Bubble -->
                                 <div class="group relative"
