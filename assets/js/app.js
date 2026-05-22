@@ -49,8 +49,9 @@ createApp({
         const systemWorldInfoNames = ['自动生图'];
 
         // --- Default API Configuration ---
+        const DEFAULT_API_PROVIDER_ID = 'sta1n';
         const DEFAULT_API_CONFIG = {
-            apiUrl: '',
+            apiUrl: 'https://cdn.sta1n.cn/v1',
             apiKey: '',
             model: '', // Default selected
             qualityModel: '',
@@ -58,6 +59,39 @@ createApp({
             fastModel: '',
             suggestionModel: ''
         };
+
+        const apiProviderOptions = [
+            {
+                id: 'sta1n',
+                name: 'STA1N API',
+                apiUrl: 'https://cdn.sta1n.cn/v1',
+                icon: 'https://img.cdn1.vip/i/69c18cc07538b_1774292160.webp'
+            },
+            {
+                id: 'openai',
+                name: 'OpenAI',
+                apiUrl: 'https://api.openai.com/v1',
+                icon: 'https://openai.com/favicon.ico'
+            },
+            {
+                id: 'deepseek',
+                name: 'DeepSeek',
+                apiUrl: 'https://api.deepseek.com/v1',
+                icon: 'https://www.deepseek.com/favicon.ico'
+            },
+            {
+                id: 'openrouter',
+                name: 'OpenRouter',
+                apiUrl: 'https://openrouter.ai/api/v1',
+                icon: 'https://openrouter.ai/favicon.ico'
+            },
+            {
+                id: 'siliconflow',
+                name: 'SiliconFlow',
+                apiUrl: 'https://api.siliconflow.cn/v1',
+                icon: 'https://siliconflow.cn/favicon.ico'
+            }
+        ];
 
         // --- State ---
         const globalConfirmModal = ref({
@@ -126,8 +160,8 @@ createApp({
                 });
                 const data = await response.json();
                 if (data.status === 'ok' && (data.type === 'std' || data.type === 'sta1n')) {
-                    let val = parseInt(data.data.value);
-                    if (val > 1000) val = 1000;
+                    const val = Number.parseInt(data.data?.value, 10);
+                    if (!Number.isFinite(val)) throw new Error('Invalid quota value');
                     quotaValue.value = val;
                     quotaAvailable.value = val > 0;
                 } else {
@@ -156,20 +190,24 @@ createApp({
             isUpdateScrolledToBottom.value = (el.scrollHeight - el.scrollTop - el.clientHeight) < 10;
         };
         const latestUpdate = reactive({
-            id: 10131, // 确保这是一个五位数ID，每次更新内容时增加这个数字
+            id: 10132, // 确保这是一个五位数ID，每次更新内容时增加这个数字
             date: new Date().toISOString().split('T')[0],
             title: '网站公告',
             content: `
-### RP-Hub 1.6.1
+### RP-Hub 1.6.1 Fix
 
-- 解决了楼层过多时的卡顿问题
-- 取消渲染层数调节功能
+- 完美解决了楼层增多时的卡顿问题
+- 为工坊新增角色卡/正则/世界书导入功能
+- 添加API提供商预设/自定义功能
+- 优化了工坊的API状态展示，添加了更宽松的流式解析逻辑
+- 取消渲染层数调节/空回重试功能
 - 为聊天自动生图和工坊新增新的2.5D画风选项
-- 优化了上下文后处理逻辑，减少了部分请求参数错误问题
+- 添加了更好且完整的错误信息展示
+- 优化了上下文后处理逻辑
 
 本项目为全开源公益项目，严禁倒卖源码，二改需经作者授权
 
-#### 更新时间：05/22/20:18
+#### 更新时间：05/23/05:01
                     `
         });
 
@@ -350,6 +388,9 @@ createApp({
         const settings = reactive({
             apiUrl: DEFAULT_API_CONFIG.apiUrl,
             apiKey: DEFAULT_API_CONFIG.apiKey,
+            apiProviderId: DEFAULT_API_PROVIDER_ID,
+            apiProviderKeys: {},
+            customApiUrl: '',
             model: DEFAULT_API_CONFIG.qualityModel,
             contextSize: MAX_CONTEXT_SIZE,
             temperature: 1.0,
@@ -372,6 +413,96 @@ createApp({
             balancedModel: DEFAULT_API_CONFIG.balancedModel,
             fastModel: DEFAULT_API_CONFIG.fastModel,
             suggestionModel: DEFAULT_API_CONFIG.suggestionModel
+        });
+
+        const showApiProviderSelector = ref(false);
+        const selectedApiProviderId = ref(DEFAULT_API_PROVIDER_ID);
+        const customApiProviderOption = {
+            id: 'custom',
+            name: '自定义',
+            apiUrl: '',
+            icon: ''
+        };
+        const normalizeApiProviderUrl = (url) => String(url || '').replace(/\/+$/, '').toLowerCase();
+        const getApiProviderById = (id) => apiProviderOptions.find(provider => provider.id === id);
+        const getApiProviderByUrl = (url) => {
+            const currentUrl = normalizeApiProviderUrl(url);
+            return apiProviderOptions.find(provider => normalizeApiProviderUrl(provider.apiUrl) === currentUrl);
+        };
+        const syncCurrentApiKeyToProvider = () => {
+            const providerId = settings.apiProviderId || selectedApiProvider.value.id || DEFAULT_API_PROVIDER_ID;
+            if (!settings.apiProviderKeys || typeof settings.apiProviderKeys !== 'object' || Array.isArray(settings.apiProviderKeys)) {
+                settings.apiProviderKeys = {};
+            }
+            settings.apiProviderKeys[providerId] = settings.apiKey || '';
+            if (providerId === 'custom') {
+                settings.customApiUrl = settings.apiUrl || '';
+            }
+        };
+        const normalizeApiProviderSettings = () => {
+            if (!settings.apiProviderKeys || typeof settings.apiProviderKeys !== 'object' || Array.isArray(settings.apiProviderKeys)) {
+                settings.apiProviderKeys = {};
+            }
+            [...apiProviderOptions, customApiProviderOption].forEach(provider => {
+                if (typeof settings.apiProviderKeys[provider.id] !== 'string') {
+                    settings.apiProviderKeys[provider.id] = '';
+                }
+            });
+
+            let provider = getApiProviderById(settings.apiProviderId);
+            if (!provider && settings.apiProviderId !== 'custom') {
+                provider = getApiProviderByUrl(settings.apiUrl);
+                settings.apiProviderId = provider?.id || DEFAULT_API_PROVIDER_ID;
+            }
+            if (settings.apiProviderId === 'custom') {
+                settings.customApiUrl = settings.customApiUrl || settings.apiUrl || '';
+            } else {
+                provider = getApiProviderById(settings.apiProviderId) || getApiProviderById(DEFAULT_API_PROVIDER_ID);
+                settings.apiProviderId = provider.id;
+                settings.apiUrl = provider.apiUrl;
+            }
+
+            selectedApiProviderId.value = settings.apiProviderId;
+            if (settings.apiKey && !settings.apiProviderKeys[settings.apiProviderId]) {
+                settings.apiProviderKeys[settings.apiProviderId] = settings.apiKey;
+            }
+            settings.apiKey = settings.apiProviderKeys[settings.apiProviderId] || '';
+        };
+        const selectedApiProvider = computed(() => {
+            if (settings.apiProviderId === 'custom' || selectedApiProviderId.value === 'custom') return customApiProviderOption;
+            const selectedProvider = getApiProviderById(settings.apiProviderId) || getApiProviderById(selectedApiProviderId.value);
+            if (selectedProvider) return selectedProvider;
+            return getApiProviderByUrl(settings.apiUrl) || customApiProviderOption;
+        });
+        const isCustomApiProvider = computed(() => selectedApiProvider.value.id === 'custom');
+        const selectApiProvider = (provider) => {
+            syncCurrentApiKeyToProvider();
+            selectedApiProviderId.value = provider.id;
+            settings.apiProviderId = provider.id;
+            if (provider.id !== 'custom') {
+                settings.apiUrl = provider.apiUrl;
+            } else {
+                settings.apiUrl = settings.customApiUrl || '';
+            }
+            settings.apiKey = settings.apiProviderKeys[provider.id] || '';
+            showApiProviderSelector.value = false;
+        };
+        normalizeApiProviderSettings();
+
+        watch(() => settings.apiKey, (newKey) => {
+            if (!settings.apiProviderKeys || typeof settings.apiProviderKeys !== 'object' || Array.isArray(settings.apiProviderKeys)) {
+                settings.apiProviderKeys = {};
+            }
+            const providerId = settings.apiProviderId || selectedApiProvider.value.id || DEFAULT_API_PROVIDER_ID;
+            if (settings.apiProviderKeys[providerId] !== (newKey || '')) {
+                settings.apiProviderKeys[providerId] = newKey || '';
+            }
+        });
+
+        watch(() => settings.apiUrl, (newUrl) => {
+            if (settings.apiProviderId === 'custom') {
+                settings.customApiUrl = newUrl || '';
+            }
         });
 
         const syncSettingsToGenerator = () => {
@@ -780,17 +911,20 @@ createApp({
 
 
         // --- Persistence (IndexedDB) ---
-        const dbName = 'SillyTavernDB';
+        const dbName = 'RPHubDB';
+        const legacyDbName = String.fromCharCode(83, 105, 108, 108, 121, 84, 97, 118, 101, 114, 110, 68, 66);
+        const storagePrefix = 'rp_hub_';
+        const legacyStoragePrefix = String.fromCharCode(115, 105, 108, 108, 121, 95, 116, 97, 118, 101, 114, 110, 95);
         const dbVersion = 1;
         let db = null;
+        let legacyDb = null;
 
-        const initDB = () => {
+        const openAppDB = (name) => {
             return new Promise((resolve, reject) => {
-                const request = indexedDB.open(dbName, dbVersion);
+                const request = indexedDB.open(name, dbVersion);
                 request.onerror = (event) => reject('DB Error: ' + event.target.error);
                 request.onsuccess = (event) => {
-                    db = event.target.result;
-                    resolve(db);
+                    resolve(event.target.result);
                 };
                 request.onupgradeneeded = (event) => {
                     const db = event.target.result;
@@ -801,12 +935,31 @@ createApp({
             });
         };
 
+        const initDB = async () => {
+            db = await openAppDB(dbName);
+            try {
+                const dbList = typeof indexedDB.databases === 'function' ? await indexedDB.databases() : null;
+                const shouldOpenLegacy = !dbList || dbList.some(item => item && item.name === legacyDbName);
+                if (shouldOpenLegacy) {
+                    legacyDb = await openAppDB(legacyDbName);
+                }
+            } catch (e) {
+                console.warn('Legacy DB check failed:', e);
+            }
+            return db;
+        };
+
         const cloneForStorage = (value) => JSON.parse(JSON.stringify(value));
 
-        const dbSet = (key, value, options = {}) => {
+        const storageKey = (name) => `${storagePrefix}${name}`;
+        const legacyStorageKey = (name) => `${legacyStoragePrefix}${name}`;
+        const scopedStorageKey = (name, id) => `${storageKey(name)}_${id}`;
+        const legacyScopedStorageKey = (name, id) => `${legacyStorageKey(name)}_${id}`;
+
+        const dbSetTo = (targetDb, key, value, options = {}) => {
             return new Promise((resolve, reject) => {
-                if (!db) return reject('DB not initialized');
-                const transaction = db.transaction(['store'], 'readwrite');
+                if (!targetDb) return reject('DB not initialized');
+                const transaction = targetDb.transaction(['store'], 'readwrite');
                 const store = transaction.objectStore('store');
                 // Clone to plain object to avoid Proxy issues unless the caller already did it.
                 const request = store.put(options.clone === false ? value : cloneForStorage(value), key);
@@ -815,15 +968,40 @@ createApp({
             });
         };
 
-        const dbGet = (key) => {
+        const dbSet = (key, value, options = {}) => dbSetTo(db, key, value, options);
+
+        const dbGetFrom = (targetDb, key) => {
             return new Promise((resolve, reject) => {
-                if (!db) return reject('DB not initialized');
-                const transaction = db.transaction(['store'], 'readonly');
+                if (!targetDb) return resolve(undefined);
+                const transaction = targetDb.transaction(['store'], 'readonly');
                 const store = transaction.objectStore('store');
                 const request = store.get(key);
                 request.onsuccess = () => resolve(request.result);
                 request.onerror = (event) => reject(event.target.error);
             });
+        };
+
+        const dbGet = (key) => dbGetFrom(db, key);
+
+        const dbGetWithLegacy = async (key, oldKey = null) => {
+            const value = await dbGet(key);
+            if (value !== undefined) return value;
+            if (!oldKey || !legacyDb) return undefined;
+            const legacyValue = await dbGetFrom(legacyDb, oldKey);
+            if (legacyValue !== undefined) {
+                await dbSet(key, legacyValue);
+            }
+            return legacyValue;
+        };
+
+        const setStoredValue = (name, value, options = {}) => dbSet(storageKey(name), value, options);
+        const getStoredValue = (name) => dbGetWithLegacy(storageKey(name), legacyStorageKey(name));
+        const setScopedStoredValue = (name, id, value, options = {}) => dbSet(scopedStorageKey(name, id), value, options);
+        const getScopedStoredValue = (name, id) => dbGetWithLegacy(scopedStorageKey(name, id), legacyScopedStorageKey(name, id));
+        const getLocalStoredValue = (name) => localStorage.getItem(storageKey(name)) ?? localStorage.getItem(legacyStorageKey(name));
+        const removeLocalStoredValue = (name) => {
+            localStorage.removeItem(storageKey(name));
+            localStorage.removeItem(legacyStorageKey(name));
         };
 
         let chatHistorySaveTimer = null;
@@ -837,7 +1015,7 @@ createApp({
 
             try {
                 const historyToSave = cloneForStorage(chatHistory.value);
-                await dbSet(`silly_tavern_chat_${currentCharacter.value.uuid}`, historyToSave, { clone: false });
+                await setScopedStoredValue('chat', currentCharacter.value.uuid, historyToSave, { clone: false });
             } catch (e) {
                 console.error('Failed to save chat history:', e);
             }
@@ -861,36 +1039,36 @@ createApp({
             try {
                 if (!db) await initDB();
                 settings.contextSize = MAX_CONTEXT_SIZE;
-                await dbSet('silly_tavern_characters', characters.value);
-                await dbSet('silly_tavern_settings', settings);
-                await dbSet('silly_tavern_presets', presets.value);
-                await dbSet('silly_tavern_regex', regexScripts.value);
-                await dbSet('silly_tavern_global_regex', globalRegexScripts.value);
-                await dbSet('silly_tavern_worldinfo', worldInfo.value);
-                await dbSet('silly_tavern_global_worldinfo', globalWorldInfo.value);
-                await dbSet('silly_tavern_worldinfo_settings', worldInfoSettings);
-                await dbSet('silly_tavern_global_ui_templates', globalUiTemplates.value);
-                // await dbSet('silly_tavern_recent_times', recentGenerationTimes.value); // Deprecated: Saved in character
+                await setStoredValue('characters', characters.value);
+                await setStoredValue('settings', settings);
+                await setStoredValue('presets', presets.value);
+                await setStoredValue('regex', regexScripts.value);
+                await setStoredValue('global_regex', globalRegexScripts.value);
+                await setStoredValue('worldinfo', worldInfo.value);
+                await setStoredValue('global_worldinfo', globalWorldInfo.value);
+                await setStoredValue('worldinfo_settings', worldInfoSettings);
+                await setStoredValue('global_ui_templates', globalUiTemplates.value);
+                // await setStoredValue('recent_times', recentGenerationTimes.value); // Deprecated: Saved in character
 
                 // 守卫：初始化完成前不写入用户/记忆数据，防止默认值覆盖服务端已有数据
                 if (_initComplete) {
-                    await dbSet('silly_tavern_user', user);
-                    await dbSet('silly_tavern_user_profiles', JSON.parse(JSON.stringify(userProfiles.value)));
-                    if (activeProfileId.value) await dbSet('silly_tavern_active_profile_id', activeProfileId.value);
+                    await setStoredValue('user', user);
+                    await setStoredValue('user_profiles', JSON.parse(JSON.stringify(userProfiles.value)));
+                    if (activeProfileId.value) await setStoredValue('active_profile_id', activeProfileId.value);
                 }
 
                 // Save Chat State
                 if (currentCharacterIndex.value >= 0) {
-                    await dbSet('silly_tavern_last_active_char', currentCharacterIndex.value);
+                    await setStoredValue('last_active_char', currentCharacterIndex.value);
                     await saveChatHistoryNow();
                 }
 
                 // Save Memory State
                 if (_initComplete) {
-                    await dbSet('silly_tavern_memory_settings', JSON.parse(JSON.stringify(memorySettings)));
+                    await setStoredValue('memory_settings', JSON.parse(JSON.stringify(memorySettings)));
                 }
                 if (_memoriesLoaded && currentCharacter.value && currentCharacter.value.uuid) {
-                    await dbSet(`silly_tavern_memories_${currentCharacter.value.uuid}`, JSON.parse(JSON.stringify(memories.value)));
+                    await setScopedStoredValue('memories', currentCharacter.value.uuid, JSON.parse(JSON.stringify(memories.value)));
                 }
             } catch (e) {
                 console.error('Save failed:', e);
@@ -900,16 +1078,25 @@ createApp({
             }
         };
 
-        const dbDelete = (key) => {
+        const dbDeleteFrom = (targetDb, key) => {
             return new Promise((resolve, reject) => {
-                if (!db) return reject('DB not initialized');
-                const transaction = db.transaction(['store'], 'readwrite');
+                if (!targetDb) return resolve();
+                const transaction = targetDb.transaction(['store'], 'readwrite');
                 const store = transaction.objectStore('store');
                 const request = store.delete(key);
                 request.onsuccess = () => resolve();
                 request.onerror = (event) => reject(event.target.error);
             });
         };
+
+        const dbDelete = (key) => dbDeleteFrom(db, key);
+
+        const dbDeleteWithLegacy = async (key, oldKey = null) => {
+            await dbDelete(key);
+            if (oldKey && legacyDb) await dbDeleteFrom(legacyDb, oldKey);
+        };
+
+        const deleteScopedStoredValue = (name, id) => dbDeleteWithLegacy(scopedStorageKey(name, id), legacyScopedStorageKey(name, id));
 
         /* extracted generateUUID */
 
@@ -925,36 +1112,45 @@ createApp({
                 await initDB();
 
                 // Migration: Check LocalStorage first
-                const localChar = localStorage.getItem('silly_tavern_characters');
+                const localChar = getLocalStoredValue('characters');
                 if (localChar) {
                     console.log('Migrating from LocalStorage to IndexedDB...');
                     try {
                         characters.value = JSON.parse(localChar);
-                        const localSettings = localStorage.getItem('silly_tavern_settings');
-                        if (localSettings) Object.assign(settings, JSON.parse(localSettings));
+                        const localSettings = getLocalStoredValue('settings');
+                        if (localSettings) {
+                            const parsedLocalSettings = JSON.parse(localSettings);
+                            Object.assign(settings, parsedLocalSettings);
+                            if (!Object.prototype.hasOwnProperty.call(parsedLocalSettings, 'apiProviderId')) {
+                                const legacyProvider = getApiProviderByUrl(parsedLocalSettings.apiUrl);
+                                settings.apiProviderId = legacyProvider?.id || (parsedLocalSettings.apiUrl ? 'custom' : DEFAULT_API_PROVIDER_ID);
+                                if (!legacyProvider && parsedLocalSettings.apiUrl) settings.customApiUrl = parsedLocalSettings.apiUrl;
+                            }
+                            normalizeApiProviderSettings();
+                        }
                         delete settings.renderLayerLimit;
                         settings.contextSize = MAX_CONTEXT_SIZE;
 
-                        const localPresets = localStorage.getItem('silly_tavern_presets');
+                        const localPresets = getLocalStoredValue('presets');
                         if (localPresets) presets.value = JSON.parse(localPresets);
 
-                        const localRegex = localStorage.getItem('silly_tavern_regex');
+                        const localRegex = getLocalStoredValue('regex');
                         if (localRegex) regexScripts.value = JSON.parse(localRegex);
 
-                        const localWI = localStorage.getItem('silly_tavern_worldinfo');
+                        const localWI = getLocalStoredValue('worldinfo');
                         if (localWI) worldInfo.value = JSON.parse(localWI).map(normalizeWorldInfoEntry);
 
-                        const localUser = localStorage.getItem('silly_tavern_user');
+                        const localUser = getLocalStoredValue('user');
                         if (localUser) Object.assign(user, JSON.parse(localUser));
 
                         // Save to DB and Clear LocalStorage
                         await saveData();
-                        localStorage.removeItem('silly_tavern_characters');
-                        localStorage.removeItem('silly_tavern_settings');
-                        localStorage.removeItem('silly_tavern_presets');
-                        localStorage.removeItem('silly_tavern_regex');
-                        localStorage.removeItem('silly_tavern_worldinfo');
-                        localStorage.removeItem('silly_tavern_user');
+                        removeLocalStoredValue('characters');
+                        removeLocalStoredValue('settings');
+                        removeLocalStoredValue('presets');
+                        removeLocalStoredValue('regex');
+                        removeLocalStoredValue('worldinfo');
+                        removeLocalStoredValue('user');
                         showToast('数据已迁移到 IndexedDB', 'success');
                         return;
                     } catch (e) {
@@ -963,7 +1159,7 @@ createApp({
                 }
 
                 // Load from DB
-                const savedChars = await dbGet('silly_tavern_characters');
+                const savedChars = await getStoredValue('characters');
                 if (savedChars) {
                     // Migration: Ensure all characters have a UUID and createdAt
                     let migrated = false;
@@ -972,10 +1168,10 @@ createApp({
                             char.uuid = generateUUID();
                             migrated = true;
                             // Try to migrate old index-based chat history to UUID-based
-                            dbGet(`silly_tavern_chat_${index}`).then(oldChat => {
+                            getScopedStoredValue('chat', index).then(oldChat => {
                                 if (oldChat) {
-                                    dbSet(`silly_tavern_chat_${char.uuid}`, oldChat);
-                                    dbDelete(`silly_tavern_chat_${index}`); // Clean up old key
+                                    setScopedStoredValue('chat', char.uuid, oldChat);
+                                    deleteScopedStoredValue('chat', index); // Clean up old key
                                 }
                             }).catch(() => { });
                         }
@@ -994,58 +1190,68 @@ createApp({
                         return char;
                     });
                     if (migrated) {
-                        await dbSet('silly_tavern_characters', characters.value);
+                        await setStoredValue('characters', characters.value);
                         console.log('Migrated characters to UUID and timestamp system');
                     }
                 }
 
-                const savedSettings = await dbGet('silly_tavern_settings');
-                if (savedSettings) Object.assign(settings, savedSettings);
+                const savedSettings = await getStoredValue('settings');
+                if (savedSettings) {
+                    Object.assign(settings, savedSettings);
+                    if (!Object.prototype.hasOwnProperty.call(savedSettings, 'apiProviderId')) {
+                        const legacyProvider = getApiProviderByUrl(savedSettings.apiUrl);
+                        settings.apiProviderId = legacyProvider?.id || (savedSettings.apiUrl ? 'custom' : DEFAULT_API_PROVIDER_ID);
+                        if (!legacyProvider && savedSettings.apiUrl) settings.customApiUrl = savedSettings.apiUrl;
+                    }
+                    normalizeApiProviderSettings();
+                } else {
+                    normalizeApiProviderSettings();
+                }
                 delete settings.renderLayerLimit;
                 settings.contextSize = MAX_CONTEXT_SIZE;
 
-                const savedPresets = await dbGet('silly_tavern_presets');
+                const savedPresets = await getStoredValue('presets');
                 if (savedPresets) presets.value = savedPresets;
 
-                const savedGlobalRegex = await dbGet('silly_tavern_global_regex');
+                const savedGlobalRegex = await getStoredValue('global_regex');
                 if (savedGlobalRegex) globalRegexScripts.value = savedGlobalRegex.map(script => normalizeRegexScript(script, 'global'));
 
-                const savedRegex = await dbGet('silly_tavern_regex');
+                const savedRegex = await getStoredValue('regex');
                 if (savedGlobalRegex) {
                     regexScripts.value = JSON.parse(JSON.stringify(globalRegexScripts.value)).map(script => normalizeRegexScript(script, 'global'));
                 } else if (savedRegex) {
                     regexScripts.value = savedRegex.map(script => normalizeRegexScript(script, 'character'));
                 }
 
-                const savedGlobalWI = await dbGet('silly_tavern_global_worldinfo');
+                const savedGlobalWI = await getStoredValue('global_worldinfo');
                 if (savedGlobalWI) globalWorldInfo.value = savedGlobalWI.map(entry => normalizeWorldInfoEntry({ ...entry, scope: 'global' }));
 
-                const savedWI = await dbGet('silly_tavern_worldinfo');
+                const savedWI = await getStoredValue('worldinfo');
                 if (savedGlobalWI) {
                     worldInfo.value = JSON.parse(JSON.stringify(globalWorldInfo.value)).map(entry => normalizeWorldInfoEntry({ ...entry, scope: 'global' }));
                 } else if (savedWI) {
                     worldInfo.value = savedWI.map(normalizeWorldInfoEntry);
                 }
 
-                const savedGlobalUiTemplates = await dbGet('silly_tavern_global_ui_templates');
+                const savedGlobalUiTemplates = await getStoredValue('global_ui_templates');
                 if (savedGlobalUiTemplates) globalUiTemplates.value = savedGlobalUiTemplates.map(template => normalizeUiTemplate({ ...template, scope: 'global' }));
 
-                const savedWISettings = await dbGet('silly_tavern_worldinfo_settings');
+                const savedWISettings = await getStoredValue('worldinfo_settings');
                 if (savedWISettings) {
                     delete savedWISettings['use' + 'GroupScoring'];
                     delete savedWISettings['overflow' + 'Warning'];
                     Object.assign(worldInfoSettings, savedWISettings);
                 }
 
-                // const savedRecentTimes = await dbGet('silly_tavern_recent_times'); // Deprecated
+                // const savedRecentTimes = await getStoredValue('recent_times'); // Deprecated
                 // if (savedRecentTimes) recentGenerationTimes.value = savedRecentTimes;
 
-                const savedUser = await dbGet('silly_tavern_user');
+                const savedUser = await getStoredValue('user');
                 if (savedUser) Object.assign(user, savedUser);
                 if (!user.uuid) user.uuid = generateUUID(); // Ensure UUID
 
-                const savedProfiles = await dbGet('silly_tavern_user_profiles');
-                const savedActiveId = await dbGet('silly_tavern_active_profile_id');
+                const savedProfiles = await getStoredValue('user_profiles');
+                const savedActiveId = await getStoredValue('active_profile_id');
 
                 if (savedProfiles && savedProfiles.length > 0) {
                     userProfiles.value = savedProfiles;
@@ -1065,13 +1271,13 @@ createApp({
                 }
 
                 // Load Last Active Character Index
-                const lastCharIndex = await dbGet('silly_tavern_last_active_char');
+                const lastCharIndex = await getStoredValue('last_active_char');
                 if (lastCharIndex !== undefined) {
                     lastActiveCharacterId.value = lastCharIndex;
                 }
 
                 // Load Memory Settings
-                const savedMemorySettings = await dbGet('silly_tavern_memory_settings');
+                const savedMemorySettings = await getStoredValue('memory_settings');
                 if (savedMemorySettings) Object.assign(memorySettings, savedMemorySettings);
 
             } catch (e) {
@@ -2370,7 +2576,7 @@ ${content}
                 if (script.maxDepth !== null && script.maxDepth !== undefined && depth > script.maxDepth) return;
 
                 try {
-                    // 兼容 SillyTavern 字段：findRegex/regex, replaceString/replacement
+                    // 兼容外部正则字段：findRegex/regex, replaceString/replacement
                     let regexPattern = script.regex || script.findRegex;
                     let flags = script.flags || script.regexFlags || 'g';
                     const replacement = script.hasOwnProperty('replacement')
@@ -4692,7 +4898,7 @@ summary 长度控制在300-500字，尽量完全详细。
                 if (uniqueNewMemories.length > 0) {
                     memories.value.push(...uniqueNewMemories);
                     if (currentCharacter.value?.uuid) {
-                        await dbSet(`silly_tavern_memories_${currentCharacter.value.uuid}`, JSON.parse(JSON.stringify(memories.value)));
+                        await setScopedStoredValue('memories', currentCharacter.value.uuid, JSON.parse(JSON.stringify(memories.value)));
                     }
                     console.log(`%c[Memory] 提取了 ${uniqueNewMemories.length} 条新记忆`, 'color: #a855f7; font-weight: bold;');
                     return uniqueNewMemories.length;
@@ -4993,7 +5199,7 @@ summary 长度控制在300-500字，尽量完全详细。
                 try {
                     const char = characters.value[index];
                     if (char && char.uuid) {
-                        await dbDelete(`silly_tavern_chat_${char.uuid}`);
+                        await deleteScopedStoredValue('chat', char.uuid);
                     }
 
                     characters.value.splice(index, 1);
@@ -5035,7 +5241,7 @@ summary 长度控制在300-500字，尽量完全详细。
                     for (const index of indices) {
                         const char = characters.value[index];
                         if (char && char.uuid) {
-                            await dbDelete(`silly_tavern_chat_${char.uuid}`);
+                            await deleteScopedStoredValue('chat', char.uuid);
                         }
                         characters.value.splice(index, 1);
                     }
@@ -5231,7 +5437,7 @@ image###生成的提示词###
 
             // Try to load saved chat history for this character
             try {
-                const savedChat = await dbGet(`silly_tavern_chat_${char.uuid}`);
+                const savedChat = await getScopedStoredValue('chat', char.uuid);
                 if (savedChat && savedChat.length > 0) {
                     chatHistory.value = savedChat;
                 } else {
@@ -5309,7 +5515,7 @@ image###生成的提示词###
 
             // Load Character Memories
             try {
-                const savedMemories = await dbGet(`silly_tavern_memories_${char.uuid}`);
+                const savedMemories = await getScopedStoredValue('memories', char.uuid);
                 if (savedMemories && savedMemories.length > 0) {
                     memories.value = savedMemories;
                 } else {
@@ -5504,7 +5710,7 @@ image###生成的提示词###
                 }
             } else if (typeof stPos === 'number' || (typeof stPos === 'string' && !isNaN(Number(stPos)) && validPositions.indexOf(stPos) === -1)) {
                 const numPos = Number(stPos);
-                // SillyTavern Standard Position Mapping
+                // External card standard position mapping
                 // 0: Before Char
                 // 1: After Char
                 // 2: AN Top
@@ -5599,7 +5805,7 @@ image###生成的提示词###
                     let regexScripts = null;
                     let uiTemplates = null;
 
-                    // --- SillyTavern Data Structure Parsing ---
+                    // --- External Card Data Structure Parsing ---
 
                     // Wrapped cards store the actual character fields in a 'data' object.
                     if (rawData.data) {
@@ -5629,7 +5835,7 @@ image###生成的提示词###
                     discardRemovedCardFields(charData);
 
                     // --- Extract Core Character Fields ---
-                    // SillyTavern uses specific field names. We map them to our internal structure.
+                    // External cards may use specific field names. We map them to our internal structure.
                     // Priority: V2 fields > V1 fields > Fallbacks
 
                     const name = charData.name || charData.char_name || 'Unknown';
@@ -5650,7 +5856,7 @@ image###生成的提示词###
                     }
 
                     // --- Extract Regex Scripts ---
-                    // In V2/ST, regex scripts are often in 'extensions.regex_scripts'
+                    // In V2-compatible cards, regex scripts are often in 'extensions.regex_scripts'
                     if (charData.extensions && charData.extensions.regex_scripts) {
                         regexScripts = charData.extensions.regex_scripts;
                     }
@@ -5713,13 +5919,13 @@ image###生成的提示词###
                     // --- Process Regex Scripts ---
                     if (Array.isArray(regexScripts)) {
                         char.regexScripts = regexScripts.map(script => {
-                            // Preserve ALL original ST fields completely
+                            // Preserve ALL original external fields completely
                             const normalized = {
                                 ...script, // Keep all original fields intact
                             };
 
                             // Add normalized fields ONLY if they don't exist
-                            // ST standard fields: scriptName, findRegex, replaceString, trimStrings,
+                            // Common external fields: scriptName, findRegex, replaceString, trimStrings,
                             // disabled, markdownOnly, promptOnly, runOnEdit, substituteRegex
                             if (!normalized.name && script.scriptName) {
                                 normalized.name = script.scriptName;
@@ -5728,7 +5934,7 @@ image###生成的提示词###
                                 normalized.name = 'Regex Script';
                             }
 
-                            // Keep both findRegex (ST standard) and regex (legacy)
+                            // Keep both findRegex (external standard) and regex (legacy)
                             if (!normalized.regex && script.findRegex) {
                                 normalized.regex = script.findRegex;
                             }
@@ -5747,7 +5953,7 @@ image###生成的提示词###
                                 }
                             }
 
-                            // Keep both replaceString (ST standard) and replacement (legacy)
+                            // Keep both replaceString (external standard) and replacement (legacy)
                             if (!normalized.replacement && script.replaceString) {
                                 normalized.replacement = script.replaceString;
                             }
@@ -5889,9 +6095,9 @@ image###生成的提示词###
 
                                 // Save to DB
                                 if (char.uuid) {
-                                    await dbSet(`silly_tavern_chat_${char.uuid}`, chatHistory.value);
+                                    await setScopedStoredValue('chat', char.uuid, chatHistory.value);
                                 } else {
-                                    await dbSet(`silly_tavern_chat_${currentCharacterIndex.value}`, chatHistory.value);
+                                    await setScopedStoredValue('chat', currentCharacterIndex.value, chatHistory.value);
                                 }
 
                                 showToast(`成功为 ${char.name} 导入 ${importedChat.length} 条聊天记录`, 'success');
@@ -5935,7 +6141,7 @@ image###生成的提示词###
         const exportCharacter = async (index, includeChat = false) => {
             const char = characters.value[index];
 
-            // Construct SillyTavern/V2 Card Data
+            // Construct V2-compatible card data
             const cardData = {
                 name: char.name,
                 description: char.description,
@@ -6054,10 +6260,10 @@ image###生成的提示词###
                             try {
                                 let savedChat = null;
                                 if (char.uuid) {
-                                    savedChat = await dbGet(`silly_tavern_chat_${char.uuid}`);
+                                    savedChat = await getScopedStoredValue('chat', char.uuid);
                                 }
                                 if (!savedChat) {
-                                    savedChat = await dbGet(`silly_tavern_chat_${index}`);
+                                    savedChat = await getScopedStoredValue('chat', index);
                                 }
 
                                 if (savedChat && Array.isArray(savedChat) && savedChat.length > 0) {
@@ -6587,9 +6793,9 @@ image###生成的提示词###
                 // Load Chat History for this character
                 try {
                     // Try UUID first, fallback to index if migration failed or partial
-                    let savedChat = await dbGet(`silly_tavern_chat_${char.uuid}`);
+                    let savedChat = await getScopedStoredValue('chat', char.uuid);
                     if (!savedChat) {
-                        savedChat = await dbGet(`silly_tavern_chat_${currentCharacterIndex.value}`);
+                        savedChat = await getScopedStoredValue('chat', currentCharacterIndex.value);
                     }
 
                     if (savedChat && Array.isArray(savedChat) && savedChat.length > 0) {
@@ -6630,7 +6836,7 @@ image###生成的提示词###
 
                 // Load Character Memories on restore
                 try {
-                    const savedMemories = await dbGet(`silly_tavern_memories_${char.uuid}`);
+                    const savedMemories = await getScopedStoredValue('memories', char.uuid);
                     if (savedMemories && savedMemories.length > 0) {
                         memories.value = savedMemories;
                     } else {
@@ -6728,6 +6934,9 @@ image###生成的提示词###
                 if (showProfileDropdown.value && !e.target.closest('.profile-dropdown-container')) {
                     showProfileDropdown.value = false;
                 }
+                if (showApiProviderSelector.value && !e.target.closest('.api-provider-selector-container')) {
+                    showApiProviderSelector.value = false;
+                }
             });
         });
         // 解析并截断生成的包含 HTML UI 的正文，避免闪屏问题
@@ -6804,7 +7013,7 @@ image###生成的提示词###
             showUpdateModal, updateCountdown, latestUpdate, closeUpdateModal, isUpdateScrolledToBottom, checkUpdateScroll, // Update Modal
             showConfirmModal, confirmMessage, modelMode, showNoMemoryNeededModal, // Export for template
             isGenerating, isRemoteGenerating, remoteEstimatedTime, isReceiving, isThinking, activeNativeReasoning, userInput, modelSearchQuery, activeModelTag, modelTags, characterSearchQuery, availableModels, filteredModels, filteredCharacters,
-            user, settings, characters, currentCharacter, currentCharacterIndex, chatHistory, displayedChatMessages, handleChatScroll, presets, regexScripts, worldInfo,
+            user, settings, apiProviderOptions, selectedApiProvider, isCustomApiProvider, customApiProviderOption, showApiProviderSelector, selectApiProvider, characters, currentCharacter, currentCharacterIndex, chatHistory, displayedChatMessages, handleChatScroll, presets, regexScripts, worldInfo,
             activeRegexCount, activeWorldInfoCount, activeUiTemplateCount, totalContextLength,
             editingCharacter, editingPreset, editingUiTemplate, toasts, chatContainer, inputBox, messageElements,
             lastUserMessageIndex, // Expose to template

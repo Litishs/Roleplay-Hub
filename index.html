@@ -1079,7 +1079,7 @@
                                                                     d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z">
                                                                 </path>
                                                             </svg>
-                                                            质量 (PRO)
+                                                            模型1
                                                         </div>
                                                         <div class="text-[10px] font-medium text-gray-500/80 ml-6 tracking-wide truncate max-w-[140px] md:max-w-[190px]"
                                                             :title="settings.qualityModel">{{ settings.qualityModel }}
@@ -1104,7 +1104,7 @@
                                                                     d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3">
                                                                 </path>
                                                             </svg>
-                                                            均衡 (FLASH)
+                                                            模型2
                                                         </div>
                                                         <div class="text-[10px] font-medium text-gray-500/80 ml-6 tracking-wide truncate max-w-[140px] md:max-w-[190px]"
                                                             :title="settings.balancedModel">{{ settings.balancedModel }}
@@ -1128,7 +1128,7 @@
                                                                     stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z">
                                                                 </path>
                                                             </svg>
-                                                            快速 (LITE)
+                                                            模型3
                                                         </div>
                                                         <div class="text-[10px] font-medium text-gray-500/80 ml-6 tracking-wide truncate max-w-[140px] md:max-w-[190px]"
                                                             :title="settings.fastModel">{{ settings.fastModel }}</div>
@@ -1165,7 +1165,7 @@
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                                 d="M13 10V3L4 14h7v7l9-11h-7z"></path>
                                         </svg>
-                                        {{ modelMode === 'quality' ? 'PRO' : modelMode === 'balanced' ? 'FLASH' : 'LITE'
+                                        {{ modelMode === 'quality' ? '模型1' : modelMode === 'balanced' ? '模型2' : '模型3'
                                         }}
                                     </button>
                                 </div>
@@ -1937,7 +1937,7 @@
                                             <div class="text-[10px] text-gray-500 truncate">
                                                 <span v-if="imageGenStatus === 'connected'">正常<span
                                                         v-if="quotaLoading">（获取中...）</span><span v-else>（{{ quotaError ?
-                                                        '查询失败' : (quotaValue / 10).toFixed(1) + '%' }}）</span></span>
+                                                        '查询失败' : quotaValue + ' 次' }}）</span></span>
                                                 <span v-else-if="imageGenStatus === 'checking'">检测中...</span>
                                                 <span v-else-if="imageGenStatus === 'error'">连接失败</span>
                                                 <span v-else>未检测</span>
@@ -1952,8 +1952,84 @@
                                 <div class="group">
                                     <label
                                         class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 ml-1">API
-                                        地址</label>
-                                    <div class="relative">
+                                        提供商</label>
+                                    <div class="relative mb-2 api-provider-selector-container">
+                                        <button type="button" @click="showApiProviderSelector = !showApiProviderSelector"
+                                            class="w-full h-12 bg-gray-50 border-2 border-gray-100 rounded-xl px-3 py-0 flex items-center justify-between text-left hover:bg-white hover:border-teal-300 hover:shadow-sm transition-all active:scale-[0.99]">
+                                            <span class="flex items-center min-w-0">
+                                                <span
+                                                    class="w-7 h-7 rounded-lg bg-white border border-gray-100 shadow-sm flex items-center justify-center mr-2 shrink-0 overflow-hidden">
+                                                    <img v-if="selectedApiProvider.icon" :src="selectedApiProvider.icon"
+                                                        :alt="selectedApiProvider.name"
+                                                        class="w-5 h-5 object-contain"
+                                                        @error="$event.target.style.visibility = 'hidden'">
+                                                    <svg v-else class="w-4 h-4 text-gray-400" fill="none"
+                                                        stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round"
+                                                            stroke-width="2"
+                                                            d="M12 2a10 10 0 100 20 10 10 0 000-20zM2 12h20M12 2c2.5 2.7 4 6.2 4 10s-1.5 7.3-4 10c-2.5-2.7-4-6.2-4-10s1.5-7.3 4-10z">
+                                                        </path>
+                                                    </svg>
+                                                </span>
+                                                <span class="block min-w-0 text-sm font-bold text-gray-700 truncate">{{
+                                                    selectedApiProvider.name }}</span>
+                                            </span>
+                                            <svg class="w-4 h-4 text-gray-400 ml-2 shrink-0" fill="none"
+                                                stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                    d="M19 9l-7 7-7-7"></path>
+                                            </svg>
+                                        </button>
+                                        <div v-if="showApiProviderSelector"
+                                            class="absolute left-0 right-0 top-full z-40 mt-2 w-full max-h-96 overflow-y-auto bg-white border border-gray-200 rounded-xl shadow-xl p-2">
+                                            <button v-for="provider in apiProviderOptions" :key="provider.id"
+                                                type="button" @click="selectApiProvider(provider)"
+                                                :class="['w-full px-3 py-2.5 rounded-lg flex items-center text-left transition-all', selectedApiProvider.id === provider.id ? 'bg-teal-50 text-teal-700' : 'hover:bg-gray-50 text-gray-700']">
+                                                <span
+                                                    class="w-8 h-8 rounded-lg bg-white border border-gray-100 shadow-sm flex items-center justify-center mr-3 shrink-0 overflow-hidden">
+                                                    <img :src="provider.icon" :alt="provider.name"
+                                                        class="w-5 h-5 object-contain"
+                                                        @error="$event.target.style.visibility = 'hidden'">
+                                                </span>
+                                                <span class="min-w-0 flex-1">
+                                                    <span class="block text-sm font-bold truncate">{{ provider.name
+                                                        }}</span>
+                                                    <span class="block text-xs text-gray-400 font-mono truncate">{{
+                                                        provider.apiUrl }}</span>
+                                                </span>
+                                                <svg v-if="selectedApiProvider.id === provider.id"
+                                                    class="w-4 h-4 ml-2 text-teal-600 shrink-0" fill="none"
+                                                    stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round"
+                                                        stroke-width="2" d="M5 13l4 4L19 7"></path>
+                                                </svg>
+                                            </button>
+                                            <button type="button" @click="selectApiProvider(customApiProviderOption)"
+                                                :class="['w-full mt-2 px-3 py-2.5 border-t border-gray-100 rounded-lg flex items-center text-left transition-all', isCustomApiProvider ? 'bg-teal-50 text-teal-700' : 'hover:bg-gray-50 text-gray-700']">
+                                                <span
+                                                    class="w-8 h-8 rounded-lg bg-white border border-gray-100 shadow-sm flex items-center justify-center mr-3 shrink-0">
+                                                    <svg class="w-5 h-5 text-gray-500" fill="none"
+                                                        stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round"
+                                                            stroke-width="2"
+                                                            d="M12 2a10 10 0 100 20 10 10 0 000-20zM2 12h20M12 2c2.5 2.7 4 6.2 4 10s-1.5 7.3-4 10c-2.5-2.7-4-6.2-4-10s1.5-7.3 4-10z">
+                                                        </path>
+                                                    </svg>
+                                                </span>
+                                                <span class="min-w-0 flex-1">
+                                                    <span class="block text-sm font-bold truncate">自定义</span>
+                                                    <span class="block text-xs text-gray-400 truncate">手动输入 API 地址</span>
+                                                </span>
+                                                <svg v-if="isCustomApiProvider"
+                                                    class="w-4 h-4 ml-2 text-teal-600 shrink-0" fill="none"
+                                                    stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round"
+                                                        stroke-width="2" d="M5 13l4 4L19 7"></path>
+                                                </svg>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div v-if="isCustomApiProvider" class="relative">
                                         <div
                                             class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-teal-500 transition-colors pointer-events-none">
                                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1963,7 +2039,7 @@
                                             </svg>
                                         </div>
                                         <input v-model="settings.apiUrl" type="text"
-                                            class="w-full bg-gray-50 border-2 border-gray-100 rounded-xl pl-11 pr-4 py-3 text-gray-800 font-medium focus:bg-white focus:border-teal-500 focus:ring-4 focus:ring-teal-100 focus:outline-none transition-all placeholder-gray-400 font-mono text-sm"
+                                            class="w-full h-12 bg-gray-50 border-2 border-gray-100 rounded-xl pl-11 pr-4 py-0 text-gray-800 font-medium focus:bg-white focus:border-teal-500 focus:ring-4 focus:ring-teal-100 focus:outline-none transition-all placeholder-gray-400 font-mono text-sm"
                                             placeholder="https://api.openai.com/v1">
                                     </div>
                                 </div>
@@ -1981,7 +2057,7 @@
                                             </svg>
                                         </div>
                                         <input v-model="settings.apiKey" type="password"
-                                            class="w-full bg-gray-50 border-2 border-gray-100 rounded-xl pl-11 pr-4 py-3 text-gray-800 font-medium focus:bg-white focus:border-teal-500 focus:ring-4 focus:ring-teal-100 focus:outline-none transition-all placeholder-gray-400 font-mono text-sm"
+                                            class="w-full h-12 bg-gray-50 border-2 border-gray-100 rounded-xl pl-11 pr-4 py-0 text-gray-800 font-medium focus:bg-white focus:border-teal-500 focus:ring-4 focus:ring-teal-100 focus:outline-none transition-all placeholder-gray-400 font-mono text-sm"
                                             placeholder="sk-...">
                                     </div>
                                 </div>
@@ -1990,8 +2066,7 @@
                                 <div class="grid grid-cols-1 md:grid-cols-2 gap-5 mt-5">
                                     <div class="group">
                                         <label
-                                            class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 ml-1">质量
-                                            (PRO) 模型配置</label>
+                                            class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 ml-1">预设模型①</label>
                                         <div class="relative flex-1 group"
                                             @click="modelSelectionTarget = 'qualityModel'; showModelSelector = true">
                                             <div
@@ -2018,8 +2093,7 @@
                                     </div>
                                     <div class="group">
                                         <label
-                                            class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 ml-1">均衡
-                                            (FLASH) 模型配置</label>
+                                            class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 ml-1">预设模型②</label>
                                         <div class="relative flex-1 group"
                                             @click="modelSelectionTarget = 'balancedModel'; showModelSelector = true">
                                             <div
@@ -2046,8 +2120,7 @@
                                     </div>
                                     <div class="group">
                                         <label
-                                            class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 ml-1">快速
-                                            (LITE) 模型配置</label>
+                                            class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 ml-1">预设模型③</label>
                                         <div class="relative flex-1 group"
                                             @click="modelSelectionTarget = 'fastModel'; showModelSelector = true">
                                             <div
@@ -2072,7 +2145,7 @@
                                     </div>
                                     <div class="group">
                                         <label
-                                            class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 ml-1">建议回复模型配置</label>
+                                            class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 ml-1">建议回复模型</label>
                                         <div class="relative flex-1 group"
                                             @click="modelSelectionTarget = 'suggestionModel'; showModelSelector = true">
                                             <div
@@ -2099,7 +2172,7 @@
                                     </div>
                                     <div class="group">
                                         <label
-                                            class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 ml-1">记忆引擎模型配置</label>
+                                            class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 ml-1">记忆引擎模型</label>
                                         <div class="relative flex-1 group"
                                             @click="modelSelectionTarget = 'memoryModel'; showModelSelector = true">
                                             <div
@@ -2115,7 +2188,7 @@
                                             <div
                                                 class="w-full bg-gray-50 border-2 border-gray-100 rounded-xl pl-11 pr-4 py-3 text-gray-800 font-medium flex items-center justify-between cursor-pointer hover:bg-white hover:border-teal-300 hover:shadow-md transition-all active:scale-[0.99]">
                                                 <span class="truncate mr-2 font-mono text-sm">{{
-                                                    memorySettings.model || '自动选择：快速模型' }}</span>
+                                                    memorySettings.model || '自动选择：预设模型③' }}</span>
                                                 <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor"
                                                     viewBox="0 0 24 24">
                                                     <path stroke-linecap="round" stroke-linejoin="round"
@@ -2126,7 +2199,7 @@
                                     </div>
                                     <div class="group">
                                         <label
-                                            class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 ml-1">UI模板模型配置</label>
+                                            class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 ml-1">UI模板模型</label>
                                         <div class="relative flex-1 group"
                                             @click="modelSelectionTarget = 'uiTemplateModel'; showModelSelector = true">
                                             <div
@@ -2597,14 +2670,14 @@
                             class="space-y-3 pt-3 border-t border-gray-100 animate-fade-in">
                             <div class="grid grid-cols-1 gap-3">
                                 <div>
-                                    <label class="text-xs font-medium text-gray-500 block mb-1.5">分析模型（留空使用快速模型）</label>
+                                    <label class="text-xs font-medium text-gray-500 block mb-1.5">分析模型（留空使用预设模型③）</label>
                                     <div class="flex gap-2">
                                         <button @click="modelSelectionTarget = 'uiTemplateModel'; showModelSelector = true"
                                             class="flex-1 px-3 py-2 text-sm text-left bg-gray-50/80 border border-gray-200 rounded-xl hover:border-primary-300 hover:bg-white transition-all cursor-pointer truncate"
                                             :title="settings.uiTemplateModel || '自动选择'">
                                             <span
                                                 :class="settings.uiTemplateModel ? 'text-gray-800 font-mono' : 'text-gray-400'">{{
-                                                settings.uiTemplateModel || '自动选择：快速模型' }}</span>
+                                                settings.uiTemplateModel || '自动选择：预设模型③' }}</span>
                                         </button>
                                     </div>
                                 </div>
@@ -2954,7 +3027,7 @@
                             class="space-y-3 pt-3 border-t border-gray-100 animate-fade-in">
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                                 <div>
-                                    <label class="text-xs font-medium text-gray-500 block mb-1.5">记忆模型（留空使用快速模型）</label>
+                                    <label class="text-xs font-medium text-gray-500 block mb-1.5">记忆模型（留空使用预设模型③）</label>
                                     <div class="flex gap-2">
                                         <button @click="modelSelectionTarget = 'memoryModel'; showModelSelector = true"
                                             class="flex-1 px-3 py-2 text-sm text-left bg-gray-50/80 border border-gray-200 rounded-xl hover:border-primary-300 hover:bg-white transition-all cursor-pointer truncate"
