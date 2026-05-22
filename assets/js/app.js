@@ -156,7 +156,7 @@ createApp({
             isUpdateScrolledToBottom.value = (el.scrollHeight - el.scrollTop - el.clientHeight) < 10;
         };
         const latestUpdate = reactive({
-            id: 10130, // 确保这是一个五位数ID，每次更新内容时增加这个数字
+            id: 10131, // 确保这是一个五位数ID，每次更新内容时增加这个数字
             date: new Date().toISOString().split('T')[0],
             title: '网站公告',
             content: `
@@ -164,7 +164,7 @@ createApp({
 
 - 解决了楼层过多时的卡顿问题
 - 取消渲染层数调节功能
-= 为聊天自动生图和工坊新增新的2.5D画风选项
+- 为聊天自动生图和工坊新增新的2.5D画风选项
 - 优化了上下文后处理逻辑，减少了部分请求参数错误问题
 
 本项目为全开源公益项目，严禁倒卖源码，二改需经作者授权
