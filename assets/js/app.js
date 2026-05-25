@@ -190,7 +190,7 @@ createApp({
             isUpdateScrolledToBottom.value = (el.scrollHeight - el.scrollTop - el.clientHeight) < 10;
         };
         const latestUpdate = reactive({
-            id: 10135, // 确保这是一个五位数ID，每次更新内容时增加这个数字
+            id: 10133, // 确保这是一个五位数ID，每次更新内容时增加这个数字
             date: new Date().toISOString().split('T')[0],
             title: '网站公告',
             content: `
@@ -735,6 +735,23 @@ createApp({
             return `${safeUuid}:${safeMode}`;
         };
 
+        const markRuntimeRaw = (value) => {
+            if (!value || typeof value !== 'object') return value;
+            return typeof Vue?.markRaw === 'function' ? Vue.markRaw(value) : value;
+        };
+
+        const prepareMemoryForRuntime = (memory) => {
+            if (!memory || typeof memory !== 'object') return memory;
+            if (Array.isArray(memory.embedding)) {
+                memory.embedding = markRuntimeRaw(memory.embedding);
+            }
+            return memory.vectorMemory === true ? markRuntimeRaw(memory) : memory;
+        };
+
+        const prepareMemoriesForRuntime = (items) => {
+            return Array.isArray(items) ? items.map(prepareMemoryForRuntime) : [];
+        };
+
         // 防抖计算节约字数，避免滑块拖动时卡顿
         const _memorySavedChars = ref(0);
         let _savedCharsTimer = null;
@@ -1004,6 +1021,17 @@ createApp({
             return db;
         };
 
+        const isDatabaseClosingError = (error) => {
+            const message = String(error?.message || error || '');
+            return /connection is closing|database is closing|close pending/i.test(message);
+        };
+
+        const reopenMainDB = async () => {
+            try { if (db) db.close(); } catch (_) { }
+            db = await openAppDB(dbName);
+            return db;
+        };
+
         const unwrapForStorage = (value, seen = new WeakMap()) => {
             if (value === null || typeof value !== 'object') return value;
 
@@ -1062,7 +1090,15 @@ createApp({
             });
         };
 
-        const dbSet = (key, value, options = {}) => dbSetTo(db, key, value, options);
+        const dbSet = async (key, value, options = {}) => {
+            try {
+                return await dbSetTo(db, key, value, options);
+            } catch (error) {
+                if (!isDatabaseClosingError(error)) throw error;
+                await reopenMainDB();
+                return dbSetTo(db, key, value, options);
+            }
+        };
 
         const dbGetFrom = (targetDb, key) => {
             return new Promise((resolve, reject) => {
@@ -1075,7 +1111,15 @@ createApp({
             });
         };
 
-        const dbGet = (key) => dbGetFrom(db, key);
+        const dbGet = async (key) => {
+            try {
+                return await dbGetFrom(db, key);
+            } catch (error) {
+                if (!isDatabaseClosingError(error)) throw error;
+                await reopenMainDB();
+                return dbGetFrom(db, key);
+            }
+        };
 
         const dbGetWithLegacy = async (key, oldKey = null) => {
             const value = await dbGet(key);
@@ -1129,6 +1173,18 @@ createApp({
             await saveChatHistoryNow();
         };
 
+        const saveMemorySettingsNow = async () => {
+            if (!_initComplete) return;
+            if (!db) await initDB();
+            await setStoredValue('memory_settings', cloneForStorage(memorySettings), { clone: false });
+        };
+
+        const saveMemoriesNow = async () => {
+            if (!_memoriesLoaded || !currentCharacter.value?.uuid) return;
+            if (!db) await initDB();
+            await setScopedStoredValue('memories', currentCharacter.value.uuid, cloneForStorage(memories.value), { clone: false });
+        };
+
         const saveData = async () => {
             try {
                 if (!db) await initDB();
@@ -1158,12 +1214,8 @@ createApp({
                 }
 
                 // Save Memory State
-                if (_initComplete) {
-                    await setStoredValue('memory_settings', cloneForStorage(memorySettings), { clone: false });
-                }
-                if (_memoriesLoaded && currentCharacter.value && currentCharacter.value.uuid) {
-                    await setScopedStoredValue('memories', currentCharacter.value.uuid, cloneForStorage(memories.value), { clone: false });
-                }
+                await saveMemorySettingsNow();
+                await saveMemoriesNow();
             } catch (e) {
                 console.error('Save failed:', e);
                 if (e.name === 'QuotaExceededError') {
@@ -1198,7 +1250,9 @@ createApp({
         let _memorySettingsSaveTimer = null;
         watch(memorySettings, () => {
             clearTimeout(_memorySettingsSaveTimer);
-            _memorySettingsSaveTimer = setTimeout(() => saveData(), 500);
+            _memorySettingsSaveTimer = setTimeout(() => {
+                saveMemorySettingsNow().catch(e => console.error('Save memory settings failed:', e));
+            }, 500);
         }, { deep: true });
 
         const loadData = async () => {
@@ -5226,7 +5280,7 @@ ${content}
         };
 
         const createVectorMemoryFromFragment = (fragment, embedding) => {
-            return {
+            return prepareMemoryForRuntime({
                 id: generateUUID(),
                 timestamp: Date.now(),
                 turn: fragment.turn,
@@ -5249,7 +5303,7 @@ ${content}
                 embeddingModel: getMemoryEmbeddingModel(),
                 embedding,
                 sourceText: fragment.sourceText
-            };
+            });
         };
 
         const _doEmbedMemoryForMessages = async (messagesArray, signal, chunkEndIdx) => {
@@ -5271,9 +5325,7 @@ ${content}
 
             memories.value.push(...newMemories);
 
-            if (currentCharacter.value?.uuid) {
-                await setScopedStoredValue('memories', currentCharacter.value.uuid, cloneForStorage(memories.value), { clone: false });
-            }
+            await saveMemoriesNow();
 
             return newMemories.length;
         };
@@ -5409,9 +5461,7 @@ summary 长度控制在300-500字，尽量完全详细。
 
                 if (uniqueNewMemories.length > 0) {
                     memories.value.push(...uniqueNewMemories);
-                    if (currentCharacter.value?.uuid) {
-                        await setScopedStoredValue('memories', currentCharacter.value.uuid, cloneForStorage(memories.value), { clone: false });
-                    }
+                    await saveMemoriesNow();
                     return uniqueNewMemories.length;
                 }
             }
@@ -5438,7 +5488,7 @@ summary 长度控制在300-500字，尽量完全详细。
 
             if (fragmentItems.length === 0) {
                 batchExtractProgress.value = { current: chunks.length, total: chunks.length };
-                if (typeof saveData === 'function') await saveData();
+                await saveMemorySettingsNow();
                 return 0;
             }
 
@@ -5479,10 +5529,8 @@ summary 长度控制在300-500字，尽量完全详细。
 
                     batchExtractProgress.value.current = Math.min(i + batch.length, fragmentItems.length);
 
-                    if (currentCharacter.value?.uuid) {
-                        await setScopedStoredValue('memories', currentCharacter.value.uuid, cloneForStorage(memories.value), { clone: false });
-                    }
-                    if (typeof saveData === 'function') await saveData();
+                    await saveMemoriesNow();
+                    await saveMemorySettingsNow();
                 } catch (err) {
                     if (err.name === 'AbortError') throw err;
 
@@ -5760,12 +5808,12 @@ summary 长度控制在300-500字，尽量完全详细。
                         if (addedCount === 0) {
                             if (!emptyLog.includes(turnValue)) {
                                 emptyLog.push(turnValue);
-                                if (typeof saveSettings === 'function') saveSettings();
+                                await saveMemorySettingsNow();
                             }
                         } else {
                             if (emptyLog.includes(turnValue)) {
                                 emptyLog.splice(emptyLog.indexOf(turnValue), 1);
-                                if (typeof saveSettings === 'function') saveSettings();
+                                await saveMemorySettingsNow();
                             }
                         }
                     } catch (err) {
@@ -6315,7 +6363,7 @@ image###生成的提示词###
             try {
                 const savedMemories = await getScopedStoredValue('memories', char.uuid);
                 if (savedMemories && savedMemories.length > 0) {
-                    memories.value = savedMemories;
+                    memories.value = prepareMemoriesForRuntime(savedMemories);
                 } else {
                     memories.value = [];
                 }
@@ -7636,7 +7684,7 @@ image###生成的提示词###
                 try {
                     const savedMemories = await getScopedStoredValue('memories', char.uuid);
                     if (savedMemories && savedMemories.length > 0) {
-                        memories.value = savedMemories;
+                        memories.value = prepareMemoriesForRuntime(savedMemories);
                     } else {
                         memories.value = [];
                     }
@@ -7872,26 +7920,40 @@ image###生成的提示词###
             }),
             memoryStats: computed(() => {
                 const total = memories.value.length;
-                const enabled = memories.value.filter(m => m.enabled !== false).length;
-                const classicMemories = memories.value.filter(m => m.vectorMemory !== true);
-                const vectorMemories = memories.value.filter(m => m.vectorMemory === true);
-                const classic = classicMemories.length;
-                const classicEnabled = classicMemories.filter(m => m.enabled !== false).length;
-                const vector = vectorMemories.length;
-                const vectorEnabled = vectorMemories.filter(m => m.enabled !== false).length;
-                const vectorEmbeddable = vectorMemories.filter(m => m.enabled !== false && Array.isArray(m.embedding) && m.embedding.length > 0).length;
+                let enabled = 0;
+                let classic = 0;
+                let classicEnabled = 0;
+                let vector = 0;
+                let vectorEnabled = 0;
+                let vectorEmbeddable = 0;
+                let classicTotalChars = 0;
+                let vectorTotalChars = 0;
                 const byCategory = { event: 0, state: 0, relationship: 0 };
                 const turns = new Set();
                 const vectorTurns = new Set();
-                classicMemories.forEach(m => {
+
+                memories.value.forEach(m => {
+                    const isEnabled = m.enabled !== false;
+                    if (isEnabled) enabled++;
+
+                    if (m.vectorMemory === true) {
+                        vector++;
+                        if (isEnabled) {
+                            vectorEnabled++;
+                            if (Array.isArray(m.embedding) && m.embedding.length > 0) vectorEmbeddable++;
+                        }
+                        if (m.turn) vectorTurns.add(m.turn);
+                        vectorTotalChars += (m.paragraph || m.summary || '').length;
+                        return;
+                    }
+
+                    classic++;
+                    if (isEnabled) classicEnabled++;
                     if (byCategory.hasOwnProperty(m.category)) byCategory[m.category]++;
                     if (m.turn) turns.add(m.turn);
+                    classicTotalChars += (m.summary || '').length;
                 });
-                vectorMemories.forEach(m => {
-                    if (m.turn) vectorTurns.add(m.turn);
-                });
-                const classicTotalChars = classicMemories.reduce((sum, m) => sum + (m.summary || '').length, 0);
-                const vectorTotalChars = vectorMemories.reduce((sum, m) => sum + (m.paragraph || m.summary || '').length, 0);
+
                 const activeMode = memorySettings.mode === 'vector' ? 'vector' : 'classic';
                 const activeTotal = activeMode === 'vector' ? vector : classic;
                 const activeEnabled = activeMode === 'vector' ? vectorEnabled : classicEnabled;
@@ -8015,7 +8077,7 @@ image###生成的提示词###
                                         enabled: memoryData.enabled !== false
                                     };
                                 });
-                            memories.value = [...memories.value, ...normalized];
+                            memories.value = [...memories.value, ...prepareMemoriesForRuntime(normalized)];
                             saveData();
                             showToast(`成功导入 ${normalized.length} 条记忆`, 'success');
                         } else {
