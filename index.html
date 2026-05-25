@@ -2068,7 +2068,7 @@
                                         <label
                                             class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 ml-1">预设模型①</label>
                                         <div class="relative flex-1 group"
-                                            @click="modelSelectionTarget = 'qualityModel'; showModelSelector = true">
+                                            @click="openModelSelector('qualityModel')">
                                             <div
                                                 class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-hover:text-teal-500 transition-colors pointer-events-none z-10">
                                                 <svg class="w-5 h-5" fill="none" stroke="currentColor"
@@ -2095,7 +2095,7 @@
                                         <label
                                             class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 ml-1">预设模型②</label>
                                         <div class="relative flex-1 group"
-                                            @click="modelSelectionTarget = 'balancedModel'; showModelSelector = true">
+                                            @click="openModelSelector('balancedModel')">
                                             <div
                                                 class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-hover:text-teal-500 transition-colors pointer-events-none z-10">
                                                 <svg class="w-5 h-5" fill="none" stroke="currentColor"
@@ -2122,7 +2122,7 @@
                                         <label
                                             class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 ml-1">预设模型③</label>
                                         <div class="relative flex-1 group"
-                                            @click="modelSelectionTarget = 'fastModel'; showModelSelector = true">
+                                            @click="openModelSelector('fastModel')">
                                             <div
                                                 class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-hover:text-teal-500 transition-colors pointer-events-none z-10">
                                                 <svg class="w-5 h-5" fill="none" stroke="currentColor"
@@ -2147,7 +2147,7 @@
                                         <label
                                             class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 ml-1">建议回复模型</label>
                                         <div class="relative flex-1 group"
-                                            @click="modelSelectionTarget = 'suggestionModel'; showModelSelector = true">
+                                            @click="openModelSelector('suggestionModel')">
                                             <div
                                                 class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-hover:text-teal-500 transition-colors pointer-events-none z-10">
                                                 <svg class="w-5 h-5" fill="none" stroke="currentColor"
@@ -2162,60 +2162,6 @@
                                                 class="w-full bg-gray-50 border-2 border-gray-100 rounded-xl pl-11 pr-4 py-3 text-gray-800 font-medium flex items-center justify-between cursor-pointer hover:bg-white hover:border-teal-300 hover:shadow-md transition-all active:scale-[0.99]">
                                                 <span class="truncate mr-2 font-mono text-sm">{{
                                                     settings.suggestionModel || '请选择模型' }}</span>
-                                                <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor"
-                                                    viewBox="0 0 24 24">
-                                                    <path stroke-linecap="round" stroke-linejoin="round"
-                                                        stroke-width="2" d="M19 9l-7 7-7-7"></path>
-                                                </svg>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="group">
-                                        <label
-                                            class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 ml-1">记忆引擎模型</label>
-                                        <div class="relative flex-1 group"
-                                            @click="modelSelectionTarget = 'memoryModel'; showModelSelector = true">
-                                            <div
-                                                class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-hover:text-teal-500 transition-colors pointer-events-none z-10">
-                                                <svg class="w-5 h-5" fill="none" stroke="currentColor"
-                                                    viewBox="0 0 24 24">
-                                                    <path stroke-linecap="round" stroke-linejoin="round"
-                                                        stroke-width="2"
-                                                        d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z">
-                                                    </path>
-                                                </svg>
-                                            </div>
-                                            <div
-                                                class="w-full bg-gray-50 border-2 border-gray-100 rounded-xl pl-11 pr-4 py-3 text-gray-800 font-medium flex items-center justify-between cursor-pointer hover:bg-white hover:border-teal-300 hover:shadow-md transition-all active:scale-[0.99]">
-                                                <span class="truncate mr-2 font-mono text-sm">{{
-                                                    memorySettings.model || '自动选择：预设模型③' }}</span>
-                                                <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor"
-                                                    viewBox="0 0 24 24">
-                                                    <path stroke-linecap="round" stroke-linejoin="round"
-                                                        stroke-width="2" d="M19 9l-7 7-7-7"></path>
-                                                </svg>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="group">
-                                        <label
-                                            class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 ml-1">UI模板模型</label>
-                                        <div class="relative flex-1 group"
-                                            @click="modelSelectionTarget = 'uiTemplateModel'; showModelSelector = true">
-                                            <div
-                                                class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-hover:text-teal-500 transition-colors pointer-events-none z-10">
-                                                <svg class="w-5 h-5" fill="none" stroke="currentColor"
-                                                    viewBox="0 0 24 24">
-                                                    <path stroke-linecap="round" stroke-linejoin="round"
-                                                        stroke-width="2"
-                                                        d="M4 5a2 2 0 012-2h12a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm4 3h8M8 12h8M8 16h5">
-                                                    </path>
-                                                </svg>
-                                            </div>
-                                            <div
-                                                class="w-full bg-gray-50 border-2 border-gray-100 rounded-xl pl-11 pr-4 py-3 text-gray-800 font-medium flex items-center justify-between cursor-pointer hover:bg-white hover:border-teal-300 hover:shadow-md transition-all active:scale-[0.99]">
-                                                <span class="truncate mr-2 font-mono text-sm">{{
-                                                    settings.uiTemplateModel || '自动选择' }}</span>
                                                 <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor"
                                                     viewBox="0 0 24 24">
                                                     <path stroke-linecap="round" stroke-linejoin="round"
@@ -2670,14 +2616,14 @@
                             class="space-y-3 pt-3 border-t border-gray-100 animate-fade-in">
                             <div class="grid grid-cols-1 gap-3">
                                 <div>
-                                    <label class="text-xs font-medium text-gray-500 block mb-1.5">分析模型（留空使用预设模型③）</label>
+                                    <label class="text-xs font-medium text-gray-500 block mb-1.5">分析模型</label>
                                     <div class="flex gap-2">
-                                        <button @click="modelSelectionTarget = 'uiTemplateModel'; showModelSelector = true"
+                                        <button @click="openModelSelector('uiTemplateModel')"
                                             class="flex-1 px-3 py-2 text-sm text-left bg-gray-50/80 border border-gray-200 rounded-xl hover:border-primary-300 hover:bg-white transition-all cursor-pointer truncate"
-                                            :title="settings.uiTemplateModel || '自动选择'">
+                                            :title="settings.uiTemplateModel || '未选择模型'">
                                             <span
                                                 :class="settings.uiTemplateModel ? 'text-gray-800 font-mono' : 'text-gray-400'">{{
-                                                settings.uiTemplateModel || '自动选择：预设模型③' }}</span>
+                                                settings.uiTemplateModel || '未选择模型' }}</span>
                                         </button>
                                     </div>
                                 </div>
@@ -2925,7 +2871,7 @@
                 </div>
 
                 <!-- Stats Bar -->
-                <div v-if="memoryStats.total > 0"
+                <div v-if="memoryStats.activeTotal > 0"
                     class="flex items-center flex-wrap gap-3 mb-4 text-xs font-medium text-gray-500">
                     <div class="flex items-center gap-1.5 bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-100">
                         <svg class="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2933,25 +2879,25 @@
                                 d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10">
                             </path>
                         </svg>
-                        {{ memoryStats.total }} 条记忆
+                        {{ memoryStats.activeTotal }} 条记忆
                     </div>
-                    <div v-if="memoryStats.turnCount > 0"
+                    <div v-if="memoryStats.activeTurnCount > 0"
                         class="flex items-center gap-1.5 bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-100">
                         <svg class="w-3.5 h-3.5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                 d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15">
                             </path>
                         </svg>
-                        {{ memoryStats.turnCount }} 次对话
+                        {{ memoryStats.activeTurnCount }} 次对话
                     </div>
-                    <div v-if="memoryStats.totalChars > 0"
+                    <div v-if="memoryStats.activeTotalChars > 0"
                         class="flex items-center gap-1.5 bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-100">
                         <svg class="w-3.5 h-3.5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                 d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129">
                             </path>
                         </svg>
-                        {{ memoryStats.totalChars }} 字
+                        {{ memoryStats.activeTotalChars }} 字
                     </div>
                 </div>
 
@@ -3027,17 +2973,54 @@
                             class="space-y-3 pt-3 border-t border-gray-100 animate-fade-in">
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                                 <div>
-                                    <label class="text-xs font-medium text-gray-500 block mb-1.5">记忆模型（留空使用预设模型③）</label>
-                                    <div class="flex gap-2">
-                                        <button @click="modelSelectionTarget = 'memoryModel'; showModelSelector = true"
-                                            class="flex-1 px-3 py-2 text-sm text-left bg-gray-50/80 border border-gray-200 rounded-xl hover:border-primary-300 hover:bg-white transition-all cursor-pointer truncate"
-                                            :title="memorySettings.model || '自动选择'">
-                                            <span
-                                                :class="memorySettings.model ? 'text-gray-800 font-mono' : 'text-gray-400'">{{
-                                                memorySettings.model || '推荐使用 gemini-3-flash-thinking' }}</span>
+                                    <label class="text-xs font-medium text-gray-500 block mb-1.5">记忆模式</label>
+                                    <div class="grid grid-cols-2 gap-1 bg-gray-50 border border-gray-200 rounded-xl p-1">
+                                        <button type="button" @click="memorySettings.mode = 'vector'"
+                                            :class="['px-3 py-2 text-xs font-bold rounded-lg transition-all', memorySettings.mode === 'vector' ? 'bg-white text-primary-700 shadow-sm border border-primary-100' : 'text-gray-400 hover:text-gray-600']">
+                                            向量模式
+                                        </button>
+                                        <button type="button" @click="memorySettings.mode = 'classic'"
+                                            :class="['px-3 py-2 text-xs font-bold rounded-lg transition-all', memorySettings.mode !== 'vector' ? 'bg-white text-primary-700 shadow-sm border border-primary-100' : 'text-gray-400 hover:text-gray-600']">
+                                            普通模式
                                         </button>
                                     </div>
                                 </div>
+                                <div v-if="memorySettings.mode !== 'vector'">
+                                    <label class="text-xs font-medium text-gray-500 block mb-1.5">记忆模型</label>
+                                    <div class="flex gap-2">
+                                        <button @click="openModelSelector('memoryModel')"
+                                            class="flex-1 px-3 py-2 text-sm text-left bg-gray-50/80 border border-gray-200 rounded-xl hover:border-primary-300 hover:bg-white transition-all cursor-pointer truncate"
+                                            :title="memorySettings.model || '未选择模型'">
+                                            <span
+                                                :class="memorySettings.model ? 'text-gray-800 font-mono' : 'text-gray-400'">{{
+                                                memorySettings.model || '未选择模型' }}</span>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div v-else>
+                                    <label class="text-xs font-medium text-gray-500 block mb-1.5">向量嵌入模型</label>
+                                    <div class="flex gap-2">
+                                        <button @click="openModelSelector('memoryEmbeddingModel')"
+                                            class="flex-1 px-3 py-2 text-sm text-left bg-gray-50/80 border border-gray-200 rounded-xl hover:border-primary-300 hover:bg-white transition-all cursor-pointer truncate"
+                                            :title="memorySettings.embeddingModel || '请选择向量嵌入模型'">
+                                            <span
+                                                :class="memorySettings.embeddingModel ? 'text-gray-800 font-mono' : 'text-gray-400'">{{
+                                                memorySettings.embeddingModel || '请选择向量嵌入模型' }}</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div v-if="memorySettings.mode === 'vector'"
+                                class="bg-gray-50/80 p-3 rounded-xl border border-gray-100">
+                                <div class="flex justify-between items-center mb-2">
+                                    <label class="text-xs font-medium text-gray-500">记忆召回数量</label>
+                                    <span
+                                        class="text-xs font-mono text-primary-600 bg-primary-50 px-1.5 py-0.5 rounded border border-primary-100">{{
+                                        memorySettings.vectorTopK || 15 }} 条</span>
+                                </div>
+                                <input type="range" v-model.number="memorySettings.vectorTopK" min="15" max="50" step="1"
+                                    class="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary-500">
                             </div>
 
                             <!-- Context Compression Settings -->
@@ -3051,7 +3034,7 @@
                                             (memoryStats.savedChars > 0 ? '（节约' + memoryStats.savedChars + '字）' : '')
                                             }}</span>
                                     </div>
-                                    <input type="range" v-model.number="keepFloorsSlider" min="20" max="105" step="5"
+                                    <input type="range" v-model.number="keepFloorsSlider" min="10" max="65" step="5"
                                         class="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary-500">
                                     <p class="text-[10px] text-gray-400 mt-1.5">仅保留最近 N 楼原始消息，更早的楼层使用记忆引擎替代，拖到最右侧关闭
                                     </p>
@@ -3061,8 +3044,92 @@
                     </div>
                 </div>
 
+                <!-- Vector Memory View -->
+                <div v-if="memorySettings.enabled && memorySettings.mode === 'vector'"
+                    class="bg-white/70 backdrop-blur-sm p-1 rounded-2xl border border-gray-200 shadow-sm mb-4 overflow-hidden">
+                    <div class="w-full flex justify-between items-center px-4 py-3 rounded-xl transition-all font-bold text-gray-700 bg-white">
+                        <span class="flex items-center min-w-0">
+                            <div class="p-1.5 rounded-lg mr-3 bg-gray-100 text-gray-500 transition-colors">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M4 7h16M4 12h10M4 17h7"></path>
+                                </svg>
+                            </div>
+                            <span class="truncate">向量记忆视图</span>
+                        </span>
+                        <div class="text-xs font-mono text-gray-600 bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-1">
+                            {{ memoryStats.vector }} 片段
+                        </div>
+                    </div>
+
+                    <div class="px-4 pb-4 pt-3 border-t border-gray-100 space-y-4">
+                        <div class="grid grid-cols-2 gap-2">
+                            <div class="rounded-xl bg-gray-50 border border-gray-100 px-3 py-2">
+                                <div class="text-[10px] font-bold text-gray-400 mb-1">总片段</div>
+                                <div class="text-lg font-black text-gray-800">{{ memoryStats.vector }}</div>
+                            </div>
+                            <div class="rounded-xl bg-gray-50 border border-gray-100 px-3 py-2">
+                                <div class="text-[10px] font-bold text-gray-400 mb-1">覆盖轮数</div>
+                                <div class="text-lg font-black text-gray-800">{{ memoryStats.vectorTurns }}</div>
+                            </div>
+                        </div>
+
+                        <form @submit.prevent="searchVectorMemories()" class="flex flex-col sm:flex-row gap-2">
+                            <input v-model="vectorMemorySearchQuery"
+                                :disabled="isVectorMemorySearching"
+                                class="flex-1 min-w-0 px-3 py-2 text-sm bg-gray-50/80 border border-gray-200 rounded-xl focus:bg-white focus:border-primary-300 focus:ring-2 focus:ring-primary-100 outline-none transition-all"
+                                placeholder="输入一句模拟对话">
+                            <button type="submit"
+                                :disabled="isVectorMemorySearching || !vectorMemorySearchQuery.trim() || memoryStats.vector === 0"
+                                class="min-h-[42px] px-4 py-2.5 text-sm font-bold rounded-xl bg-primary-600 hover:bg-primary-700 text-white disabled:opacity-40 disabled:cursor-not-allowed active:scale-95 transition-all">
+                                {{ isVectorMemorySearching ? '模拟中' : '模拟对话' }}
+                            </button>
+                            <button v-if="vectorMemorySearchQuery || vectorMemorySearchResults.length > 0 || vectorMemorySearchError"
+                                type="button" @click="clearVectorMemorySearch()"
+                                class="px-3 py-2 text-xs font-bold rounded-xl bg-white border border-gray-200 text-gray-500 hover:text-gray-700 hover:bg-gray-50 active:scale-95 transition-all">
+                                清空
+                            </button>
+                        </form>
+
+                        <div v-if="vectorMemorySearchError"
+                            class="rounded-xl border border-rose-100 bg-rose-50 px-3 py-2 text-xs font-bold text-rose-700">
+                            {{ vectorMemorySearchError }}
+                        </div>
+
+                        <div v-if="vectorMemorySearchResults.length > 0" class="space-y-2">
+                            <div class="flex items-center justify-between gap-3 text-[11px] font-bold text-gray-500">
+                                <span>记忆片段 · {{ vectorMemorySearchResults.length }} / 20</span>
+                                <div class="grid grid-cols-2 gap-1 bg-gray-50 border border-gray-200 rounded-lg p-0.5">
+                                    <button type="button" @click="vectorMemorySearchSortMode = 'time'"
+                                        :class="['px-2 py-1 rounded-md transition-all', vectorMemorySearchSortMode === 'time' ? 'bg-white text-primary-700 shadow-sm border border-primary-100' : 'text-gray-400 hover:text-gray-600']">
+                                        时间
+                                    </button>
+                                    <button type="button" @click="vectorMemorySearchSortMode = 'score'"
+                                        :class="['px-2 py-1 rounded-md transition-all', vectorMemorySearchSortMode === 'score' ? 'bg-white text-primary-700 shadow-sm border border-primary-100' : 'text-gray-400 hover:text-gray-600']">
+                                        相似度
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="space-y-2">
+                                <div v-for="mem in displayedVectorMemorySearchResults" :key="mem.id"
+                                    class="rounded-xl border border-gray-100 bg-white px-3 py-2.5 shadow-sm">
+                                    <div class="flex items-center gap-2 flex-wrap mb-1.5">
+                                        <span class="text-[10px] font-mono text-primary-700 bg-primary-50 border border-primary-100 rounded-md px-2 py-0.5">
+                                            第 {{ mem.turn || '?' }} 轮
+                                        </span>
+                                        <span class="text-[10px] font-mono text-gray-500 bg-gray-50 border border-gray-100 rounded-md px-2 py-0.5">
+                                            相似度 {{ (mem.vectorSearchScore * 100).toFixed(1) }}%
+                                        </span>
+                                    </div>
+                                    <p class="text-xs text-gray-700 leading-relaxed whitespace-pre-line">{{ mem.paragraph || mem.summary }}</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Category Filter -->
-                <div v-if="memories.length > 0" class="grid grid-cols-4 gap-2 mb-4">
+                <div v-if="memoryStats.classic > 0 && memorySettings.mode !== 'vector'" class="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
                     <button @click="memoryFilterCategory = 'all'"
                         :class="['memory-filter-btn cursor-pointer rounded-xl py-2 text-xs font-bold transition-all border flex items-center justify-center gap-1.5', 
                         memoryFilterCategory === 'all' ? 'bg-gradient-to-r from-gray-800 to-gray-900 text-white border-gray-700 shadow-lg shadow-gray-900/20' : 'bg-white border-gray-200 hover:border-gray-300 text-gray-600 hover:shadow-sm']">
@@ -3070,7 +3137,7 @@
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                 d="M4 6h16M4 10h16M4 14h16M4 18h16"></path>
                         </svg>
-                        全部 <span class="opacity-70">{{ memoryStats.total }}</span>
+                        全部 <span class="opacity-70">{{ memoryStats.classic }}</span>
                     </button>
                     <button @click="memoryFilterCategory = 'event'"
                         :class="['memory-filter-btn cursor-pointer rounded-xl py-2 text-xs font-bold transition-all border flex items-center justify-center gap-1.5', 
@@ -3104,7 +3171,7 @@
                 </div>
 
                 <!-- Memory List -->
-                <div v-if="filteredMemories.length > 0" class="space-y-3">
+                <div v-if="memorySettings.mode !== 'vector' && filteredMemories.length > 0" class="space-y-3">
                     <div v-for="(mem, mIdx) in filteredMemories" :key="mem.id"
                         :class="['memory-card group relative bg-white rounded-2xl border overflow-hidden', 'cat-' + mem.category, mem.enabled === false ? 'opacity-50 grayscale-[30%]' : '']">
                         <!-- Top accent gradient bar -->
@@ -3218,7 +3285,7 @@
                 </div>
 
                 <!-- Empty State -->
-                <div v-else class="flex flex-col items-center justify-center py-16 md:py-24 px-4">
+                <div v-else-if="memorySettings.mode !== 'vector'" class="flex flex-col items-center justify-center py-16 md:py-24 px-4">
                     <div class="relative mb-8">
                         <div
                             class="w-28 h-28 bg-gradient-to-br from-primary-100 via-blue-50 to-indigo-100 rounded-full flex items-center justify-center border border-primary-100 shadow-inner">
@@ -3768,8 +3835,11 @@
                         </button>
                     </div>
                     <div class="p-4 border-b border-gray-100 flex flex-col gap-3">
-                        <input v-model="modelSearchQuery" type="text" placeholder="搜索模型..."
-                            class="w-full bg-gray-50 border border-gray-300 rounded-lg px-4 py-2 text-gray-800 focus:ring-2 focus:ring-primary-500 focus:outline-none transition-all shadow-sm focus:shadow-md">
+                        <input v-model="modelSearchQuery" type="text"
+                            :placeholder="modelSelectionTarget === 'memoryEmbeddingModel' ? '已锁定：embedding' : '搜索模型...'"
+                            :readonly="modelSelectionTarget === 'memoryEmbeddingModel'"
+                            :title="modelSelectionTarget === 'memoryEmbeddingModel' ? '模型选择已锁定' : ''"
+                            :class="['w-full border rounded-lg px-4 py-2 focus:outline-none transition-all shadow-sm', modelSelectionTarget === 'memoryEmbeddingModel' ? 'bg-gray-100 border-gray-200 text-gray-400 placeholder-gray-400 cursor-not-allowed shadow-none select-none' : 'bg-gray-50 border-gray-300 text-gray-800 focus:ring-2 focus:ring-primary-500 focus:shadow-md']">
 
                         <!-- Model Category Tags -->
                         <div class="flex flex-wrap gap-2 max-h-[160px] overflow-y-auto custom-scrollbar items-center py-1">
@@ -3804,7 +3874,7 @@
                                     class="text-gray-700 font-mono font-medium group-hover:text-primary-600 transition-colors">{{
                                     model.id }}</span>
                                 <span
-                                    v-if="(modelSelectionTarget === 'memoryModel' ? memorySettings.model : settings[modelSelectionTarget]) === model.id"
+                                    v-if="(modelSelectionTarget === 'memoryModel' ? memorySettings.model : (modelSelectionTarget === 'memoryEmbeddingModel' ? memorySettings.embeddingModel : settings[modelSelectionTarget])) === model.id"
                                     class="text-primary-600 bg-primary-50 p-1 rounded-full shadow-sm">
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -4923,11 +4993,11 @@
                             <div class="px-4 pb-4 pt-0">
                                 <div class="flex flex-wrap gap-2 max-h-32 overflow-y-auto custom-scrollbar">
                                     <div v-for="(wi, idx) in lastTriggeredWorldInfos" :key="'wi-'+idx"
-                                        :class="[wi.name === '角色记忆' ? 'bg-purple-100 text-purple-700 border-purple-200' : 'bg-blue-100 text-blue-700 border-blue-200', 'px-2.5 py-1.5 rounded-md text-xs shadow-sm border flex flex-col justify-center']">
+                                        class="bg-blue-100 text-blue-700 border-blue-200 px-2.5 py-1.5 rounded-md text-xs shadow-sm border flex flex-col justify-center">
                                         <span class="font-bold pb-0.5">{{ wi.name }}</span>
                                         <span v-if="wi.triggers"
-                                            :class="[wi.name === '角色记忆' ? 'text-purple-600/90 border-purple-200/50' : 'text-blue-600/90 border-blue-200/50', 'font-normal text-[10px] mt-0.5 pt-0.5 border-t leading-none']">{{
-                                            wi.triggers === '常驻' ? '常驻' : wi.name === '角色记忆' ? wi.triggers : '触发: ' +
+                                            class="text-blue-600/90 border-blue-200/50 font-normal text-[10px] mt-0.5 pt-0.5 border-t leading-none">{{
+                                            wi.triggers === '常驻' ? '常驻' : wi.name && wi.name.startsWith('角色记忆') ? wi.triggers : '触发: ' +
                                             wi.triggers }}</span>
                                     </div>
                                     <span v-if="lastTriggeredWorldInfos.length === 0"
@@ -4946,7 +5016,7 @@
                                         <div class="flex flex-row justify-between items-center w-full">
                                             <div class="flex items-center gap-2">
                                                 <span :class="{
-                                                        'bg-rose-100 text-rose-700 border border-rose-300 shadow-sm': msg.isMemory,
+                                                        'bg-green-100 text-green-700 border border-green-200 shadow-sm': msg.isMemory,
                                                         'bg-red-100 text-red-700 border border-red-200 shadow-sm': msg.role === 'system' && !msg.isMemory,
                                                         'bg-green-100 text-green-700 border border-green-200 shadow-sm': msg.role === 'user',
                                                         'bg-purple-100 text-purple-700 border border-purple-200 shadow-sm': msg.role === 'assistant'
@@ -4973,12 +5043,12 @@
                                         <div v-if="msg.wiTriggers && msg.wiTriggers.length > 0"
                                             class="flex flex-wrap gap-1.5 items-center w-full">
                                             <div v-for="(trigger, tIdx) in msg.wiTriggers" :key="tIdx"
-                                                :class="[trigger.name === '角色记忆' ? 'bg-purple-100 text-purple-700 border-purple-200' : 'bg-blue-100 text-blue-700 border-blue-200', 'px-2 py-0.5 rounded flex flex-col border']">
+                                                class="bg-blue-100 text-blue-700 border-blue-200 px-2 py-0.5 rounded flex flex-col border">
                                                 <span class="text-[11px] font-semibold tracking-wide">{{ trigger.name
                                                     }}</span>
                                                 <span v-if="trigger.triggers"
-                                                    :class="[trigger.name === '角色记忆' ? 'text-purple-600/90 border-purple-200/50' : 'text-blue-600/90 border-blue-200/50', 'text-[9px] font-normal mt-[1px] pt-[1px] border-t leading-[10px]']">{{
-                                                    trigger.triggers === '常驻' ? '常驻' : trigger.name === '角色记忆' ?
+                                                    class="text-blue-600/90 border-blue-200/50 text-[9px] font-normal mt-[1px] pt-[1px] border-t leading-[10px]">{{
+                                                    trigger.triggers === '常驻' ? '常驻' : trigger.name && trigger.name.startsWith('角色记忆') ?
                                                     trigger.triggers : '触发: ' + trigger.triggers }}</span>
                                             </div>
                                         </div>
