@@ -3470,11 +3470,22 @@ ${content}
             return match ? match[1] : null;
         };
 
+        const createAbortReason = (message = 'Operation aborted') => {
+            if (typeof DOMException === 'function') return new DOMException(message, 'AbortError');
+            const error = new Error(message);
+            error.name = 'AbortError';
+            return error;
+        };
+        const abortSafely = (controller, message) => {
+            if (!controller || controller.signal?.aborted) return;
+            controller.abort(createAbortReason(message));
+        };
+
         // Chat Logic
         const stopGeneration = () => {
             abortUiTemplateUpdate();
             if (abortController.value) {
-                abortController.value.abort();
+                abortSafely(abortController.value, 'Generation cancelled by user');
             }
         };
 
@@ -5683,13 +5694,10 @@ ${content}
 
             try {
                 const [queryVector] = await requestMemoryEmbeddings([queryText], signal);
+                if (signal?.aborted || !isEmbeddingLike(queryVector)) return [];
                 const scoredMemories = [];
                 for (let i = 0; i < vectorMemories.length; i++) {
-                    if (signal?.aborted) {
-                        const abortErr = new Error('Aborted');
-                        abortErr.name = 'AbortError';
-                        throw abortErr;
-                    }
+                    if (signal?.aborted) return [];
                     const memory = vectorMemories[i];
                     const rawScore = cosineSimilarity(queryVector, memory.embedding);
                     if (Number.isFinite(rawScore) && rawScore > -1) {
@@ -5727,7 +5735,7 @@ ${content}
                 }
                 return selected;
             } catch (err) {
-                if (err.name === 'AbortError') throw err;
+                if (err.name === 'AbortError') return [];
                 return [];
             }
         };
