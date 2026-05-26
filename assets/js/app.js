@@ -809,7 +809,7 @@ createApp({
         const MEMORY_VECTOR_SAVE_EVERY_BATCHES = 4;
         const MEMORY_VECTOR_MAX_PARAGRAPH_LENGTH = 1800;
         const MEMORY_VECTOR_MERGE_MAX_LENGTH = 400;
-        const MEMORY_VECTOR_MIN_TOP_K = 5;
+        const MEMORY_VECTOR_MIN_TOP_K = 10;
         const MEMORY_VECTOR_MAX_TOP_K = 30;
         const MEMORY_VECTOR_DEFAULT_TOP_K = 10;
         const MEMORY_KEEP_FLOORS_MIN = 10;
@@ -4466,8 +4466,9 @@ ${content}
                         const fullContent = [
                             ROLE_MEMORY_VECTOR_RECALL_OPEN_TAG,
                             '  <description>',
-                            '    以下是向量模式按当前输入相似度选出的历史记忆分片，并非全部记忆。',
-                            '    这些分片已按原对话时间顺序排列；它们不一定是今天或刚才发生的内容，只表示过去某轮对话里出现过的相关信息。',
+                            '    以下内容是从往期对话记录中按当前输入检索出的相关记忆分片，并非全部历史。',
+                            '    请尽力理解这些分片之间的前因后果、人物关系和情绪延续，理清它们与当前对话的关联。',
+                            '    这些分片已按原对话时间顺序排列；它们不一定是今天或刚才发生的内容，请不要误当作当前现场，只把它们作为过往经历和关系背景参考。',
                             '  </description>',
                             formattedContent,
                             ROLE_MEMORY_VECTOR_RECALL_CLOSE_TAG
