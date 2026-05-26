@@ -666,6 +666,31 @@ createApp({
             const realFirstUser = messages.find((message, index) => index >= realUserStartIndex && message.role === 'user' && !isContextUserMessage(message));
             appendToMessage(realFirstUser);
         };
+        const getMessageSourceIndexes = (message, index, trackSources) => {
+            const source = message?._sourceIndexes;
+            if (!Array.isArray(source)) return trackSources ? [index] : [];
+            const indexes = [];
+            for (let i = 0; i < source.length; i++) {
+                indexes.push(source[i]);
+            }
+            return indexes;
+        };
+
+        const toPlainContextMessage = (message, index, trackSources = false) => {
+            const nextMessage = {
+                role: message.role,
+                name: message.name,
+                content: String(message.content || '')
+            };
+            if (message.id) nextMessage.id = message.id;
+            if (trackSources) {
+                nextMessage._sourceIndexes = getMessageSourceIndexes(message, index, true);
+            } else if (Array.isArray(message?._sourceIndexes)) {
+                nextMessage._sourceIndexes = getMessageSourceIndexes(message, index, false);
+            }
+            return nextMessage;
+        };
+
         const mergeConsecutiveRoleMessages = (messages, options = {}) => {
             const {
                 mergeRoles = ['user', 'assistant'],
@@ -678,16 +703,7 @@ createApp({
                 if (!message || typeof message !== 'object') return;
                 if (!includeSystem && message.role === 'system') return;
 
-                const sourceIndexes = Array.isArray(message._sourceIndexes)
-                    ? [...message._sourceIndexes]
-                    : (trackSources ? [index] : []);
-                const nextMessage = {
-                    ...message,
-                    content: String(message.content || '')
-                };
-                if (trackSources) {
-                    nextMessage._sourceIndexes = sourceIndexes;
-                }
+                const nextMessage = toPlainContextMessage(message, index, trackSources);
 
                 const previous = merged[merged.length - 1];
                 if (
@@ -729,11 +745,11 @@ createApp({
             const processedMessages = alreadyPostprocessed
                 ? (Array.isArray(messages) ? messages : [])
                     .filter(message => message && typeof message === 'object' && (includeSystem || message.role !== 'system'))
-                    .map((message, index) => ({
-                        ...message,
-                        content: String(message.content || ''),
-                        _sourceIndexes: Array.isArray(message._sourceIndexes) ? [...message._sourceIndexes] : [index]
-                    }))
+                    .map((message, index) => {
+                        const nextMessage = toPlainContextMessage(message, index, false);
+                        nextMessage._sourceIndexes = getMessageSourceIndexes(message, index, true);
+                        return nextMessage;
+                    })
                 : getPostprocessedChatMessages(messages, { includeSystem });
 
             const turns = [];
@@ -776,20 +792,48 @@ createApp({
             return { messages: processedMessages, turns };
         };
 
-        const getConversationTurnAtIndex = (index) => {
+        const createCompletedTurnBeforeIndexResolver = (snapshot = buildConversationTurnSnapshot()) => {
+            const turns = Array.isArray(snapshot?.turns)
+                ? [...snapshot.turns].sort((a, b) => (a.endIndex || 0) - (b.endIndex || 0))
+                : [];
+
+            return (index) => {
+                if (!Number.isFinite(index) || index <= 0) return null;
+                let left = 0;
+                let right = turns.length - 1;
+                let matchedTurn = null;
+
+                while (left <= right) {
+                    const middle = Math.floor((left + right) / 2);
+                    const turn = turns[middle];
+                    if ((turn.endIndex || 0) < index) {
+                        matchedTurn = turn.turn;
+                        left = middle + 1;
+                    } else {
+                        right = middle - 1;
+                    }
+                }
+
+                return matchedTurn;
+            };
+        };
+
+        const getConversationTurnAtIndexFromSnapshot = (snapshot, index) => {
             if (!Number.isFinite(index) || index < 0) return null;
-            const snapshot = buildConversationTurnSnapshot();
-            const matchedTurn = snapshot.turns.find(turn => (turn.sourceIndexes || []).includes(index));
+            const turns = Array.isArray(snapshot?.turns) ? snapshot.turns : [];
+            const matchedTurn = turns.find(turn => (turn.sourceIndexes || []).includes(index));
             if (matchedTurn) return matchedTurn.turn;
-            const previousTurns = snapshot.turns.filter(turn => turn.endIndex < index).length;
+            const previousTurns = turns.filter(turn => turn.endIndex < index).length;
             return previousTurns + 1;
+        };
+
+        const getConversationTurnAtIndex = (index) => {
+            return getConversationTurnAtIndexFromSnapshot(buildConversationTurnSnapshot(), index);
         };
 
         const getCompletedConversationTurnBeforeIndex = (index) => {
             if (!Number.isFinite(index) || index <= 0) return null;
-            const snapshot = buildConversationTurnSnapshot();
-            const previousTurn = [...snapshot.turns].reverse().find(turn => turn.endIndex < index);
-            return previousTurn ? previousTurn.turn : null;
+            return createCompletedTurnBeforeIndexResolver()(index);
         };
 
         const getLatestCompleteConversationTurn = () => {
@@ -1358,7 +1402,8 @@ createApp({
             await setScopedStoredValue('memories', currentCharacter.value.uuid, await compactMemoriesForStorageAsync(memories.value), { clone: false });
         };
 
-        const saveData = async () => {
+        const saveData = async (options = {}) => {
+            const { saveMemories = true } = options;
             try {
                 if (!db) await initDB();
                 settings.contextSize = MAX_CONTEXT_SIZE;
@@ -1388,12 +1433,26 @@ createApp({
 
                 // Save Memory State
                 await saveMemorySettingsNow();
-                await saveMemoriesNow();
+                if (saveMemories) await saveMemoriesNow();
             } catch (e) {
                 console.error('Save failed:', e);
                 if (e.name === 'QuotaExceededError') {
                     showToast('存储空间不足，无法保存', 'error');
                 }
+            }
+        };
+
+        const saveConversationMutationNow = async ({ saveTemplateRuntime = false } = {}) => {
+            try {
+                if (!db) await initDB();
+                await saveChatHistoryNow();
+                await saveMemoriesNow();
+                if (saveTemplateRuntime) {
+                    await setStoredValue('characters', characters.value);
+                    await setStoredValue('global_ui_templates', globalUiTemplates.value);
+                }
+            } catch (e) {
+                console.error('Save conversation mutation failed:', e);
             }
         };
 
@@ -1864,7 +1923,7 @@ createApp({
 
         // Debounced Save
         const debouncedSave = debounce(() => {
-            saveData();
+            saveData({ saveMemories: false });
         }, 1000);
 
         // Watch for changes to auto-save
@@ -2433,18 +2492,18 @@ ${content}
             return state;
         };
 
-        const getUiTemplateReferenceTurnForUserMessage = (message) => {
+        const getUiTemplateReferenceTurnForUserMessage = (message, getCompletedTurnBeforeIndex = getCompletedConversationTurnBeforeIndex) => {
             if (!message || message.role !== 'user') return null;
             if (Array.isArray(message._sourceIndexes) && message._sourceIndexes.length > 0) {
-                return getCompletedConversationTurnBeforeIndex(Math.min(...message._sourceIndexes));
+                return getCompletedTurnBeforeIndex(Math.min(...message._sourceIndexes));
             }
             const index = chatHistory.value.findIndex(msg => msg === message || (message.id && msg.id === message.id));
-            return getCompletedConversationTurnBeforeIndex(index);
+            return getCompletedTurnBeforeIndex(index);
         };
 
-        const buildUiTemplateContextInjection = (message) => {
+        const buildUiTemplateContextInjection = (message, getCompletedTurnBeforeIndex = getCompletedConversationTurnBeforeIndex) => {
             if (!settings.uiTemplateInjectContext) return '';
-            const turn = getUiTemplateReferenceTurnForUserMessage(message);
+            const turn = getUiTemplateReferenceTurnForUserMessage(message, getCompletedTurnBeforeIndex);
             if (!turn) return '';
 
             const hasAnyTurnChange = activeUiTemplates.value.some(template => {
@@ -2496,10 +2555,15 @@ ${content}
             });
 
             let removedBlocks = 0;
-            chatHistory.value.forEach((msg, msgIndex) => {
-                if (msg.role !== 'assistant') return;
-                const messageTurn = getConversationTurnAtIndex(msgIndex);
-                if (messageTurn >= turn && msg.uiTemplateBlocks) {
+            const snapshot = buildConversationTurnSnapshot();
+            const blockMessageIndexes = new Set();
+            snapshot.turns.forEach(turnInfo => {
+                if ((turnInfo.turn || 0) < turn) return;
+                (turnInfo.sourceIndexes || []).forEach(sourceIndex => blockMessageIndexes.add(sourceIndex));
+            });
+            blockMessageIndexes.forEach(msgIndex => {
+                const msg = chatHistory.value[msgIndex];
+                if (msg?.role === 'assistant' && msg.uiTemplateBlocks) {
                     delete msg.uiTemplateBlocks;
                     removedBlocks++;
                 }
@@ -2830,6 +2894,13 @@ ${content}
 
         // Confirmation Dialog
         const cancelCallback = ref(null);
+        const yieldToUi = () => new Promise(resolve => {
+            if (typeof requestAnimationFrame === 'function') {
+                requestAnimationFrame(() => setTimeout(resolve, 0));
+            } else {
+                setTimeout(resolve, 0);
+            }
+        });
 
         const confirmAction = (message, callback) => {
             confirmMessage.value = message;
@@ -2847,18 +2918,30 @@ ${content}
             });
         };
 
+        const runConfirmCallback = async (callback) => {
+            try {
+                await yieldToUi();
+                await callback();
+            } catch (error) {
+                console.error('Confirm action failed:', error);
+                showToast(error?.message || '操作失败', 'error');
+            }
+        };
+
         const handleConfirm = () => {
-            if (confirmCallback.value) confirmCallback.value();
+            const callback = confirmCallback.value;
             showConfirmModal.value = false;
             confirmCallback.value = null;
             cancelCallback.value = null;
+            if (callback) runConfirmCallback(callback);
         };
 
         const handleCancel = () => {
-            if (cancelCallback.value) cancelCallback.value();
+            const callback = cancelCallback.value;
             showConfirmModal.value = false;
             confirmCallback.value = null;
             cancelCallback.value = null;
+            if (callback) callback();
         };
 
         // Regex Processing
@@ -3825,7 +3908,7 @@ ${content}
 
                 if (hasChanges) {
                     saveGlobalUiTemplateRuntimeForCharacter();
-                    saveData();
+                    saveData({ saveMemories: false });
                     await saveChatHistoryNow();
                     markUiTemplateStatus(failedTemplateCount ? 'skipped' : 'success', `已更新 ${changedTemplateCount} 个模板，${changedFieldCount} 个变量${failedTemplateCount ? `，${failedTemplateCount} 个失败` : ''}`);
                     if (manual) showToast(uiTemplateUpdateStatus.message, failedTemplateCount ? 'warning' : 'success');
@@ -3857,11 +3940,30 @@ ${content}
 
 
 
+        const filterMemoriesAsync = async (keepMemory) => {
+            const source = Array.isArray(memories.value) ? memories.value : [];
+            const kept = [];
+            let removed = 0;
+
+            for (let i = 0; i < source.length; i++) {
+                if (keepMemory(source[i], i)) {
+                    kept.push(source[i]);
+                } else {
+                    removed++;
+                }
+                if (i > 0 && i % 512 === 0) await yieldToUi();
+            }
+
+            memories.value = kept;
+            return removed;
+        };
+
         const deleteMessage = (index) => {
-            confirmAction('确定要删除这条消息吗？该楼层的关联记忆也将一并删除。', () => {
+            confirmAction('确定要删除这条消息吗？该楼层的关联记忆也将一并删除。', async () => {
                 const msg = chatHistory.value[index];
                 abortUiTemplateUpdate();
-                const affectedTurn = getAssistantTurnAtIndex(index);
+                const snapshot = buildConversationTurnSnapshot();
+                const affectedTurn = getConversationTurnAtIndexFromSnapshot(snapshot, index);
                 // Remove timing record if exists
                 if (msg && msg.id) {
                     recentGenerationTimes.value = recentGenerationTimes.value.filter(t => (t.id || t) !== msg.id);
@@ -3870,19 +3972,17 @@ ${content}
                 // 只删除与该楼层关联的记忆，而非全部清空
                 if (msg && msg.role === 'assistant') {
                     // 计算该 assistant 消息对应的轮次 (turn)
-                    const turnAtIndex = getConversationTurnAtIndex(index);
-                    const before = memories.value.length;
-                    memories.value = memories.value.filter(m => (m.turn || 0) !== turnAtIndex);
-                    const removed = before - memories.value.length;
+                    const turnAtIndex = affectedTurn;
+                    const removed = await filterMemoriesAsync(m => (m.turn || 0) !== turnAtIndex);
                     chatHistory.value.splice(index, 1);
-                    saveData();
+                    await saveConversationMutationNow({ saveTemplateRuntime: uiCleanup.logs > 0 || uiCleanup.blocks > 0 });
                     const extras = [];
                     if (removed > 0) extras.push(`${removed} 个关联分片`);
                     if (uiCleanup.logs > 0 || uiCleanup.blocks > 0) extras.push('变量模板');
                     showToast(extras.length ? `消息已删除，清除了 ${extras.join('、')}` : '消息已删除', 'success');
                 } else {
                     chatHistory.value.splice(index, 1);
-                    saveData();
+                    await saveConversationMutationNow({ saveTemplateRuntime: uiCleanup.logs > 0 || uiCleanup.blocks > 0 });
                     showToast(uiCleanup.logs > 0 || uiCleanup.blocks > 0 ? '消息已删除，变量模板已同步回退' : '消息已删除', 'success');
                 }
             });
@@ -3900,8 +4000,10 @@ ${content}
                 abortUiTemplateUpdate();
                 abortMemoryExtraction(); // 中断正在进行的记忆提取
                 // 只删除最新一轮的记忆，保留之前的
-                const currentTurn = buildConversationTurnSnapshot().turns.length;
-                memories.value = memories.value.filter(m => (m.turn || 0) < currentTurn);
+                const snapshot = buildConversationTurnSnapshot();
+                const currentTurn = snapshot.turns.length;
+                await filterMemoriesAsync(m => (m.turn || 0) < currentTurn);
+                saveMemoriesNow();
                 await generateResponse(startTime);
             } else {
                 // 如果是 AI 消息，删除它（及之后）然后重新生成
@@ -3909,15 +4011,17 @@ ${content}
                     abortUiTemplateUpdate();
                     abortMemoryExtraction(); // 中断正在进行的记忆提取
                     // 计算被删除区间的 assistant 轮次，只删除 >= 该轮次的记忆
-                    const uiTurnAtIndex = getAssistantTurnAtIndex(index);
-                    const turnAtIndex = getConversationTurnAtIndex(index);
-                    memories.value = memories.value.filter(m => (m.turn || 0) < turnAtIndex);
-                    pruneUiTemplateChangesFromTurn(uiTurnAtIndex);
+                    const snapshot = buildConversationTurnSnapshot();
+                    const turnAtIndex = getConversationTurnAtIndexFromSnapshot(snapshot, index);
+                    const uiTurnAtIndex = turnAtIndex;
+                    await filterMemoriesAsync(m => (m.turn || 0) < turnAtIndex);
+                    const uiCleanup = pruneUiTemplateChangesFromTurn(uiTurnAtIndex);
                     // Remove timing record for the message being regenerated
                     if (msg && msg.id) {
                         recentGenerationTimes.value = recentGenerationTimes.value.filter(t => (t.id || t) !== msg.id);
                     }
                     chatHistory.value = chatHistory.value.slice(0, index);
+                    saveConversationMutationNow({ saveTemplateRuntime: uiCleanup.logs > 0 || uiCleanup.blocks > 0 });
                     await generateResponse(startTime);
                 });
             }
@@ -4353,19 +4457,24 @@ ${content}
                 if (totalFloors > keepCount) {
                     const candidateCount = totalFloors - keepCount;
 
-                    const enabledMemories = memories.value.filter(isEnabledVectorMemory);
+                    const memoryTurnSet = new Set(
+                        memories.value
+                            .filter(isEnabledVectorMemory)
+                            .map(memory => memory.turn || 0)
+                            .filter(turn => turn > 0)
+                    );
                     const emptyLog = memorySettings.emptyTurns?.[
                         getMemoryEmptyTurnsKey(currentCharacter.value.uuid)
                     ] || [];
+                    const emptyTurnSet = new Set(emptyLog);
 
                     const removableIndices = new Set();
                     const contextSnapshot = buildConversationTurnSnapshot(chatHistoryForContext, { alreadyPostprocessed: true });
 
                     contextSnapshot.turns.forEach(turnInfo => {
                         if (!turnInfo.messageIndexes.every(messageIndex => messageIndex < candidateCount)) return;
-                        const coveredMemories = enabledMemories.filter(m => (m.turn || 0) === turnInfo.turn);
-                        const hasMemory = coveredMemories.length > 0;
-                        const isEmpty = emptyLog.includes(turnInfo.turn);
+                        const hasMemory = memoryTurnSet.has(turnInfo.turn);
+                        const isEmpty = emptyTurnSet.has(turnInfo.turn);
 
                         if (hasMemory || isEmpty) {
                             turnInfo.messageIndexes.forEach(messageIndex => removableIndices.add(messageIndex));
@@ -4386,6 +4495,10 @@ ${content}
             }
 
             // 添加聊天记录
+            const getCompletedTurnBeforeIndexForUiTemplateContext = settings.uiTemplateInjectContext
+                ? createCompletedTurnBeforeIndexResolver(buildConversationTurnSnapshot(postprocessedChatHistory, { alreadyPostprocessed: true }))
+                : getCompletedConversationTurnBeforeIndex;
+
             messages = messages.concat(chatHistoryForContext
                 .map((m, index) => {
                     const sourceIndexes = Array.isArray(m._sourceIndexes) ? m._sourceIndexes : [];
@@ -4401,15 +4514,15 @@ ${content}
                         }
                         return content.trim();
                     };
-                    let cleanContent = sourceMessages
-                        .map(cleanSourceContent)
-                        .filter(Boolean)
-                        .join('\n\n');
+            let cleanContent = sourceMessages
+                .map(cleanSourceContent)
+                .filter(Boolean)
+                .join('\n\n');
 
-                    const uiTemplateContext = buildUiTemplateContextInjection(m);
-                    if (uiTemplateContext) {
-                        cleanContent += `\n\n${uiTemplateContext}`;
-                    }
+            const uiTemplateContext = buildUiTemplateContextInjection(m, getCompletedTurnBeforeIndexForUiTemplateContext);
+            if (uiTemplateContext) {
+                cleanContent += `\n\n${uiTemplateContext}`;
+            }
 
                     return {
                         role: m.role === 'user' ? 'user' : 'assistant',
@@ -4987,14 +5100,19 @@ ${content}
                     waitTimer = null;
                 }
 
-                if (!wasCancelled && settings.uiTemplateEnabled && generatedAssistantMessageId && buildConversationTurnSnapshot().turns.length > 0) {
+                const needsPostGenerationTurns = !wasCancelled
+                    && ((settings.uiTemplateEnabled && generatedAssistantMessageId)
+                        || (memorySettings.enabled && memorySettings.autoExtract));
+                const hasCompletedTurns = needsPostGenerationTurns && buildConversationTurnSnapshot().turns.length > 0;
+
+                if (hasCompletedTurns && settings.uiTemplateEnabled && generatedAssistantMessageId) {
                     nextTick(() => {
                         updateUiTemplatesFromChat({ manual: false, targetMessageId: generatedAssistantMessageId });
                     });
                 }
 
                 // 记忆提取：在对话正常完成后异步提取记忆（用户取消时不触发）
-                if (!wasCancelled && memorySettings.enabled && memorySettings.autoExtract && buildConversationTurnSnapshot().turns.length > 0) {
+                if (hasCompletedTurns && memorySettings.enabled && memorySettings.autoExtract) {
                     nextTick(() => {
                         extractMemoryFromChat();
                     });
@@ -5838,12 +5956,17 @@ ${content}
 
             const chunks = [];
             const snapshot = buildConversationTurnSnapshot(chatHistory.value, { includeSystem: false });
+            const memoryTurnSet = new Set(
+                memories.value
+                    .filter(isVectorMemory)
+                    .map(memory => memory.turn || 0)
+                    .filter(turn => turn > 0)
+            );
+            const emptyTurnSet = new Set(emptyLog);
 
             snapshot.turns.forEach(turnInfo => {
-                const hasMemory = memories.value.some(m =>
-                    isVectorMemory(m) && (m.turn || 0) === turnInfo.turn
-                );
-                const isEmpty = emptyLog.includes(turnInfo.turn);
+                const hasMemory = memoryTurnSet.has(turnInfo.turn);
+                const isEmpty = emptyTurnSet.has(turnInfo.turn);
 
                 if (!hasMemory && !isEmpty) {
                     chunks.push({ data: turnInfo.messages, endIdx: turnInfo.endIndex, turnValue: turnInfo.turn });

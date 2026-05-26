@@ -1864,6 +1864,15 @@
                     // Force inform sync if needed (though watch handles it)
                 };
 
+                const getActiveModelTypeFromMainSettings = (mainSettings) => {
+                    const selectedModel = String(mainSettings?.model || '');
+                    if (!selectedModel) return null;
+                    if (selectedModel === mainSettings.fastModel) return 'fast';
+                    if (selectedModel === mainSettings.balancedModel) return 'balanced';
+                    if (selectedModel === mainSettings.qualityModel) return 'quality';
+                    return null;
+                };
+
                 // Main Settings Sync Listener
                 const setupSyncListener = () => {
                     window.addEventListener('message', (event) => {
@@ -1893,9 +1902,11 @@
                             if (mainSettings.balancedModel) options.customModels.balanced = mainSettings.balancedModel;
                             if (mainSettings.fastModel) options.customModels.fast = mainSettings.fastModel;
                             uiTemplateModel.value = mainSettings.uiTemplateModel || mainSettings.memoryModel || mainSettings.fastModel || '';
+                            const syncedModelType = getActiveModelTypeFromMainSettings(mainSettings);
+                            if (syncedModelType) activeModelType.value = syncedModelType;
 
                             // Update current active api.model
-                            api.model = options.customModels[activeModelType.value] || api.model;
+                            api.model = options.customModels[activeModelType.value] || mainSettings.model || api.model;
                         }
                     });
 
@@ -3367,7 +3378,7 @@ ${uiTemplatePrompt.value.trim() || '根据当前角色自动设计一个状态�
                     try {
                         const baseUrl = api.url.replace(/\/+$/, '');
                         const apiUrl = baseUrl.endsWith('/v1') ? baseUrl : `${baseUrl}/v1`;
-                        const model = uiTemplateModel.value || options.customModels.fast || api.model;
+                        const model = options.customModels[activeModelType.value] || api.model || uiTemplateModel.value;
                         const response = await fetch(`${apiUrl}/chat/completions`, {
                             method: 'POST',
                             headers: {
