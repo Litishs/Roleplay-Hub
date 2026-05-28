@@ -932,7 +932,7 @@ createApp({
         const ACTIVE_TOOL_WEB_DEFAULT_DESCRIPTION = '当本地上下文、角色记忆、关键词检索都不足以确认作品设定、同人资料、冷门角色、现实最新信息或网页资料时，在正文中单独输出 <tool_web_add:联网搜索内容或网页链接> 或 <tool_web_cover:联网搜索内容或网页链接>。系统会通过 Tavily 联网搜索并返回带来源链接的结果；如果调用内容是网页链接，系统会进入该链接读取更详细的网页正文。查询要具体，优先包含作品名、角色名、设定名、站点或语言关键词；不要把多个独立信息点塞进同一次联网搜索。';
         const ACTIVE_TOOL_WEB_DEFAULT_DISPLAY_DESCRIPTION = '通过 Tavily 联网搜索补充外部资料，也能进入链接读取网页详情，适合同人设定、作品百科、冷门角色和最新信息。';
         const ACTIVE_TOOL_WORLD_READ_DESCRIPTION = '当需要查看世界书时，在正文中单独输出 <tool_world_add:list> 或 <tool_world_add:read 世界书名字>。流程是先获取已开启世界书名字列表，再由你决定阅读哪些世界书的完整内容。当前为阅读模式，不能编辑世界书。系统只处理已开启且非系统内置的世界书。';
-        const ACTIVE_TOOL_WORLD_READ_DISPLAY_DESCRIPTION = '阅读已开启世界书：先列出名字，再按名字阅读全文，不允许修改内容。';
+        const ACTIVE_TOOL_WORLD_READ_DISPLAY_DESCRIPTION = '阅读已开启世界书：支持列出世界书列表，阅读世界书内容，不允许编辑世界书内容。';
         const ACTIVE_TOOL_WORLD_EDIT_DESCRIPTION = '当需要查看或修改世界书时，在正文中单独输出 <tool_world_add:list>、<tool_world_add:read 世界书名字> 或 <tool_world_add:{"action":"edit","name":"世界书名字","operation":"replace","content":"新的完整内容"}>。流程是先获取已开启世界书名字列表，再由你决定阅读哪些世界书的完整内容，最后只在用户明确要求时编辑内容。系统只处理已开启且非系统内置的世界书。';
         const ACTIVE_TOOL_WORLD_EDIT_DISPLAY_DESCRIPTION = '管理已开启世界书：支持列出世界书列表，阅读世界书内容，编辑世界书内容。';
         const ACTIVE_TOOL_WORLD_DEFAULT_DESCRIPTION = ACTIVE_TOOL_WORLD_EDIT_DESCRIPTION;
@@ -1038,20 +1038,27 @@ createApp({
                 .trim() || 'tool_memory';
         };
 
+        const normalizeActiveToolBaseCallName = (value) => normalizeActiveToolCallName(value)
+            .replace(/_(?:add|cover)$/i, '');
+
         const getActiveToolResultCountMin = () => ACTIVE_TOOL_MIN_RESULT_COUNT;
 
         const getActiveToolResultCountMax = () => ACTIVE_TOOL_MAX_RESULT_COUNT;
 
         const normalizeActiveTool = (tool = {}) => {
             const resultCount = Number(tool.resultCount);
-            const rawCallName = normalizeActiveToolCallName(tool.callName || tool.callPattern || 'tool_memory');
+            const rawCallName = normalizeActiveToolBaseCallName(tool.callName || tool.callPattern || 'tool_memory');
             const legacyWorldToolNames = ['tool_world_list', 'tool_world_read', 'tool_world_edit'];
             const isLegacyWorldTool = legacyWorldToolNames.includes(rawCallName)
                 || ['world_info_list', 'world_info_read', 'world_info_edit'].includes(tool.type)
                 || ['tool_world_list', 'tool_world_read', 'tool_world_edit'].includes(tool.id);
-            const callName = isLegacyWorldTool ? 'tool_world' : rawCallName;
+            const isLegacyWebTool = rawCallName === 'tool_web'
+                || ['web_search', 'tavily', 'tavily_search'].includes(tool.type)
+                || ['tool_web', 'tool_web_add', 'tool_web_cover'].includes(tool.id)
+                || /tavily|联网搜索/i.test(String(tool.name || ''));
+            const callName = isLegacyWorldTool ? 'tool_world' : (isLegacyWebTool ? 'tool_web' : rawCallName);
             const defaultTool = getDefaultActiveToolDefinitions()
-                .find(item => item.id === (isLegacyWorldTool ? 'tool_world' : tool.id) || item.callName === callName);
+                .find(item => item.id === (isLegacyWorldTool ? 'tool_world' : (isLegacyWebTool ? 'tool_web' : tool.id)) || item.callName === callName);
             const fallback = defaultTool || createDefaultActiveTool();
             const normalizedCallName = defaultTool ? defaultTool.callName : callName;
             const resultCountVersion = Number(tool.resultCountVersion) || 1;
@@ -4339,16 +4346,18 @@ ${content}
             .filter(tool => tool.enabled !== false && tool.callName);
 
         const isVectorActiveTool = (tool) => tool?.type === ACTIVE_TOOL_VECTOR_TYPE
-            || normalizeActiveToolCallName(tool?.callName) === 'tool_memory';
+            || normalizeActiveToolBaseCallName(tool?.callName) === 'tool_memory';
 
         const isKeywordActiveTool = (tool) => tool?.type === ACTIVE_TOOL_KEYWORD_TYPE
-            || normalizeActiveToolCallName(tool?.callName) === 'tool_grep';
+            || normalizeActiveToolBaseCallName(tool?.callName) === 'tool_grep';
 
         const isWebActiveTool = (tool) => tool?.type === ACTIVE_TOOL_WEB_TYPE
-            || normalizeActiveToolCallName(tool?.callName) === 'tool_web';
+            || normalizeActiveToolBaseCallName(tool?.callName) === 'tool_web'
+            || ['tool_web', 'tool_web_add', 'tool_web_cover'].includes(tool?.id)
+            || /tavily|联网搜索/i.test(String(tool?.name || ''));
 
         const isWorldInfoActiveTool = (tool) => tool?.type === ACTIVE_TOOL_WORLD_TYPE
-            || ['tool_world', 'tool_world_list', 'tool_world_read', 'tool_world_edit'].includes(normalizeActiveToolCallName(tool?.callName));
+            || ['tool_world', 'tool_world_list', 'tool_world_read', 'tool_world_edit'].includes(normalizeActiveToolBaseCallName(tool?.callName));
 
         const getWorldInfoAccessMode = (tool) => normalizeWorldInfoAccessMode(tool?.worldInfoAccessMode || tool?.worldInfoMode || tool?.accessMode);
 
@@ -4387,7 +4396,7 @@ ${content}
         };
 
         const getActiveToolCallLabels = (tool) => {
-            const baseCallName = normalizeActiveToolCallName(tool?.callName || 'tool_memory');
+            const baseCallName = normalizeActiveToolBaseCallName(tool?.callName || 'tool_memory');
             return {
                 add: `${baseCallName}_add`,
                 cover: `${baseCallName}_cover`
@@ -7704,9 +7713,9 @@ ${content}
         });
 
         const getActiveToolUiGroupKey = (toolCall) => {
-            const baseCallName = normalizeActiveToolCallName(
+            const baseCallName = normalizeActiveToolBaseCallName(
                 toolCall?.baseCallName
-                || String(toolCall?.callName || '').replace(/_(?:add|cover)$/i, '')
+                || toolCall?.callName
                 || ''
             );
             if (toolCall?.toolType === ACTIVE_TOOL_KEYWORD_TYPE || baseCallName === 'tool_grep') {
@@ -8013,19 +8022,19 @@ ${content}
         };
 
         const resolveActiveToolForUi = (toolUi) => {
-            const baseCallName = normalizeActiveToolCallName(
+            const baseCallName = normalizeActiveToolBaseCallName(
                 toolUi?.baseCallName
-                || String(toolUi?.callName || '').replace(/_(?:add|cover)$/i, '')
+                || toolUi?.callName
                 || 'tool_memory'
             );
             const enabledMatch = getEnabledActiveTools().find(tool => (
                 tool.id === toolUi?.toolId
-                || normalizeActiveToolCallName(tool.callName) === baseCallName
+                || normalizeActiveToolBaseCallName(tool.callName) === baseCallName
             ));
             if (enabledMatch) return enabledMatch;
             return getDefaultActiveToolDefinitions().find(tool => (
                 tool.id === toolUi?.toolId
-                || normalizeActiveToolCallName(tool.callName) === baseCallName
+                || normalizeActiveToolBaseCallName(tool.callName) === baseCallName
             )) || createDefaultActiveTool();
         };
 
