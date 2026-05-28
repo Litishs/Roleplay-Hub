@@ -7743,9 +7743,15 @@ ${content}
 
             if (groupKey === ACTIVE_TOOL_WORLD_TYPE) {
                 if (toolCall?.status === 'receiving' && query.includes('编辑内容')) return '编辑世界书';
-                const request = parseWorldInfoToolRequest(query);
-                if (request.action === 'list') return '列出世界书';
-                if (request.action === 'edit') return '编辑世界书';
+                let request = null;
+                try {
+                    request = parseWorldInfoToolRequest(query);
+                } catch (err) {
+                    const looksLikeEdit = /"action"\s*:\s*"edit"|"operation"\s*:|"content"\s*:|"newContent"\s*:|"find"\s*:/i.test(query);
+                    return looksLikeEdit ? '编辑世界书' : '阅读世界书';
+                }
+                if (request?.action === 'list') return '列出世界书';
+                if (request?.action === 'edit') return '编辑世界书';
                 return '阅读世界书';
             }
 
