@@ -929,7 +929,7 @@ createApp({
         const createDefaultActiveTool = () => ({
             id: 'tool_memory',
             name: '向量记忆主动检索',
-            enabled: true,
+            enabled: false,
             type: ACTIVE_TOOL_VECTOR_TYPE,
             callName: 'tool_memory',
             resultCount: ACTIVE_TOOL_DEFAULT_RESULT_COUNT,
@@ -940,7 +940,7 @@ createApp({
         const createDefaultGrepTool = () => ({
             id: 'tool_grep',
             name: '关键词检索',
-            enabled: true,
+            enabled: false,
             type: ACTIVE_TOOL_KEYWORD_TYPE,
             callName: 'tool_grep',
             resultCount: ACTIVE_TOOL_DEFAULT_RESULT_COUNT,
