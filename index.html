@@ -513,11 +513,11 @@
                     </div>
 
                     <template v-if="currentCharacter && chatHistory.length > 0">
-                    <template v-for="({ msg, index }, displayIndex) in displayedChatMessages" :key="index">
+                    <template v-for="({ msg, index }, displayIndex) in displayedChatMessages" :key="msg.id || index">
                     <div ref="messageElements"
                         :data-role="msg.role"
                         :data-chat-index="index"
-                        v-show="!(msg.role === 'assistant' && index === chatHistory.length - 1 && isThinking && !(msg.reasoning || parseCot(msg.content).cot || parseCot(msg.content).main))"
+                        v-show="!(msg.role === 'assistant' && index === chatHistory.length - 1 && isThinking && !(msg.reasoning || parseCot(msg.content).cot || parseCot(msg.content).main || (msg.toolCalls && msg.toolCalls.length)))"
                         :class="['flex w-full scroll-reveal-container', msg.isSelf ? 'justify-end' : 'justify-start', msg.skipReveal ? 'reveal-active' : (msg.isSelf ? 'scroll-reveal-right' : 'scroll-reveal-left')]"
                         :style="{ transitionDelay: (displayIndex % 5) * 50 + 'ms' }">
                         <div
@@ -600,12 +600,12 @@
                                         <div v-else class="message-content-wrapper"
                                             :class="{'w-full': messageUsesWideLayout(msg)}">
                                             <!-- Native Model Reasoning Part -->
-                                            <div v-if="msg.reasoning && settings.showNativeReasoning !== false" class="native-thinking-wrapper">
+                                            <div v-if="getAssistantReasoningText(msg) && settings.showNativeReasoning !== false" class="native-thinking-wrapper">
                                                 <div class="cot-ui native-thinking-card"
-                                                    :class="{ 'is-live': index === chatHistory.length - 1 && isThinking && activeToolContinuationMessageId !== msg.id, 'is-open': msg.isReasoningOpen !== false }">
+                                                    :class="{ 'is-live': index === chatHistory.length - 1 && isThinking, 'is-open': msg.isReasoningOpen !== false }">
                                                     <button type="button" class="cot-header native-thinking-header"
                                                         @click="msg.isReasoningUserToggled = true; msg.isReasoningOpen = msg.isReasoningOpen === false">
-                                                        <div v-if="index === chatHistory.length - 1 && isThinking && activeToolContinuationMessageId !== msg.id"
+                                                        <div v-if="index === chatHistory.length - 1 && isThinking"
                                                             class="flex items-center text-primary-600 min-w-0">
                                                             <span class="live-dots mr-2" aria-hidden="true"><i></i><i></i><i></i></span>
                                                             <span class="text-xs font-bold truncate">原生思考中</span>
@@ -621,7 +621,7 @@
                                                             <span class="text-xs font-bold truncate">原生思考</span>
                                                         </div>
                                                         <span class="native-thinking-plain-meta">
-                                                            {{ (msg.reasoning || '').length }} 字
+                                                            {{ getAssistantReasoningText(msg).length }} 字
                                                         </span>
                                                         <svg class="w-3.5 h-3.5 ml-2 opacity-60 chevron" fill="none"
                                                             stroke="currentColor" viewBox="0 0 24 24">
@@ -635,14 +635,14 @@
                                                             <div class="cot-content native-thinking-scroll cot-thinking-scroll custom-scrollbar"
                                                                 :style="settings.fontSize ? { fontSize: (settings.fontSize - 1) + 'px' } : {}">
                                                                 <div class="markdown-body"
-                                                                    v-html="renderMarkdown(msg.reasoning, 'assistant', true)">
+                                                                    v-html="renderMarkdown(getAssistantReasoningText(msg), 'assistant', true)">
                                                                 </div>
                                                             </div>
                                                         </div>
                                                     </div>
                                                 </div>
                                             </div>
-                                            <div v-else-if="msg.reasoning && index === chatHistory.length - 1 && isThinking && activeToolContinuationMessageId !== msg.id"
+                                            <div v-else-if="getAssistantReasoningText(msg) && index === chatHistory.length - 1 && isThinking"
                                                 class="native-thinking-wrapper">
                                                 <div class="cot-ui native-thinking-card is-live">
                                                     <div class="cot-header native-thinking-header">
@@ -704,9 +704,12 @@
                                                                         </div>
                                                                         <div class="tool-call-row">
                                                                             <span>模式</span>
-                                                                            <strong>{{ toolCall.mode === 'cover' ? '覆盖检索' : '追加检索' }}</strong>
+                                                                            <strong>{{ getToolCallModeText(toolCall) }}</strong>
                                                                         </div>
-                                                                        <div v-if="toolCall.status === 'queued'" class="tool-call-muted">
+                                                                        <div v-if="toolCall.status === 'receiving'" class="tool-call-muted">
+                                                                            正在编辑世界书...
+                                                                        </div>
+                                                                        <div v-else-if="toolCall.status === 'queued'" class="tool-call-muted">
                                                                             等待上一个工具完成...
                                                                         </div>
                                                                         <div v-else-if="toolCall.status === 'running'" class="tool-call-muted">
@@ -723,12 +726,15 @@
                                                                             class="tool-call-group-item">
                                                                             <div class="tool-call-group-head">
                                                                                 <span class="tool-call-group-index">#{{ mergedIndex + 1 }}</span>
-                                                                                <strong>{{ mergedCall.mode === 'cover' ? '覆盖检索' : '追加检索' }}</strong>
+                                                                                <strong>{{ getToolCallModeText(mergedCall) }}</strong>
                                                                                 <span class="tool-call-group-status"
                                                                                     :class="'is-' + (mergedCall.status || 'queued')">{{ getToolCallStatusText(mergedCall) }}</span>
                                                                             </div>
                                                                             <code>&lt;{{ mergedCall.callName || 'tool_memory_add' }}:{{ mergedCall.query }}&gt;</code>
-                                                                            <div v-if="mergedCall.status === 'queued'" class="tool-call-muted">
+                                                                            <div v-if="mergedCall.status === 'receiving'" class="tool-call-muted">
+                                                                                正在编辑世界书...
+                                                                            </div>
+                                                                            <div v-else-if="mergedCall.status === 'queued'" class="tool-call-muted">
                                                                                 等待上一个工具完成...
                                                                             </div>
                                                                             <div v-else-if="mergedCall.status === 'running'" class="tool-call-muted">
@@ -3016,7 +3022,11 @@
                                     <h3 class="font-bold text-gray-800 truncate">{{ tool.name || '未命名工具' }}</h3>
                                 </div>
                                 <div class="text-xs text-gray-500 mt-1 tool-description-preview">
-                                    {{ tool.displayDescription || '暂无说明' }}
+                                    {{ getActiveToolDisplayDescription(tool) }}
+                                </div>
+                                <div v-if="isWebActiveTool(tool) && tool.enabled && !tool.tavilyApiKey"
+                                    class="mt-1 text-[11px] font-bold text-amber-600">
+                                    需要填写 Tavily API Key
                                 </div>
                             </div>
                         </button>
@@ -4352,11 +4362,41 @@
                             {{ editingActiveTool.data.name || '未命名工具' }}
                         </h3>
                         <p class="mt-3 text-sm text-gray-500 leading-relaxed whitespace-pre-wrap">
-                            {{ editingActiveTool.data.displayDescription || '暂无说明' }}
+                            {{ getActiveToolDisplayDescription(editingActiveTool.data) }}
                         </p>
                     </div>
 
-                    <div class="max-w-2xl mx-auto bg-white border border-gray-200 rounded-2xl p-5 md:p-6 shadow-sm">
+                    <div v-if="isWorldInfoActiveTool(editingActiveTool.data)"
+                        class="max-w-2xl mx-auto bg-white border border-gray-200 rounded-2xl p-5 md:p-6 shadow-sm">
+                        <div class="flex items-center justify-between gap-4 mb-4">
+                            <div>
+                                <div class="text-sm font-bold text-gray-800">世界书权限</div>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <button type="button"
+                                @click="editingActiveTool.data.worldInfoAccessMode = 'read'"
+                                class="px-4 py-3 rounded-xl border text-left transition-all"
+                                :class="getWorldInfoAccessMode(editingActiveTool.data) === 'read'
+                                    ? 'border-primary-500 bg-primary-50 text-primary-700 shadow-sm'
+                                    : 'border-gray-200 bg-gray-50 text-gray-600 hover:bg-gray-100'">
+                                <div class="text-sm font-bold">阅读</div>
+                                <div class="text-xs mt-1 opacity-80">列出名字、读取完整内容</div>
+                            </button>
+                            <button type="button"
+                                @click="editingActiveTool.data.worldInfoAccessMode = 'edit'"
+                                class="px-4 py-3 rounded-xl border text-left transition-all"
+                                :class="getWorldInfoAccessMode(editingActiveTool.data) === 'edit'
+                                    ? 'border-primary-500 bg-primary-50 text-primary-700 shadow-sm'
+                                    : 'border-gray-200 bg-gray-50 text-gray-600 hover:bg-gray-100'">
+                                <div class="text-sm font-bold">编辑</div>
+                                <div class="text-xs mt-1 opacity-80">读取内容，也允许修改内容</div>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div v-if="canConfigureActiveToolResultCount(editingActiveTool.data)"
+                        class="max-w-2xl mx-auto bg-white border border-gray-200 rounded-2xl p-5 md:p-6 shadow-sm">
                         <div class="flex items-center justify-between gap-4 mb-5">
                             <div>
                                 <div class="text-sm font-bold text-gray-800">返回条数</div>
@@ -4366,11 +4406,24 @@
                                 {{ editingActiveTool.data.resultCount || 8 }} 条
                             </div>
                         </div>
-                        <input v-model.number="editingActiveTool.data.resultCount" type="range" min="8" max="20" step="1"
+                        <input v-model.number="editingActiveTool.data.resultCount" type="range"
+                            :min="getActiveToolResultCountMin(editingActiveTool.data)"
+                            :max="getActiveToolResultCountMax(editingActiveTool.data)" step="1"
                             class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary-600">
                         <div class="mt-2 flex justify-between text-[11px] text-gray-400 font-medium">
-                            <span>8 条</span>
-                            <span>20 条</span>
+                            <span>{{ getActiveToolResultCountMin(editingActiveTool.data) }} 条</span>
+                            <span>{{ getActiveToolResultCountMax(editingActiveTool.data) }} 条</span>
+                        </div>
+                    </div>
+
+                    <div v-if="isWebActiveTool(editingActiveTool.data)"
+                        class="max-w-2xl mx-auto bg-white border border-gray-200 rounded-2xl p-5 md:p-6 shadow-sm space-y-5">
+                        <div>
+                            <label class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">Tavily API Key</label>
+                            <input v-model.trim="editingActiveTool.data.tavilyApiKey"
+                                type="password"
+                                class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-800 focus:ring-4 focus:ring-primary-500/10 focus:border-primary-500 focus:outline-none transition-all"
+                                placeholder="tvly-...">
                         </div>
                     </div>
                 </div>

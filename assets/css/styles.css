@@ -849,6 +849,7 @@ opacity: 0;
             font-weight: 800;
         }
 
+        .tool-call-group-status.is-receiving,
         .tool-call-group-status.is-running,
         .tool-call-group-status.is-queued {
             background: rgba(219, 234, 254, 0.95);
