@@ -6771,6 +6771,101 @@ ${content}
             error: ''
         });
 
+        const getActiveToolUiGroupKey = (toolCall) => {
+            const baseCallName = normalizeActiveToolCallName(
+                toolCall?.baseCallName
+                || String(toolCall?.callName || '').replace(/_(?:add|cover)$/i, '')
+                || ''
+            );
+            if (toolCall?.toolType === ACTIVE_TOOL_KEYWORD_TYPE || baseCallName === 'tool_grep') {
+                return ACTIVE_TOOL_KEYWORD_TYPE;
+            }
+            if (toolCall?.toolType === ACTIVE_TOOL_VECTOR_TYPE || baseCallName === 'tool_memory') {
+                return ACTIVE_TOOL_VECTOR_TYPE;
+            }
+            return baseCallName || toolCall?.toolId || ACTIVE_TOOL_VECTOR_TYPE;
+        };
+
+        const getToolCallDisplayName = (toolCall) => {
+            const groupKey = getActiveToolUiGroupKey(toolCall);
+            if (groupKey === ACTIVE_TOOL_KEYWORD_TYPE) return '关键词检索';
+            if (groupKey === ACTIVE_TOOL_VECTOR_TYPE) return '向量记忆主动检索';
+            return toolCall?.name || '向量记忆主动检索';
+        };
+
+        const getMergedToolCallItems = (toolCalls, toolCall) => {
+            if (!Array.isArray(toolCalls) || !toolCall) return [];
+            const groupKey = getActiveToolUiGroupKey(toolCall);
+            return toolCalls.filter(item => getActiveToolUiGroupKey(item) === groupKey);
+        };
+
+        const getVisibleToolCalls = (toolCalls) => {
+            if (!Array.isArray(toolCalls)) return [];
+            const seen = new Set();
+            return toolCalls.filter(toolCall => {
+                const groupKey = getActiveToolUiGroupKey(toolCall);
+                if (seen.has(groupKey)) return false;
+                seen.add(groupKey);
+                return true;
+            });
+        };
+
+        const getMergedToolCallCount = (toolCalls, toolCall) => getMergedToolCallItems(toolCalls, toolCall).length;
+
+        const getMergedToolCallTitle = (toolCalls, toolCall) => {
+            const items = getMergedToolCallItems(toolCalls, toolCall);
+            const names = [...new Set(items.map(getToolCallDisplayName).filter(Boolean))];
+            const name = names.length === 1 ? names[0] : getToolCallDisplayName(toolCall);
+            return items.length > 1 ? `${name} · ${items.length} 次` : name;
+        };
+
+        const getMergedToolCallStatus = (toolCalls, toolCall) => {
+            const items = getMergedToolCallItems(toolCalls, toolCall);
+            if (items.some(item => item?.status === 'running')) return 'running';
+            if (items.some(item => item?.status === 'queued')) return 'queued';
+            if (items.some(item => item?.status === 'continuing')) return 'continuing';
+            if (items.some(item => item?.status === 'error')) return 'error';
+            if (items.some(item => item?.status === 'done')) return 'done';
+            return toolCall?.status || 'queued';
+        };
+
+        const isMergedToolCallLive = (toolCalls, toolCall) => ['running', 'queued'].includes(getMergedToolCallStatus(toolCalls, toolCall));
+        const isMergedToolCallError = (toolCalls, toolCall) => getMergedToolCallStatus(toolCalls, toolCall) === 'error';
+        const isMergedToolCallDone = (toolCalls, toolCall) => ['done', 'continuing'].includes(getMergedToolCallStatus(toolCalls, toolCall));
+
+        const getToolCallStatusText = (toolCall) => {
+            const status = toolCall?.status || 'queued';
+            if (status === 'queued') return '等待中';
+            if (status === 'running') return '检索中';
+            if (status === 'done') return '已完成';
+            if (status === 'continuing') return '续写中';
+            if (status === 'error') return '失败';
+            return '准备中';
+        };
+
+        const getMergedToolCallReasoningText = (toolCalls, toolCall) => getMergedToolCallItems(toolCalls, toolCall)
+            .map(item => String(item?.reasoning || '').trim())
+            .filter(Boolean)
+            .join('\n\n---\n\n');
+
+        const isMergedToolCallReasoningLive = (toolCalls, toolCall) => getMergedToolCallItems(toolCalls, toolCall)
+            .some(item => item?.status === 'continuing'
+                && activeToolContinuationToolCallId.value === item.id
+                && isThinking.value);
+
+        const isMergedToolCallReasoningOpen = (toolCalls, toolCall) => {
+            if (toolCall?.isReasoningOpen !== undefined) return toolCall.isReasoningOpen;
+            return getMergedToolCallItems(toolCalls, toolCall).some(item => item?.isReasoningOpen);
+        };
+
+        const toggleMergedToolCallReasoning = (toolCalls, toolCall) => {
+            const nextOpen = !isMergedToolCallReasoningOpen(toolCalls, toolCall);
+            getMergedToolCallItems(toolCalls, toolCall).forEach(item => {
+                item.isReasoningOpen = nextOpen;
+            });
+            if (toolCall) toolCall.isReasoningOpen = nextOpen;
+        };
+
         const stripActiveToolCallsFromAssistant = (message, toolCalls) => {
             if (!message || !Array.isArray(toolCalls) || toolCalls.length === 0) return;
             const originalContent = String(message.content || '');
@@ -9155,6 +9250,7 @@ image###生成的提示词###
             isGenerating, isRemoteGenerating, remoteEstimatedTime, isReceiving, isThinking, hasActiveToolInlineWork, activeToolInlineStatusText, isConversationBusy, activeToolContinuationMessageId, activeToolContinuationToolCallId, activeToolContinuationHasResponse, activeNativeReasoning, userInput, modelSearchQuery, activeModelTag, modelTags, characterSearchQuery, availableModels, filteredModels, filteredCharacters,
             user, settings, apiProviderOptions, selectedApiProvider, isCustomApiProvider, customApiProviderOption, showApiProviderSelector, selectApiProvider, characters, currentCharacter, currentCharacterIndex, chatHistory, displayedChatMessages, handleChatScroll, presets, regexScripts, worldInfo,
             activeTools, editingActiveTool, normalizeActiveTools,
+            getVisibleToolCalls, getMergedToolCallItems, getMergedToolCallCount, getMergedToolCallTitle, getMergedToolCallStatus, isMergedToolCallLive, isMergedToolCallError, isMergedToolCallDone, getToolCallDisplayName, getToolCallStatusText, getMergedToolCallReasoningText, isMergedToolCallReasoningLive, isMergedToolCallReasoningOpen, toggleMergedToolCallReasoning,
             activeRegexCount, activeWorldInfoCount, activeUiTemplateCount, chatRoundStats, totalContextLength,
             editingCharacter, editingPreset, editingUiTemplate, toasts, chatContainer, inputBox, messageElements,
             lastUserMessageIndex, // Expose to template

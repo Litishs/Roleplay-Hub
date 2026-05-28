@@ -802,6 +802,81 @@ opacity: 0;
             padding: 0.12rem 0.35rem;
         }
 
+        .tool-call-group-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.65rem;
+        }
+
+        .tool-call-group-item {
+            display: flex;
+            flex-direction: column;
+            gap: 0.45rem;
+            padding: 0.6rem;
+            border: 1px solid rgba(203, 213, 225, 0.75);
+            border-radius: 0.6rem;
+            background: rgba(248, 250, 252, 0.78);
+        }
+
+        .tool-call-group-head {
+            display: flex;
+            align-items: center;
+            gap: 0.45rem;
+            min-width: 0;
+        }
+
+        .tool-call-group-index {
+            flex: 0 0 auto;
+            color: #64748b;
+            font-weight: 800;
+            font-size: 0.72rem;
+        }
+
+        .tool-call-group-head strong {
+            min-width: 0;
+            color: #334155;
+            font-size: 0.76rem;
+        }
+
+        .tool-call-group-status {
+            flex: 0 0 auto;
+            margin-left: auto;
+            padding: 0.08rem 0.4rem;
+            border-radius: 999px;
+            background: rgba(226, 232, 240, 0.9);
+            color: #64748b;
+            font-size: 0.68rem;
+            font-weight: 800;
+        }
+
+        .tool-call-group-status.is-running,
+        .tool-call-group-status.is-queued {
+            background: rgba(219, 234, 254, 0.95);
+            color: #2563eb;
+        }
+
+        .tool-call-group-status.is-done,
+        .tool-call-group-status.is-continuing {
+            background: rgba(220, 252, 231, 0.95);
+            color: #16a34a;
+        }
+
+        .tool-call-group-status.is-error {
+            background: rgba(254, 226, 226, 0.95);
+            color: #b91c1c;
+        }
+
+        .tool-call-group-item code {
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
+            word-break: break-word;
+            color: #1d4ed8;
+            background: rgba(239, 246, 255, 0.92);
+            border: 1px solid rgba(147, 197, 253, 0.78);
+            border-radius: 0.45rem;
+            padding: 0.12rem 0.35rem;
+        }
+
         .tool-call-muted,
         .tool-call-error {
             padding: 0.45rem 0.6rem;

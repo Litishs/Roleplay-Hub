@@ -656,15 +656,15 @@
                                             <!-- Active Tool Calls -->
                                             <div v-if="msg.role === 'assistant' && msg.toolCalls && msg.toolCalls.length"
                                                 class="native-thinking-wrapper">
-                                                <template v-for="(toolCall, toolIndex) in msg.toolCalls"
+                                                <template v-for="(toolCall, toolIndex) in getVisibleToolCalls(msg.toolCalls)"
                                                     :key="'active-tool-call-' + (toolCall.id || toolIndex)">
                                                 <div class="cot-ui native-thinking-card"
-                                                    :class="{ 'is-live': toolCall.status === 'running' || toolCall.status === 'queued', 'is-open': toolCall.isOpen }">
+                                                    :class="{ 'is-live': isMergedToolCallLive(msg.toolCalls, toolCall), 'is-open': toolCall.isOpen }">
                                                     <button type="button" class="cot-header native-thinking-header"
                                                         @click="toolCall.isOpen = !toolCall.isOpen">
                                                         <div class="flex flex-1 items-center min-w-0"
-                                                            :class="{ 'text-primary-600': toolCall.status === 'running' || toolCall.status === 'queued', 'text-red-600': toolCall.status === 'error' }">
-                                                            <span v-if="toolCall.status === 'running' || toolCall.status === 'queued'" class="live-dots mr-2" aria-hidden="true"><i></i><i></i><i></i></span>
+                                                            :class="{ 'text-primary-600': isMergedToolCallLive(msg.toolCalls, toolCall), 'text-red-600': isMergedToolCallError(msg.toolCalls, toolCall) }">
+                                                            <span v-if="isMergedToolCallLive(msg.toolCalls, toolCall)" class="live-dots mr-2" aria-hidden="true"><i></i><i></i><i></i></span>
                                                             <svg v-else class="w-3.5 h-3.5 mr-2 opacity-70" fill="none"
                                                                 stroke="currentColor" viewBox="0 0 24 24">
                                                                 <path stroke-linecap="round" stroke-linejoin="round"
@@ -672,9 +672,9 @@
                                                                     d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94L14.7 6.3z">
                                                                 </path>
                                                             </svg>
-                                                            <span class="text-xs font-bold truncate">{{ toolCall.name || '向量记忆主动检索' }}</span>
+                                                            <span class="text-xs font-bold truncate">{{ getMergedToolCallTitle(msg.toolCalls, toolCall) }}</span>
                                                         </div>
-                                                        <span v-if="toolCall.status === 'done' || toolCall.status === 'continuing'"
+                                                        <span v-if="isMergedToolCallDone(msg.toolCalls, toolCall)"
                                                             class="native-thinking-meta tool-call-success-badge" aria-label="工具调用成功">
                                                             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor"
                                                                 viewBox="0 0 24 24">
@@ -695,37 +695,62 @@
                                                                 <div class="tool-call-detail">
                                                                     <div class="tool-call-row">
                                                                         <span>工具</span>
-                                                                        <strong>{{ toolCall.name || '向量记忆主动检索' }}</strong>
+                                                                        <strong>{{ getMergedToolCallTitle(msg.toolCalls, toolCall) }}</strong>
                                                                     </div>
-                                                                    <div class="tool-call-row">
-                                                                        <span>调用</span>
-                                                                        <code>&lt;{{ toolCall.callName || 'tool_memory_add' }}:{{ toolCall.query }}&gt;</code>
+                                                                    <template v-if="getMergedToolCallCount(msg.toolCalls, toolCall) === 1">
+                                                                        <div class="tool-call-row">
+                                                                            <span>调用</span>
+                                                                            <code>&lt;{{ toolCall.callName || 'tool_memory_add' }}:{{ toolCall.query }}&gt;</code>
+                                                                        </div>
+                                                                        <div class="tool-call-row">
+                                                                            <span>模式</span>
+                                                                            <strong>{{ toolCall.mode === 'cover' ? '覆盖检索' : '追加检索' }}</strong>
+                                                                        </div>
+                                                                        <div v-if="toolCall.status === 'queued'" class="tool-call-muted">
+                                                                            等待上一个工具完成...
+                                                                        </div>
+                                                                        <div v-else-if="toolCall.status === 'running'" class="tool-call-muted">
+                                                                            正在检索...
+                                                                        </div>
+                                                                        <div v-else-if="toolCall.error" class="tool-call-error">
+                                                                            {{ toolCall.error }}
+                                                                        </div>
+                                                                        <pre v-if="toolCall.resultText && !toolCall.error" class="tool-call-result">{{ toolCall.resultText }}</pre>
+                                                                    </template>
+                                                                    <div v-else class="tool-call-group-list">
+                                                                        <div v-for="(mergedCall, mergedIndex) in getMergedToolCallItems(msg.toolCalls, toolCall)"
+                                                                            :key="'merged-tool-call-' + (mergedCall.id || mergedIndex)"
+                                                                            class="tool-call-group-item">
+                                                                            <div class="tool-call-group-head">
+                                                                                <span class="tool-call-group-index">#{{ mergedIndex + 1 }}</span>
+                                                                                <strong>{{ mergedCall.mode === 'cover' ? '覆盖检索' : '追加检索' }}</strong>
+                                                                                <span class="tool-call-group-status"
+                                                                                    :class="'is-' + (mergedCall.status || 'queued')">{{ getToolCallStatusText(mergedCall) }}</span>
+                                                                            </div>
+                                                                            <code>&lt;{{ mergedCall.callName || 'tool_memory_add' }}:{{ mergedCall.query }}&gt;</code>
+                                                                            <div v-if="mergedCall.status === 'queued'" class="tool-call-muted">
+                                                                                等待上一个工具完成...
+                                                                            </div>
+                                                                            <div v-else-if="mergedCall.status === 'running'" class="tool-call-muted">
+                                                                                正在检索...
+                                                                            </div>
+                                                                            <div v-else-if="mergedCall.error" class="tool-call-error">
+                                                                                {{ mergedCall.error }}
+                                                                            </div>
+                                                                            <pre v-if="mergedCall.resultText && !mergedCall.error" class="tool-call-result">{{ mergedCall.resultText }}</pre>
+                                                                        </div>
                                                                     </div>
-                                                                    <div class="tool-call-row">
-                                                                        <span>模式</span>
-                                                                        <strong>{{ toolCall.mode === 'cover' ? '覆盖检索' : '追加检索' }}</strong>
-                                                                    </div>
-                                                                    <div v-if="toolCall.status === 'queued'" class="tool-call-muted">
-                                                                        等待上一个工具完成...
-                                                                    </div>
-                                                                    <div v-else-if="toolCall.status === 'running'" class="tool-call-muted">
-                                                                        正在检索...
-                                                                    </div>
-                                                                    <div v-else-if="toolCall.error" class="tool-call-error">
-                                                                        {{ toolCall.error }}
-                                                                    </div>
-                                                                    <pre v-if="toolCall.resultText && !toolCall.error" class="tool-call-result">{{ toolCall.resultText }}</pre>
                                                                 </div>
                                                             </div>
                                                         </div>
                                                     </div>
                                                 </div>
-                                                <div v-if="toolCall.reasoning"
+                                                <div v-if="getMergedToolCallReasoningText(msg.toolCalls, toolCall)"
                                                     class="cot-ui native-thinking-card"
-                                                    :class="{ 'is-live': toolCall.status === 'continuing' && activeToolContinuationToolCallId === toolCall.id && isThinking, 'is-open': toolCall.isReasoningOpen }">
+                                                    :class="{ 'is-live': isMergedToolCallReasoningLive(msg.toolCalls, toolCall), 'is-open': isMergedToolCallReasoningOpen(msg.toolCalls, toolCall) }">
                                                     <button type="button" class="cot-header native-thinking-header"
-                                                        @click="toolCall.isReasoningOpen = !toolCall.isReasoningOpen">
-                                                        <div v-if="toolCall.status === 'continuing' && activeToolContinuationToolCallId === toolCall.id && isThinking"
+                                                        @click="toggleMergedToolCallReasoning(msg.toolCalls, toolCall)">
+                                                        <div v-if="isMergedToolCallReasoningLive(msg.toolCalls, toolCall)"
                                                             class="flex items-center text-primary-600 min-w-0">
                                                             <span class="live-dots mr-2" aria-hidden="true"><i></i><i></i><i></i></span>
                                                             <span class="text-xs font-bold truncate">原生思考中</span>
@@ -741,7 +766,7 @@
                                                             <span class="text-xs font-bold truncate">原生思考</span>
                                                         </div>
                                                         <span class="native-thinking-plain-meta">
-                                                            {{ (toolCall.reasoning || '').length }} 字
+                                                            {{ getMergedToolCallReasoningText(msg.toolCalls, toolCall).length }} 字
                                                         </span>
                                                         <svg class="w-3.5 h-3.5 ml-2 opacity-60 chevron" fill="none"
                                                             stroke="currentColor" viewBox="0 0 24 24">
@@ -750,12 +775,12 @@
                                                         </svg>
                                                     </button>
                                                     <div class="cot-body native-thinking-body"
-                                                        :class="{ 'is-open': toolCall.isReasoningOpen }">
+                                                        :class="{ 'is-open': isMergedToolCallReasoningOpen(msg.toolCalls, toolCall) }">
                                                         <div class="cot-inner native-thinking-inner">
                                                             <div class="cot-content native-thinking-scroll cot-thinking-scroll custom-scrollbar"
                                                                 :style="settings.fontSize ? { fontSize: (settings.fontSize - 1) + 'px' } : {}">
                                                                 <div class="markdown-body"
-                                                                    v-html="renderMarkdown(toolCall.reasoning, 'assistant', true)">
+                                                                    v-html="renderMarkdown(getMergedToolCallReasoningText(msg.toolCalls, toolCall), 'assistant', true)">
                                                                 </div>
                                                             </div>
                                                         </div>
