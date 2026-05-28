@@ -135,8 +135,11 @@ createApp({
         let uiTemplateUpdateAbortController = null;
         const showRegexEditor = ref(false);
         const showWorldInfoEditor = ref(false);
+        const showActiveToolEditor = ref(false);
         const showUserSetupModal = ref(false);
         const showAutoImageGenModal = ref(false);
+        const pendingActiveToolContext = ref('');
+        const activeToolResultContexts = ref([]);
         const tempUserSetup = reactive({ name: '', description: '', person: 'second' });
         const characterDisplayLimit = ref(20);
 
@@ -190,22 +193,21 @@ createApp({
             isUpdateScrolledToBottom.value = (el.scrollHeight - el.scrollTop - el.clientHeight) < 10;
         };
         const latestUpdate = reactive({
-            id: 10136, // 确保这是一个五位数ID，每次更新内容时增加这个数字
+            id: 10137, // 确保这是一个五位数ID，每次更新内容时增加这个数字
             date: new Date().toISOString().split('T')[0],
             title: '网站公告',
             content: `
-### RP-Hub 1.6.3
+### RP-Hub 1.6.4
 
-- 彻底去除旧记忆模式
-- 大幅度优化了向量记忆的准确性和模型对其的理解能力
-- 加强了上下文后处理，确保对话轮数的正确性
-- 优化重写了部分预设，并适配新版记忆系统
-- 调整了召回记忆数量，保留楼层的上下限与默认值
-- 更改了记忆向量坐标的压缩与存储方式
+- 新增"工具(Beta)"测试版，现支持模型主动调用工具检索记忆/关键词
+- 支持向量记忆的合并功能，增强了低理解力模型的表现
+- 修复了角色卡工坊UI模板模型异常的问题
+- 修复了部分未闭合xml标签，增强了AI理解能力
+- 进一步优化了超长上下文的聊天体验
 
 本项目为全开源公益项目，严禁倒卖源码，二改需经作者授权
 
-#### 更新时间：05/26/21:12
+#### 更新时间：05/29/00:01
                     `
         });
 
@@ -259,6 +261,13 @@ createApp({
         const remoteEstimatedTime = ref(null); // 新增：远程预计时间
         const isReceiving = ref(false);
         const isThinking = ref(false);
+        const activeToolContinuationMessageId = ref(null);
+        const activeToolContinuationToolCallId = ref(null);
+        const activeToolContinuationHasResponse = ref(false);
+        const activeToolHandoffPending = ref(false);
+        const activeToolQueueRunning = ref(false);
+        const activeToolContinuationPending = ref(false);
+        let activeToolQueueAbortController = null;
         const abortController = ref(null);
         const userInput = ref('');
         const modelSearchQuery = ref('');
@@ -597,6 +606,24 @@ createApp({
         let isLoadingEarlierChatMessages = false;
         let isChatTopUnlockArmed = true;
         const lastActiveCharacterId = ref(null); // For persistence
+        const hasActiveToolInlineWork = computed(() => {
+            if (activeToolHandoffPending.value || activeToolContinuationMessageId.value || activeToolContinuationPending.value || activeToolQueueRunning.value) return true;
+            if (!isGenerating.value && !isRemoteGenerating.value) return false;
+            return chatHistory.value.some(msg => (
+                msg?.role === 'assistant'
+                && Array.isArray(msg.toolCalls)
+                && msg.toolCalls.some(toolCall => ['queued', 'running', 'continuing'].includes(toolCall?.status))
+            ));
+        });
+        const activeToolInlineStatusText = computed(() => {
+            if (activeToolQueueRunning.value) return '调用中';
+            if (activeToolContinuationMessageId.value || activeToolContinuationPending.value) {
+                return isThinking.value ? '模型思考中' : '生成中';
+            }
+            if (activeToolHandoffPending.value || hasActiveToolInlineWork.value) return '工具准备中';
+            return '';
+        });
+        const isConversationBusy = computed(() => isGenerating.value || isRemoteGenerating.value || hasActiveToolInlineWork.value);
 
         const presets = ref([]);
         const deepSeekThinkingInstructionMarker = '【DeepSeek思考层硬规则】';
@@ -886,6 +913,44 @@ createApp({
         let _memoriesLoaded = false; // 标志：防止在记忆加载前 saveData 覆盖已存数据
         let _initComplete = false; // 守卫标志：防止 onMounted 初始化阶段写入默认值覆盖服务端数据
 
+        // --- Active Tool System State ---
+        const ACTIVE_TOOL_VECTOR_TYPE = 'vector_memory';
+        const ACTIVE_TOOL_KEYWORD_TYPE = 'keyword_dialogue';
+        const ACTIVE_TOOL_MIN_RESULT_COUNT = 8;
+        const ACTIVE_TOOL_DEFAULT_RESULT_COUNT = 8;
+        const ACTIVE_TOOL_MAX_RESULT_COUNT = 20;
+        const ACTIVE_TOOL_RESULT_COUNT_VERSION = 3;
+        const ACTIVE_TOOL_MAX_AUTO_CONTINUE = 4;
+        const ACTIVE_TOOL_LATEST_USER_REMINDER = '每一次回复，你必须调用工具来获取需要的信息；一次回复可以分多行调用多个工具，每行只写一个工具标签。用户问题包含多个独立信息点时，必须拆开逐项调用，每个工具标签只检索一个信息点，禁止把多个问题塞进同一次工具调用。若工具返回结果不够完整且准确，你可以换更具体的检索内容或关键词继续调用工具；工具返回后再继续正文。';
+        const ACTIVE_TOOL_DEFAULT_DESCRIPTION = '每一次回复都必须先调用工具来获取需要的信息；当需要长期记忆、旧剧情、历史设定、过往关系、人物状态、物品来历或用户暗指内容时，在正文中单独输出 <tool_memory_add:具体检索内容> 主动向量检索长期记忆。禁止编造任何不真实、未在当前上下文或检索结果中出现过的信息；没有依据的设定、旧剧情、关系、物品来历、人物状态和事件细节都必须先用工具确认。用户问题包含多个独立信息点时，必须拆开逐项调用，每个工具标签只检索一个信息点；例如年龄、材质、武器、动力来源属于不同信息点，禁止合成一次长检索。可以在同一次回复中分多行输出多个工具标签，每行只写一个标签，用不同工具分别检索不同信息点。如果返回内容不够贴合或仍不够完整准确，请换更具体的关键词继续细化检索。继续补充检索时输出 <tool_memory_add:更具体的检索内容>，系统会把新结果追加到本轮已检索的工具结果后；如果前一次检索方向明显错误或需要重新开始，请输出 <tool_memory_cover:新的检索内容>，系统会用新结果覆盖本轮已检索的工具结果。工具结果返回后，如果依据已经足够，就继续正文；如果仍不够，继续细化调用工具。需要工具调用时，不需要输出 COT，也不要输出“我先查一下”“我先检索一下确保信息完整准确”等任何说明或铺垫，只输出工具标签即可。系统会把检索结果插入最后一条用户消息结尾，然后自动让你继续回答。';
+        const ACTIVE_TOOL_DEFAULT_DISPLAY_DESCRIPTION = '让角色在上下文信息不够明确时，主动检索向量记忆，适合找旧剧情、历史设定、人物关系、物品来历和用户暗指过的内容。';
+        const ACTIVE_TOOL_GREP_DEFAULT_DESCRIPTION = '当需要精准抓取当前对话历史里的原文内容时，在正文中单独输出 <tool_grep_add:关键词> 或 <tool_grep_cover:关键词>。系统会按关键词精确匹配用户与角色消息，返回包含关键词的原文片段。适合查找某句台词、某个名称、物品、地点、设定词、前文原句或具体对话细节。关键词要尽量写原文可能出现的词；用户问题包含多个独立信息点时，必须拆开逐项调用，每个工具标签只检索一个信息点，禁止把多个问题塞进同一次关键词检索。可以在同一次回复中分多行输出多个关键词检索或和其他工具混用，每行只写一个工具标签。需要工具调用时，不需要输出 COT，也不要输出说明或铺垫，只输出工具标签即可。';
+        const ACTIVE_TOOL_GREP_DEFAULT_DISPLAY_DESCRIPTION = '按关键词精准抓取当前对话历史里的原文片段，适合找台词、名称、物品、地点和具体前文。';
+        const createDefaultActiveTool = () => ({
+            id: 'tool_memory',
+            name: '向量记忆主动检索',
+            enabled: true,
+            type: ACTIVE_TOOL_VECTOR_TYPE,
+            callName: 'tool_memory',
+            resultCount: ACTIVE_TOOL_DEFAULT_RESULT_COUNT,
+            resultCountVersion: ACTIVE_TOOL_RESULT_COUNT_VERSION,
+            description: ACTIVE_TOOL_DEFAULT_DESCRIPTION,
+            displayDescription: ACTIVE_TOOL_DEFAULT_DISPLAY_DESCRIPTION
+        });
+        const createDefaultGrepTool = () => ({
+            id: 'tool_grep',
+            name: '关键词检索',
+            enabled: true,
+            type: ACTIVE_TOOL_KEYWORD_TYPE,
+            callName: 'tool_grep',
+            resultCount: ACTIVE_TOOL_DEFAULT_RESULT_COUNT,
+            resultCountVersion: ACTIVE_TOOL_RESULT_COUNT_VERSION,
+            description: ACTIVE_TOOL_GREP_DEFAULT_DESCRIPTION,
+            displayDescription: ACTIVE_TOOL_GREP_DEFAULT_DISPLAY_DESCRIPTION
+        });
+        const getDefaultActiveToolDefinitions = () => [createDefaultActiveTool(), createDefaultGrepTool()];
+        const activeTools = ref(getDefaultActiveToolDefinitions());
+
         const normalizeMemorySettings = () => {
             ['mode', 'model', `re${'rankEnabled'}`, `re${'rankModel'}`].forEach(key => {
                 delete memorySettings[key];
@@ -898,6 +963,66 @@ createApp({
             memorySettings.vectorTopK = Number.isFinite(vectorTopK)
                 ? Math.max(MEMORY_VECTOR_MIN_TOP_K, Math.min(MEMORY_VECTOR_MAX_TOP_K, vectorTopK))
                 : MEMORY_VECTOR_DEFAULT_TOP_K;
+        };
+
+        const normalizeActiveToolCallName = (value) => {
+            const raw = String(value || '').trim();
+            const matched = raw.match(/^<\s*([^:\s>]+)\s*:/);
+            const source = matched ? matched[1] : raw;
+            return source
+                .replace(/[<>：:]/g, '')
+                .replace(/\s+/g, '_')
+                .trim() || 'tool_memory';
+        };
+
+        const normalizeActiveTool = (tool = {}) => {
+            const resultCount = Number(tool.resultCount);
+            const callName = normalizeActiveToolCallName(tool.callName || tool.callPattern || 'tool_memory');
+            const defaultTool = getDefaultActiveToolDefinitions()
+                .find(item => item.id === tool.id || item.callName === callName);
+            const fallback = defaultTool || createDefaultActiveTool();
+            const normalizedCallName = defaultTool ? defaultTool.callName : callName;
+            const resultCountVersion = Number(tool.resultCountVersion) || 1;
+            const isDefaultTool = !!defaultTool;
+            const description = isDefaultTool
+                ? fallback.description
+                : String(tool.description || fallback.description).trim();
+            let normalizedResultCount = Number.isFinite(resultCount)
+                ? Math.max(ACTIVE_TOOL_MIN_RESULT_COUNT, Math.min(ACTIVE_TOOL_MAX_RESULT_COUNT, Math.round(resultCount)))
+                : ACTIVE_TOOL_DEFAULT_RESULT_COUNT;
+            if (resultCountVersion < ACTIVE_TOOL_RESULT_COUNT_VERSION
+                && isDefaultTool
+                && normalizedCallName === fallback.callName
+                && (!Number.isFinite(resultCount) || Math.round(resultCount) <= ACTIVE_TOOL_MIN_RESULT_COUNT || Math.round(resultCount) === 10)) {
+                normalizedResultCount = ACTIVE_TOOL_DEFAULT_RESULT_COUNT;
+            }
+            return {
+                id: isDefaultTool ? fallback.id : (tool.id || generateUUID()),
+                name: isDefaultTool ? fallback.name : (String(tool.name || fallback.name).trim() || fallback.name),
+                enabled: tool.enabled !== false,
+                type: isDefaultTool ? fallback.type : (tool.type || ACTIVE_TOOL_VECTOR_TYPE),
+                callName: normalizedCallName,
+                resultCount: normalizedResultCount,
+                resultCountVersion: ACTIVE_TOOL_RESULT_COUNT_VERSION,
+                description: description || fallback.description,
+                displayDescription: isDefaultTool
+                    ? fallback.displayDescription
+                    : (String(tool.displayDescription || fallback.displayDescription).trim() || fallback.displayDescription)
+            };
+        };
+
+        const normalizeActiveTools = (items = activeTools.value) => {
+            const normalized = (Array.isArray(items) ? items : [])
+                .map(normalizeActiveTool)
+                .filter(tool => tool.callName);
+            getDefaultActiveToolDefinitions().forEach(defaultTool => {
+                const hasDefaultTool = normalized.some(tool => tool.id === defaultTool.id || tool.callName === defaultTool.callName);
+                if (!hasDefaultTool) normalized.push(defaultTool);
+            });
+            if (JSON.stringify(activeTools.value) !== JSON.stringify(normalized)) {
+                activeTools.value = normalized;
+            }
+            return normalized;
         };
 
         const getMemoryEmptyTurnsKey = (uuid) => {
@@ -1065,6 +1190,7 @@ createApp({
         const editingUiTemplate = reactive({ id: undefined, data: {} });
         const editingRegex = reactive({ id: undefined, data: {} });
         const editingWorldInfo = reactive({ id: undefined, data: {} });
+        const editingActiveTool = reactive({ id: undefined, data: {} });
 
         const sysInstruction = ref('');
         const showInstructionPanel = ref(false);
@@ -1416,6 +1542,7 @@ createApp({
                 await setStoredValue('global_worldinfo', globalWorldInfo.value);
                 await setStoredValue('worldinfo_settings', worldInfoSettings);
                 await setStoredValue('global_ui_templates', globalUiTemplates.value);
+                await setStoredValue('active_tools', normalizeActiveTools(), { clone: false });
                 // await setStoredValue('recent_times', recentGenerationTimes.value); // Deprecated: Saved in character
 
                 // 守卫：初始化完成前不写入用户/记忆数据，防止默认值覆盖服务端已有数据
@@ -1615,6 +1742,9 @@ createApp({
 
                 const savedGlobalUiTemplates = await getStoredValue('global_ui_templates');
                 if (savedGlobalUiTemplates) globalUiTemplates.value = savedGlobalUiTemplates.map(template => normalizeUiTemplate({ ...template, scope: 'global' }));
+
+                const savedActiveTools = await getStoredValue('active_tools');
+                normalizeActiveTools(savedActiveTools || activeTools.value);
 
                 const savedWISettings = await getStoredValue('worldinfo_settings');
                 if (savedWISettings) {
@@ -1927,7 +2057,7 @@ createApp({
         }, 1000);
 
         // Watch for changes to auto-save
-        watch([characters, settings, presets, regexScripts, globalRegexScripts, worldInfo, globalWorldInfo, globalUiTemplates, user, recentGenerationTimes], () => {
+        watch([characters, settings, presets, regexScripts, globalRegexScripts, worldInfo, globalWorldInfo, globalUiTemplates, activeTools, user, recentGenerationTimes], () => {
             debouncedSave();
         }, { deep: true });
 
@@ -3111,6 +3241,7 @@ ${content}
             return !!(
                 msg.reasoning
                 || parseCot(msg.content || '').cot
+                || (Array.isArray(msg.toolCalls) && msg.toolCalls.length > 0)
                 || msg.isEditing_Message
                 || messageUsesHtmlFrame(msg)
                 || messageHasUiTemplateBlocks(msg)
@@ -3565,15 +3696,44 @@ ${content}
         };
 
         // Chat Logic
+        const markActiveToolInlineWorkCancelled = () => {
+            let changed = false;
+            chatHistory.value.forEach(msg => {
+                if (!msg || msg.role !== 'assistant' || !Array.isArray(msg.toolCalls)) return;
+                msg.toolCalls.forEach(toolCall => {
+                    if (!toolCall || !['queued', 'running', 'continuing'].includes(toolCall.status)) return;
+                    toolCall.status = 'error';
+                    toolCall.error = '生成已中止';
+                    toolCall.resultText = toolCall.resultText || toolCall.error;
+                    changed = true;
+                });
+            });
+            if (changed) {
+                activeToolContinuationMessageId.value = null;
+                activeToolContinuationToolCallId.value = null;
+                activeToolContinuationHasResponse.value = false;
+                activeToolHandoffPending.value = false;
+                activeToolContinuationPending.value = false;
+                saveChatHistoryNow();
+            }
+            return changed;
+        };
+
         const stopGeneration = () => {
             abortUiTemplateUpdate();
             if (abortController.value) {
                 abortSafely(abortController.value, 'Generation cancelled by user');
             }
+            if (activeToolQueueAbortController) {
+                abortSafely(activeToolQueueAbortController, 'Generation cancelled by user');
+            }
+            if (hasActiveToolInlineWork.value) {
+                markActiveToolInlineWorkCancelled();
+            }
         };
 
         const sendMessage = async () => {
-            if (!userInput.value.trim() || isGenerating.value) return;
+            if (!userInput.value.trim() || isConversationBusy.value) return;
 
             const content = userInput.value.trim();
 
@@ -4055,19 +4215,123 @@ ${content}
             console.groupEnd();
         };
 
+        const getEnabledActiveTools = () => normalizeActiveTools()
+            .filter(tool => tool.enabled !== false && tool.callName);
+
+        const isVectorActiveTool = (tool) => tool?.type === ACTIVE_TOOL_VECTOR_TYPE
+            || normalizeActiveToolCallName(tool?.callName) === 'tool_memory';
+
+        const isKeywordActiveTool = (tool) => tool?.type === ACTIVE_TOOL_KEYWORD_TYPE
+            || normalizeActiveToolCallName(tool?.callName) === 'tool_grep';
+
+        const shouldSuppressStandardVectorMemoryRecall = () => getEnabledActiveTools()
+            .some(tool => isVectorActiveTool(tool) && (tool.id === 'tool_memory' || tool.callName === 'tool_memory'));
+
+        const appendActiveToolReminderToLatestUserMessage = (msgArray) => {
+            if (getEnabledActiveTools().length === 0) return msgArray;
+            const latestUserMessage = [...msgArray].reverse().find(message => {
+                const content = String(message?.content || '');
+                return message?.role === 'user'
+                    && content.trim()
+                    && !isRoleMemoryContextContent(content)
+                    && !content.includes('<active_tool_results>');
+            });
+            if (!latestUserMessage) return msgArray;
+
+            const currentContent = String(latestUserMessage.content || '').trimEnd();
+            if (!currentContent.includes(ACTIVE_TOOL_LATEST_USER_REMINDER)) {
+                latestUserMessage.content = currentContent
+                    ? `${currentContent}\n${ACTIVE_TOOL_LATEST_USER_REMINDER}`
+                    : ACTIVE_TOOL_LATEST_USER_REMINDER;
+            }
+            return msgArray;
+        };
+
+        const getActiveToolCallLabels = (tool) => {
+            const baseCallName = normalizeActiveToolCallName(tool?.callName || 'tool_memory');
+            return {
+                add: `${baseCallName}_add`,
+                cover: `${baseCallName}_cover`
+            };
+        };
+
+        const buildActiveToolSystemPrompt = () => {
+            const tools = getEnabledActiveTools();
+            if (tools.length === 0) return '';
+
+            const toolLines = tools.map(tool => {
+                const count = Number(tool.resultCount) || ACTIVE_TOOL_DEFAULT_RESULT_COUNT;
+                const labels = getActiveToolCallLabels(tool);
+                const addCallName = escapeXmlAttribute(labels.add);
+                const coverCallName = escapeXmlAttribute(labels.cover);
+                const keywordTool = isKeywordActiveTool(tool);
+                const callPlaceholder = keywordTool ? '关键词' : '检索内容';
+                const returnLabel = keywordTool ? `${count}条对话片段` : `${count}条向量记忆`;
+                const descriptionFallback = keywordTool
+                    ? '按关键词精确匹配当前对话历史，抓取包含关键词的原文片段。'
+                    : '按调用内容检索长期向量记忆。';
+                const toolRules = keywordTool ? [
+                    `用途：当你需要精准抓取当前对话历史里的原文、查找某个名称、台词、物品、地点、设定词、前文原句或具体对话细节时，使用本工具。`,
+                    `追加调用：当你需要补充更多关键词结果时，在最终正文中单独输出 <${addCallName}:关键词>。系统会把新结果追加到本轮已经检索过的工具结果后。`,
+                    `覆盖调用：当前一次关键词方向明显错误、结果偏题、或你想重新开始本轮工具结果时，在最终正文中单独输出 <${coverCallName}:关键词>。系统会用新结果覆盖本轮已经检索过的工具结果。`,
+                    `关键词规则：关键词要尽量写原文可能出现的词；用户问题包含多个独立信息点时，必须拆开逐项调用，每个工具标签只检索一个信息点，禁止把多个问题塞进同一次关键词检索。只有同一信息点的同义词或原文别名才可以放在同一次关键词里。`,
+                    `多工具调用：可以在同一次回复中分多行输出多个工具标签，每行只写一个标签；系统会按出现顺序逐个执行全部工具标签。`,
+                    `返回位置：工具返回内容会被系统插入最后一条用户消息结尾，然后自动触发你继续生成；继续回答时把它当作原文对话证据，不要复述工具标签。`
+                ] : [
+                    `每轮工具调用：每一次回复都必须先调用工具来获取需要的信息；当需要长期记忆、旧剧情、历史设定、过往关系、人物状态、物品来历或用户暗指内容时，调用本工具进行主动向量检索。工具结果返回后，如果依据已经足够，就继续正文；如果仍不够，继续细化调用工具。`,
+                    `真实性规则：禁止编造任何不真实、未在当前上下文或检索结果中出现过的信息。没有依据的设定、旧剧情、关系、物品来历、人物状态和事件细节都必须先检索确认，不要凭空猜。`,
+                    `追加调用：当你需要补充检索、细化检索、扩展同一问题的信息时，在最终正文中单独输出 <${addCallName}:检索内容>。系统会把新检索结果追加到本轮已经检索过的工具结果后。`,
+                    `覆盖调用：当前一次检索方向明显错误、结果偏题、或你想重新开始本轮工具结果时，在最终正文中单独输出 <${coverCallName}:检索内容>。系统会用新检索结果覆盖本轮已经检索过的工具结果。`,
+                    `检索内容要具体，优先写人物名、事件、物品、地点、时间线、关键词。用户问题包含多个独立信息点时，必须拆开逐项调用，每个工具标签只检索一个信息点；例如年龄、材质、武器、动力来源属于不同信息点，禁止合成一次长检索。第一次检索通常使用追加调用；只有需要重开检索时才使用覆盖调用。`,
+                    `多工具调用：可以在同一次回复中分多行输出多个工具标签，每行只写一个标签，也可以和其他工具混用；系统会按出现顺序逐个执行全部工具标签。`,
+                    `细化检索：系统返回结果后，如果结果不够完美、不够贴合、仍然无法让你确认答案，请不要急着回答；请换更具体的检索内容继续检索，避免重复完全相同的检索内容。`,
+                    `返回位置：工具返回内容会被系统插入最后一条用户消息结尾，然后自动触发你继续生成；继续回答时把它当作系统提供的记忆参考，不要复述工具标签。追加调用会保留旧结果，覆盖调用会替换旧结果。`
+                ];
+                return [
+                    `<tool name="${escapeXmlAttribute(tool.name)}" call_add="<${addCallName}:${callPlaceholder}>" call_cover="<${coverCallName}:${callPlaceholder}>" returns="${returnLabel}">`,
+                    `说明：${tool.description || descriptionFallback}`,
+                    ...toolRules,
+                    `注意：需要工具调用时，不需要输出 COT，也不要输出“我先查一下”“我先检索一下确保信息完整准确”等任何说明或铺垫，只输出工具标签即可。不要把调用标签写进 <cot>、<think> 或原生思考；调用后不要同时回答，等待系统返回结果后再继续正文。`,
+                    `</tool>`
+                ].join('\n');
+            }).join('\n\n');
+            return [
+                '<active_tools>',
+                '以下是可由正文主动触发的工具。它们不是传统 function/tool call，而是由最终正文中的标签触发。',
+                ACTIVE_TOOL_LATEST_USER_REMINDER,
+                toolLines,
+                '</active_tools>'
+            ].filter(Boolean).join('\n');
+        };
+
         // Refactored generation logic
         let _wasCancelled = false;
-        const generateResponse = async (startTime = null) => {
+        const generateResponse = async (startTime = null, options = {}) => {
             if (isGenerating.value) return;
+            const activeToolDepth = Number(options.activeToolDepth) || 0;
+            const continueAssistantMessageId = options.continueAssistantMessageId || null;
+            const continuationToolCallId = options.continuationToolCallId || null;
 
             if (!currentCharacter.value) {
                 showToast('请先选择一个角色', 'error');
                 return;
             }
 
+            const continuationTargetMessage = continueAssistantMessageId
+                ? chatHistory.value.find(msg => msg && msg.role === 'assistant' && msg.id === continueAssistantMessageId) || null
+                : null;
+            if (!continuationTargetMessage && activeToolDepth === 0) {
+                resetActiveToolResultContext();
+            }
+
             isGenerating.value = true;
-            isReceiving.value = false;
+            // 工具续写时内容会回填到旧气泡里，这里先占住“已在接收”的状态，
+            // 避免底部全局 typing 占位气泡冒出来。
+            isReceiving.value = !!continuationTargetMessage;
             isThinking.value = false;
+            activeToolContinuationMessageId.value = continuationTargetMessage?.id || null;
+            activeToolContinuationToolCallId.value = continuationTargetMessage ? continuationToolCallId : null;
+            activeToolContinuationHasResponse.value = false;
             abortController.value = new AbortController();
             let generationStartTime = startTime || Date.now();
 
@@ -4348,6 +4612,9 @@ ${content}
             // 6. User Info (Moved to end)
             systemPromptParts.push(userPrompt);
 
+            const activeToolPrompt = buildActiveToolSystemPrompt();
+            if (activeToolPrompt) systemPromptParts.push(activeToolPrompt);
+
             const systemPrompt = systemPromptParts.join('\n\n');
 
             // Base Messages
@@ -4530,10 +4797,11 @@ ${content}
                         content: cleanContent
                     };
                 })
+                .filter(m => String(m.content || '').trim())
             );
 
             let selectedVectorMemories = [];
-            if (memorySettings.enabled && memories.value.length > 0) {
+            if (memorySettings.enabled && memories.value.length > 0 && !shouldSuppressStandardVectorMemoryRecall()) {
                 selectedVectorMemories = await selectVectorMemoriesForContext(abortController.value.signal, {
                     excludedTurns: getRetainedRecentMemoryTurns(postprocessedChatHistory)
                 });
@@ -4648,6 +4916,15 @@ ${content}
             };
 
             messages = processMessageInjections(messages);
+            messages = appendActiveToolReminderToLatestUserMessage(messages);
+            const activeToolContextPayload = pendingActiveToolContext.value || (activeToolDepth > 0 ? buildActiveToolResultPayload() : '');
+            if (activeToolContextPayload) {
+                messages.push({
+                    role: 'user',
+                    content: activeToolContextPayload
+                });
+                pendingActiveToolContext.value = '';
+            }
             appendDeepSeekThinkingInstruction(messages, safeTargetLimit);
             messages = postprocessContextMessages(messages);
 
@@ -4794,6 +5071,108 @@ ${content}
 
             let generatedAssistantMessageId = null;
             let assistantMessage = null;
+            let continuingAssistantMessage = continuationTargetMessage;
+            let continuationToolCall = null;
+            let continuationContentStarted = false;
+            let continuationReasoningStarted = false;
+
+            if (continuingAssistantMessage && continuationToolCallId && Array.isArray(continuingAssistantMessage.toolCalls)) {
+                continuationToolCall = continuingAssistantMessage.toolCalls.find(call => call && call.id === continuationToolCallId) || null;
+                if (continuationToolCall && typeof continuationToolCall.reasoning !== 'string') continuationToolCall.reasoning = '';
+            }
+
+            const prepareAssistantMessageForAppend = (message) => {
+                if (!message) return null;
+                if (!message.id) message.id = generateUUID();
+                if (typeof message.content !== 'string') message.content = '';
+                if (typeof message.reasoning !== 'string') message.reasoning = '';
+                if (message.isCotOpen === undefined) message.isCotOpen = false;
+                if (message.isReasoningOpen === undefined) message.isReasoningOpen = true;
+                if (message.isReasoningUserToggled === undefined) message.isReasoningUserToggled = false;
+                if (message.isReasoningAutoCollapsed === undefined) message.isReasoningAutoCollapsed = false;
+                message.shouldAnimate = !continuingAssistantMessage;
+                return message;
+            };
+
+            const appendAssistantText = (message, field, text) => {
+                if (!message || !text) return;
+                const isContinuation = continuingAssistantMessage && message.id === continuingAssistantMessage.id;
+                const startedKey = field === 'reasoning' ? 'continuationReasoningStarted' : 'continuationContentStarted';
+                const hasStarted = field === 'reasoning' ? continuationReasoningStarted : continuationContentStarted;
+
+                if (field === 'content' && message._activeToolCaptureActive) {
+                    message._activeToolPendingText = `${message._activeToolPendingText || ''}${text}`;
+                    promoteActiveToolCallsFromAssistant(message);
+                    if (isContinuation) {
+                        if (!hasStarted) continuationContentStarted = true;
+                        activeToolContinuationHasResponse.value = true;
+                    }
+                    return;
+                }
+
+                const existing = String(message[field] || '');
+
+                if (isContinuation && !hasStarted && existing.trim()) {
+                    message[field] = existing.replace(/\s+$/, '') + '\n\n' + text;
+                } else {
+                    message[field] = existing + text;
+                }
+
+                if (isContinuation && !hasStarted) {
+                    if (startedKey === 'continuationReasoningStarted') continuationReasoningStarted = true;
+                    else continuationContentStarted = true;
+                }
+                if (field === 'content') {
+                    promoteActiveToolCallsFromAssistant(message);
+                }
+                if (isContinuation) activeToolContinuationHasResponse.value = true;
+            };
+
+            const appendAssistantReasoning = (message, text) => {
+                if (!message || !text) return;
+                if (continuationToolCall && continuingAssistantMessage && message.id === continuingAssistantMessage.id) {
+                    const existing = String(continuationToolCall.reasoning || '');
+                    if (!continuationReasoningStarted && existing.trim()) {
+                        continuationToolCall.reasoning = existing.replace(/\s+$/, '') + '\n\n' + text;
+                    } else {
+                        continuationToolCall.reasoning = existing + text;
+                    }
+                    continuationReasoningStarted = true;
+                    activeToolContinuationHasResponse.value = true;
+                    return;
+                }
+                appendAssistantText(message, 'reasoning', text);
+            };
+
+            const createAssistantMessage = (content = '', reasoning = '') => reactive({
+                role: 'assistant',
+                name: currentCharacter.value.name,
+                content: content || '',
+                reasoning: reasoning || '',
+                id: generateUUID(),
+                shouldAnimate: true,
+                isCotOpen: false,
+                isReasoningOpen: true,
+                isReasoningUserToggled: false,
+                isReasoningAutoCollapsed: false
+            });
+
+            const ensureAssistantMessage = (content = '', reasoning = '') => {
+                if (assistantMessage) return assistantMessage;
+                if (continuingAssistantMessage) {
+                    assistantMessage = prepareAssistantMessageForAppend(continuingAssistantMessage);
+                    if (reasoning) appendAssistantReasoning(assistantMessage, reasoning);
+                    if (content) appendAssistantText(assistantMessage, 'content', content);
+                    isReceiving.value = true;
+                    return assistantMessage;
+                }
+
+                assistantMessage = createAssistantMessage(content, reasoning);
+                promoteActiveToolCallsFromAssistant(assistantMessage);
+                chatHistory.value.push(assistantMessage);
+                isReceiving.value = true;
+                return assistantMessage;
+            };
 
             try {
                         const url = settings.apiUrl.endsWith('/v1') ? `${settings.apiUrl}/chat/completions` : `${settings.apiUrl}/v1/chat/completions`;
@@ -4845,7 +5224,7 @@ ${content}
                             let nativeReasoningFlushRaf = null;
                             const applyPendingNativeReasoning = () => {
                                 if (!assistantMessage || !pendingNativeReasoning) return;
-                                assistantMessage.reasoning += pendingNativeReasoning;
+                                appendAssistantReasoning(assistantMessage, pendingNativeReasoning);
                                 pendingNativeReasoning = '';
                             };
                             const scheduleNativeReasoningFlush = () => {
@@ -4899,20 +5278,7 @@ ${content}
                                                     if (reasoning) {
                                                         isThinking.value = true;
                                                     }
-                                                    assistantMessage = reactive({
-                                                        role: 'assistant',
-                                                        name: currentCharacter.value.name,
-                                                        content: content || '',
-                                                        reasoning: reasoning || '',
-                                                        id: generateUUID(), // Assign ID
-                                                        shouldAnimate: true, // Enable animation for new stream
-                                                        isCotOpen: false, // Default collapsed for CoT
-                                                        isReasoningOpen: true,
-                                                        isReasoningUserToggled: false,
-                                                        isReasoningAutoCollapsed: false
-                                                    });
-                                                    chatHistory.value.push(assistantMessage);
-                                                    isReceiving.value = true;
+                                                    assistantMessage = ensureAssistantMessage(content, reasoning);
                                                     seededContent = !!content;
                                                     seededReasoning = !!reasoning;
                                                     if (seededContent) {
@@ -4930,7 +5296,7 @@ ${content}
 
                                                 if (content && !seededContent) {
                                                     flushNativeReasoning();
-                                                    assistantMessage.content += content;
+                                                    appendAssistantText(assistantMessage, 'content', content);
                                                     isThinking.value = false;
                                                     collapseNativeReasoning(assistantMessage);
                                                 }
@@ -4970,19 +5336,13 @@ ${content}
                                 }
 
                                 if (content || reasoning) {
-                                    assistantMessage = reactive({
-                                        role: 'assistant',
-                                        name: currentCharacter.value.name,
-                                        content: content,
-                                        reasoning: reasoning,
-                                        id: generateUUID(),
-                                        shouldAnimate: true,
-                                        isCotOpen: false,
-                                        isReasoningOpen: !(reasoning && content),
-                                        isReasoningUserToggled: false,
-                                        isReasoningAutoCollapsed: !!(reasoning && content)
-                                    });
-                                    chatHistory.value.push(assistantMessage);
+                                    assistantMessage = ensureAssistantMessage(content, reasoning);
+                                    if (!continuingAssistantMessage) {
+                                        assistantMessage.isReasoningOpen = !(reasoning && content);
+                                        assistantMessage.isReasoningAutoCollapsed = !!(reasoning && content);
+                                    } else if (reasoning && content) {
+                                        collapseNativeReasoning(assistantMessage);
+                                    }
                                     // scrollToBottom(); // Removed auto-scroll during generation
                                 }
                             } catch (e) {
@@ -5020,19 +5380,13 @@ ${content}
                                 }
 
                                 if (content || finalReasoning) {
-                                    assistantMessage = reactive({
-                                        role: 'assistant',
-                                        name: currentCharacter.value.name,
-                                        content: content,
-                                        reasoning: finalReasoning,
-                                        id: generateUUID(),
-                                        shouldAnimate: true,
-                                        isCotOpen: false,
-                                        isReasoningOpen: !(finalReasoning && content),
-                                        isReasoningUserToggled: false,
-                                        isReasoningAutoCollapsed: !!(finalReasoning && content)
-                                    });
-                                    chatHistory.value.push(assistantMessage);
+                                    assistantMessage = ensureAssistantMessage(content, finalReasoning);
+                                    if (!continuingAssistantMessage) {
+                                        assistantMessage.isReasoningOpen = !(finalReasoning && content);
+                                        assistantMessage.isReasoningAutoCollapsed = !!(finalReasoning && content);
+                                    } else if (finalReasoning && content) {
+                                        collapseNativeReasoning(assistantMessage);
+                                    }
 
                                     // scrollToBottom(); // Removed auto-scroll during generation
                                 }
@@ -5085,15 +5439,37 @@ ${content}
                     } else {
                         chatHistory.value.push({ role: 'system', name: currentCharacter.value.name, content: '生成已中止', skipReveal: true });
                     }
+                } else if (continuingAssistantMessage) {
+                    const errorMessage = error.message || '生成失败';
+                    if (continuationToolCall) {
+                        continuationToolCall.status = 'error';
+                        continuationToolCall.error = errorMessage;
+                        continuationToolCall.isOpen = true;
+                        activeToolContinuationHasResponse.value = true;
+                    } else {
+                        continuingAssistantMessage.content = [
+                            String(continuingAssistantMessage.content || '').trimEnd(),
+                            `*-- ${errorMessage} --*`
+                        ].filter(Boolean).join('\n\n');
+                        continuingAssistantMessage.shouldAnimate = false;
+                    }
                 } else {
                     chatHistory.value.push({ role: 'system', name: currentCharacter.value.name, content: error.message });
                 }
             } finally {
+                if (continuationToolCall && continuationToolCall.status === 'continuing') {
+                    continuationToolCall.status = 'done';
+                }
                 collapseActiveNativeReasoning();
                 await saveChatHistoryNow();
                 isGenerating.value = false;
                 isReceiving.value = false;
                 isThinking.value = false;
+                if (!continueAssistantMessageId || activeToolContinuationMessageId.value === continueAssistantMessageId) {
+                    activeToolContinuationMessageId.value = null;
+                    activeToolContinuationToolCallId.value = null;
+                    activeToolContinuationHasResponse.value = false;
+                }
                 abortController.value = null;
                 const wasCancelled = _wasCancelled;
                 _wasCancelled = false;
@@ -5105,7 +5481,13 @@ ${content}
                 const needsPostGenerationTurns = !wasCancelled
                     && ((settings.uiTemplateEnabled && generatedAssistantMessageId)
                         || (memorySettings.enabled && memorySettings.autoExtract));
-                const hasCompletedTurns = needsPostGenerationTurns && buildConversationTurnSnapshot().turns.length > 0;
+                const activeToolContinued = !wasCancelled && assistantMessage
+                    ? await handleActiveToolCallFromAssistant(assistantMessage, activeToolDepth)
+                    : false;
+                if (!activeToolContinued) {
+                    resetActiveToolResultContext();
+                }
+                const hasCompletedTurns = !activeToolContinued && needsPostGenerationTurns && buildConversationTurnSnapshot().turns.length > 0;
 
                 if (hasCompletedTurns && settings.uiTemplateEnabled && generatedAssistantMessageId) {
                     nextTick(() => {
@@ -5915,6 +6297,10 @@ ${content}
             return retainedTurns;
         };
 
+        const getCurrentRetainedVectorMemoryTurns = () => getRetainedRecentMemoryTurns(
+            getPostprocessedChatMessages(chatHistory.value, { includeSystem: false })
+        );
+
         const yieldToBrowser = () => new Promise(resolve => setTimeout(resolve, 0));
 
         const selectVectorMemoriesForContext = async (signal, options = {}) => {
@@ -5993,11 +6379,16 @@ ${content}
                 return;
             }
 
+            const excludedTurns = getCurrentRetainedVectorMemoryTurns();
             const vectorMemories = memories.value
                 .filter(m => m.vectorMemory === true && m.enabled !== false)
-                .filter(m => isEmbeddingLike(m.embedding) && m.embedding.length > 0);
+                .filter(m => isEmbeddingLike(m.embedding) && m.embedding.length > 0)
+                .filter(memory => {
+                    const turn = Number(memory.turn) || 0;
+                    return turn <= 0 || !excludedTurns.has(turn);
+                });
             if (vectorMemories.length === 0) {
-                vectorMemorySearchError.value = '还没有可搜索的向量分片';
+                vectorMemorySearchError.value = '还没有可检索的向量分片';
                 return;
             }
 
@@ -6046,7 +6437,7 @@ ${content}
                 }
             } catch (err) {
                 if (err.name !== 'AbortError') {
-                    vectorMemorySearchError.value = err.message || '向量搜索失败';
+                    vectorMemorySearchError.value = err.message || '向量检索失败';
                 }
             } finally {
                 if (_vectorMemorySearchAbort === searchAbort) {
@@ -6065,6 +6456,566 @@ ${content}
             vectorMemorySearchResults.value = [];
             vectorMemorySearchError.value = '';
             isVectorMemorySearching.value = false;
+        };
+
+        const searchVectorMemoriesForTool = async (query, limit, signal) => {
+            const cleanQuery = trimMemoryText(stripVectorMemoryCode(query), 800);
+            if (!cleanQuery) return [];
+
+            const excludedTurns = getCurrentRetainedVectorMemoryTurns();
+            const vectorMemories = memories.value
+                .filter(isEnabledVectorMemory)
+                .filter(memory => isEmbeddingLike(memory.embedding) && memory.embedding.length > 0)
+                .filter(memory => {
+                    const turn = Number(memory.turn) || 0;
+                    return turn <= 0 || !excludedTurns.has(turn);
+                });
+            if (vectorMemories.length === 0) return [];
+
+            const [queryVector] = await requestMemoryEmbeddings([`工具检索：${cleanQuery}`], signal);
+            const queryTerms = extractVectorQueryTerms(cleanQuery);
+            const scoredMemories = [];
+
+            for (let i = 0; i < vectorMemories.length; i++) {
+                if (signal?.aborted) return [];
+                const memory = vectorMemories[i];
+                const rawScore = cosineSimilarity(queryVector, memory.embedding);
+                if (Number.isFinite(rawScore) && rawScore > -1) {
+                    const lexical = getVectorLexicalMatch(memory, queryTerms);
+                    scoredMemories.push({
+                        memory,
+                        vectorRawScore: rawScore,
+                        vectorLexicalHits: lexical.hits,
+                        vectorLexicalTerms: lexical.matched,
+                        vectorScore: rawScore + lexical.boost
+                    });
+                }
+                if (i > 0 && i % 512 === 0) await yieldToBrowser();
+            }
+
+            return scoredMemories
+                .sort((a, b) => {
+                    const scoreDiff = b.vectorScore - a.vectorScore;
+                    if (Math.abs(scoreDiff) > 0.0001) return scoreDiff;
+                    return (b.memory.turn || 0) - (a.memory.turn || 0);
+                })
+                .slice(0, Math.max(ACTIVE_TOOL_MIN_RESULT_COUNT, Math.min(ACTIVE_TOOL_MAX_RESULT_COUNT, Number(limit) || ACTIVE_TOOL_DEFAULT_RESULT_COUNT)))
+                .map(item => ({
+                    ...item.memory,
+                    vectorRawScore: item.vectorRawScore,
+                    vectorLexicalHits: item.vectorLexicalHits,
+                    vectorLexicalTerms: item.vectorLexicalTerms,
+                    vectorScore: item.vectorScore
+                }));
+        };
+
+        const extractKeywordToolTerms = (query) => {
+            const cleanQuery = trimMemoryText(stripVectorMemoryCode(query), 300);
+            if (!cleanQuery) return [];
+            const parts = cleanQuery
+                .split(/[\s,，、;；|｜/\\]+/u)
+                .map(term => term.trim())
+                .filter(Boolean);
+            return Array.from(new Set([cleanQuery, ...parts]))
+                .filter(term => term.length > 0)
+                .slice(0, 12);
+        };
+
+        const getKeywordToolMessageText = (message) => {
+            if (!message || typeof message.content !== 'string') return '';
+            const parsedData = parseCot(message.content || '');
+            return trimMemoryText(stripVectorMemoryCode(stripImageTags(parsedData.main || '')), 5000);
+        };
+
+        const buildKeywordToolSnippet = (text, matchedTerms) => {
+            const source = String(text || '').trim();
+            if (source.length <= 1400) return source;
+            const lowerSource = source.toLowerCase();
+            const firstIndex = matchedTerms
+                .map(term => lowerSource.indexOf(String(term || '').toLowerCase()))
+                .filter(index => index >= 0)
+                .sort((a, b) => a - b)[0] ?? 0;
+            const start = Math.max(0, firstIndex - 420);
+            const end = Math.min(source.length, firstIndex + 900);
+            return `${start > 0 ? '...' : ''}${source.slice(start, end).trim()}${end < source.length ? '...' : ''}`;
+        };
+
+        const searchDialogueByKeywordForTool = (query, limit, options = {}) => {
+            const terms = extractKeywordToolTerms(query);
+            if (terms.length === 0) return [];
+            const lowerTerms = terms.map(term => term.toLowerCase());
+            const messages = getPostprocessedChatMessages(chatHistory.value, { includeSystem: false });
+            const snapshot = buildConversationTurnSnapshot(messages, { alreadyPostprocessed: true });
+            const turnByMessageIndex = new Map();
+            (snapshot.turns || []).forEach(turnInfo => {
+                (turnInfo.messageIndexes || []).forEach(messageIndex => {
+                    turnByMessageIndex.set(messageIndex, turnInfo.turn);
+                });
+            });
+
+            const scored = [];
+            messages.forEach((message, index) => {
+                if (!message || message.role === 'system') return;
+                if (options.excludeMessageId && message.id === options.excludeMessageId) return;
+                const text = getKeywordToolMessageText(message);
+                if (!text || isRoleMemoryContextContent(text) || text.includes('<active_tool_results>')) return;
+
+                const lowerText = text.toLowerCase();
+                const matchedTerms = terms.filter((term, termIndex) => lowerText.includes(lowerTerms[termIndex]));
+                if (matchedTerms.length === 0) return;
+
+                const fullQueryMatched = lowerText.includes(lowerTerms[0]);
+                const roleLabel = message.role === 'user' ? '用户' : '角色卡';
+                const speaker = message.name || (message.role === 'user' ? user.name : currentCharacter.value?.name) || roleLabel;
+                scored.push({
+                    turn: turnByMessageIndex.get(index) || getConversationTurnAtIndexFromSnapshot(snapshot, index) || '?',
+                    role: message.role,
+                    speaker,
+                    matchedTerms,
+                    score: (fullQueryMatched ? 100 : 0) + matchedTerms.length,
+                    messageIndex: index,
+                    dialogueText: `${roleLabel}：${buildKeywordToolSnippet(text, matchedTerms)}`
+                });
+            });
+
+            return scored
+                .sort((a, b) => {
+                    const scoreDiff = b.score - a.score;
+                    if (scoreDiff !== 0) return scoreDiff;
+                    return b.messageIndex - a.messageIndex;
+                })
+                .slice(0, Math.max(ACTIVE_TOOL_MIN_RESULT_COUNT, Math.min(ACTIVE_TOOL_MAX_RESULT_COUNT, Number(limit) || ACTIVE_TOOL_DEFAULT_RESULT_COUNT)))
+                .sort((a, b) => a.messageIndex - b.messageIndex);
+        };
+
+        const resetActiveToolResultContext = () => {
+            activeToolResultContexts.value = [];
+            pendingActiveToolContext.value = '';
+        };
+
+        const buildActiveToolResultPayload = () => {
+            const blocks = activeToolResultContexts.value.filter(Boolean);
+            if (blocks.length === 0) return '';
+            return [
+                '<active_tool_results>',
+                '  <description>以下是本轮正文工具调用已经检索到的结果。本段内容由系统插入最后一条用户消息结尾。追加调用会保留并追加旧结果，覆盖调用会替换旧结果；请把这些内容作为参考继续回答，不要复述工具调用标签。</description>',
+                blocks.join('\n\n'),
+                '</active_tool_results>'
+            ].join('\n');
+        };
+
+        const updateActiveToolResultContext = (resultContext, mode = 'add') => {
+            if (!resultContext) {
+                pendingActiveToolContext.value = buildActiveToolResultPayload();
+                return;
+            }
+            if (mode === 'cover') {
+                activeToolResultContexts.value = [resultContext];
+            } else {
+                activeToolResultContexts.value = [...activeToolResultContexts.value, resultContext];
+            }
+            pendingActiveToolContext.value = buildActiveToolResultPayload();
+        };
+
+        const formatActiveToolResultContext = (tool, query, results, mode = 'add') => {
+            const title = escapeXmlAttribute(tool.name || '工具');
+            const modeValue = mode === 'cover' ? 'cover' : 'add';
+            const labels = getActiveToolCallLabels(tool);
+            const callName = escapeXmlAttribute(modeValue === 'cover' ? labels.cover : labels.add);
+            const cleanQuery = trimMemoryText(query, 800);
+            if (isKeywordActiveTool(tool)) {
+                const modeDescription = modeValue === 'cover'
+                    ? '本次调用模式为覆盖：系统会用本次结果替换本轮此前已检索的工具结果。'
+                    : '本次调用模式为追加：系统会把本次结果追加到本轮此前已检索的工具结果后。';
+
+                if (!Array.isArray(results) || results.length === 0) {
+                    return [
+                        `<active_tool_result name="${title}" call="${callName}" mode="${modeValue}" query="${escapeXmlAttribute(cleanQuery)}">`,
+                        `  <description>系统已按关键词精确检索当前对话历史，但没有找到包含该关键词的对话片段。${modeDescription}本段内容已插入最后一条用户消息结尾。请换更贴近原文的关键词再次调用，不要编造未出现过的对话内容。</description>`,
+                        '</active_tool_result>'
+                    ].join('\n');
+                }
+
+                const formattedResults = results.map(item => {
+                    const turnValue = escapeXmlAttribute(item.turn || '?');
+                    const roleValue = escapeXmlAttribute(item.role || 'unknown');
+                    const speakerValue = escapeXmlAttribute(item.speaker || '');
+                    const matchedValue = escapeXmlAttribute((item.matchedTerms || []).join(', '));
+                    const fragmentText = indentXmlText(item.dialogueText || '', 4);
+                    return [
+                        `  <dialogue_fragment turn="${turnValue}" role="${roleValue}" speaker="${speakerValue}" matched="${matchedValue}">`,
+                        fragmentText,
+                        '  </dialogue_fragment>'
+                    ].join('\n');
+                }).join('\n\n');
+
+                return [
+                    `<active_tool_result name="${title}" call="${callName}" mode="${modeValue}" query="${escapeXmlAttribute(cleanQuery)}">`,
+                    `  <description>以下是系统根据关键词从当前对话历史中精确抓取到的原文片段。${modeDescription}本段内容由系统插入最后一条用户消息结尾。请优先依据这些原文片段继续回答，不要把没有出现过的内容说成事实；如果仍不足以明确回答，请换更贴近原文的关键词继续调用工具。</description>`,
+                    formattedResults,
+                    '</active_tool_result>'
+                ].join('\n');
+            }
+            const modeDescription = modeValue === 'cover'
+                ? '本次调用模式为覆盖：系统会用本次结果替换本轮此前已检索的工具结果。'
+                : '本次调用模式为追加：系统会把本次结果追加到本轮此前已检索的工具结果后。';
+
+            if (!Array.isArray(results) || results.length === 0) {
+                return [
+                    `<active_tool_result name="${title}" call="${callName}" mode="${modeValue}" query="${escapeXmlAttribute(cleanQuery)}">`,
+                    `  <description>系统已按工具调用检索向量记忆，但没有找到可用结果。${modeDescription}本段内容已插入最后一条用户消息结尾。请先判断当前上下文是否已经明确且足够；如果仍不够明确完整，请换更具体的检索内容再次调用，不要重复完全相同的查询。</description>`,
+                    '</active_tool_result>'
+                ].join('\n');
+            }
+
+            const formattedResults = sortVectorMemoriesByTime(results).map(memory => {
+                const turnValue = escapeXmlAttribute(memory.turn || '?');
+                const scoreValue = escapeXmlAttribute(Number.isFinite(memory.vectorScore)
+                    ? `${(memory.vectorScore * 100).toFixed(1)}%`
+                    : 'unknown');
+                const fragmentText = indentXmlText(memory.paragraph || memory.summary || memory.sourceText || '', 4);
+                return [
+                    `  <memory_fragment turn="${turnValue}" similarity="${scoreValue}">`,
+                    fragmentText,
+                    '  </memory_fragment>'
+                ].join('\n');
+            }).join('\n\n');
+
+            return [
+                `<active_tool_result name="${title}" call="${callName}" mode="${modeValue}" query="${escapeXmlAttribute(cleanQuery)}">`,
+                `  <description>以下是系统根据上一条正文工具调用检索到的向量记忆。${modeDescription}本段内容由系统插入最后一条用户消息结尾。请用这些结果继续回答用户，不要复述工具调用标签，也不要把这些内容当作当前现场；如果结果仍不足以明确回答，或仍有疑点，请换更具体的检索内容继续调用工具。</description>`,
+                formattedResults,
+                '</active_tool_result>'
+            ].join('\n');
+        };
+
+        const stripCodeBlocksForToolDetection = (text) => String(text || '')
+            .replace(/```[\s\S]*?```/g, '')
+            .replace(/~~~[\s\S]*?~~~/g, '');
+
+        const escapeRegexText = (value) => String(value || '').replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+
+        const findActiveToolCallsInText = (text) => {
+            const originalContent = String(text || '');
+            if (!originalContent) return [];
+            const mainContent = stripCodeBlocksForToolDetection(parseCot(originalContent).main);
+            const tools = getEnabledActiveTools();
+            const calls = [];
+            const seen = new Set();
+
+            for (const tool of tools) {
+                const labels = getActiveToolCallLabels(tool);
+                const callForms = [
+                    { label: labels.add, mode: 'add' },
+                    { label: labels.cover, mode: 'cover' }
+                ];
+                for (const form of callForms) {
+                    const escapedName = escapeRegexText(form.label);
+                    const regex = new RegExp(`<\\s*${escapedName}\\s*:\\s*([\\s\\S]{1,800}?)\\s*>`, 'gi');
+                    let match;
+                    while ((match = regex.exec(mainContent)) !== null) {
+                        const query = String(match[1] || '').trim();
+                        if (!query) continue;
+
+                        const raw = match[0];
+                        const originalIndex = originalContent.indexOf(raw, match.index);
+                        const index = originalIndex >= 0 ? originalIndex : match.index;
+                        const key = `${index}:${match.index}:${form.label}:${raw}`;
+                        if (seen.has(key)) continue;
+                        seen.add(key);
+
+                        calls.push({
+                            tool,
+                            mode: form.mode,
+                            callLabel: form.label,
+                            query,
+                            raw,
+                            index,
+                            mainIndex: match.index
+                        });
+                    }
+                }
+            }
+
+            return calls.sort((a, b) => {
+                const indexDiff = (a.index ?? 0) - (b.index ?? 0);
+                if (indexDiff !== 0) return indexDiff;
+                return (a.mainIndex ?? 0) - (b.mainIndex ?? 0);
+            });
+        };
+
+        const getActiveToolDetectionText = (message) => [
+            String(message?.content || ''),
+            String(message?._activeToolPendingText || '')
+        ].filter(Boolean).join('\n');
+
+        const findActiveToolCallsInAssistantMessage = (message) => findActiveToolCallsInText(getActiveToolDetectionText(message));
+
+        const createActiveToolUi = (toolCall, initialStatus = 'queued') => ({
+            id: generateUUID(),
+            toolId: toolCall.tool?.id || '',
+            toolType: toolCall.tool?.type || ACTIVE_TOOL_VECTOR_TYPE,
+            toolResultCount: toolCall.tool?.resultCount || ACTIVE_TOOL_DEFAULT_RESULT_COUNT,
+            name: toolCall.tool?.name || '向量记忆主动检索',
+            callName: toolCall.callLabel || toolCall.tool?.callName || 'tool_memory_add',
+            baseCallName: toolCall.tool?.callName || 'tool_memory',
+            mode: toolCall.mode || 'add',
+            query: toolCall.query || '',
+            raw: toolCall.raw,
+            status: initialStatus,
+            isOpen: false,
+            reasoning: '',
+            isReasoningOpen: false,
+            resultCount: 0,
+            resultText: '',
+            error: ''
+        });
+
+        const stripActiveToolCallsFromAssistant = (message, toolCalls) => {
+            if (!message || !Array.isArray(toolCalls) || toolCalls.length === 0) return;
+            const originalContent = String(message.content || '');
+            const firstToolCallIndex = toolCalls
+                .map(toolCall => Number.isFinite(toolCall.index) ? toolCall.index : originalContent.indexOf(toolCall.raw))
+                .filter(index => index >= 0)
+                .sort((a, b) => a - b)[0];
+            const nextContent = (Number.isFinite(firstToolCallIndex)
+                ? originalContent.slice(0, firstToolCallIndex)
+                : toolCalls.reduce((content, toolCall) => content.replace(toolCall.raw, ''), originalContent))
+                .replace(/\n{3,}/g, '\n\n')
+                .trim();
+
+            message.content = nextContent;
+            message.shouldAnimate = false;
+        };
+
+        const appendActiveToolCallsToAssistant = (message, toolCalls) => {
+            if (!message || !Array.isArray(toolCalls) || toolCalls.length === 0) return [];
+            if (!Array.isArray(message.toolCalls)) message.toolCalls = [];
+
+            const toolUis = toolCalls.map(toolCall => createActiveToolUi(toolCall));
+            message.toolCalls.push(...toolUis);
+            message.shouldAnimate = false;
+            return toolUis;
+        };
+
+        const attachActiveToolCallsToAssistant = (message, toolCalls, options = {}) => {
+            const toolUis = appendActiveToolCallsToAssistant(message, toolCalls, options);
+            if (toolUis.length === 0) return [];
+            stripActiveToolCallsFromAssistant(message, toolCalls);
+            return toolUis;
+        };
+
+        const removeActiveToolCallRawsFromText = (text, toolCalls) => {
+            let nextText = String(text || '');
+            [...toolCalls]
+                .sort((a, b) => (b.index ?? b.mainIndex ?? 0) - (a.index ?? a.mainIndex ?? 0))
+                .forEach(toolCall => {
+                    const index = Number.isFinite(toolCall.index) ? toolCall.index : nextText.indexOf(toolCall.raw);
+                    if (index < 0) return;
+                    nextText = `${nextText.slice(0, index)}${nextText.slice(index + String(toolCall.raw || '').length)}`;
+                });
+            return nextText;
+        };
+
+        const promoteActiveToolCallsFromAssistant = (message, options = {}) => {
+            if (!message || typeof message.content !== 'string') return [];
+            const scanText = message._activeToolCaptureActive
+                ? String(message._activeToolPendingText || '')
+                : String(message.content || '');
+            const detectedCalls = findActiveToolCallsInText(scanText);
+            if (detectedCalls.length === 0) return [];
+
+            let toolBuffer = scanText;
+            let callsForUi = detectedCalls;
+            if (!message._activeToolCaptureActive) {
+                const firstIndex = Math.max(0, detectedCalls[0].index ?? detectedCalls[0].mainIndex ?? scanText.indexOf(detectedCalls[0].raw));
+                message.content = scanText.slice(0, firstIndex)
+                    .replace(/\n{3,}/g, '\n\n')
+                    .trim();
+                toolBuffer = scanText.slice(firstIndex);
+                callsForUi = findActiveToolCallsInText(toolBuffer);
+                message._activeToolCaptureActive = true;
+            }
+
+            const toolUis = appendActiveToolCallsToAssistant(message, callsForUi, options);
+            if (toolUis.length > 0) {
+                activeToolHandoffPending.value = true;
+            }
+            message._activeToolPendingText = removeActiveToolCallRawsFromText(toolBuffer, callsForUi);
+            message.shouldAnimate = false;
+            return toolUis;
+        };
+
+        const cleanupActiveToolCaptureState = (message) => {
+            if (!message) return;
+            delete message._activeToolCaptureActive;
+            delete message._activeToolPendingText;
+        };
+
+        const resolveActiveToolForUi = (toolUi) => {
+            const baseCallName = normalizeActiveToolCallName(
+                toolUi?.baseCallName
+                || String(toolUi?.callName || '').replace(/_(?:add|cover)$/i, '')
+                || 'tool_memory'
+            );
+            const enabledMatch = getEnabledActiveTools().find(tool => (
+                tool.id === toolUi?.toolId
+                || normalizeActiveToolCallName(tool.callName) === baseCallName
+            ));
+            if (enabledMatch) return enabledMatch;
+            return getDefaultActiveToolDefinitions().find(tool => (
+                tool.id === toolUi?.toolId
+                || normalizeActiveToolCallName(tool.callName) === baseCallName
+            )) || createDefaultActiveTool();
+        };
+
+        const buildActiveToolCallFromUi = (toolUi) => {
+            const tool = resolveActiveToolForUi(toolUi);
+            return {
+                tool,
+                mode: toolUi?.mode || 'add',
+                callLabel: toolUi?.callName || getActiveToolCallLabels(tool).add,
+                query: String(toolUi?.query || '').trim(),
+                raw: toolUi?.raw || ''
+            };
+        };
+
+        const handleActiveToolCallFromAssistant = async (assistantMessage, activeToolDepth = 0) => {
+            promoteActiveToolCallsFromAssistant(assistantMessage);
+            let toolUis = Array.isArray(assistantMessage?.toolCalls)
+                ? assistantMessage.toolCalls.filter(toolCall => ['queued', 'running'].includes(toolCall?.status))
+                : [];
+            let toolCalls = toolUis.map(buildActiveToolCallFromUi).filter(toolCall => toolCall.query);
+
+            if (toolCalls.length === 0) {
+                toolCalls = findActiveToolCallsInAssistantMessage(assistantMessage);
+            }
+            if (toolCalls.length === 0) {
+                cleanupActiveToolCaptureState(assistantMessage);
+                activeToolHandoffPending.value = false;
+                return false;
+            }
+
+            if (activeToolDepth >= ACTIVE_TOOL_MAX_AUTO_CONTINUE) {
+                if (toolUis.length === 0) {
+                    stripActiveToolCallsFromAssistant(assistantMessage, toolCalls);
+                } else {
+                    toolUis.forEach(toolUi => {
+                        toolUi.status = 'error';
+                    });
+                }
+                cleanupActiveToolCaptureState(assistantMessage);
+                activeToolHandoffPending.value = false;
+                await saveChatHistoryNow();
+                return false;
+            }
+
+            if (toolUis.length === 0) {
+                toolUis = attachActiveToolCallsToAssistant(assistantMessage, toolCalls);
+            }
+            if (toolUis.length === 0) {
+                cleanupActiveToolCaptureState(assistantMessage);
+                activeToolHandoffPending.value = false;
+                return false;
+            }
+            await saveChatHistoryNow();
+
+            const toolAbort = new AbortController();
+            activeToolQueueRunning.value = true;
+            activeToolHandoffPending.value = false;
+            activeToolQueueAbortController = toolAbort;
+            let continuationToolUi = null;
+            let hasToolResult = false;
+
+            try {
+                for (let index = 0; index < toolCalls.length; index += 1) {
+                    const toolCall = toolCalls[index];
+                    const toolUi = toolUis[index];
+                    try {
+                        if (toolAbort.signal.aborted) throw createAbortReason('Generation cancelled by user');
+                        toolUi.status = 'running';
+                        await saveChatHistoryNow();
+
+                        if (isVectorActiveTool(toolCall.tool) && !memorySettings.enabled) {
+                            throw new Error('记忆系统未开启，无法执行向量检索。');
+                        }
+
+                        const results = isKeywordActiveTool(toolCall.tool)
+                            ? searchDialogueByKeywordForTool(toolCall.query, toolCall.tool.resultCount, {
+                                excludeMessageId: assistantMessage.id
+                            })
+                            : await searchVectorMemoriesForTool(
+                                toolCall.query,
+                                toolCall.tool.resultCount,
+                                toolAbort.signal
+                            );
+                        if (toolAbort.signal.aborted) throw createAbortReason('Generation cancelled by user');
+                        const resultContext = formatActiveToolResultContext(toolCall.tool, toolCall.query, results, toolCall.mode);
+                        toolUi.status = 'done';
+                        toolUi.resultCount = Array.isArray(results) ? results.length : 0;
+                        toolUi.resultText = resultContext;
+                        updateActiveToolResultContext(resultContext, toolCall.mode);
+                        continuationToolUi = toolUi;
+                        hasToolResult = true;
+                        await saveChatHistoryNow();
+                    } catch (err) {
+                        if (err.name === 'AbortError') {
+                            markActiveToolInlineWorkCancelled();
+                            await saveChatHistoryNow();
+                            return false;
+                        }
+                        toolUi.status = 'error';
+                        toolUi.error = err.message || '工具检索失败';
+                        toolUi.resultText = toolUi.error;
+                        await saveChatHistoryNow();
+                    }
+                }
+
+                if (!hasToolResult || !continuationToolUi) return false;
+                if (toolAbort.signal.aborted) {
+                    markActiveToolInlineWorkCancelled();
+                    await saveChatHistoryNow();
+                    return false;
+                }
+
+                continuationToolUi.status = 'continuing';
+                cleanupActiveToolCaptureState(assistantMessage);
+                activeToolQueueRunning.value = false;
+                activeToolContinuationPending.value = true;
+                await saveChatHistoryNow();
+                await generateResponse(Date.now(), {
+                    activeToolDepth: activeToolDepth + 1,
+                    continueAssistantMessageId: assistantMessage.id,
+                    continuationToolCallId: continuationToolUi.id
+                });
+                if (continuationToolUi.status === 'continuing') {
+                    continuationToolUi.status = 'done';
+                }
+                await saveChatHistoryNow();
+                return true;
+            } catch (err) {
+                if (err.name === 'AbortError') {
+                    markActiveToolInlineWorkCancelled();
+                    await saveChatHistoryNow();
+                    return false;
+                }
+                if (continuationToolUi) {
+                    continuationToolUi.status = 'error';
+                    continuationToolUi.error = err.message || '工具续写失败';
+                    continuationToolUi.resultText = continuationToolUi.error;
+                    await saveChatHistoryNow();
+                }
+                return false;
+            } finally {
+                if (activeToolQueueAbortController === toolAbort) {
+                    activeToolQueueAbortController = null;
+                }
+                activeToolHandoffPending.value = false;
+                activeToolQueueRunning.value = false;
+                activeToolContinuationPending.value = false;
+                cleanupActiveToolCaptureState(assistantMessage);
+                await saveChatHistoryNow();
+            }
         };
 
         const startBatchMemoryExtraction = async () => {
@@ -8195,13 +9146,15 @@ image###生成的提示词###
             switchProfile, createNewProfile, deleteProfile, userProfiles, activeProfileId, showProfileDropdown,
             processMainContent,
             currentView, showMobileMenu, showDescriptionPanel, showModelSelector, modelSelectionTarget, openModelSelector, showChatModelSelector, showCharacterEditor, showAddCharacterMenu, showPresetEditor, showUiTemplateEditor,
+            showActiveToolEditor,
             showExportModal, sysInstruction, showInstructionPanel, exportType, exportItems, selectedExportIndices, // Export Modal
             showContextViewerModal, lastContextMessages, lastTriggeredWorldInfos, // Context Viewer
             showCharacterExportModal, characterToExportIndex, openCharacterExportModal, confirmCharacterExport, // Character Export Modal
             showUpdateModal, updateCountdown, latestUpdate, closeUpdateModal, isUpdateScrolledToBottom, checkUpdateScroll, // Update Modal
             showConfirmModal, confirmMessage, modelMode, showNoMemoryNeededModal, // Export for template
-            isGenerating, isRemoteGenerating, remoteEstimatedTime, isReceiving, isThinking, activeNativeReasoning, userInput, modelSearchQuery, activeModelTag, modelTags, characterSearchQuery, availableModels, filteredModels, filteredCharacters,
+            isGenerating, isRemoteGenerating, remoteEstimatedTime, isReceiving, isThinking, hasActiveToolInlineWork, activeToolInlineStatusText, isConversationBusy, activeToolContinuationMessageId, activeToolContinuationToolCallId, activeToolContinuationHasResponse, activeNativeReasoning, userInput, modelSearchQuery, activeModelTag, modelTags, characterSearchQuery, availableModels, filteredModels, filteredCharacters,
             user, settings, apiProviderOptions, selectedApiProvider, isCustomApiProvider, customApiProviderOption, showApiProviderSelector, selectApiProvider, characters, currentCharacter, currentCharacterIndex, chatHistory, displayedChatMessages, handleChatScroll, presets, regexScripts, worldInfo,
+            activeTools, editingActiveTool, normalizeActiveTools,
             activeRegexCount, activeWorldInfoCount, activeUiTemplateCount, chatRoundStats, totalContextLength,
             editingCharacter, editingPreset, editingUiTemplate, toasts, chatContainer, inputBox, messageElements,
             lastUserMessageIndex, // Expose to template
@@ -8360,7 +9313,6 @@ image###生成的提示词###
             getCharacterWICount, getCharacterRegexCount,
             handleAvatarUpload, importCharacter, exportCharacter,
             createPreset, editPreset, savePreset, deletePreset, movePreset,
-
             renderMarkdown, messageUsesHtmlFrame, messageUsesWideLayout, parseCot, formatTimeAgo, closeCharacterEditor: () => showCharacterEditor.value = false,
             openExportModal: (type) => {
                 exportType.value = type;
@@ -8597,6 +9549,38 @@ image###生成的提示词###
                     regexScripts.value.splice(index, 1);
                     showToast('正则脚本已删除', 'success');
                 });
+            },
+
+            editActiveTool: (index) => {
+                const tool = activeTools.value[index];
+                if (!tool) return;
+                editingActiveTool.id = index;
+                editingActiveTool.data = normalizeActiveTool(JSON.parse(JSON.stringify(tool)));
+                showActiveToolEditor.value = true;
+            },
+            saveActiveTool: () => {
+                const index = editingActiveTool.id;
+                if (index === undefined || !activeTools.value[index]) {
+                    showActiveToolEditor.value = false;
+                    return;
+                }
+                const previous = activeTools.value[index];
+                const data = normalizeActiveTool({
+                    ...previous,
+                    id: previous.id,
+                    name: previous.name,
+                    enabled: previous.enabled,
+                    callName: previous.callName,
+                    type: previous.type,
+                    description: previous.description,
+                    displayDescription: previous.displayDescription,
+                    resultCount: editingActiveTool.data.resultCount,
+                    resultCountVersion: ACTIVE_TOOL_RESULT_COUNT_VERSION
+                });
+                activeTools.value[index] = data;
+                normalizeActiveTools();
+                showActiveToolEditor.value = false;
+                showToast('工具设置已保存', 'success');
             },
 
             // World Info Methods
