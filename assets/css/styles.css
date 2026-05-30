@@ -1,4 +1,14 @@
-html {
+        :root {
+            --app-visual-height: 100vh;
+        }
+
+        @supports (height: 100dvh) {
+            :root {
+                --app-visual-height: 100dvh;
+            }
+        }
+
+        html {
             height: 100%;
             -webkit-text-size-adjust: 100% !important;
             -moz-text-size-adjust: 100% !important;
@@ -76,11 +86,16 @@ html {
             text-size-adjust: 100% !important;
         }
 
+        #app {
+            height: var(--app-visual-height, 100%);
+            min-height: 0;
+        }
+
         .app-native-fullscreen,
         html:fullscreen #app,
         html:-webkit-full-screen #app {
             width: 100vw;
-            height: 100vh;
+            height: var(--app-visual-height, 100vh);
             background-color: #f9fafb;
         }
 
@@ -219,7 +234,37 @@ html {
         /* Mobile optimizations */
         @media (max-width: 768px) {
             .mobile-hide { display: none; }
-            
+
+            html,
+            body,
+            #app {
+                height: var(--app-visual-height, 100dvh) !important;
+                min-height: 0 !important;
+                overflow: hidden !important;
+                overscroll-behavior: none;
+            }
+
+            .app-main,
+            .chat-view-root {
+                min-height: 0 !important;
+                height: var(--app-visual-height, 100dvh) !important;
+            }
+
+            .mobile-keyboard-active .app-main,
+            .mobile-keyboard-active .chat-view-root,
+            .mobile-keyboard-active .chat-header-bar,
+            .mobile-keyboard-active .input-area-mobile,
+            .mobile-keyboard-active .input-island,
+            .mobile-keyboard-active .char-bg-blur {
+                transition: none !important;
+                animation: none !important;
+            }
+
+            .mobile-keyboard-active .char-bg-blur {
+                will-change: auto !important;
+                transform: translateZ(0);
+            }
+
             /* Hide scrollbar for Chrome, Safari and Opera */
             ::-webkit-scrollbar,
             .custom-scrollbar::-webkit-scrollbar {

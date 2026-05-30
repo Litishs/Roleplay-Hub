@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport"
-        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, interactive-widget=resizes-content">
+        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, interactive-widget=overlays-content">
     <title>Roleplay Hub</title>
     <!-- <link rel="icon" href="logo.jpg" type="image/jpeg"> -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -80,7 +80,7 @@
 
 <body class="bg-gray-50 text-gray-900 font-sans selection:bg-primary-200 selection:text-primary-900">
     <div id="app" v-cloak class="h-full flex flex-col md:flex-row relative"
-        :class="{ 'app-native-fullscreen': isChatFullscreen }">
+        :class="{ 'app-native-fullscreen': isChatFullscreen, 'mobile-keyboard-active': isMobileKeyboardOpen }">
         <component is="style" v-if="settings.fontSize">
             .markdown-body :not(h1):not(h2):not(h3):not(h4):not(h5):not(h6):not(small):not(sub):not(sup):not(code) {
             font-size: inherit !important;
@@ -415,7 +415,7 @@
                 </transition>
 
                 <!-- Chat Header -->
-                <div class="absolute top-0 left-0 right-0 z-10 pointer-events-none">
+                <div class="absolute top-0 left-0 right-0 z-10 pointer-events-none chat-header-bar">
                     <!-- 深色渐隐背景层 (平滑极细过渡) -->
                     <div class="absolute top-0 left-0 right-0 h-28"
                         style="background: linear-gradient(to bottom, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0.4) 20%, rgba(0,0,0,0.25) 40%, rgba(0,0,0,0.15) 60%, rgba(0,0,0,0.06) 80%, rgba(0,0,0,0.02) 95%, rgba(0,0,0,0) 100%); pointer-events: none;">
@@ -1059,9 +1059,9 @@
 
                 <!-- Input Area (Floating Island) -->
                 <div
-                    class="absolute bottom-0 left-0 right-0 w-full p-2 md:p-3 z-30 pointer-events-none flex justify-center flex-shrink-0 transition-all duration-300">
+                    class="absolute bottom-0 left-0 right-0 w-full p-2 md:p-3 z-30 pointer-events-none flex justify-center flex-shrink-0 transition-all duration-300 input-area-mobile">
                     <div
-                        class="w-full max-w-lg pointer-events-auto p-2.5 md:p-3 bg-white/90 backdrop-blur-xl border border-white/40 shadow-lg rounded-3xl ring-1 ring-black/5 transition-all duration-300 flex flex-col">
+                        class="w-full max-w-lg pointer-events-auto p-2.5 md:p-3 bg-white/90 backdrop-blur-xl border border-white/40 shadow-lg rounded-3xl ring-1 ring-black/5 transition-all duration-300 flex flex-col input-island">
                         <!-- Suggestion Bubbles (Absolute positioned above the bar) -->
                         <div v-if="suggestedReplies.length > 0"
                             class="absolute bottom-full left-0 right-0 p-2 pointer-events-none z-50">
@@ -1340,7 +1340,8 @@
                             </div>
                         </div>
                         <div class="relative w-full flex items-end gap-2 px-1">
-                            <textarea v-model="userInput" @input="autoResizeInput" @keydown.enter.prevent="sendMessage"
+                            <textarea v-model="userInput" @input="autoResizeInput" @focus="handleChatInputFocus"
+                                @blur="handleChatInputBlur" @keydown.enter.prevent="sendMessage"
                                 :placeholder="'输入消息...'"
                                 class="flex-1 bg-gray-100/70 text-gray-800 rounded-2xl px-4 py-2.5 md:px-4 md:py-2.5 focus:outline-none focus:ring-2 focus:ring-primary-500/30 focus:border-primary-400 resize-none border border-transparent shadow-inner transition-all focus:bg-white chat-input-scrollbar min-h-[44px] md:min-h-[46px] max-h-[140px] md:max-h-[160px]"
                                 rows="1" ref="inputBox"></textarea>

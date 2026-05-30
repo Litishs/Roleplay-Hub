@@ -275,8 +275,13 @@ createApp({
         const toasts = ref([]);
         const chatContainer = ref(null);
         const isChatFullscreen = ref(false);
+        const isMobileKeyboardOpen = ref(false);
         const inputBox = ref(null);
         const messageElements = ref([]);
+        let mobileViewportRaf = null;
+        let mobileKeyboardBlurTimer = null;
+        let mobileKeyboardScrollTimer = null;
+        let lastAppliedMobileViewportHeight = 0;
 
         // IntersectionObserver for lazy loading images or other visibility triggers could go here
 
@@ -354,6 +359,72 @@ createApp({
         watch(userInput, () => {
             nextTick(autoResizeInput);
         });
+
+        const isMobileViewport = () => (
+            (window.matchMedia && window.matchMedia('(max-width: 768px)').matches)
+            || window.innerWidth <= 768
+        );
+
+        const applyMobileVisualViewportHeight = (height, { force = false } = {}) => {
+            if (!Number.isFinite(height) || height <= 0) return;
+            const safeHeight = Math.max(320, Math.round(height));
+            if (!force && Math.abs(safeHeight - lastAppliedMobileViewportHeight) < 2) return;
+            lastAppliedMobileViewportHeight = safeHeight;
+            document.documentElement.style.setProperty('--app-visual-height', `${safeHeight}px`);
+            const appElement = document.getElementById('app');
+            if (appElement?.style.height) appElement.style.height = '';
+        };
+
+        const syncMobileVisualViewport = ({ force = false } = {}) => {
+            if (!isMobileViewport()) {
+                isMobileKeyboardOpen.value = false;
+                lastAppliedMobileViewportHeight = 0;
+                document.documentElement.style.removeProperty('--app-visual-height');
+                return;
+            }
+
+            const viewport = window.visualViewport;
+            const height = viewport?.height || window.innerHeight || document.documentElement.clientHeight;
+            applyMobileVisualViewportHeight(height, { force });
+
+            const inputFocused = document.activeElement === inputBox.value;
+            const layoutHeight = window.innerHeight || document.documentElement.clientHeight || height;
+            const viewportCompressed = viewport && height < layoutHeight - 80;
+            isMobileKeyboardOpen.value = !!(inputFocused || viewportCompressed);
+
+            if (isMobileKeyboardOpen.value && currentView.value === 'chat') {
+                clearTimeout(mobileKeyboardScrollTimer);
+                mobileKeyboardScrollTimer = setTimeout(scrollToBottom, 90);
+            }
+        };
+
+        const scheduleMobileVisualViewportSync = (options = {}) => {
+            if (mobileViewportRaf) cancelAnimationFrame(mobileViewportRaf);
+            mobileViewportRaf = requestAnimationFrame(() => {
+                mobileViewportRaf = null;
+                syncMobileVisualViewport(options);
+            });
+        };
+
+        const handleChatInputFocus = () => {
+            if (!isMobileViewport()) return;
+            clearTimeout(mobileKeyboardBlurTimer);
+            isMobileKeyboardOpen.value = true;
+            scheduleMobileVisualViewportSync({ force: true });
+            clearTimeout(mobileKeyboardScrollTimer);
+            mobileKeyboardScrollTimer = setTimeout(scrollToBottom, 120);
+        };
+
+        const handleChatInputBlur = () => {
+            clearTimeout(mobileKeyboardBlurTimer);
+            mobileKeyboardBlurTimer = setTimeout(() => {
+                isMobileKeyboardOpen.value = false;
+                scheduleMobileVisualViewportSync({ force: true });
+            }, 180);
+        };
+
+        const handleMobileViewportResize = () => scheduleMobileVisualViewportSync();
+        const handleMobileOrientationChange = () => scheduleMobileVisualViewportSync({ force: true });
 
         // Service Status
         const apiStatus = ref('unknown'); // 'unknown', 'checking', 'connected', 'error'
@@ -10491,31 +10562,11 @@ image###生成的提示词###
 
             // --- Mobile Keyboard Adaptation (VisualViewport) ---
             if (window.visualViewport) {
-                const handleVisualViewportResize = () => {
-                    const appElement = document.getElementById('app');
-                    if (appElement) {
-                        // 直接设置高度为视觉视口高度，解决键盘弹起导致的遮挡或留白问题
-                        const height = window.visualViewport.height;
-                        appElement.style.height = `${height}px`;
-
-                        // 当键盘收起时（高度恢复），确保页面回到顶部，防止留白
-                        if (height >= window.innerHeight - 20) { // 允许微小误差
-                            window.scrollTo(0, 0);
-                        }
-
-                        // 如果是输入状态（视口变小），且是在聊天界面，自动滚动到底部
-                        if (height < window.innerHeight * 0.8 && currentView.value === 'chat') {
-                            setTimeout(scrollToBottom, 100);
-                        }
-                    }
-                };
-
-                window.visualViewport.addEventListener('resize', handleVisualViewportResize);
-                window.visualViewport.addEventListener('scroll', handleVisualViewportResize);
-
-                // 初始调用
-                handleVisualViewportResize();
+                window.visualViewport.addEventListener('resize', handleMobileViewportResize, { passive: true });
             }
+            window.addEventListener('orientationchange', handleMobileOrientationChange, { passive: true });
+            window.addEventListener('resize', handleMobileViewportResize, { passive: true });
+            scheduleMobileVisualViewportSync({ force: true });
 
             // --- 全局点击外部区域收起面板 ---
             document.addEventListener('click', (e) => {
@@ -10534,6 +10585,14 @@ image###生成的提示词###
         onBeforeUnmount(() => {
             document.removeEventListener('fullscreenchange', syncChatFullscreenState);
             document.removeEventListener('webkitfullscreenchange', syncChatFullscreenState);
+            if (window.visualViewport) {
+                window.visualViewport.removeEventListener('resize', handleMobileViewportResize);
+            }
+            window.removeEventListener('orientationchange', handleMobileOrientationChange);
+            window.removeEventListener('resize', handleMobileViewportResize);
+            if (mobileViewportRaf) cancelAnimationFrame(mobileViewportRaf);
+            clearTimeout(mobileKeyboardBlurTimer);
+            clearTimeout(mobileKeyboardScrollTimer);
         });
         // 解析并截断生成的包含 HTML UI 的正文，避免闪屏问题
         const processMainContent = (mainText, isGeneratingState) => {
@@ -10614,7 +10673,7 @@ image###生成的提示词###
             activeTools, editingActiveTool, normalizeActiveTools, isWebActiveTool, isWorldInfoActiveTool, getWorldInfoAccessMode, getActiveToolDisplayDescription, canConfigureActiveToolResultCount, getActiveToolResultCountMin, getActiveToolResultCountMax,
             getVisibleToolCalls, getMergedToolCallItems, getMergedToolCallCount, getMergedToolCallTitle, getMergedToolCallStatus, isMergedToolCallLive, isMergedToolCallError, isMergedToolCallDone, getToolCallDisplayName, getToolCallModeText, getToolCallStatusText, getAssistantReasoningText, getMergedToolCallReasoningText, isMergedToolCallReasoningLive, isMergedToolCallReasoningOpen, toggleMergedToolCallReasoning,
             activeRegexCount, activeWorldInfoCount, activeUiTemplateCount, chatRoundStats, totalContextLength,
-            editingCharacter, editingPreset, editingUiTemplate, toasts, chatContainer, isChatFullscreen, inputBox, messageElements,
+            editingCharacter, editingPreset, editingUiTemplate, toasts, chatContainer, isChatFullscreen, isMobileKeyboardOpen, inputBox, messageElements,
             lastUserMessageIndex, // Expose to template
             isGeneratorLoading, generatorUrl, onGeneratorLoad, syncSettingsToGenerator, // Generator exports
             isSquareLoading, squareUrl, onSquareLoad, // Square exports
@@ -10760,7 +10819,7 @@ image###生成的提示词###
             },
             toggleMobileMenu: () => showMobileMenu.value = !showMobileMenu.value,
             scrollToPreviousMessage, scrollToNextMessage,
-            fetchModels, selectModel, sendMessage, autoResizeInput, stopGeneration, clearChat, toggleChatFullscreen,
+            fetchModels, selectModel, sendMessage, autoResizeInput, handleChatInputFocus, handleChatInputBlur, stopGeneration, clearChat, toggleChatFullscreen,
             handleConfirm, handleCancel, // Export handlers
             manualSave,
             copyMessage, deleteMessage, regenerateMessage, printAIRequestLogs,
