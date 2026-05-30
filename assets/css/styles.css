@@ -362,20 +362,21 @@
 
             /* Input area container (mobile bottom bar) */
             .input-area-mobile {
-                background-color: rgba(255, 255, 255, 0.96) !important;
-                border-top: 1px solid rgba(0, 0, 0, 0.08) !important;
+                background-color: transparent !important;
+                border-top: none !important;
             }
 
-            /* Input area inner island (desktop style - make transparent on mobile to avoid double overlapping) */
+            /* Input area inner island */
             .input-island {
-                background-color: transparent !important;
-                border: none !important;
-                box-shadow: none !important;
-                -webkit-box-shadow: none !important;
+                background-color: rgba(255, 255, 255, 0.9) !important;
+                border: 1px solid rgba(255, 255, 255, 0.45) !important;
+                border-radius: 1.5rem !important;
+                box-shadow: 0 10px 28px -12px rgba(15, 23, 42, 0.35), 0 1px 2px rgba(15, 23, 42, 0.08) !important;
+                -webkit-box-shadow: 0 10px 28px -12px rgba(15, 23, 42, 0.35), 0 1px 2px rgba(15, 23, 42, 0.08) !important;
                 --tw-ring-offset-shadow: 0 0 #0000 !important;
-                --tw-ring-shadow: 0 0 #0000 !important;
-                --tw-shadow: 0 0 #0000 !important;
-                --tw-shadow-colored: 0 0 #0000 !important;
+                --tw-ring-shadow: 0 0 0 1px rgba(0, 0, 0, 0.04) !important;
+                --tw-shadow: 0 10px 28px -12px rgba(15, 23, 42, 0.35), 0 1px 2px rgba(15, 23, 42, 0.08) !important;
+                --tw-shadow-colored: 0 10px 28px -12px var(--tw-shadow-color), 0 1px 2px var(--tw-shadow-color) !important;
             }
 
             /* Suggestion reply buttons */
