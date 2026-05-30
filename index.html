@@ -423,7 +423,7 @@
                     <!-- 实际内容容器 -->
                     <div class="relative h-12 flex items-center justify-between px-4 pointer-events-auto">
                         <div class="flex items-center min-w-0">
-                            <button @click="toggleMobileMenu"
+                            <button v-if="!isChatFullscreen" @click="toggleMobileMenu"
                                 class="md:hidden mr-3 text-white/80 hover:text-white transition-colors flex-shrink-0">
                                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
