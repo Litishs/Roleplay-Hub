@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport"
-        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, interactive-widget=overlays-content">
+        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, interactive-widget=resizes-content">
     <title>Roleplay Hub</title>
     <!-- <link rel="icon" href="logo.jpg" type="image/jpeg"> -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -80,7 +80,7 @@
 
 <body class="bg-gray-50 text-gray-900 font-sans selection:bg-primary-200 selection:text-primary-900">
     <div id="app" v-cloak class="h-full flex flex-col md:flex-row relative"
-        :class="{ 'app-native-fullscreen': isChatFullscreen }">
+        :class="{ 'app-native-fullscreen': isChatFullscreen, 'mobile-keyboard-active': isMobileKeyboardOpen }">
         <component is="style" v-if="settings.fontSize">
             .markdown-body :not(h1):not(h2):not(h3):not(h4):not(h5):not(h6):not(small):not(sub):not(sup):not(code) {
             font-size: inherit !important;
