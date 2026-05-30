@@ -386,7 +386,11 @@ createApp({
 
         const applyMobileBackgroundHeight = (height, { force = false } = {}) => {
             if (!Number.isFinite(height) || height <= 0) return;
-            const safeHeight = Math.max(320, Math.round(height));
+            const safeHeight = Math.max(
+                320,
+                Math.round(height),
+                Math.round(lastAppliedMobileBackgroundHeight || 0)
+            );
             if (!force && Math.abs(safeHeight - lastAppliedMobileBackgroundHeight) < 2) return;
             lastAppliedMobileBackgroundHeight = safeHeight;
             document.documentElement.style.setProperty('--chat-bg-height', `${safeHeight}px`);
@@ -414,7 +418,8 @@ createApp({
                 : 0;
             const viewportCompressed = viewport && height < layoutHeight - 80;
             const keyboardOpen = !!(viewportCompressed || keyboardInset > 40);
-            const backgroundHeight = keyboardOpen
+            const freezeBackground = inputFocused || keyboardOpen || isMobileKeyboardOpen.value;
+            const backgroundHeight = freezeBackground
                 ? Math.max(lastAppliedMobileBackgroundHeight, lastAppliedMobileViewportHeight, layoutHeight, height)
                 : Math.max(layoutHeight, height);
 
