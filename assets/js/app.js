@@ -406,9 +406,27 @@ createApp({
             inputBox.value?.closest('.input-area-mobile')?.style.setProperty('--mobile-keyboard-inset', `${inset}px`);
         };
 
-        const getVirtualKeyboardInset = () => {
+        const getMobileKeyboardMaxInset = (baselineHeight) => {
+            const screenHeight = Math.max(window.screen?.height || 0, window.screen?.availHeight || 0);
+            const referenceHeight = screenHeight > 0 ? Math.min(baselineHeight, screenHeight) : baselineHeight;
+            const inputAreaHeight = inputBox.value?.closest('.input-area-mobile')?.getBoundingClientRect().height || 88;
+            const visibleReserve = Math.max(120, inputAreaHeight + 28);
+            const safeSpaceMax = Math.max(0, referenceHeight - visibleReserve);
+            const keyboardRatioMax = Math.round(referenceHeight * 0.46);
+            return Math.max(0, Math.min(safeSpaceMax, keyboardRatioMax, 390));
+        };
+
+        const clampMobileKeyboardInset = (value, baselineHeight) => {
+            const inset = Math.max(0, Math.round(Number(value) || 0));
+            if (inset <= 40) return 0;
+            return Math.min(inset, getMobileKeyboardMaxInset(baselineHeight));
+        };
+
+        const getVirtualKeyboardInset = (layoutHeight) => {
             const rect = navigator.virtualKeyboard?.boundingRect;
-            return rect?.height ? Math.max(0, rect.height) : 0;
+            if (!rect?.height) return 0;
+            const overlapByTop = rect.y > 0 ? Math.max(0, layoutHeight - rect.y) : 0;
+            return Math.max(0, overlapByTop || rect.height);
         };
 
         const syncMobileVisualViewport = () => {
@@ -430,10 +448,8 @@ createApp({
 
             const baselineHeight = Math.max(mobileViewportBaseHeight || 0, metrics.layoutHeight, metrics.height);
             const visualViewportInset = Math.max(0, baselineHeight - metrics.height - metrics.offsetTop);
-            const keyboardInset = Math.max(getVirtualKeyboardInset(), visualViewportInset);
-            const boundedInset = keyboardInset > 40
-                ? Math.min(keyboardInset, Math.round(baselineHeight * 0.65))
-                : 0;
+            const keyboardInset = Math.max(getVirtualKeyboardInset(baselineHeight), visualViewportInset);
+            const boundedInset = clampMobileKeyboardInset(keyboardInset, baselineHeight);
 
             mobileKeyboardOpen = true;
             setMobileKeyboardInset(boundedInset);
