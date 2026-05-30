@@ -1,6 +1,7 @@
         :root {
             --app-visual-height: 100vh;
             --keyboard-inset: 0px;
+            --chat-bg-height: 100vh;
         }
 
         @supports (height: 100dvh) {
@@ -249,6 +250,19 @@
             .chat-view-root {
                 min-height: 0 !important;
                 height: var(--app-visual-height, 100dvh) !important;
+            }
+
+            .char-bg-blur {
+                top: -1rem !important;
+                right: -1rem !important;
+                bottom: auto !important;
+                left: -1rem !important;
+                height: calc(var(--chat-bg-height, var(--app-visual-height, 100dvh)) + 2rem) !important;
+                transition: none !important;
+                background-position: center center !important;
+                background-size: cover !important;
+                backface-visibility: hidden;
+                contain: paint;
             }
 
             .mobile-keyboard-active .app-main,

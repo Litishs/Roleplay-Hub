@@ -283,6 +283,7 @@ createApp({
         let mobileKeyboardScrollTimer = null;
         let lastAppliedMobileViewportHeight = 0;
         let lastAppliedMobileKeyboardInset = 0;
+        let lastAppliedMobileBackgroundHeight = 0;
 
         // IntersectionObserver for lazy loading images or other visibility triggers could go here
 
@@ -383,13 +384,23 @@ createApp({
             document.documentElement.style.setProperty('--keyboard-inset', `${safeInset}px`);
         };
 
+        const applyMobileBackgroundHeight = (height, { force = false } = {}) => {
+            if (!Number.isFinite(height) || height <= 0) return;
+            const safeHeight = Math.max(320, Math.round(height));
+            if (!force && Math.abs(safeHeight - lastAppliedMobileBackgroundHeight) < 2) return;
+            lastAppliedMobileBackgroundHeight = safeHeight;
+            document.documentElement.style.setProperty('--chat-bg-height', `${safeHeight}px`);
+        };
+
         const syncMobileVisualViewport = ({ force = false } = {}) => {
             if (!isMobileViewport()) {
                 isMobileKeyboardOpen.value = false;
                 lastAppliedMobileViewportHeight = 0;
                 lastAppliedMobileKeyboardInset = 0;
+                lastAppliedMobileBackgroundHeight = 0;
                 document.documentElement.style.removeProperty('--app-visual-height');
                 document.documentElement.style.removeProperty('--keyboard-inset');
+                document.documentElement.style.removeProperty('--chat-bg-height');
                 return;
             }
 
@@ -403,9 +414,13 @@ createApp({
                 : 0;
             const viewportCompressed = viewport && height < layoutHeight - 80;
             const keyboardOpen = !!(viewportCompressed || keyboardInset > 40);
+            const backgroundHeight = keyboardOpen
+                ? Math.max(lastAppliedMobileBackgroundHeight, lastAppliedMobileViewportHeight, layoutHeight, height)
+                : Math.max(layoutHeight, height);
 
             applyMobileVisualViewportHeight(height, { force });
             applyMobileKeyboardInset(keyboardOpen ? keyboardInset : 0, { force });
+            applyMobileBackgroundHeight(backgroundHeight, { force });
             isMobileKeyboardOpen.value = !!(inputFocused || keyboardOpen);
 
             if (isMobileKeyboardOpen.value && currentView.value === 'chat') {
@@ -440,7 +455,11 @@ createApp({
         };
 
         const handleMobileViewportResize = () => scheduleMobileVisualViewportSync();
-        const handleMobileOrientationChange = () => scheduleMobileVisualViewportSync({ force: true });
+        const handleMobileOrientationChange = () => {
+            lastAppliedMobileBackgroundHeight = 0;
+            document.documentElement.style.removeProperty('--chat-bg-height');
+            scheduleMobileVisualViewportSync({ force: true });
+        };
 
         // Service Status
         const apiStatus = ref('unknown'); // 'unknown', 'checking', 'connected', 'error'
