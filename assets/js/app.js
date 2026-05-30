@@ -1,4 +1,4 @@
-const { createApp, ref, reactive, computed, onMounted, watch, nextTick } = Vue;
+const { createApp, ref, reactive, computed, onMounted, onBeforeUnmount, watch, nextTick } = Vue;
 
 // Configure marked to disable indented code blocks
 // This allows indented HTML (like details/summary) to be rendered as HTML instead of code
@@ -66,12 +66,6 @@ createApp({
                 name: 'STA1N API',
                 apiUrl: 'https://cdn.sta1n.cn/v1',
                 icon: 'https://img.cdn1.vip/i/69c18cc07538b_1774292160.webp'
-            },
-            {
-                id: 'openai',
-                name: 'OpenAI',
-                apiUrl: 'https://api.openai.com/v1',
-                icon: 'https://openai.com/favicon.ico'
             },
             {
                 id: 'deepseek',
@@ -193,20 +187,24 @@ createApp({
             isUpdateScrolledToBottom.value = (el.scrollHeight - el.scrollTop - el.clientHeight) < 10;
         };
         const latestUpdate = reactive({
-            id: 10138, // 确保这是一个五位数ID，每次更新内容时增加这个数字
+            id: 10139, // 确保这是一个五位数ID，每次更新内容时增加这个数字
             date: new Date().toISOString().split('T')[0],
             title: '网站公告',
             content: `
-### RP-Hub 1.6.5
+### RP-Hub 1.6.6
 
-- 新增"联网搜索"与"世界书阅读/管理"工具
-- 优化了工具调用状态下的UI表现
-- 优化了AI对工具的使用表现
-- 修复了部分闪烁BUG
+- 新增"全屏模式"功能，部分浏览器不兼容
+- 优化了UI模板变量更新，现在可大幅度提升成功率，且提升速度，效果显著
+- 优化了PC沉浸模式、全屏模式、消息气泡与输入区显示，现强烈推荐PC用户开启沉浸模式
+- 优化了工具调用逻辑，支持更稳的追加/覆盖与空结果处理
+- 优化了向量记忆召回与补录表现，减少无关上下文干扰
+- 新增备选自定义API提供商，并精简了模型列表标签
+- 重构了角色卡简介弹窗的视觉表现，修复了高度与覆盖层异常的问题
+- 优化了部分UI细节
 
 本项目为全开源公益项目，严禁倒卖源码，二改需经作者授权
 
-#### 更新时间：05/29/05:35
+#### 更新时间：05/31/00:12
                     `
         });
 
@@ -222,7 +220,7 @@ createApp({
         };
 
         const startUpdateCountdown = () => {
-            updateCountdown.value = 8;
+            updateCountdown.value = 10;
             if (updateCountdownTimer) clearInterval(updateCountdownTimer);
             updateCountdownTimer = setInterval(() => {
                 if (updateCountdown.value > 0) {
@@ -271,11 +269,12 @@ createApp({
         const userInput = ref('');
         const modelSearchQuery = ref('');
         const activeModelTag = ref('all');
-        const popularModelFamilies = ['gpt', 'claude', 'gemini', 'deepseek', 'qwen', 'llama', 'glm', 'minimax', 'kimi', 'moonshot', 'grok'];
+        const popularModelFamilies = ['claude', 'gemini', 'deepseek', 'llama', 'glm', 'minimax', 'moonshot', 'grok'];
         const characterSearchQuery = ref('');
         const availableModels = ref([]);
         const toasts = ref([]);
         const chatContainer = ref(null);
+        const isChatFullscreen = ref(false);
         const inputBox = ref(null);
         const messageElements = ref([]);
 
@@ -397,6 +396,7 @@ createApp({
             apiProviderId: DEFAULT_API_PROVIDER_ID,
             apiProviderKeys: {},
             customApiUrl: '',
+            customApiUrl2: '',
             model: DEFAULT_API_CONFIG.qualityModel,
             contextSize: MAX_CONTEXT_SIZE,
             temperature: 1.0,
@@ -429,6 +429,15 @@ createApp({
             apiUrl: '',
             icon: ''
         };
+        const customApiProviderOption2 = {
+            id: 'custom2',
+            name: '自定义2',
+            apiUrl: '',
+            icon: ''
+        };
+        const customApiProviderOptions = [customApiProviderOption, customApiProviderOption2];
+        const isCustomApiProviderId = (id) => customApiProviderOptions.some(provider => provider.id === id);
+        const getCustomApiUrlKey = (id) => id === 'custom2' ? 'customApiUrl2' : 'customApiUrl';
         const normalizeApiProviderUrl = (url) => String(url || '').replace(/\/+$/, '').toLowerCase();
         const getApiProviderById = (id) => apiProviderOptions.find(provider => provider.id === id);
         const getApiProviderByUrl = (url) => {
@@ -441,27 +450,29 @@ createApp({
                 settings.apiProviderKeys = {};
             }
             settings.apiProviderKeys[providerId] = settings.apiKey || '';
-            if (providerId === 'custom') {
-                settings.customApiUrl = settings.apiUrl || '';
+            if (isCustomApiProviderId(providerId)) {
+                settings[getCustomApiUrlKey(providerId)] = settings.apiUrl || '';
             }
         };
         const normalizeApiProviderSettings = () => {
             if (!settings.apiProviderKeys || typeof settings.apiProviderKeys !== 'object' || Array.isArray(settings.apiProviderKeys)) {
                 settings.apiProviderKeys = {};
             }
-            [...apiProviderOptions, customApiProviderOption].forEach(provider => {
+            [...apiProviderOptions, ...customApiProviderOptions].forEach(provider => {
                 if (typeof settings.apiProviderKeys[provider.id] !== 'string') {
                     settings.apiProviderKeys[provider.id] = '';
                 }
             });
 
             let provider = getApiProviderById(settings.apiProviderId);
-            if (!provider && settings.apiProviderId !== 'custom') {
+            if (!provider && !isCustomApiProviderId(settings.apiProviderId)) {
                 provider = getApiProviderByUrl(settings.apiUrl);
                 settings.apiProviderId = provider?.id || DEFAULT_API_PROVIDER_ID;
             }
-            if (settings.apiProviderId === 'custom') {
-                settings.customApiUrl = settings.customApiUrl || settings.apiUrl || '';
+            if (isCustomApiProviderId(settings.apiProviderId)) {
+                const urlKey = getCustomApiUrlKey(settings.apiProviderId);
+                settings[urlKey] = settings[urlKey] || settings.apiUrl || '';
+                settings.apiUrl = settings[urlKey];
             } else {
                 provider = getApiProviderById(settings.apiProviderId) || getApiProviderById(DEFAULT_API_PROVIDER_ID);
                 settings.apiProviderId = provider.id;
@@ -475,21 +486,22 @@ createApp({
             settings.apiKey = settings.apiProviderKeys[settings.apiProviderId] || '';
         };
         const selectedApiProvider = computed(() => {
-            if (settings.apiProviderId === 'custom' || selectedApiProviderId.value === 'custom') return customApiProviderOption;
+            const customProvider = customApiProviderOptions.find(provider => (
+                provider.id === settings.apiProviderId || provider.id === selectedApiProviderId.value
+            ));
+            if (customProvider) return customProvider;
             const selectedProvider = getApiProviderById(settings.apiProviderId) || getApiProviderById(selectedApiProviderId.value);
             if (selectedProvider) return selectedProvider;
             return getApiProviderByUrl(settings.apiUrl) || customApiProviderOption;
         });
-        const isCustomApiProvider = computed(() => selectedApiProvider.value.id === 'custom');
+        const isCustomApiProvider = computed(() => isCustomApiProviderId(selectedApiProvider.value.id));
         const selectApiProvider = (provider) => {
             syncCurrentApiKeyToProvider();
             selectedApiProviderId.value = provider.id;
             settings.apiProviderId = provider.id;
-            if (provider.id !== 'custom') {
-                settings.apiUrl = provider.apiUrl;
-            } else {
-                settings.apiUrl = settings.customApiUrl || '';
-            }
+            settings.apiUrl = isCustomApiProviderId(provider.id)
+                ? settings[getCustomApiUrlKey(provider.id)] || ''
+                : provider.apiUrl;
             settings.apiKey = settings.apiProviderKeys[provider.id] || '';
             showApiProviderSelector.value = false;
         };
@@ -506,8 +518,8 @@ createApp({
         });
 
         watch(() => settings.apiUrl, (newUrl) => {
-            if (settings.apiProviderId === 'custom') {
-                settings.customApiUrl = newUrl || '';
+            if (isCustomApiProviderId(settings.apiProviderId)) {
+                settings[getCustomApiUrlKey(settings.apiProviderId)] = newUrl || '';
             }
         });
 
@@ -617,9 +629,9 @@ createApp({
         const activeToolInlineStatusText = computed(() => {
             if (activeToolQueueRunning.value) return '调用中';
             if (activeToolContinuationMessageId.value || activeToolContinuationPending.value) {
-                return isThinking.value ? '模型思考中' : '生成中';
+                return isThinking.value ? '思考中' : '生成中';
             }
-            if (activeToolHandoffPending.value || hasActiveToolInlineWork.value) return '工具准备中';
+            if (activeToolHandoffPending.value || hasActiveToolInlineWork.value) return '准备中';
             return '';
         });
         const isConversationBusy = computed(() => isGenerating.value || isRemoteGenerating.value || hasActiveToolInlineWork.value);
@@ -632,6 +644,10 @@ createApp({
         const escapeXmlAttribute = (value) => String(value ?? '')
             .replace(/&/g, '&amp;')
             .replace(/"/g, '&quot;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
+        const escapeXmlText = (value) => String(value ?? '')
+            .replace(/&/g, '&amp;')
             .replace(/</g, '&lt;')
             .replace(/>/g, '&gt;');
         const indentXmlText = (text, spaces = 0) => {
@@ -883,9 +899,9 @@ createApp({
         const MEMORY_VECTOR_MAX_PARAGRAPH_LENGTH = 1800;
         const MEMORY_VECTOR_MERGE_MAX_LENGTH = 400;
         const MEMORY_VECTOR_MIN_TOP_K = 10;
-        const MEMORY_VECTOR_MAX_TOP_K = 30;
+        const MEMORY_VECTOR_MAX_TOP_K = 20;
         const MEMORY_VECTOR_DEFAULT_TOP_K = 15;
-        const MEMORY_KEEP_FLOORS_MIN = 10;
+        const MEMORY_KEEP_FLOORS_MIN = 20;
         const MEMORY_KEEP_FLOORS_MAX = 60;
         const MEMORY_KEEP_FLOORS_DEFAULT = 40;
         const MEMORY_KEEP_FLOORS_OFF_SLIDER_VALUE = 65;
@@ -919,17 +935,17 @@ createApp({
         const ACTIVE_TOOL_WORLD_TYPE = 'world_info';
         const ACTIVE_TOOL_MIN_RESULT_COUNT = 8;
         const ACTIVE_TOOL_DEFAULT_RESULT_COUNT = 8;
-        const ACTIVE_TOOL_MAX_RESULT_COUNT = 20;
+        const ACTIVE_TOOL_MAX_RESULT_COUNT = 12;
         const ACTIVE_TOOL_RESULT_COUNT_VERSION = 4;
         const ACTIVE_TOOL_MAX_AUTO_CONTINUE = 4;
         const ACTIVE_TOOL_WORLD_ACCESS_READ = 'read';
         const ACTIVE_TOOL_WORLD_ACCESS_EDIT = 'edit';
-        const ACTIVE_TOOL_LATEST_USER_REMINDER = '每一次回复，你必须调用工具来获取需要的信息；一次回复可以分多行调用多个工具，每行只写一个工具标签。用户问题包含多个独立信息点时，必须拆开逐项调用，每个工具标签只检索一个信息点，禁止把多个问题塞进同一次工具调用。若工具返回结果不够完整且准确，你可以换更具体的检索内容或关键词继续调用工具；工具返回后再继续正文。必须确保人设、世界观、剧情记忆、同人资料和事实准确；不确定就先调用工具确认，尤其是同人角色卡，不能凭空猜和编造。';
-        const ACTIVE_TOOL_DEFAULT_DESCRIPTION = '每一次回复都必须先调用工具来获取需要的信息；当需要长期记忆、旧剧情、历史设定、过往关系、人物状态、物品来历或用户暗指内容时，在正文中单独输出 <tool_memory_add:具体检索内容> 主动向量检索长期记忆。禁止编造任何不真实、未在当前上下文或检索结果中出现过的信息；没有依据的设定、旧剧情、关系、物品来历、人物状态和事件细节都必须先用工具确认。用户问题包含多个独立信息点时，必须拆开逐项调用，每个工具标签只检索一个信息点；例如年龄、材质、武器、动力来源属于不同信息点，禁止合成一次长检索。可以在同一次回复中分多行输出多个工具标签，每行只写一个标签，用不同工具分别检索不同信息点。如果返回内容不够贴合或仍不够完整准确，请换更具体的关键词继续细化检索。继续补充检索时输出 <tool_memory_add:更具体的检索内容>，系统会把新结果追加到本轮已检索的工具结果后；如果前一次检索方向明显错误或需要重新开始，请输出 <tool_memory_cover:新的检索内容>，系统会用新结果覆盖本轮已检索的工具结果。工具结果返回后，如果依据已经足够，就继续正文；如果仍不够，继续细化调用工具。需要工具调用时，不需要输出 COT，也不要输出“我先查一下”“我先检索一下确保信息完整准确”等任何说明或铺垫，只输出工具标签即可。系统会把检索结果插入最后一条用户消息结尾，然后自动让你继续回答。';
+        const ACTIVE_TOOL_LATEST_USER_REMINDER = '在正式回复之前，请根据当前需求智能选择工具。当前上下文已经确保足够明确、用户只是简单继续写作且无需查证时，可以直接回复；当没有完全的确定人设、世界观、剧情记忆、同人资料、事实或用户暗指内容时，再调用工具确认，禁止编造。需要调用工具时，每行只写一个工具标签，工具调用阶段不写说明或 COT，单次回复最多输出 5 个工具标签，多个独立信息点必须拆开并优先查最关键的点。模式选择：本轮还没收到工具结果前，第一次输出的所有工具标签都必须用 add；工具结果返回后，旧结果仍有证据价值且不干扰回答时继续 add；旧结果偏题、太宽、重复、噪声过多、被更具体问题替代，或继续保留会堆积上下文冗余、浪费注意力时，要积极使用 cover 清理旧结果，只保留更聚焦、更有用的信息。';
+        const ACTIVE_TOOL_DEFAULT_DESCRIPTION = '当需要长期记忆、旧剧情、历史设定、过往关系、人物状态、物品来历或用户暗指内容时，单独输出 <tool_memory_add:检索内容> 或 <tool_memory_cover:检索内容>。每行一个标签，单次回复最多 5 个工具标签，不写说明或 COT；多个独立信息点拆开查，优先最关键的信息点，检索词要具体，优先人物、事件、物品、地点和时间线。没有当前上下文或检索结果支持的设定、关系、状态和事件不要编造。本轮第一次检索一律用 add；看到工具结果后，若是补充不同证据且旧结果有用就 add；若旧结果偏题、太宽、重复、方向错误、噪声过多，或更具体检索能替代旧结果，应优先用 cover 清理上下文冗余，把注意力集中在更准确的记忆上。结果足够就继续正文，不够就换更具体的问题继续查。';
         const ACTIVE_TOOL_DEFAULT_DISPLAY_DESCRIPTION = '让角色在上下文信息不够明确时，主动检索向量记忆，适合找旧剧情、历史设定、人物关系、物品来历和用户暗指过的内容。';
-        const ACTIVE_TOOL_GREP_DEFAULT_DESCRIPTION = '当需要精准抓取当前对话历史里的原文内容时，在正文中单独输出 <tool_grep_add:关键词> 或 <tool_grep_cover:关键词>。系统会按关键词精确匹配用户与角色消息，返回包含关键词的原文片段。适合查找某句台词、某个名称、物品、地点、设定词、前文原句或具体对话细节。关键词要尽量写原文可能出现的词；用户问题包含多个独立信息点时，必须拆开逐项调用，每个工具标签只检索一个信息点，禁止把多个问题塞进同一次关键词检索。可以在同一次回复中分多行输出多个关键词检索或和其他工具混用，每行只写一个工具标签。需要工具调用时，不需要输出 COT，也不要输出说明或铺垫，只输出工具标签即可。';
+        const ACTIVE_TOOL_GREP_DEFAULT_DESCRIPTION = '当需要精准抓取当前对话历史里的原文内容时，单独输出 <tool_grep_add:关键词> 或 <tool_grep_cover:关键词>。关键词要尽量写原文可能出现的词，适合找台词、名称、物品、地点、设定词、前文原句或具体细节。多个独立信息点必须拆开，每行一个标签，单次回复最多 5 个工具标签，不写说明或 COT。本轮第一次关键词检索一律用 add；看到结果后，若旧结果有用且需要保留就 add；若旧关键词结果偏题、太宽、重复、噪声过多，或更准确关键词能替代旧结果，应优先用 cover 清理冗余原文片段，避免旧结果分散注意力。';
         const ACTIVE_TOOL_GREP_DEFAULT_DISPLAY_DESCRIPTION = '按关键词精准抓取当前对话历史里的原文片段，适合找台词、名称、物品、地点和具体前文。';
-        const ACTIVE_TOOL_WEB_DEFAULT_DESCRIPTION = '当本地上下文、角色记忆、关键词检索都不足以确认作品设定、同人资料、冷门角色、现实最新信息或网页资料时，在正文中单独输出 <tool_web_add:联网搜索内容或网页链接> 或 <tool_web_cover:联网搜索内容或网页链接>。系统会通过 Tavily 联网搜索并返回带来源链接的结果；如果调用内容是网页链接，系统会进入该链接读取更详细的网页正文。查询要具体，优先包含作品名、角色名、设定名、站点或语言关键词；不要把多个独立信息点塞进同一次联网搜索。';
+        const ACTIVE_TOOL_WEB_DEFAULT_DESCRIPTION = '当本地上下文、角色记忆、关键词检索都不足以确认作品设定、同人资料、冷门角色、现实最新信息或网页资料时，单独输出 <tool_web_add:联网搜索内容或网页链接> 或 <tool_web_cover:联网搜索内容或网页链接>。先用具体关键词搜索，再按需读取真实 URL；查询优先包含作品名、角色名、设定名、站点、语言关键词或别名。多个独立信息点必须拆开，单次回复最多 5 个工具标签。本轮第一次联网搜索或首次读取 URL 一律用 add；看到结果后，若旧结果有用且需要保留就 add；若搜索结果偏题、太宽、重复、来源噪声多，或新搜索/网页读取能替代旧结果，应优先用 cover 清理上下文冗余，避免无关网页摘要干扰判断。';
         const ACTIVE_TOOL_WEB_DEFAULT_DISPLAY_DESCRIPTION = '通过 Tavily 联网搜索补充外部资料，也能进入链接读取网页详情，适合同人设定、作品百科、冷门角色和最新信息。';
         const ACTIVE_TOOL_WORLD_READ_DESCRIPTION = '当需要查看世界书时，在正文中单独输出 <tool_world_add:list> 或 <tool_world_add:read 世界书名字>。流程是先获取已开启世界书名字列表，再由你决定阅读哪些世界书的完整内容。当前为阅读模式，不能编辑世界书。系统只处理已开启且非系统内置的世界书。';
         const ACTIVE_TOOL_WORLD_READ_DISPLAY_DESCRIPTION = '阅读已开启世界书：支持列出世界书列表，阅读世界书内容，不允许编辑世界书内容。';
@@ -2254,13 +2270,17 @@ createApp({
             if (template.initialVariableState && typeof template.initialVariableState === 'object') {
                 return cloneUiObject(template.initialVariableState);
             }
-            const baseState = cloneUiObject(variableState || template.variableState || template.variables || defaultUiTemplateVariables);
+            let baseState = cloneUiObject(variableState || template.variableState || template.variables || defaultUiTemplateVariables);
             const logs = Array.isArray(template.changeLog) ? [...template.changeLog].sort((a, b) => (a.time || 0) - (b.time || 0)) : [];
             const initializedKeys = new Set();
             logs.forEach(log => {
                 Object.entries(log.changes || {}).forEach(([key, change]) => {
                     if (!initializedKeys.has(key) && change && Object.prototype.hasOwnProperty.call(change, 'from')) {
-                        baseState[key] = change.from;
+                        if (key === '$root') {
+                            baseState = cloneUiValue(change.from) || {};
+                        } else {
+                            baseState[key] = change.from;
+                        }
                         initializedKeys.add(key);
                     }
                 });
@@ -2773,6 +2793,69 @@ ${content}
                 '以下内容是给你参考当前剧情状态的，不是让你生成、复述或改写的正文。请只用它理解角色状态、关系、地点和其他模板变量。',
                 sections.join('\n\n')
             ].join('\n');
+        };
+
+        const UI_TEMPLATE_CONTEXT_OPEN_TAG = '<ui_template_state_context>';
+        const UI_TEMPLATE_CONTEXT_CLOSE_TAG = '</ui_template_state_context>';
+
+        const stripUiTemplateContextInjection = (text) => String(text || '')
+            .replace(/<ui_template_state_context>[\s\S]*?<\/ui_template_state_context>/gi, '')
+            .replace(/<ui_template_state_context>[\s\S]*$/gi, '');
+
+        const buildLatestUiTemplateContextInjectionForTurn = (turn) => {
+            if (!settings.uiTemplateInjectContext) return '';
+            const referenceTurn = Number(turn) || 0;
+            if (referenceTurn <= 0) return '';
+
+            const sections = activeUiTemplates.value
+                .map(template => {
+                    const state = buildUiTemplateStateAtTurn(template, referenceTurn);
+                    if (!state || Object.keys(state).length === 0) return null;
+                    const title = escapeXmlAttribute(template.name || template.id || 'UI模板');
+                    return [
+                        `  <template_state name="${title}">`,
+                        indentXmlText(JSON.stringify(state, null, 2), 4),
+                        '  </template_state>'
+                    ].join('\n');
+                })
+                .filter(Boolean);
+
+            if (!sections.length) return '';
+            return [
+                UI_TEMPLATE_CONTEXT_OPEN_TAG,
+                '  <description>以下内容是给你参考当前剧情状态的 UI 模板变量快照，不是正文，也不要复述、改写或输出这些变量。请只用它理解角色状态、关系、地点和其他模板变量。</description>',
+                ...sections,
+                UI_TEMPLATE_CONTEXT_CLOSE_TAG
+            ].join('\n');
+        };
+
+        const getLatestUiTemplateContextReferenceTurn = (contextMessages, getCompletedTurnBeforeIndex = getCompletedConversationTurnBeforeIndex) => {
+            for (let i = (contextMessages?.length || 0) - 1; i >= 0; i--) {
+                const message = contextMessages[i];
+                if (message?.role !== 'user') continue;
+                const turn = getUiTemplateReferenceTurnForUserMessage(message, getCompletedTurnBeforeIndex);
+                if (turn) return turn;
+            }
+            return null;
+        };
+
+        const appendUiTemplateContextToLatestUserMessage = (msgArray, referenceTurn) => {
+            const uiTemplateContext = buildLatestUiTemplateContextInjectionForTurn(referenceTurn);
+            if (!uiTemplateContext) return msgArray;
+
+            const latestUserMessage = [...msgArray].reverse().find(message => {
+                const content = String(message?.content || '');
+                return message?.role === 'user'
+                    && content.trim()
+                    && !isRoleMemoryContextContent(content);
+            });
+            if (!latestUserMessage) return msgArray;
+
+            const cleanContent = stripUiTemplateContextInjection(latestUserMessage.content).trimEnd();
+            latestUserMessage.content = cleanContent
+                ? `${cleanContent}\n\n${uiTemplateContext}`
+                : uiTemplateContext;
+            return msgArray;
         };
 
         const rebuildUiTemplateStateFromLogs = (template, remainingLogs, allLogs) => {
@@ -3909,6 +3992,44 @@ ${content}
             });
         };
 
+        const getNativeFullscreenElement = () => document.fullscreenElement || document.webkitFullscreenElement || null;
+        const requestNativeFullscreen = (element) => {
+            if (element.requestFullscreen) return element.requestFullscreen();
+            if (element.webkitRequestFullscreen) return element.webkitRequestFullscreen();
+            return Promise.reject(new Error('Fullscreen is not supported'));
+        };
+        const exitNativeFullscreen = () => {
+            if (document.exitFullscreen) return document.exitFullscreen();
+            if (document.webkitExitFullscreen) return document.webkitExitFullscreen();
+            return Promise.resolve();
+        };
+
+        const toggleChatFullscreen = async () => {
+            try {
+                if (getNativeFullscreenElement()) {
+                    isChatFullscreen.value = false;
+                    await exitNativeFullscreen();
+                    return;
+                }
+                const fullscreenTarget = document.documentElement || document.body;
+                if (!fullscreenTarget || (!fullscreenTarget.requestFullscreen && !fullscreenTarget.webkitRequestFullscreen)) {
+                    showToast('当前浏览器不支持全屏', 'warning');
+                    return;
+                }
+                showMobileMenu.value = false;
+                isChatFullscreen.value = true;
+                await requestNativeFullscreen(fullscreenTarget);
+            } catch (err) {
+                isChatFullscreen.value = !!getNativeFullscreenElement();
+                console.error('Toggle fullscreen failed:', err);
+                showToast('全屏失败', 'error');
+            }
+        };
+
+        const syncChatFullscreenState = () => {
+            isChatFullscreen.value = !!getNativeFullscreenElement();
+        };
+
         const copyMessage = (content) => {
             navigator.clipboard.writeText(content).then(() => {
                 showToast('已复制到剪贴板', 'success');
@@ -4064,10 +4185,61 @@ ${content}
                 const failedTemplateIds = new Set();
                 const pendingTemplateUpdates = [];
 
+                const parseUiTemplateUpdateResponse = (rawContent) => {
+                    const normalizedContent = String(rawContent || '')
+                        .replace(/^```(?:json)?\s*/i, '')
+                        .replace(/```\s*$/i, '')
+                        .trim();
+                    try {
+                        return JSON.parse(normalizedContent);
+                    } catch (primaryError) {
+                        const objectStart = normalizedContent.indexOf('{');
+                        const arrayStart = normalizedContent.indexOf('[');
+                        const candidates = [
+                            [objectStart, normalizedContent.lastIndexOf('}')],
+                            [arrayStart, normalizedContent.lastIndexOf(']')]
+                        ].filter(([start, end]) => start >= 0 && end > start);
+                        for (const [start, end] of candidates) {
+                            try {
+                                return JSON.parse(normalizedContent.slice(start, end + 1));
+                            } catch (_) { }
+                        }
+                        throw primaryError;
+                    }
+                };
+
+                const normalizeUiTemplateUpdates = (parsed) => {
+                    if (Array.isArray(parsed)) {
+                        return [{ variables: parsed, reason: '' }];
+                    }
+                    if (!parsed || typeof parsed !== 'object') return [];
+                    const parsedKeys = Object.keys(parsed);
+                    const looksLikeLegacyUpdates = Array.isArray(parsed.updates)
+                        && (
+                            parsed.updates.length === 0 && parsedKeys.every(key => ['updates', 'reason'].includes(key))
+                            || parsed.updates.some(update => update && typeof update === 'object' && Object.prototype.hasOwnProperty.call(update, 'variables'))
+                        );
+                    if (looksLikeLegacyUpdates) {
+                        return parsed.updates
+                            .map(update => {
+                                if (!update || typeof update !== 'object') return null;
+                                if (Object.prototype.hasOwnProperty.call(update, 'variables')) return update;
+                                return { variables: update, reason: '' };
+                            })
+                            .filter(Boolean);
+                    }
+                    const looksLikeLegacyVariables = Object.prototype.hasOwnProperty.call(parsed, 'variables')
+                        && parsedKeys.every(key => ['id', 'variables', 'reason'].includes(key));
+                    if (looksLikeLegacyVariables) {
+                        return [{ variables: parsed.variables, reason: parsed.reason || '' }];
+                    }
+                    return [{ variables: parsed, reason: '' }];
+                };
+
                 const applyTemplateUpdates = (template, updates, model) => {
                     updates.forEach(update => {
                         if (update.id && update.id !== template.id) return;
-                        if (!template || !update.variables || typeof update.variables !== 'object') return;
+                        if (!template || update.variables === null || typeof update.variables !== 'object') return;
                         const changes = {};
                         const variableEntries = Array.isArray(update.variables)
                             ? [['$root', update.variables]]
@@ -4103,16 +4275,7 @@ ${content}
                 await Promise.all(templates.map(async (template) => {
                     const model = fallbackModel;
                     try {
-                        const templatePromptData = JSON.stringify({
-                            character: currentCharacter.value.name,
-                            user: user.name,
-                            template: {
-                                id: template.id,
-                                name: template.name,
-                                variables: template.variableState || {},
-                                schema: template.variableSchema || {}
-                            }
-                        }, null, 2);
+                        const currentVariableJson = JSON.stringify(template.variableState || {}, null, 2);
                         const response = await fetch(url, {
                             method: 'POST',
                             headers: {
@@ -4130,13 +4293,13 @@ ${content}
                                             '你是RP-Hub的UI变量更新器。当前请求只分析一个UI模板。',
                                             '只根据用户消息里提供的最近对话，更新下方模板已定义的变量。',
                                             '严格返回JSON，不要解释，不要输出Markdown。',
-                                            '返回格式：{"updates":[{"id":"模板id","variables":{"变量名":"新值"},"reason":"简短原因"}]}。',
-                                            'variables 的值可以是文字、数字、对象或JSON数组；装备栏、背包、日志这类列表请直接返回完整数组字段，例如 {"equipment":[{"slot":"武器","name":"短剑"}]}。',
-                                            '如果只改数组里的一个小项，也可以返回 "equipment.0.name" 这种路径。',
-                                            '没有变化则updates为空数组。不要修改HTML。',
+                                            '返回格式要尽量简单：直接返回本次要更新的变量对象，例如 {"a_line_1":"新台词","a_line_3":"新台词"}。',
+                                            '变量值可以是文字、数字、对象或JSON数组；装备栏、背包、日志这类列表可直接返回完整数组字段，例如 {"equipment":[{"slot":"武器","name":"短剑"}]}。',
+                                            '如果模板根变量本身就是数组，可以直接返回JSON数组；如果只改数组里的一个小项，也可以返回 {"equipment.0.name":"短剑"} 这种路径对象。',
+                                            '没有变化则返回 {}。不要返回模板id，不要套updates/variables，不要修改HTML。',
                                             '',
-                                            '当前模板数据如下：',
-                                            templatePromptData
+                                            '当前变量JSON如下：',
+                                            currentVariableJson
                                         ].join('\n')
                                     },
                                     {
@@ -4155,9 +4318,8 @@ ${content}
                         if (!isCurrentRun()) return;
                         let content = data.choices?.[0]?.message?.content || '';
                         console.log(`[UI模板变量分析] ${template.name || template.id} 原始返回:`, content);
-                        content = content.replace(/```json\s*/i, '').replace(/```\s*$/i, '').trim();
-                        const parsed = JSON.parse(content);
-                        const updates = Array.isArray(parsed.updates) ? parsed.updates : [];
+                        const parsed = parseUiTemplateUpdateResponse(content);
+                        const updates = normalizeUiTemplateUpdates(parsed);
                         pendingTemplateUpdates.push({ template, updates, model });
                     } catch (e) {
                         if (updateRun.signal.aborted || !isCurrentRun()) return;
@@ -4439,7 +4601,7 @@ ${content}
                         `<tool name="${escapeXmlAttribute(tool.name)}" call_add="<${addCallName}:${escapeXmlAttribute(callPlaceholder)}>" call_cover="<${coverCallName}:${escapeXmlAttribute(callPlaceholder)}>" returns="${escapeXmlAttribute(returnLabel)}">`,
                         `说明：${tool.description}`,
                         ...toolRules,
-                        `注意：需要工具调用时，不需要输出 COT，也不要输出说明或铺垫，只输出工具标签即可。不要把调用标签写进 <cot>、<think> 或原生思考；调用后不要同时回答，等待系统返回结果后再继续正文。`,
+                        `注意：需要工具调用时，不需要输出 COT，也不要输出说明或铺垫，只输出工具标签即可；单次回复最多输出 5 个工具标签。不要把调用标签写进 <cot>、<think> 或原生思考；调用后不要同时回答，等待系统返回结果后再继续正文。`,
                         `</tool>`
                     ].join('\n');
                 }
@@ -4451,36 +4613,32 @@ ${content}
                     ? '按关键词精确匹配当前对话历史，抓取包含关键词的原文片段。'
                     : '按调用内容检索长期向量记忆。';
                 const toolRules = webTool ? [
-                    `用途：当本地上下文、角色记忆、关键词检索或向量记忆不足以确认作品设定、同人资料、冷门角色、现实最新信息、网页资料来源时，使用本工具联网搜索。`,
-                    `先搜索：第一次查网页资料时，请用关键词或问题调用 <${addCallName}:联网搜索内容>，先拿到标题、链接和摘要。可以像检索工具一样在同一次回复中分多行输出多个搜索调用，每个搜索调用只查一个独立信息点。不要第一步就编造链接。`,
-                    `深入网页：看完搜索结果后，如果标题和摘要仍不足以确认细节，请从搜索结果里选择一个或多个最相关的真实 URL，再单独输出 <${addCallName}:https://...> 读取网页正文。进入网页也可以像检索工具一样多次调用；每行只放一个工具标签，或在同一个标签里放少量同一主题的 URL。只有需要更完整证据时才进入网页，不要自动读取全部链接。`,
-                    `追加调用：当你需要补充更多联网资料、换关键词、查另一个独立信息点、或进入一个/多个搜索结果链接读取正文时，在最终正文中单独输出 <${addCallName}:联网搜索内容或网页链接>。系统会把新结果追加到本轮已经检索过的工具结果后。`,
-                    `覆盖调用：当前一次搜索方向明显错误、结果偏题、或你想重新开始本轮工具结果时，在最终正文中单独输出 <${coverCallName}:联网搜索内容或网页链接>。系统会用新结果覆盖本轮已经检索过的工具结果。`,
-                    `搜索词规则：查询要具体，优先包含作品名、角色名、设定名、站点名、语言关键词或别名。用户问题包含多个独立信息点时，必须拆开逐项调用，每个工具标签只搜索一个信息点，禁止把多个问题塞进同一次联网搜索。`,
-                    `来源规则：联网结果包含标题、链接和摘要；网页正文结果包含从该链接抽取的正文。继续回答时优先依据这些来源，不要把搜索结果或网页正文没有支持的内容说成事实。`,
-                    `多工具调用：可以在同一次回复中分多行输出多个搜索或网页读取标签，每行只写一个标签，也可以和其他工具混用；系统会按出现顺序逐个执行全部工具标签。`
+                    `用途：当本地上下文、角色记忆、关键词检索或向量记忆不足以确认作品设定、同人资料、冷门角色、现实最新信息或网页来源时，使用本工具。`,
+                    `流程：先用 <${addCallName}:具体搜索词> 获取标题、链接和摘要；摘要不够再从结果里选真实 URL，用 <${addCallName}:https://...> 读取正文。不要第一步编造链接，也不要自动读取全部链接。`,
+                    `模式选择：本轮还没收到工具结果前，第一次输出的所有联网搜索/网页读取标签都必须用 <${addCallName}:联网搜索内容或网页链接>。只有工具结果返回后才算二次重搜；旧结果仍有证据价值、需要补充并保留旧结果、或读取搜索结果里的相关 URL 时继续用 add。结果偏题、太宽、重复、来源噪声多、需要换方向重搜，或旧结果会堆积上下文冗余/干扰判断时，要积极用 <${coverCallName}:联网搜索内容或网页链接> 覆盖清理，只保留更聚焦的搜索结果。`,
+                    `搜索词规则：查询要具体，优先包含作品名、角色名、设定名、站点名、语言关键词或别名。多个独立信息点必须拆开，每个工具标签只搜索一个信息点。`,
+                    `来源规则：联网结果含标题、链接和摘要；网页正文结果含抽取正文。继续回答时优先依据这些来源，不要把来源没有支持的内容说成事实。`,
+                    `多工具调用：可以在同一次回复中分多行输出搜索或网页读取标签，每行只写一个标签，也可以和其他工具混用；单次回复最多输出 5 个工具标签，系统会按出现顺序执行。`
                 ] : keywordTool ? [
-                    `用途：当你需要精准抓取当前对话历史里的原文、查找某个名称、台词、物品、地点、设定词、前文原句或具体对话细节时，使用本工具。`,
-                    `追加调用：当你需要补充更多关键词结果时，在最终正文中单独输出 <${addCallName}:关键词>。系统会把新结果追加到本轮已经检索过的工具结果后。`,
-                    `覆盖调用：当前一次关键词方向明显错误、结果偏题、或你想重新开始本轮工具结果时，在最终正文中单独输出 <${coverCallName}:关键词>。系统会用新结果覆盖本轮已经检索过的工具结果。`,
-                    `关键词规则：关键词要尽量写原文可能出现的词；用户问题包含多个独立信息点时，必须拆开逐项调用，每个工具标签只检索一个信息点，禁止把多个问题塞进同一次关键词检索。只有同一信息点的同义词或原文别名才可以放在同一次关键词里。`,
-                    `多工具调用：可以在同一次回复中分多行输出多个工具标签，每行只写一个标签；系统会按出现顺序逐个执行全部工具标签。`,
+                    `用途：当你需要精准抓取当前对话历史里的原文、名称、台词、物品、地点、设定词、前文原句或具体对话细节时，使用本工具。`,
+                    `模式选择：本轮还没收到工具结果前，第一次输出的所有关键词标签都必须用 <${addCallName}:关键词>。只有工具结果返回后才算二次重搜；旧关键词结果仍有证据价值或需要补充并保留旧结果时继续用 add。结果偏题、太宽、重复、噪声过多、被更准确关键词替代，或旧结果会堆积上下文冗余/分散注意力时，要积极用 <${coverCallName}:关键词> 覆盖清理，只保留更准确的原文片段。`,
+                    `关键词规则：关键词要尽量写原文可能出现的词；多个独立信息点必须拆开，每个工具标签只检索一个信息点。只有同一信息点的同义词或原文别名才可以放在同一次关键词里。`,
+                    `多工具调用：可以在同一次回复中分多行输出工具标签，每行只写一个标签；单次回复最多输出 5 个工具标签，系统会按出现顺序执行。`,
                     `返回位置：工具返回内容会被系统插入最后一条用户消息结尾，然后自动触发你继续生成；继续回答时把它当作原文对话证据，不要复述工具标签。`
                 ] : [
-                    `每轮工具调用：每一次回复都必须先调用工具来获取需要的信息；当需要长期记忆、旧剧情、历史设定、过往关系、人物状态、物品来历或用户暗指内容时，调用本工具进行主动向量检索。工具结果返回后，如果依据已经足够，就继续正文；如果仍不够，继续细化调用工具。`,
-                    `真实性规则：禁止编造任何不真实、未在当前上下文或检索结果中出现过的信息。没有依据的设定、旧剧情、关系、物品来历、人物状态和事件细节都必须先检索确认，不要凭空猜。`,
-                    `追加调用：当你需要补充检索、细化检索、扩展同一问题的信息时，在最终正文中单独输出 <${addCallName}:检索内容>。系统会把新检索结果追加到本轮已经检索过的工具结果后。`,
-                    `覆盖调用：当前一次检索方向明显错误、结果偏题、或你想重新开始本轮工具结果时，在最终正文中单独输出 <${coverCallName}:检索内容>。系统会用新检索结果覆盖本轮已经检索过的工具结果。`,
-                    `检索内容要具体，优先写人物名、事件、物品、地点、时间线、关键词。用户问题包含多个独立信息点时，必须拆开逐项调用，每个工具标签只检索一个信息点；例如年龄、材质、武器、动力来源属于不同信息点，禁止合成一次长检索。第一次检索通常使用追加调用；只有需要重开检索时才使用覆盖调用。`,
-                    `多工具调用：可以在同一次回复中分多行输出多个工具标签，每行只写一个标签，也可以和其他工具混用；系统会按出现顺序逐个执行全部工具标签。`,
-                    `细化检索：系统返回结果后，如果结果不够完美、不够贴合、仍然无法让你确认答案，请不要急着回答；请换更具体的检索内容继续检索，避免重复完全相同的检索内容。`,
-                    `返回位置：工具返回内容会被系统插入最后一条用户消息结尾，然后自动触发你继续生成；继续回答时把它当作系统提供的记忆参考，不要复述工具标签。追加调用会保留旧结果，覆盖调用会替换旧结果。`
+                    `不是每次回复都必须调用工具；当前上下文已经足够明确时可以直接继续正文。当需要长期记忆、旧剧情、历史设定、过往关系、人物状态、物品来历或用户暗指内容，且上下文不够明确时，使用本工具。结果足够就继续正文，不够就继续细化检索。`,
+                    `真实性规则：禁止编造未在当前上下文或检索结果中出现的信息。没有依据的设定、旧剧情、关系、物品来历、人物状态和事件细节必须先检索确认。`,
+                    `模式选择：本轮还没收到工具结果前，第一次输出的所有向量检索标签都必须用 <${addCallName}:检索内容>。只有工具结果返回后才算二次重搜；旧结果仍有证据价值、需要补充并保留旧结果时继续用 add。结果偏题、太宽、重复、方向错误、噪声过多、被更具体问题替代，或旧结果会堆积上下文冗余/分散注意力时，要积极用 <${coverCallName}:检索内容> 覆盖清理，只保留更聚焦、更准确的记忆结果。`,
+                    `检索规则：检索内容要具体，优先写人物名、事件、物品、地点、时间线和关键词。多个独立信息点必须拆开，每个工具标签只检索一个信息点；例如年龄、材质、武器、动力来源不要合成一次长检索。`,
+                    `细化检索：结果不够贴合或仍无法确认答案时，不要急着回答；换更具体的检索内容继续查，避免重复完全相同的检索。`,
+                    `多工具调用：可以在同一次回复中分多行输出工具标签，每行只写一个标签，也可以和其他工具混用；单次回复最多输出 5 个工具标签，系统会按出现顺序执行。`,
+                    `返回位置：工具返回内容会被系统插入最后一条用户消息结尾，然后自动触发你继续生成；继续回答时把它当作记忆参考，不要复述工具标签。`
                 ];
                 return [
                     `<tool name="${escapeXmlAttribute(tool.name)}" call_add="<${addCallName}:${callPlaceholder}>" call_cover="<${coverCallName}:${callPlaceholder}>" returns="${returnLabel}">`,
                     `说明：${tool.description || descriptionFallback}`,
                     ...toolRules,
-                    `注意：需要工具调用时，不需要输出 COT，也不要输出“我先查一下”“我先检索一下确保信息完整准确”等任何说明或铺垫，只输出工具标签即可。不要把调用标签写进 <cot>、<think> 或原生思考；调用后不要同时回答，等待系统返回结果后再继续正文。`,
+                    `注意：需要工具调用时，不需要输出 COT，也不要输出“我先查一下”“我先检索一下确保信息完整准确”等任何说明或铺垫，只输出工具标签即可；单次回复最多输出 5 个工具标签。不要把调用标签写进 <cot>、<think> 或原生思考；调用后不要同时回答，等待系统返回结果后再继续正文。`,
                     `</tool>`
                 ].join('\n');
             }).join('\n\n');
@@ -4954,6 +5112,9 @@ ${content}
             const getCompletedTurnBeforeIndexForUiTemplateContext = settings.uiTemplateInjectContext
                 ? createCompletedTurnBeforeIndexResolver(buildConversationTurnSnapshot(postprocessedChatHistory, { alreadyPostprocessed: true }))
                 : getCompletedConversationTurnBeforeIndex;
+            const latestUiTemplateContextReferenceTurn = settings.uiTemplateInjectContext
+                ? getLatestUiTemplateContextReferenceTurn(chatHistoryForContext, getCompletedTurnBeforeIndexForUiTemplateContext)
+                : null;
 
             messages = messages.concat(chatHistoryForContext
                 .map((m, index) => {
@@ -4964,7 +5125,7 @@ ${content}
                     const cleanSourceContent = (source) => {
                         // Remove CoT content from history messages before sending to AI.
                         const parsedData = parseCot(source.content || '');
-                        let content = stripImageTags(parsedData.main);
+                        let content = stripImageTags(stripUiTemplateContextInjection(parsedData.main));
                         if (parsedData.sys && source.role === 'user') {
                             content += '\n\n[系统指令: ' + parsedData.sys + ']';
                         }
@@ -4974,11 +5135,6 @@ ${content}
                 .map(cleanSourceContent)
                 .filter(Boolean)
                 .join('\n\n');
-
-            const uiTemplateContext = buildUiTemplateContextInjection(m, getCompletedTurnBeforeIndexForUiTemplateContext);
-            if (uiTemplateContext) {
-                cleanContent += `\n\n${uiTemplateContext}`;
-            }
 
                     return {
                         role: m.role === 'user' ? 'user' : 'assistant',
@@ -5115,6 +5271,7 @@ ${content}
                 pendingActiveToolContext.value = '';
             }
             appendDeepSeekThinkingInstruction(messages, safeTargetLimit);
+            messages = appendUiTemplateContextToLatestUserMessage(messages, latestUiTemplateContextReferenceTurn);
             messages = postprocessContextMessages(messages);
 
             // Escape HTML helper
@@ -5623,18 +5780,13 @@ ${content}
                     }
                 } else if (continuingAssistantMessage) {
                     const errorMessage = error.message || '生成失败';
-                    if (continuationToolCall) {
-                        continuationToolCall.status = 'error';
-                        continuationToolCall.error = errorMessage;
-                        continuationToolCall.isOpen = true;
-                        activeToolContinuationHasResponse.value = true;
-                    } else {
-                        continuingAssistantMessage.content = [
-                            String(continuingAssistantMessage.content || '').trimEnd(),
-                            `*-- ${errorMessage} --*`
-                        ].filter(Boolean).join('\n\n');
-                        continuingAssistantMessage.shouldAnimate = false;
-                    }
+                    continuingAssistantMessage.content = [
+                        String(continuingAssistantMessage.content || '').trimEnd(),
+                        `*-- ${errorMessage} --*`
+                    ].filter(Boolean).join('\n\n');
+                    continuingAssistantMessage.shouldAnimate = false;
+                    collapseNativeReasoning(continuingAssistantMessage);
+                    activeToolContinuationHasResponse.value = true;
                 } else {
                     chatHistory.value.push({ role: 'system', name: currentCharacter.value.name, content: error.message });
                 }
@@ -5754,7 +5906,7 @@ ${content}
         const stripVectorMemoryCode = (text) => {
             if (!text) return '';
 
-            let result = String(text)
+            let result = stripUiTemplateContextInjection(text)
                 .replace(/<image>[\s\S]*?<\/image>/gi, '')
                 .replace(/```[\s\S]*?```/g, '')
                 .replace(/~~~[\s\S]*?~~~/g, '')
@@ -6706,7 +6858,8 @@ ${content}
         const getKeywordToolMessageText = (message) => {
             if (!message || typeof message.content !== 'string') return '';
             const parsedData = parseCot(message.content || '');
-            return trimMemoryText(stripVectorMemoryCode(stripImageTags(parsedData.main || '')), 5000);
+            const cleanMain = stripUiTemplateContextInjection(parsedData.main || '');
+            return trimMemoryText(stripVectorMemoryCode(stripImageTags(cleanMain)), 5000);
         };
 
         const buildKeywordToolSnippet = (text, matchedTerms) => {
@@ -7328,7 +7481,7 @@ ${content}
             if (blocks.length === 0) return '';
             return [
                 '<active_tool_results>',
-                '  <description>以下是本轮正文工具调用已经检索到的结果。本段内容由系统插入最后一条用户消息结尾。追加调用会保留并追加旧结果，覆盖调用会替换旧结果；请把这些内容作为参考继续回答，不要复述工具调用标签。</description>',
+                '  <description>以下是本轮正文工具调用返回的记录，可能包含有效结果、空结果或错误。本段内容由系统插入最后一条用户消息结尾。追加调用会保留并追加旧记录，覆盖调用会替换旧记录；只有包含实际片段、网页、世界书内容等证据的记录才算检索成功。请把有效证据作为参考继续回答，不要复述工具调用标签。</description>',
                 blocks.join('\n\n'),
                 '</active_tool_results>'
             ].join('\n');
@@ -7345,6 +7498,50 @@ ${content}
                 activeToolResultContexts.value = [...activeToolResultContexts.value, resultContext];
             }
             pendingActiveToolContext.value = buildActiveToolResultPayload();
+        };
+
+        const formatActiveToolNoticeContext = (tool, query, mode = 'add', status = 'empty', message = '') => {
+            const title = escapeXmlAttribute(tool?.name || '工具');
+            const modeValue = mode === 'cover' ? 'cover' : 'add';
+            const labels = getActiveToolCallLabels(tool || createDefaultActiveTool());
+            const callName = escapeXmlAttribute(modeValue === 'cover' ? labels.cover : labels.add);
+            const cleanQuery = trimMemoryText(query, 800);
+            const statusValue = escapeXmlAttribute(status || 'notice');
+            const messageText = escapeXmlText(message || '工具没有返回可用内容。');
+            const bodyTag = status === 'error' ? 'error' : 'description';
+            return [
+                `<active_tool_result name="${title}" call="${callName}" mode="${modeValue}" query="${escapeXmlAttribute(cleanQuery)}" status="${statusValue}">`,
+                `  <${bodyTag}>`,
+                indentXmlText(messageText, 4),
+                `  </${bodyTag}>`,
+                '</active_tool_result>'
+            ].join('\n');
+        };
+
+        const normalizeActiveToolResultContext = (resultContext, tool, query, mode = 'add') => {
+            const text = String(resultContext || '').trim();
+            const hasResultBody = /<(?:description|error|memory_fragment|dialogue_fragment|web_source|web_page|failed_page|world_info_[a-z_]+)\b/i.test(text);
+            if (!text || text === '</active_tool_result>' || !text.includes('<active_tool_result') || !hasResultBody) {
+                return formatActiveToolNoticeContext(
+                    tool,
+                    query,
+                    mode,
+                    'empty',
+                    '工具调用已经完成，但没有返回可用内容。请先判断当前上下文是否足够；如果仍不够，请换更具体的检索内容继续调用工具。'
+                );
+            }
+            return text;
+        };
+
+        const formatActiveToolErrorContext = (tool, query, err, mode = 'add') => {
+            const message = err?.message || String(err || '') || '工具调用失败';
+            return formatActiveToolNoticeContext(
+                tool,
+                query,
+                mode,
+                'error',
+                `工具调用出错：${message}\n这不是用户要求的最终答案。请不要停止生成；先基于当前上下文和已有工具结果继续回答。若信息仍不足，可以换更具体的检索内容再次调用工具。`
+            );
         };
 
         const formatActiveToolResultContext = (tool, query, results, mode = 'add') => {
@@ -7364,10 +7561,10 @@ ${content}
 
                 if (!Array.isArray(results) || results.length === 0) {
                     const emptyDescription = webMode === 'extract'
-                        ? `系统已尝试进入网页链接读取正文，但没有抽取到可用内容。${modeDescription}本段内容已插入最后一条用户消息结尾。请先判断当前搜索摘要和上下文是否已经足够；如果仍不够，请换另一个更可靠的来源链接或重新搜索，不要编造网页正文没有支持的信息。`
-                        : `系统已通过 Tavily 联网搜索，但没有找到可用网页结果。${modeDescription}本段内容已插入最后一条用户消息结尾。请先判断当前上下文是否已经足够；如果仍不够，请换更具体的作品名、角色名、站点名、别名或语言关键词再次调用，不要编造搜索结果没有支持的信息。`;
+                        ? `本次网页读取没有检索成功，没有抽取到可用正文，也没有提供可作为答案依据的新证据。${modeDescription}本段内容已插入最后一条用户消息结尾。请先判断当前搜索摘要和上下文是否已经足够；如果仍不够，请换另一个更可靠的来源链接或重新搜索，不要编造网页正文没有支持的信息。`
+                        : `本次联网搜索没有检索成功，没有找到可用网页结果，也没有提供可作为答案依据的新证据。${modeDescription}本段内容已插入最后一条用户消息结尾。请先判断当前上下文是否已经足够；如果仍不够，请换更具体的作品名、角色名、站点名、别名或语言关键词再次调用，不要编造搜索结果没有支持的信息。`;
                     return [
-                        `<active_tool_result name="${title}" call="${callName}" mode="${modeValue}" query="${escapeXmlAttribute(cleanQuery)}" web_mode="${webMode}"${responseTime}>`,
+                        `<active_tool_result name="${title}" call="${callName}" mode="${modeValue}" query="${escapeXmlAttribute(cleanQuery)}" status="empty" web_mode="${webMode}"${responseTime}>`,
                         `  <description>${emptyDescription}</description>`,
                         '</active_tool_result>'
                     ].join('\n');
@@ -7434,8 +7631,8 @@ ${content}
 
                 if (!Array.isArray(results) || results.length === 0) {
                     return [
-                        `<active_tool_result name="${title}" call="${callName}" mode="${modeValue}" query="${escapeXmlAttribute(cleanQuery)}" world_info_mode="${escapeXmlAttribute(worldInfoMode)}">`,
-                        `  <description>系统没有找到匹配的已开启世界书条目。${modeDescription}如果需要读取或编辑，请先调用 list 获取可用世界书名字。</description>`,
+                        `<active_tool_result name="${title}" call="${callName}" mode="${modeValue}" query="${escapeXmlAttribute(cleanQuery)}" status="empty" world_info_mode="${escapeXmlAttribute(worldInfoMode)}">`,
+                        `  <description>本次世界书读取没有检索成功，没有找到匹配的已开启世界书条目，也没有提供可作为答案依据的新证据。${modeDescription}如果需要读取或编辑，请先调用 list 获取可用世界书名字。</description>`,
                         '</active_tool_result>'
                     ].join('\n');
                 }
@@ -7521,8 +7718,8 @@ ${content}
 
                 if (!Array.isArray(results) || results.length === 0) {
                     return [
-                        `<active_tool_result name="${title}" call="${callName}" mode="${modeValue}" query="${escapeXmlAttribute(cleanQuery)}">`,
-                        `  <description>系统已按关键词精确检索当前对话历史，但没有找到包含该关键词的对话片段。${modeDescription}本段内容已插入最后一条用户消息结尾。请换更贴近原文的关键词再次调用，不要编造未出现过的对话内容。</description>`,
+                        `<active_tool_result name="${title}" call="${callName}" mode="${modeValue}" query="${escapeXmlAttribute(cleanQuery)}" status="empty">`,
+                        `  <description>本次关键词检索没有检索成功，没有找到包含该关键词的对话片段，也没有提供可作为答案依据的新证据。${modeDescription}本段内容已插入最后一条用户消息结尾。请换更贴近原文的关键词再次调用，不要编造未出现过的对话内容。</description>`,
                         '</active_tool_result>'
                     ].join('\n');
                 }
@@ -7553,8 +7750,8 @@ ${content}
 
             if (!Array.isArray(results) || results.length === 0) {
                 return [
-                    `<active_tool_result name="${title}" call="${callName}" mode="${modeValue}" query="${escapeXmlAttribute(cleanQuery)}">`,
-                    `  <description>系统已按工具调用检索向量记忆，但没有找到可用结果。${modeDescription}本段内容已插入最后一条用户消息结尾。请先判断当前上下文是否已经明确且足够；如果仍不够明确完整，请换更具体的检索内容再次调用，不要重复完全相同的查询。</description>`,
+                    `<active_tool_result name="${title}" call="${callName}" mode="${modeValue}" query="${escapeXmlAttribute(cleanQuery)}" status="empty">`,
+                    `  <description>本次向量记忆没有检索成功，没有找到可用记忆片段，也没有提供可作为答案依据的新证据。${modeDescription}本段内容已插入最后一条用户消息结尾。请先判断当前上下文是否已经明确且足够；如果仍不够明确完整，请换更具体的检索内容再次调用，不要重复完全相同的查询。</description>`,
                     '</active_tool_result>'
                 ].join('\n');
             }
@@ -7924,7 +8121,6 @@ ${content}
                 : null;
             if (!toolUi) {
                 toolUi = createActiveToolUi(toolCall, 'receiving');
-                toolUi.isOpen = true;
                 message.toolCalls.push(toolUi);
                 message._activeToolPendingUiId = toolUi.id;
             }
@@ -8145,7 +8341,12 @@ ${content}
                         );
                     if (toolAbort.signal.aborted) throw createAbortReason('Generation cancelled by user');
 
-                    const resultContext = formatActiveToolResultContext(toolCall.tool, toolCall.query, results, toolCall.mode);
+                    const resultContext = normalizeActiveToolResultContext(
+                        formatActiveToolResultContext(toolCall.tool, toolCall.query, results, toolCall.mode),
+                        toolCall.tool,
+                        toolCall.query,
+                        toolCall.mode
+                    );
                     toolUi.status = 'done';
                     toolUi.resultCount = Array.isArray(results) ? results.length : 0;
                     toolUi.resultText = resultContext;
@@ -8165,11 +8366,13 @@ ${content}
                     if (err.name === 'AbortError') {
                         return { aborted: true, toolCall, toolUi };
                     }
+                    const resultContext = formatActiveToolErrorContext(toolCall.tool, toolCall.query, err, toolCall.mode);
                     toolUi.status = 'error';
                     toolUi.error = err.message || '工具检索失败';
-                    toolUi.resultText = toolUi.error;
+                    toolUi.resultCount = 0;
+                    toolUi.resultText = resultContext;
                     await saveChatHistoryNow();
-                    return { ok: false, toolCall, toolUi, error: err };
+                    return { ok: true, toolCall, toolUi, resultContext, error: err };
                 }
             };
 
@@ -8218,7 +8421,9 @@ ${content}
                     return false;
                 }
 
-                continuationToolUi.status = 'continuing';
+                if (continuationToolUi.status !== 'error') {
+                    continuationToolUi.status = 'continuing';
+                }
                 cleanupActiveToolCaptureState(assistantMessage);
                 activeToolQueueRunning.value = false;
                 activeToolContinuationPending.value = true;
@@ -8239,10 +8444,15 @@ ${content}
                     await saveChatHistoryNow();
                     return false;
                 }
-                if (continuationToolUi) {
-                    continuationToolUi.status = 'error';
-                    continuationToolUi.error = err.message || '工具续写失败';
-                    continuationToolUi.resultText = continuationToolUi.error;
+                if (assistantMessage) {
+                    const errorMessage = err.message || '生成失败';
+                    assistantMessage.content = [
+                        String(assistantMessage.content || '').trimEnd(),
+                        `*-- ${errorMessage} --*`
+                    ].filter(Boolean).join('\n\n');
+                    assistantMessage.shouldAnimate = false;
+                    collapseNativeReasoning(assistantMessage);
+                    activeToolContinuationHasResponse.value = true;
                     await saveChatHistoryNow();
                 }
                 return false;
@@ -9676,6 +9886,8 @@ image###生成的提示词###
 
         // Lifecycle
         onMounted(async () => {
+            document.addEventListener('fullscreenchange', syncChatFullscreenState);
+            document.addEventListener('webkitfullscreenchange', syncChatFullscreenState);
             fetchQuota(); // Fetch quota on load
 
             await loadData();
@@ -10318,6 +10530,11 @@ image###生成的提示词###
                 }
             });
         });
+
+        onBeforeUnmount(() => {
+            document.removeEventListener('fullscreenchange', syncChatFullscreenState);
+            document.removeEventListener('webkitfullscreenchange', syncChatFullscreenState);
+        });
         // 解析并截断生成的包含 HTML UI 的正文，避免闪屏问题
         const processMainContent = (mainText, isGeneratingState) => {
             if (!isGeneratingState) return { text: mainText, showSpinner: false };
@@ -10393,11 +10610,11 @@ image###生成的提示词###
             showUpdateModal, updateCountdown, latestUpdate, closeUpdateModal, isUpdateScrolledToBottom, checkUpdateScroll, // Update Modal
             showConfirmModal, confirmMessage, modelMode, showNoMemoryNeededModal, // Export for template
             isGenerating, isRemoteGenerating, remoteEstimatedTime, isReceiving, isThinking, hasActiveToolInlineWork, activeToolInlineStatusText, isConversationBusy, activeToolContinuationMessageId, activeToolContinuationToolCallId, activeToolContinuationHasResponse, activeNativeReasoning, userInput, modelSearchQuery, activeModelTag, modelTags, characterSearchQuery, availableModels, filteredModels, filteredCharacters,
-            user, settings, apiProviderOptions, selectedApiProvider, isCustomApiProvider, customApiProviderOption, showApiProviderSelector, selectApiProvider, characters, currentCharacter, currentCharacterIndex, chatHistory, displayedChatMessages, handleChatScroll, presets, regexScripts, worldInfo,
+            user, settings, apiProviderOptions, selectedApiProvider, isCustomApiProvider, customApiProviderOption, customApiProviderOptions, showApiProviderSelector, selectApiProvider, characters, currentCharacter, currentCharacterIndex, chatHistory, displayedChatMessages, handleChatScroll, presets, regexScripts, worldInfo,
             activeTools, editingActiveTool, normalizeActiveTools, isWebActiveTool, isWorldInfoActiveTool, getWorldInfoAccessMode, getActiveToolDisplayDescription, canConfigureActiveToolResultCount, getActiveToolResultCountMin, getActiveToolResultCountMax,
             getVisibleToolCalls, getMergedToolCallItems, getMergedToolCallCount, getMergedToolCallTitle, getMergedToolCallStatus, isMergedToolCallLive, isMergedToolCallError, isMergedToolCallDone, getToolCallDisplayName, getToolCallModeText, getToolCallStatusText, getAssistantReasoningText, getMergedToolCallReasoningText, isMergedToolCallReasoningLive, isMergedToolCallReasoningOpen, toggleMergedToolCallReasoning,
             activeRegexCount, activeWorldInfoCount, activeUiTemplateCount, chatRoundStats, totalContextLength,
-            editingCharacter, editingPreset, editingUiTemplate, toasts, chatContainer, inputBox, messageElements,
+            editingCharacter, editingPreset, editingUiTemplate, toasts, chatContainer, isChatFullscreen, inputBox, messageElements,
             lastUserMessageIndex, // Expose to template
             isGeneratorLoading, generatorUrl, onGeneratorLoad, syncSettingsToGenerator, // Generator exports
             isSquareLoading, squareUrl, onSquareLoad, // Square exports
@@ -10410,7 +10627,7 @@ image###生成的提示词###
             memories, memorySettings, isExtractingMemory, isBatchExtracting, batchExtractProgress, memoryExtractStatus,
             vectorMemorySearchQuery, vectorMemorySearchResults, vectorMemorySearchError, vectorMemorySearchSortMode, isVectorMemorySearching,
             extractMemoryFromChat, startBatchMemoryExtraction, abortBatchExtraction, searchVectorMemories, clearVectorMemorySearch,
-            // Slider mapping: 10-60 are real keep floors, 65 means disabled (keepFloors=0).
+            // Slider mapping: 20-60 are real keep floors, 65 means disabled (keepFloors=0).
             keepFloorsSlider: computed({
                 get: () => memorySettings.keepFloors === 0
                     ? MEMORY_KEEP_FLOORS_OFF_SLIDER_VALUE
@@ -10543,7 +10760,7 @@ image###生成的提示词###
             },
             toggleMobileMenu: () => showMobileMenu.value = !showMobileMenu.value,
             scrollToPreviousMessage, scrollToNextMessage,
-            fetchModels, selectModel, sendMessage, autoResizeInput, stopGeneration, clearChat,
+            fetchModels, selectModel, sendMessage, autoResizeInput, stopGeneration, clearChat, toggleChatFullscreen,
             handleConfirm, handleCancel, // Export handlers
             manualSave,
             copyMessage, deleteMessage, regenerateMessage, printAIRequestLogs,

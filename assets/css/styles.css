@@ -60,7 +60,7 @@ html {
         .chat-input-scrollbar:focus::-webkit-scrollbar-thumb {
             background: #e5e7eb;
         }
-        
+
         body {
             height: 100%;
             margin: 0;
@@ -74,6 +74,32 @@ html {
             -moz-text-size-adjust: 100% !important;
             -ms-text-size-adjust: 100% !important;
             text-size-adjust: 100% !important;
+        }
+
+        .app-native-fullscreen,
+        html:fullscreen #app,
+        html:-webkit-full-screen #app {
+            width: 100vw;
+            height: 100vh;
+            background-color: #f9fafb;
+        }
+
+        .app-native-fullscreen .app-sidebar,
+        html:fullscreen #app .app-sidebar,
+        html:-webkit-full-screen #app .app-sidebar {
+            display: none !important;
+            visibility: hidden !important;
+            width: 0 !important;
+            min-width: 0 !important;
+            flex-basis: 0 !important;
+        }
+
+        .app-native-fullscreen .app-main,
+        html:fullscreen #app .app-main,
+        html:-webkit-full-screen #app .app-main {
+            width: 100vw;
+            max-width: 100vw;
+            flex: 1 1 auto;
         }
 
         /* Markdown Body Layout Reset for Full-width Content */
@@ -147,6 +173,47 @@ html {
             backdrop-filter: blur(12px);
             border: 1px solid rgba(0, 0, 0, 0.05);
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+        }
+
+        .msg-bubble-glass {
+            background-color: rgba(255, 255, 255, 0.88) !important;
+        }
+
+        @media (min-width: 769px) {
+            .immersive-message-row {
+                justify-content: center !important;
+            }
+
+            .immersive-message-shell {
+                width: min(56rem, 73%);
+                max-width: min(56rem, 73%) !important;
+                justify-content: center;
+            }
+
+            .immersive-message-column {
+                align-items: flex-start !important;
+                width: 100%;
+            }
+
+            .immersive-message-shell.flex-row-reverse .immersive-message-column {
+                align-items: flex-end !important;
+            }
+
+            .immersive-message-column > .group {
+                width: fit-content;
+                max-width: 100%;
+            }
+
+            .immersive-message-column > .group.w-full {
+                width: 100%;
+            }
+
+            .immersive-message-column .active-tool-waiting {
+                width: fit-content;
+                min-width: 9.5rem;
+                max-width: 100%;
+            }
+
         }
 
         /* Mobile optimizations */
@@ -226,11 +293,6 @@ html {
             /* Message name tags */
             .msg-name-tag {
                 background-color: rgba(255, 255, 255, 0.7) !important;
-            }
-
-            /* Message bubbles - increase opacity for readability */
-            .msg-bubble-glass {
-                background-color: rgba(255, 255, 255, 0.88) !important;
             }
 
             /* Summary message box */
@@ -1027,14 +1089,21 @@ opacity: 0;
     will-change: transform, opacity;
 }
 
+.scroll-reveal-center {
+    opacity: 0;
+    transform: translateY(18px) scale(0.98);
+    transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+    will-change: transform, opacity;
+}
+
 .reveal-active {
     opacity: 1 !important;
-    transform: translateX(0) !important;
+    transform: translate3d(0, 0, 0) scale(1) !important;
 }
 
 /* Reduced motion support */
 @media (prefers-reduced-motion: reduce) {
-    .scroll-reveal-left, .scroll-reveal-right {
+    .scroll-reveal-left, .scroll-reveal-right, .scroll-reveal-center {
         transform: none !important;
         transition: opacity 0.3s ease !important;
     }

@@ -79,7 +79,8 @@
 </head>
 
 <body class="bg-gray-50 text-gray-900 font-sans selection:bg-primary-200 selection:text-primary-900">
-    <div id="app" v-cloak class="h-full flex flex-col md:flex-row relative">
+    <div id="app" v-cloak class="h-full flex flex-col md:flex-row relative"
+        :class="{ 'app-native-fullscreen': isChatFullscreen }">
         <component is="style" v-if="settings.fontSize">
             .markdown-body :not(h1):not(h2):not(h3):not(h4):not(h5):not(h6):not(small):not(sub):not(sup):not(code) {
             font-size: inherit !important;
@@ -133,7 +134,7 @@
 
         <!-- Sidebar (Desktop & Mobile Drawer) -->
         <div
-            :class="['fixed inset-y-0 left-0 z-50 bg-white border-r border-gray-200 transform transition-all duration-300 md:relative md:translate-x-0 flex flex-col shadow-lg md:shadow-none md:rounded-none rounded-r-2xl', showMobileMenu ? 'translate-x-0' : '-translate-x-full', isSidebarCollapsed ? 'md:w-16' : 'md:w-72', 'w-72']">
+            :class="['app-sidebar fixed inset-y-0 left-0 z-50 bg-white border-r border-gray-200 transform transition-all duration-300 md:relative md:translate-x-0 flex flex-col shadow-lg md:shadow-none md:rounded-none rounded-r-2xl', showMobileMenu ? 'translate-x-0' : '-translate-x-full', isSidebarCollapsed ? 'md:w-16' : 'md:w-72', 'w-72']">
             <!-- Sidebar Header -->
             <div class="h-16 flex items-center border-b border-gray-100 transition-all duration-300"
                 :class="isSidebarCollapsed ? 'justify-center px-0' : 'justify-between px-6'">
@@ -299,12 +300,12 @@
             </div>
         </div>
 
-        <div class="flex-1 flex flex-col h-full overflow-hidden bg-gray-50 relative">
+        <div class="app-main flex-1 flex flex-col h-full overflow-hidden bg-gray-50 relative">
 
 
 
             <!-- Chat View -->
-            <div v-if="currentView === 'chat'" class="flex flex-col h-full relative">
+            <div v-if="currentView === 'chat'" class="chat-view-root flex flex-col h-full relative">
 
                 <!-- Character Background Layer -->
                 <div v-if="settings.useCharacterBackground && currentCharacter && currentCharacter?.avatar"
@@ -315,14 +316,14 @@
                 <!-- Blur Overlay for Description Panel -->
                 <transition name="fade">
                     <div v-if="showDescriptionPanel" @click="showDescriptionPanel = false"
-                        class="absolute inset-0 bg-black/5 backdrop-blur-[2px] z-10 transition-opacity duration-300 desc-panel-overlay">
+                        class="absolute inset-0 bg-black/5 backdrop-blur-[2px] z-[35] transition-opacity duration-300 desc-panel-overlay">
                     </div>
                 </transition>
 
                 <!-- Character Description Panel -->
                 <transition name="dropdown">
                     <div v-if="showDescriptionPanel && currentCharacter"
-                        class="absolute top-14 left-4 right-4 md:w-[460px] md:left-[60px] md:right-auto md:top-[60px] md:ml-0 bg-white/95 backdrop-blur-2xl border border-white/60 shadow-[0_20px_60px_-10px_rgba(0,0,0,0.15)] rounded-3xl z-20 overflow-hidden ring-1 ring-black/5 origin-top-left transform-gpu desc-panel">
+                        class="absolute top-14 left-4 right-4 md:w-[460px] md:left-[60px] md:right-auto md:top-[60px] md:ml-0 max-h-[calc(100dvh-5rem)] md:max-h-[calc(100dvh-7rem)] bg-white/95 backdrop-blur-2xl border border-white/60 shadow-[0_20px_60px_-10px_rgba(0,0,0,0.15)] rounded-3xl z-40 overflow-hidden ring-1 ring-black/5 origin-top-left transform-gpu flex flex-col desc-panel">
                         <!-- Decorative Header Background -->
                         <div
                             class="absolute top-0 left-0 right-0 h-32 bg-gradient-to-br from-primary-50 via-purple-50 to-pink-50 z-0">
@@ -336,7 +337,7 @@
                             </div>
                         </div>
 
-                        <div class="relative z-10 p-4 pt-6">
+                        <div class="relative z-10 p-4 pt-6 flex flex-col min-h-0 max-h-[inherit] overflow-hidden">
                             <!-- Close Button -->
                             <button @click="showDescriptionPanel = false"
                                 class="absolute top-3 right-3 p-1.5 text-gray-400 hover:text-gray-600 hover:bg-white/60 rounded-full transition-all backdrop-blur-sm shadow-sm hover:shadow border border-transparent hover:border-gray-100 z-20 desc-close-btn">
@@ -346,7 +347,7 @@
                                 </svg>
                             </button>
 
-                            <div class="flex flex-row md:flex-col items-center md:items-center mb-6 gap-4 md:gap-0">
+                            <div class="flex flex-row md:flex-col items-center md:items-center mb-5 gap-4 md:gap-0 flex-shrink-0">
                                 <!-- Avatar Container with Glow -->
                                 <div class="relative group cursor-pointer flex-shrink-0 mb-0 md:mb-4"
                                     @click="editCharacter(currentCharacterIndex)">
@@ -375,16 +376,17 @@
                                         {{ currentCharacter.name }}</h3>
                                     <div class="flex flex-wrap justify-start md:justify-center gap-2">
                                         <span
-                                            class="px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wide uppercase bg-primary-50 text-primary-600 border border-primary-100 shadow-sm">Character
-                                            Info</span>
+                                            class="px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wide bg-primary-50 text-primary-600 border border-primary-100 shadow-sm">
+                                            {{ chatRoundStats.floors }} 楼 · {{ totalContextLength }} 字
+                                        </span>
                                     </div>
                                 </div>
                             </div>
 
                             <!-- Description Box -->
                             <div
-                                class="bg-gray-50/50 rounded-2xl p-1 border border-gray-100 shadow-inner max-h-[55vh] md:max-h-[40vh] flex flex-col group">
-                                <div class="overflow-y-auto custom-scrollbar p-2 space-y-2 pr-2">
+                                class="bg-gray-50/50 rounded-2xl p-1 border border-gray-100 shadow-inner min-h-0 flex-1 flex flex-col overflow-hidden group">
+                                <div class="min-h-0 flex-1 overflow-y-auto custom-scrollbar p-2 space-y-2 pr-2">
                                     <div v-if="currentCharacter.description"
                                         class="prose prose-sm prose-gray max-w-none">
                                         <div class="text-sm text-gray-600 leading-relaxed font-normal font-sans markdown-body"
@@ -404,27 +406,6 @@
                                 </div>
                             </div>
 
-                            <!-- Footer Actions -->
-                            <div class="mt-5 flex justify-center items-center px-1 gap-4">
-                                <div class="text-xs text-gray-400 font-medium flex items-center">
-                                    <svg class="w-3 h-3 mr-1 opacity-70" fill="none" stroke="currentColor"
-                                        viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                            d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z">
-                                        </path>
-                                    </svg>
-                                    {{ chatRoundStats.turns }} 轮 · {{ chatRoundStats.floors }} 楼
-                                </div>
-                                <div class="text-xs text-gray-400 font-medium flex items-center">
-                                    <svg class="w-3 h-3 mr-1 opacity-70" fill="none" stroke="currentColor"
-                                        viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z">
-                                        </path>
-                                    </svg>
-                                    {{ totalContextLength }} 字
-                                </div>
-                            </div>
                         </div>
                         <!-- Bottom Gradient Border -->
                         <div
@@ -468,10 +449,21 @@
                             </div>
                             <div v-else class="text-white/60 italic drop-shadow-sm">未选择角色卡</div>
                         </div>
-                        <div class="flex items-center space-x-2">
-
+                        <div class="flex items-center gap-0">
+                            <button @click="toggleChatFullscreen"
+                                class="p-1.5 text-white/70 hover:text-white rounded-full hover:bg-white/10 transition-colors"
+                                :title="isChatFullscreen ? '退出全屏' : '全屏聊天'">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path v-if="!isChatFullscreen" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M8 4H5a1 1 0 00-1 1v3m12-4h3a1 1 0 011 1v3M4 16v3a1 1 0 001 1h3m8 0h3a1 1 0 001-1v-3">
+                                    </path>
+                                    <path v-else stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M9 4v4a1 1 0 01-1 1H4m11-5v4a1 1 0 001 1h4M9 20v-4a1 1 0 00-1-1H4m11 5v-4a1 1 0 011-1h4">
+                                    </path>
+                                </svg>
+                            </button>
                             <button @click="clearChat"
-                                class="p-2 text-white/70 hover:text-red-400 rounded-full hover:bg-white/10 transition-colors"
+                                class="p-1.5 text-white/70 hover:text-red-400 rounded-full hover:bg-white/10 transition-colors"
                                 title="清空聊天">
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -518,10 +510,10 @@
                         :data-role="msg.role"
                         :data-chat-index="index"
                         v-show="!(msg.role === 'assistant' && index === chatHistory.length - 1 && isThinking && !(msg.reasoning || parseCot(msg.content).cot || parseCot(msg.content).main || (msg.toolCalls && msg.toolCalls.length)))"
-                        :class="['flex w-full scroll-reveal-container', msg.isSelf ? 'justify-end' : 'justify-start', msg.skipReveal ? 'reveal-active' : (msg.isSelf ? 'scroll-reveal-right' : 'scroll-reveal-left')]"
+                        :class="['flex w-full scroll-reveal-container', settings.immersiveMode ? 'immersive-message-row' : '', msg.isSelf ? 'justify-end' : 'justify-start', msg.skipReveal ? 'reveal-active' : (settings.immersiveMode ? 'scroll-reveal-center' : (msg.isSelf ? 'scroll-reveal-right' : 'scroll-reveal-left'))]"
                         :style="{ transitionDelay: (displayIndex % 5) * 50 + 'ms' }">
                         <div
-                            :class="['flex', msg.isEditing_Message ? 'w-full max-w-full' : ['md:max-w-[75%] lg:max-w-[70%]', settings.immersiveMode ? 'max-w-full' : 'max-w-[99%]'], messageUsesWideLayout(msg) ? 'w-full' : '', msg.isSelf ? 'flex-row-reverse' : 'flex-row']">
+                            :class="['flex', settings.immersiveMode ? 'immersive-message-shell' : '', msg.isEditing_Message ? 'w-full max-w-full' : ['md:max-w-[75%] lg:max-w-[70%]', settings.immersiveMode ? 'max-w-full' : 'max-w-[99%]'], messageUsesWideLayout(msg) ? 'w-full' : '', msg.isSelf ? 'flex-row-reverse' : 'flex-row']">
                             <!-- Avatar -->
                             <div v-show="!settings.immersiveMode"
                                 :class="['flex-shrink-0 select-none', msg.shouldAnimate ? 'animate-message-fade-in' : '']">
@@ -542,7 +534,7 @@
                             </div>
 
                             <div
-                                :class="['flex flex-col min-w-0', messageUsesWideLayout(msg) ? 'flex-1 w-full' : '', msg.isSelf ? 'items-end' : 'items-start']">
+                                :class="['flex flex-col min-w-0', settings.immersiveMode ? 'immersive-message-column' : '', messageUsesWideLayout(msg) ? 'flex-1 w-full' : '', msg.isSelf ? 'items-end' : 'items-start']">
                                 <!-- Name (Outside Bubble) -->
                                 <div v-show="!settings.immersiveMode"
                                     :class="['text-[10px] font-bold text-gray-600 mb-1 select-none px-1.5 py-0.5 rounded-md bg-white/50 backdrop-blur-sm border border-white/20 w-fit shadow-sm truncate max-w-[150px] md:max-w-[250px] msg-name-tag', msg.isSelf ? 'ml-auto mr-1' : 'mr-auto ml-1', msg.shouldAnimate ? 'animate-message-fade-in' : '']">
@@ -1024,14 +1016,15 @@
 
                     <!-- Typing Indicator -->
                     <div v-if="(isGenerating || isRemoteGenerating) && !isReceiving && !isThinking && !hasActiveToolInlineWork"
-                        class="flex w-full justify-start">
-                        <div class="flex max-w-[99%] md:max-w-[75%] lg:max-w-[70%] flex-row">
+                        :class="['flex w-full', settings.immersiveMode ? 'immersive-message-row justify-start' : 'justify-start']">
+                        <div
+                            :class="['flex flex-row', settings.immersiveMode ? 'immersive-message-shell max-w-[99%]' : 'max-w-[99%] md:max-w-[75%] lg:max-w-[70%]']">
                             <div v-show="!settings.immersiveMode" class="flex-shrink-0 animate-message-in"
                                 style="animation-delay: 200ms;">
                                 <img :src="currentCharacter?.avatar"
                                     class="w-9 h-9 rounded-full object-cover mr-1.5 border border-gray-200 shadow-sm">
                             </div>
-                            <div class="flex flex-col min-w-0 items-start">
+                            <div :class="['flex flex-col min-w-0 items-start', settings.immersiveMode ? 'immersive-message-column' : '']">
                                 <div v-show="!settings.immersiveMode"
                                     class="text-[10px] font-bold text-gray-600 mb-1 select-none px-1.5 py-0.5 rounded-md bg-white/50 backdrop-blur-sm border border-white/20 w-fit shadow-sm mr-auto ml-1 truncate max-w-[150px] md:max-w-[250px] msg-name-tag animate-message-in"
                                     style="animation-delay: 200ms;">
@@ -1066,9 +1059,9 @@
 
                 <!-- Input Area (Floating Island) -->
                 <div
-                    class="absolute bottom-0 left-0 right-0 w-full p-2 md:p-4 z-30 pointer-events-none flex justify-center flex-shrink-0 transition-all duration-300">
+                    class="absolute bottom-0 left-0 right-0 w-full p-2 md:p-3 z-30 pointer-events-none flex justify-center flex-shrink-0 transition-all duration-300">
                     <div
-                        class="w-full max-w-lg pointer-events-auto p-2.5 md:p-4 bg-white/90 backdrop-blur-xl border border-white/40 shadow-lg rounded-3xl ring-1 ring-black/5 transition-all duration-300 flex flex-col">
+                        class="w-full max-w-lg pointer-events-auto p-2.5 md:p-3 bg-white/90 backdrop-blur-xl border border-white/40 shadow-lg rounded-3xl ring-1 ring-black/5 transition-all duration-300 flex flex-col">
                         <!-- Suggestion Bubbles (Absolute positioned above the bar) -->
                         <div v-if="suggestedReplies.length > 0"
                             class="absolute bottom-full left-0 right-0 p-2 pointer-events-none z-50">
@@ -1349,24 +1342,24 @@
                         <div class="relative w-full flex items-end gap-2 px-1">
                             <textarea v-model="userInput" @input="autoResizeInput" @keydown.enter.prevent="sendMessage"
                                 :placeholder="'输入消息...'"
-                                class="flex-1 bg-gray-100/70 text-gray-800 rounded-2xl px-4 py-2.5 md:px-5 md:py-3.5 focus:outline-none focus:ring-2 focus:ring-primary-500/30 focus:border-primary-400 resize-none border border-transparent shadow-inner transition-all focus:bg-white chat-input-scrollbar min-h-[44px] md:min-h-[52px] max-h-[140px] md:max-h-[180px]"
+                                class="flex-1 bg-gray-100/70 text-gray-800 rounded-2xl px-4 py-2.5 md:px-4 md:py-2.5 focus:outline-none focus:ring-2 focus:ring-primary-500/30 focus:border-primary-400 resize-none border border-transparent shadow-inner transition-all focus:bg-white chat-input-scrollbar min-h-[44px] md:min-h-[46px] max-h-[140px] md:max-h-[160px]"
                                 rows="1" ref="inputBox"></textarea>
 
                             <!-- Send/Stop Button -->
                             <div class="flex-shrink-0 flex items-center gap-1">
                                 <button v-if="!isConversationBusy" @click="sendMessage" :disabled="!userInput.trim()"
-                                    class="p-2 md:p-3 bg-primary-600 text-white rounded-2xl md:hover:bg-primary-700 md:hover:shadow-lg md:hover:-translate-y-0.5 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:translate-y-0 transition-all shadow-md flex items-center justify-center w-[44px] h-[44px] md:w-[52px] md:h-[52px]"
+                                    class="p-2 md:p-2.5 bg-primary-600 text-white rounded-2xl md:hover:bg-primary-700 md:hover:shadow-lg md:hover:-translate-y-0.5 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:translate-y-0 transition-all shadow-md flex items-center justify-center w-[44px] h-[44px] md:w-[46px] md:h-[46px]"
                                     title="发送">
-                                    <svg class="w-5 h-5 md:w-6 md:h-6 transform rotate-90" fill="none"
+                                    <svg class="w-5 h-5 transform rotate-90" fill="none"
                                         stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                             d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path>
                                     </svg>
                                 </button>
                                 <button v-else @click="stopGeneration"
-                                    class="p-2 md:p-3 bg-red-500 text-white rounded-2xl md:hover:bg-red-600 md:hover:shadow-lg md:hover:-translate-y-0.5 active:scale-95 transition-all shadow-md flex items-center justify-center w-[44px] h-[44px] md:w-[52px] md:h-[52px]"
+                                    class="p-2 md:p-2.5 bg-red-500 text-white rounded-2xl md:hover:bg-red-600 md:hover:shadow-lg md:hover:-translate-y-0.5 active:scale-95 transition-all shadow-md flex items-center justify-center w-[44px] h-[44px] md:w-[46px] md:h-[46px]"
                                     title="中止生成">
-                                    <svg class="w-5 h-5 md:w-6 md:h-6" fill="none" stroke="currentColor"
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor"
                                         viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                             d="M6 18L18 6M6 6l12 12"></path>
@@ -2074,7 +2067,7 @@
                                         立即检测
                                     </button>
                                 </h4>
-                                <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                                     <!-- General API Status -->
                                     <div
                                         class="flex items-center p-3 bg-gray-50 rounded-xl border border-gray-100 hover:bg-white hover:border-gray-200 hover:shadow-sm transition-all duration-200">
@@ -2179,8 +2172,9 @@
                                                         stroke-width="2" d="M5 13l4 4L19 7"></path>
                                                 </svg>
                                             </button>
-                                            <button type="button" @click="selectApiProvider(customApiProviderOption)"
-                                                :class="['w-full mt-2 px-3 py-2.5 border-t border-gray-100 rounded-lg flex items-center text-left transition-all', isCustomApiProvider ? 'bg-teal-50 text-teal-700' : 'hover:bg-gray-50 text-gray-700']">
+                                            <button v-for="provider in customApiProviderOptions" :key="provider.id"
+                                                type="button" @click="selectApiProvider(provider)"
+                                                :class="['w-full mt-2 px-3 py-2.5 border-t border-gray-100 rounded-lg flex items-center text-left transition-all', selectedApiProvider.id === provider.id ? 'bg-teal-50 text-teal-700' : 'hover:bg-gray-50 text-gray-700']">
                                                 <span
                                                     class="w-8 h-8 rounded-lg bg-white border border-gray-100 shadow-sm flex items-center justify-center mr-3 shrink-0">
                                                     <svg class="w-5 h-5 text-gray-500" fill="none"
@@ -2192,10 +2186,10 @@
                                                     </svg>
                                                 </span>
                                                 <span class="min-w-0 flex-1">
-                                                    <span class="block text-sm font-bold truncate">自定义</span>
+                                                    <span class="block text-sm font-bold truncate">{{ provider.name }}</span>
                                                     <span class="block text-xs text-gray-400 truncate">手动输入 API 地址</span>
                                                 </span>
-                                                <svg v-if="isCustomApiProvider"
+                                                <svg v-if="selectedApiProvider.id === provider.id"
                                                     class="w-4 h-4 ml-2 text-teal-600 shrink-0" fill="none"
                                                     stroke="currentColor" viewBox="0 0 24 24">
                                                     <path stroke-linecap="round" stroke-linejoin="round"
@@ -2215,7 +2209,7 @@
                                         </div>
                                         <input v-model="settings.apiUrl" type="text"
                                             class="w-full h-12 bg-gray-50 border-2 border-gray-100 rounded-xl pl-11 pr-4 py-0 text-gray-800 font-medium focus:bg-white focus:border-teal-500 focus:ring-4 focus:ring-teal-100 focus:outline-none transition-all placeholder-gray-400 font-mono text-sm"
-                                            placeholder="https://api.openai.com/v1">
+                                            placeholder="https://your-api.example/v1">
                                     </div>
                                 </div>
                                 <div class="group">
@@ -3227,7 +3221,7 @@
                                             class="text-xs font-mono text-primary-600 bg-primary-50 px-1.5 py-0.5 rounded border border-primary-100">{{
                                             memorySettings.vectorTopK || 15 }} 个分片</span>
                                     </div>
-                                    <input type="range" v-model.number="memorySettings.vectorTopK" min="10" max="30" step="1"
+                                    <input type="range" v-model.number="memorySettings.vectorTopK" min="10" max="20" step="1"
                                         class="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary-500">
                                 </div>
                             </div>
@@ -3242,7 +3236,7 @@
                                             memorySettings.keepFloors === 0 ? '关闭' : memorySettings.keepFloors + ' 楼'
                                             }}</span>
                                     </div>
-                                    <input type="range" v-model.number="keepFloorsSlider" min="10" max="65" step="5"
+                                    <input type="range" v-model.number="keepFloorsSlider" min="20" max="65" step="5"
                                         class="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary-500">
                                     <p class="text-[10px] text-gray-400 mt-1.5">仅保留最近 N 楼原始消息，更早的楼层使用记忆引擎替代，拖到最右侧关闭
                                     </p>
@@ -4110,7 +4104,6 @@
                             class="list-none cursor-pointer select-none px-4 py-3 flex items-center justify-between gap-3 hover:bg-gray-50 transition-colors">
                             <span class="text-xs font-bold text-gray-500 uppercase tracking-wide">
                                 HTML模板
-                                <span class="normal-case font-normal text-gray-400">使用 <code v-pre>{{变量名}}</code> 插入变量，数组可用 <code v-pre>{{#each equipment}}</code></span>
                             </span>
                             <span class="flex items-center gap-2 text-[11px] font-bold text-gray-400">
                                 <span class="group-open:hidden">展开</span>
