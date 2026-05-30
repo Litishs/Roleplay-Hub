@@ -283,7 +283,6 @@ createApp({
         let mobileKeyboardScrollTimer = null;
         let lastAppliedMobileViewportHeight = 0;
         let lastAppliedMobileKeyboardInset = 0;
-        let stableMobileLayoutHeight = 0;
 
         // IntersectionObserver for lazy loading images or other visibility triggers could go here
 
@@ -384,23 +383,11 @@ createApp({
             document.documentElement.style.setProperty('--keyboard-inset', `${safeInset}px`);
         };
 
-        const getVirtualKeyboardInset = () => {
-            const rect = navigator.virtualKeyboard?.boundingRect;
-            const height = Number(rect?.height) || 0;
-            return height > 0 ? height : 0;
-        };
-
-        const getFallbackKeyboardInset = (height) => {
-            const baseHeight = Math.max(320, Number(height) || window.innerHeight || 0);
-            return Math.round(Math.min(380, Math.max(240, baseHeight * 0.42)));
-        };
-
         const syncMobileVisualViewport = ({ force = false } = {}) => {
             if (!isMobileViewport()) {
                 isMobileKeyboardOpen.value = false;
                 lastAppliedMobileViewportHeight = 0;
                 lastAppliedMobileKeyboardInset = 0;
-                stableMobileLayoutHeight = 0;
                 document.documentElement.style.removeProperty('--app-visual-height');
                 document.documentElement.style.removeProperty('--keyboard-inset');
                 return;
@@ -411,35 +398,15 @@ createApp({
             const layoutHeight = window.innerHeight || document.documentElement.clientHeight || height;
             const viewportOffsetTop = viewport?.offsetTop || 0;
             const inputFocused = document.activeElement === inputBox.value;
-            const visualKeyboardInset = viewport
+            const keyboardInset = viewport
                 ? Math.max(0, layoutHeight - height - viewportOffsetTop)
                 : 0;
-            const virtualKeyboardInset = getVirtualKeyboardInset();
-            const rawKeyboardInset = Math.max(visualKeyboardInset, virtualKeyboardInset);
             const viewportCompressed = viewport && height < layoutHeight - 80;
-            const keyboardOpen = !!(inputFocused || viewportCompressed || rawKeyboardInset > 40);
+            const keyboardOpen = !!(viewportCompressed || keyboardInset > 40);
 
-            if (!stableMobileLayoutHeight || (!keyboardOpen && layoutHeight > 0)) {
-                stableMobileLayoutHeight = layoutHeight;
-            }
-            if (keyboardOpen) {
-                stableMobileLayoutHeight = Math.max(stableMobileLayoutHeight, layoutHeight, lastAppliedMobileViewportHeight, height);
-            }
-
-            const stableHeight = stableMobileLayoutHeight || layoutHeight || height;
-            const stableVisualInset = keyboardOpen && viewport
-                ? Math.max(0, stableHeight - height - viewportOffsetTop)
-                : 0;
-            const fallbackInset = keyboardOpen && inputFocused && rawKeyboardInset < 80
-                ? getFallbackKeyboardInset(stableHeight)
-                : 0;
-            const keyboardInset = keyboardOpen
-                ? Math.max(rawKeyboardInset, stableVisualInset, fallbackInset)
-                : 0;
-
-            applyMobileVisualViewportHeight(stableHeight, { force });
-            applyMobileKeyboardInset(keyboardInset, { force });
-            isMobileKeyboardOpen.value = keyboardOpen;
+            applyMobileVisualViewportHeight(height, { force });
+            applyMobileKeyboardInset(keyboardOpen ? keyboardInset : 0, { force });
+            isMobileKeyboardOpen.value = !!(inputFocused || keyboardOpen);
 
             if (isMobileKeyboardOpen.value && currentView.value === 'chat') {
                 clearTimeout(mobileKeyboardScrollTimer);
@@ -10614,12 +10581,6 @@ image###生成的提示词###
                 window.visualViewport.addEventListener('resize', handleMobileViewportResize, { passive: true });
                 window.visualViewport.addEventListener('scroll', handleMobileViewportResize, { passive: true });
             }
-            if (navigator.virtualKeyboard) {
-                try {
-                    navigator.virtualKeyboard.overlaysContent = true;
-                } catch (_) { }
-                navigator.virtualKeyboard.addEventListener('geometrychange', handleMobileViewportResize);
-            }
             window.addEventListener('orientationchange', handleMobileOrientationChange, { passive: true });
             window.addEventListener('resize', handleMobileViewportResize, { passive: true });
             scheduleMobileVisualViewportSync({ force: true });
@@ -10644,9 +10605,6 @@ image###生成的提示词###
             if (window.visualViewport) {
                 window.visualViewport.removeEventListener('resize', handleMobileViewportResize);
                 window.visualViewport.removeEventListener('scroll', handleMobileViewportResize);
-            }
-            if (navigator.virtualKeyboard) {
-                navigator.virtualKeyboard.removeEventListener('geometrychange', handleMobileViewportResize);
             }
             window.removeEventListener('orientationchange', handleMobileOrientationChange);
             window.removeEventListener('resize', handleMobileViewportResize);
