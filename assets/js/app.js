@@ -282,6 +282,7 @@ createApp({
         let mobileKeyboardBlurTimer = null;
         let mobileKeyboardScrollTimer = null;
         let lastAppliedMobileViewportHeight = 0;
+        let lastAppliedMobileKeyboardInset = 0;
 
         // IntersectionObserver for lazy loading images or other visibility triggers could go here
 
@@ -375,20 +376,35 @@ createApp({
             if (appElement?.style.height) appElement.style.height = '';
         };
 
+        const applyMobileKeyboardInset = (inset, { force = false } = {}) => {
+            const safeInset = Math.max(0, Math.round(Number(inset) || 0));
+            if (!force && Math.abs(safeInset - lastAppliedMobileKeyboardInset) < 2) return;
+            lastAppliedMobileKeyboardInset = safeInset;
+            document.documentElement.style.setProperty('--keyboard-inset', `${safeInset}px`);
+        };
+
         const syncMobileVisualViewport = ({ force = false } = {}) => {
             if (!isMobileViewport()) {
                 isMobileKeyboardOpen.value = false;
                 lastAppliedMobileViewportHeight = 0;
+                lastAppliedMobileKeyboardInset = 0;
                 document.documentElement.style.removeProperty('--app-visual-height');
+                document.documentElement.style.removeProperty('--keyboard-inset');
                 return;
             }
 
             const viewport = window.visualViewport;
             const height = viewport?.height || window.innerHeight || document.documentElement.clientHeight;
-            applyMobileVisualViewportHeight(height, { force });
+            const layoutHeight = window.innerHeight || document.documentElement.clientHeight || height;
+            const viewportOffsetTop = viewport?.offsetTop || 0;
+            const keyboardInset = viewport
+                ? Math.max(0, layoutHeight - height - viewportOffsetTop)
+                : 0;
+
+            applyMobileVisualViewportHeight(layoutHeight, { force });
+            applyMobileKeyboardInset(keyboardInset, { force });
 
             const inputFocused = document.activeElement === inputBox.value;
-            const layoutHeight = window.innerHeight || document.documentElement.clientHeight || height;
             const viewportCompressed = viewport && height < layoutHeight - 80;
             isMobileKeyboardOpen.value = !!(inputFocused || viewportCompressed);
 
@@ -10563,6 +10579,7 @@ image###生成的提示词###
             // --- Mobile Keyboard Adaptation (VisualViewport) ---
             if (window.visualViewport) {
                 window.visualViewport.addEventListener('resize', handleMobileViewportResize, { passive: true });
+                window.visualViewport.addEventListener('scroll', handleMobileViewportResize, { passive: true });
             }
             window.addEventListener('orientationchange', handleMobileOrientationChange, { passive: true });
             window.addEventListener('resize', handleMobileViewportResize, { passive: true });
@@ -10587,6 +10604,7 @@ image###生成的提示词###
             document.removeEventListener('webkitfullscreenchange', syncChatFullscreenState);
             if (window.visualViewport) {
                 window.visualViewport.removeEventListener('resize', handleMobileViewportResize);
+                window.visualViewport.removeEventListener('scroll', handleMobileViewportResize);
             }
             window.removeEventListener('orientationchange', handleMobileOrientationChange);
             window.removeEventListener('resize', handleMobileViewportResize);

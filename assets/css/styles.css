@@ -1,5 +1,6 @@
         :root {
             --app-visual-height: 100vh;
+            --keyboard-inset: 0px;
         }
 
         @supports (height: 100dvh) {
@@ -361,6 +362,7 @@
 
             /* Input area container (mobile bottom bar) */
             .input-area-mobile {
+                bottom: var(--keyboard-inset, 0px) !important;
                 background-color: transparent !important;
                 border-top: none !important;
             }
