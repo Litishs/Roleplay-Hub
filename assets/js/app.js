@@ -275,15 +275,12 @@ createApp({
         const toasts = ref([]);
         const chatContainer = ref(null);
         const isChatFullscreen = ref(false);
-        const isMobileKeyboardOpen = ref(false);
         const inputBox = ref(null);
         const messageElements = ref([]);
         let mobileViewportRaf = null;
+        let mobileKeyboardOpen = false;
         let mobileKeyboardBlurTimer = null;
         let mobileKeyboardScrollTimer = null;
-        let lastAppliedMobileViewportHeight = 0;
-        let lastAppliedMobileKeyboardInset = 0;
-        let lastAppliedMobileBackgroundHeight = 0;
 
         // IntersectionObserver for lazy loading images or other visibility triggers could go here
 
@@ -367,44 +364,15 @@ createApp({
             || window.innerWidth <= 768
         );
 
-        const applyMobileVisualViewportHeight = (height, { force = false } = {}) => {
-            if (!Number.isFinite(height) || height <= 0) return;
-            const safeHeight = Math.max(320, Math.round(height));
-            if (!force && Math.abs(safeHeight - lastAppliedMobileViewportHeight) < 2) return;
-            lastAppliedMobileViewportHeight = safeHeight;
-            document.documentElement.style.setProperty('--app-visual-height', `${safeHeight}px`);
-            const appElement = document.getElementById('app');
-            if (appElement?.style.height) appElement.style.height = '';
+        const setMobileKeyboardInset = (value) => {
+            const inset = Math.max(0, Math.round(Number(value) || 0));
+            inputBox.value?.closest('.input-area-mobile')?.style.setProperty('--mobile-keyboard-inset', `${inset}px`);
         };
 
-        const applyMobileKeyboardInset = (inset, { force = false } = {}) => {
-            const safeInset = Math.max(0, Math.round(Number(inset) || 0));
-            if (!force && Math.abs(safeInset - lastAppliedMobileKeyboardInset) < 2) return;
-            lastAppliedMobileKeyboardInset = safeInset;
-            document.documentElement.style.setProperty('--keyboard-inset', `${safeInset}px`);
-        };
-
-        const applyMobileBackgroundHeight = (height, { force = false } = {}) => {
-            if (!Number.isFinite(height) || height <= 0) return;
-            const safeHeight = Math.max(
-                320,
-                Math.round(height),
-                Math.round(lastAppliedMobileBackgroundHeight || 0)
-            );
-            if (!force && Math.abs(safeHeight - lastAppliedMobileBackgroundHeight) < 2) return;
-            lastAppliedMobileBackgroundHeight = safeHeight;
-            document.documentElement.style.setProperty('--chat-bg-height', `${safeHeight}px`);
-        };
-
-        const syncMobileVisualViewport = ({ force = false } = {}) => {
+        const syncMobileVisualViewport = () => {
             if (!isMobileViewport()) {
-                isMobileKeyboardOpen.value = false;
-                lastAppliedMobileViewportHeight = 0;
-                lastAppliedMobileKeyboardInset = 0;
-                lastAppliedMobileBackgroundHeight = 0;
-                document.documentElement.style.removeProperty('--app-visual-height');
-                document.documentElement.style.removeProperty('--keyboard-inset');
-                document.documentElement.style.removeProperty('--chat-bg-height');
+                mobileKeyboardOpen = false;
+                setMobileKeyboardInset(0);
                 return;
             }
 
@@ -413,40 +381,36 @@ createApp({
             const layoutHeight = window.innerHeight || document.documentElement.clientHeight || height;
             const viewportOffsetTop = viewport?.offsetTop || 0;
             const inputFocused = document.activeElement === inputBox.value;
-            const keyboardInset = viewport
+            const keyboardInset = inputFocused && viewport
                 ? Math.max(0, layoutHeight - height - viewportOffsetTop)
                 : 0;
-            const viewportCompressed = viewport && height < layoutHeight - 80;
-            const keyboardOpen = !!(viewportCompressed || keyboardInset > 40);
-            const freezeBackground = inputFocused || keyboardOpen || isMobileKeyboardOpen.value;
-            const backgroundHeight = freezeBackground
-                ? Math.max(lastAppliedMobileBackgroundHeight, lastAppliedMobileViewportHeight, layoutHeight, height)
-                : Math.max(layoutHeight, height);
+            const boundedInset = keyboardInset > 40
+                ? Math.min(keyboardInset, Math.round(layoutHeight * 0.65))
+                : 0;
+            const keyboardOpen = inputFocused && boundedInset > 0;
 
-            applyMobileVisualViewportHeight(height, { force });
-            applyMobileKeyboardInset(keyboardOpen ? keyboardInset : 0, { force });
-            applyMobileBackgroundHeight(backgroundHeight, { force });
-            isMobileKeyboardOpen.value = !!(inputFocused || keyboardOpen);
+            mobileKeyboardOpen = !!(inputFocused || keyboardOpen);
+            setMobileKeyboardInset(inputFocused ? boundedInset : 0);
 
-            if (isMobileKeyboardOpen.value && currentView.value === 'chat') {
+            if (mobileKeyboardOpen && currentView.value === 'chat') {
                 clearTimeout(mobileKeyboardScrollTimer);
                 mobileKeyboardScrollTimer = setTimeout(scrollToBottom, 90);
             }
         };
 
-        const scheduleMobileVisualViewportSync = (options = {}) => {
+        const scheduleMobileVisualViewportSync = () => {
             if (mobileViewportRaf) cancelAnimationFrame(mobileViewportRaf);
             mobileViewportRaf = requestAnimationFrame(() => {
                 mobileViewportRaf = null;
-                syncMobileVisualViewport(options);
+                syncMobileVisualViewport();
             });
         };
 
         const handleChatInputFocus = () => {
             if (!isMobileViewport()) return;
             clearTimeout(mobileKeyboardBlurTimer);
-            isMobileKeyboardOpen.value = true;
-            scheduleMobileVisualViewportSync({ force: true });
+            mobileKeyboardOpen = true;
+            scheduleMobileVisualViewportSync();
             clearTimeout(mobileKeyboardScrollTimer);
             mobileKeyboardScrollTimer = setTimeout(scrollToBottom, 120);
         };
@@ -454,17 +418,14 @@ createApp({
         const handleChatInputBlur = () => {
             clearTimeout(mobileKeyboardBlurTimer);
             mobileKeyboardBlurTimer = setTimeout(() => {
-                isMobileKeyboardOpen.value = false;
-                scheduleMobileVisualViewportSync({ force: true });
+                mobileKeyboardOpen = false;
+                setMobileKeyboardInset(0);
+                scheduleMobileVisualViewportSync();
             }, 180);
         };
 
         const handleMobileViewportResize = () => scheduleMobileVisualViewportSync();
-        const handleMobileOrientationChange = () => {
-            lastAppliedMobileBackgroundHeight = 0;
-            document.documentElement.style.removeProperty('--chat-bg-height');
-            scheduleMobileVisualViewportSync({ force: true });
-        };
+        const handleMobileOrientationChange = () => scheduleMobileVisualViewportSync();
 
         // Service Status
         const apiStatus = ref('unknown'); // 'unknown', 'checking', 'connected', 'error'
@@ -10607,7 +10568,7 @@ image###生成的提示词###
             }
             window.addEventListener('orientationchange', handleMobileOrientationChange, { passive: true });
             window.addEventListener('resize', handleMobileViewportResize, { passive: true });
-            scheduleMobileVisualViewportSync({ force: true });
+            scheduleMobileVisualViewportSync();
 
             // --- 全局点击外部区域收起面板 ---
             document.addEventListener('click', (e) => {
@@ -10715,7 +10676,7 @@ image###生成的提示词###
             activeTools, editingActiveTool, normalizeActiveTools, isWebActiveTool, isWorldInfoActiveTool, getWorldInfoAccessMode, getActiveToolDisplayDescription, canConfigureActiveToolResultCount, getActiveToolResultCountMin, getActiveToolResultCountMax,
             getVisibleToolCalls, getMergedToolCallItems, getMergedToolCallCount, getMergedToolCallTitle, getMergedToolCallStatus, isMergedToolCallLive, isMergedToolCallError, isMergedToolCallDone, getToolCallDisplayName, getToolCallModeText, getToolCallStatusText, getAssistantReasoningText, getMergedToolCallReasoningText, isMergedToolCallReasoningLive, isMergedToolCallReasoningOpen, toggleMergedToolCallReasoning,
             activeRegexCount, activeWorldInfoCount, activeUiTemplateCount, chatRoundStats, totalContextLength,
-            editingCharacter, editingPreset, editingUiTemplate, toasts, chatContainer, isChatFullscreen, isMobileKeyboardOpen, inputBox, messageElements,
+            editingCharacter, editingPreset, editingUiTemplate, toasts, chatContainer, isChatFullscreen, inputBox, messageElements,
             lastUserMessageIndex, // Expose to template
             isGeneratorLoading, generatorUrl, onGeneratorLoad, syncSettingsToGenerator, // Generator exports
             isSquareLoading, squareUrl, onSquareLoad, // Square exports
