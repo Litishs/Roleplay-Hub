@@ -283,6 +283,7 @@ createApp({
         let mobileKeyboardScrollTimer = null;
         let lastAppliedMobileViewportHeight = 0;
         let lastAppliedMobileKeyboardInset = 0;
+        let stableMobileLayoutHeight = 0;
 
         // IntersectionObserver for lazy loading images or other visibility triggers could go here
 
@@ -388,6 +389,7 @@ createApp({
                 isMobileKeyboardOpen.value = false;
                 lastAppliedMobileViewportHeight = 0;
                 lastAppliedMobileKeyboardInset = 0;
+                stableMobileLayoutHeight = 0;
                 document.documentElement.style.removeProperty('--app-visual-height');
                 document.documentElement.style.removeProperty('--keyboard-inset');
                 return;
@@ -397,16 +399,28 @@ createApp({
             const height = viewport?.height || window.innerHeight || document.documentElement.clientHeight;
             const layoutHeight = window.innerHeight || document.documentElement.clientHeight || height;
             const viewportOffsetTop = viewport?.offsetTop || 0;
-            const keyboardInset = viewport
+            const inputFocused = document.activeElement === inputBox.value;
+            const rawKeyboardInset = viewport
                 ? Math.max(0, layoutHeight - height - viewportOffsetTop)
                 : 0;
-
-            applyMobileVisualViewportHeight(layoutHeight, { force });
-            applyMobileKeyboardInset(keyboardInset, { force });
-
-            const inputFocused = document.activeElement === inputBox.value;
             const viewportCompressed = viewport && height < layoutHeight - 80;
-            isMobileKeyboardOpen.value = !!(inputFocused || viewportCompressed);
+            const keyboardOpen = !!(inputFocused || viewportCompressed || rawKeyboardInset > 40);
+
+            if (!stableMobileLayoutHeight || (!keyboardOpen && layoutHeight > 0)) {
+                stableMobileLayoutHeight = layoutHeight;
+            }
+            if (keyboardOpen) {
+                stableMobileLayoutHeight = Math.max(stableMobileLayoutHeight, layoutHeight, lastAppliedMobileViewportHeight, height);
+            }
+
+            const stableHeight = stableMobileLayoutHeight || layoutHeight || height;
+            const keyboardInset = keyboardOpen && viewport
+                ? Math.max(0, stableHeight - height - viewportOffsetTop)
+                : 0;
+
+            applyMobileVisualViewportHeight(stableHeight, { force });
+            applyMobileKeyboardInset(keyboardInset, { force });
+            isMobileKeyboardOpen.value = keyboardOpen;
 
             if (isMobileKeyboardOpen.value && currentView.value === 'chat') {
                 clearTimeout(mobileKeyboardScrollTimer);
