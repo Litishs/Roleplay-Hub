@@ -279,6 +279,9 @@ createApp({
         const messageElements = ref([]);
         let mobileViewportRaf = null;
         let mobileKeyboardOpen = false;
+        let mobileViewportBaseHeight = 0;
+        let mobileViewportBaseWidth = 0;
+        let mobileKeyboardInsetValue = 0;
         let mobileKeyboardBlurTimer = null;
         let mobileKeyboardScrollTimer = null;
 
@@ -364,35 +367,78 @@ createApp({
             || window.innerWidth <= 768
         );
 
+        const getMobileViewportMetrics = () => {
+            const viewport = window.visualViewport;
+            const width = viewport?.width || window.innerWidth || document.documentElement.clientWidth || 0;
+            const height = viewport?.height || window.innerHeight || document.documentElement.clientHeight || 0;
+            const layoutHeight = Math.max(window.innerHeight || 0, document.documentElement.clientHeight || 0, height);
+            return {
+                width,
+                height,
+                layoutHeight,
+                offsetTop: viewport?.offsetTop || 0
+            };
+        };
+
+        const updateMobileViewportBaseline = (force = false) => {
+            const metrics = getMobileViewportMetrics();
+            const inputFocused = document.activeElement === inputBox.value;
+            const widthChanged = mobileViewportBaseWidth && Math.abs(metrics.width - mobileViewportBaseWidth) > 24;
+
+            if (force || widthChanged || !mobileViewportBaseHeight) {
+                mobileViewportBaseHeight = Math.max(metrics.height, metrics.layoutHeight);
+                mobileViewportBaseWidth = metrics.width;
+                return metrics;
+            }
+
+            if (!inputFocused && !mobileKeyboardOpen) {
+                mobileViewportBaseHeight = Math.max(mobileViewportBaseHeight, metrics.height, metrics.layoutHeight);
+                mobileViewportBaseWidth = metrics.width;
+            }
+
+            return metrics;
+        };
+
         const setMobileKeyboardInset = (value) => {
             const inset = Math.max(0, Math.round(Number(value) || 0));
+            if (inset === mobileKeyboardInsetValue) return;
+            mobileKeyboardInsetValue = inset;
             inputBox.value?.closest('.input-area-mobile')?.style.setProperty('--mobile-keyboard-inset', `${inset}px`);
+        };
+
+        const getVirtualKeyboardInset = () => {
+            const rect = navigator.virtualKeyboard?.boundingRect;
+            return rect?.height ? Math.max(0, rect.height) : 0;
         };
 
         const syncMobileVisualViewport = () => {
             if (!isMobileViewport()) {
                 mobileKeyboardOpen = false;
                 setMobileKeyboardInset(0);
+                updateMobileViewportBaseline(true);
                 return;
             }
 
-            const viewport = window.visualViewport;
-            const height = viewport?.height || window.innerHeight || document.documentElement.clientHeight;
-            const layoutHeight = window.innerHeight || document.documentElement.clientHeight || height;
-            const viewportOffsetTop = viewport?.offsetTop || 0;
-            const inputFocused = document.activeElement === inputBox.value;
-            const keyboardInset = inputFocused && viewport
-                ? Math.max(0, layoutHeight - height - viewportOffsetTop)
-                : 0;
+            const metrics = updateMobileViewportBaseline();
+            const inputFocused = document.activeElement === inputBox.value || mobileKeyboardOpen;
+
+            if (!inputFocused) {
+                mobileKeyboardOpen = false;
+                setMobileKeyboardInset(0);
+                return;
+            }
+
+            const baselineHeight = Math.max(mobileViewportBaseHeight || 0, metrics.layoutHeight, metrics.height);
+            const visualViewportInset = Math.max(0, baselineHeight - metrics.height - metrics.offsetTop);
+            const keyboardInset = Math.max(getVirtualKeyboardInset(), visualViewportInset);
             const boundedInset = keyboardInset > 40
-                ? Math.min(keyboardInset, Math.round(layoutHeight * 0.65))
+                ? Math.min(keyboardInset, Math.round(baselineHeight * 0.65))
                 : 0;
-            const keyboardOpen = inputFocused && boundedInset > 0;
 
-            mobileKeyboardOpen = !!(inputFocused || keyboardOpen);
-            setMobileKeyboardInset(inputFocused ? boundedInset : 0);
+            mobileKeyboardOpen = true;
+            setMobileKeyboardInset(boundedInset);
 
-            if (mobileKeyboardOpen && currentView.value === 'chat') {
+            if (currentView.value === 'chat') {
                 clearTimeout(mobileKeyboardScrollTimer);
                 mobileKeyboardScrollTimer = setTimeout(scrollToBottom, 90);
             }
@@ -409,8 +455,11 @@ createApp({
         const handleChatInputFocus = () => {
             if (!isMobileViewport()) return;
             clearTimeout(mobileKeyboardBlurTimer);
+            updateMobileViewportBaseline();
             mobileKeyboardOpen = true;
             scheduleMobileVisualViewportSync();
+            setTimeout(scheduleMobileVisualViewportSync, 120);
+            setTimeout(scheduleMobileVisualViewportSync, 320);
             clearTimeout(mobileKeyboardScrollTimer);
             mobileKeyboardScrollTimer = setTimeout(scrollToBottom, 120);
         };
@@ -425,7 +474,17 @@ createApp({
         };
 
         const handleMobileViewportResize = () => scheduleMobileVisualViewportSync();
-        const handleMobileOrientationChange = () => scheduleMobileVisualViewportSync();
+        const handleMobileOrientationChange = () => {
+            mobileKeyboardOpen = false;
+            mobileViewportBaseHeight = 0;
+            mobileViewportBaseWidth = 0;
+            setMobileKeyboardInset(0);
+            setTimeout(() => {
+                updateMobileViewportBaseline(true);
+                scheduleMobileVisualViewportSync();
+            }, 260);
+        };
+        const handleVirtualKeyboardGeometryChange = () => scheduleMobileVisualViewportSync();
 
         // Service Status
         const apiStatus = ref('unknown'); // 'unknown', 'checking', 'connected', 'error'
@@ -10566,8 +10625,17 @@ image###生成的提示词###
                 window.visualViewport.addEventListener('resize', handleMobileViewportResize, { passive: true });
                 window.visualViewport.addEventListener('scroll', handleMobileViewportResize, { passive: true });
             }
+            if (navigator.virtualKeyboard) {
+                try {
+                    navigator.virtualKeyboard.overlaysContent = true;
+                    navigator.virtualKeyboard.addEventListener('geometrychange', handleVirtualKeyboardGeometryChange);
+                } catch (error) {
+                    console.warn('VirtualKeyboard overlay is not available:', error);
+                }
+            }
             window.addEventListener('orientationchange', handleMobileOrientationChange, { passive: true });
             window.addEventListener('resize', handleMobileViewportResize, { passive: true });
+            updateMobileViewportBaseline(true);
             scheduleMobileVisualViewportSync();
 
             // --- 全局点击外部区域收起面板 ---
@@ -10590,6 +10658,13 @@ image###生成的提示词###
             if (window.visualViewport) {
                 window.visualViewport.removeEventListener('resize', handleMobileViewportResize);
                 window.visualViewport.removeEventListener('scroll', handleMobileViewportResize);
+            }
+            if (navigator.virtualKeyboard) {
+                try {
+                    navigator.virtualKeyboard.removeEventListener('geometrychange', handleVirtualKeyboardGeometryChange);
+                } catch (error) {
+                    console.warn('VirtualKeyboard cleanup failed:', error);
+                }
             }
             window.removeEventListener('orientationchange', handleMobileOrientationChange);
             window.removeEventListener('resize', handleMobileViewportResize);
