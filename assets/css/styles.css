@@ -314,6 +314,36 @@
             }
         }
 
+        @media (max-width: 768px) {
+            .entry-transition {
+                --entry-reveal-radius: 0vmax;
+                --entry-reveal-feather: 0vmax;
+                -webkit-mask-image: none;
+                mask-image: none;
+                background: linear-gradient(135deg, rgba(255, 255, 255, 0.995), rgba(248, 250, 252, 0.99) 54%, rgba(241, 245, 249, 0.99));
+                animation: entry-transition-mobile-fade 4s cubic-bezier(0.22, 0.66, 0.24, 1) forwards;
+                will-change: opacity, visibility;
+            }
+
+            .entry-transition::before,
+            .entry-transition::after {
+                content: none;
+                display: none;
+                animation: none;
+            }
+        }
+
+        @keyframes entry-transition-mobile-fade {
+            0%, 72% {
+                opacity: 1;
+                visibility: visible;
+            }
+            100% {
+                opacity: 0;
+                visibility: hidden;
+            }
+        }
+
         @media (prefers-reduced-motion: reduce) {
             .entry-transition {
                 animation: entry-transition-reduced 0.25s ease-out forwards;
