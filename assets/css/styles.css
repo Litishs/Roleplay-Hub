@@ -348,7 +348,7 @@
                 opacity: 1;
                 visibility: visible;
             }
-            100% {
+            78%, 100% {
                 opacity: 0;
                 visibility: hidden;
             }
@@ -362,7 +362,7 @@
             24%, 50% {
                 opacity: 0.58;
             }
-            100% {
+            78%, 100% {
                 opacity: 0;
                 transform: translate3d(4%, -2%, 0) scale(1.04);
             }
@@ -379,7 +379,7 @@
                 filter: blur(0);
                 transform: translateY(0) scale(1);
             }
-            100% {
+            78%, 100% {
                 opacity: 0;
                 filter: blur(6px);
                 transform: translateY(-8px) scale(1.018);
@@ -395,7 +395,7 @@
                 opacity: 1;
                 transform: translate3d(-50%, -50%, 0) scaleX(1);
             }
-            100% {
+            78%, 100% {
                 opacity: 0;
                 transform: translate3d(-50%, -50%, 0) scaleX(1.04);
             }
