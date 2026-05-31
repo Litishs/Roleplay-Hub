@@ -10,6 +10,8 @@
     <link href="https://cdn.jsdelivr.net/npm/daisyui@4.7.2/dist/full.min.css" rel="stylesheet" type="text/css" />
     <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/localforage@1.10.0/dist/localforage.min.js"></script>
+    <script src="../assets/js/card-utils.js"></script>
+    <script src="../assets/js/ui-select.js"></script>
     <style>
         html {
             -webkit-text-size-adjust: 100% !important;
@@ -846,24 +848,21 @@
                                         <div class="card-body p-6 gap-5">
                                             <div class="form-control">
                                                 <label
-                                                    class="label font-bold text-base-content/70 text-sm uppercase tracking-wide">角色卡名称
-                                                    Name</label>
+                                                    class="label font-bold text-base-content/70 text-sm uppercase tracking-wide">角色卡名称</label>
                                                 <input type="text" v-model="currentCharacter.name"
                                                     class="input input-bordered lg:h-12 xl:h-14 lg:text-lg xl:text-xl lg:font-bold bg-base-200/30 focus:bg-base-100 transition-colors"
                                                     placeholder="角色卡的名字" />
                                             </div>
                                             <div class="form-control">
                                                 <label
-                                                    class="label font-bold text-base-content/70 text-sm uppercase tracking-wide">简短描述
-                                                    Description</label>
+                                                    class="label font-bold text-base-content/70 text-sm uppercase tracking-wide">简短描述</label>
                                                 <textarea v-model="currentCharacter.description"
                                                     class="textarea textarea-bordered h-64 bg-base-200/30 focus:bg-base-100 transition-colors leading-relaxed"
                                                     placeholder="角色卡的简要描述..."></textarea>
                                             </div>
                                             <div class="form-control">
                                                 <label
-                                                    class="label font-bold text-base-content/70 text-sm uppercase tracking-wide">设定
-                                                    Personality</label>
+                                                    class="label font-bold text-base-content/70 text-sm uppercase tracking-wide">设定</label>
                                                 <textarea v-model="currentCharacter.personality"
                                                     class="textarea textarea-bordered h-64 bg-base-200/30 focus:bg-base-100 transition-colors leading-relaxed"
                                                     placeholder="角色卡的设定..."></textarea>
@@ -871,7 +870,7 @@
                                             <div class="form-control">
                                                 <label
                                                     class="label font-bold text-base-content/70 text-sm uppercase tracking-wide justify-between cursor-default">
-                                                    <span>开场白 First Message</span>
+                                                    <span>开场白</span>
                                                     <button @click="showPreview = true"
                                                         class="btn btn-xs btn-ghost text-primary gap-1 hover:bg-primary/10">
                                                         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14"
@@ -1053,13 +1052,10 @@
                                                         <div class="form-control col-span-2 md:col-span-2">
                                                             <label class="label py-0"><span
                                                                     class="label-text text-xs font-bold text-base-content/50">插入位置</span></label>
-                                                            <select v-model="entry.position"
-                                                                class="select select-bordered select-xs w-full">
-                                                                <option v-for="option in worldInfoPositionOptions"
-                                                                    :key="option.value" :value="option.value">
-                                                                    {{ option.label }}
-                                                                </option>
-                                                            </select>
+                                                            <custom-select v-model="entry.position" :options="worldInfoPositionOptions"
+                                                                button-class="h-8 min-h-8 rounded-lg border-base-300 bg-base-200/30 px-3 py-1 text-xs text-base-content"
+                                                                menu-class="text-xs">
+                                                            </custom-select>
                                                         </div>
                                                         <div class="form-control">
                                                             <label class="label py-0"><span
@@ -1331,12 +1327,10 @@
                                             <div v-if="uiTemplateGenerationMode === 'diff'" class="form-control">
                                                 <label class="label py-1"><span
                                                         class="label-text text-xs font-bold text-base-content/50 uppercase">选择要改造的模板</span></label>
-                                                <select v-model.number="uiTemplateTargetIndex"
-                                                    class="select select-bordered select-sm bg-base-200/30">
-                                                    <option :value="-1" disabled>请选择模板</option>
-                                                    <option v-for="(template, index) in uiTemplates" :key="template.id || index"
-                                                        :value="index">{{ index + 1 }}. {{ template.name || '未命名模板' }}</option>
-                                                </select>
+                                                <custom-select v-model="uiTemplateTargetIndex" :options="uiTemplateTargetOptions"
+                                                    button-class="h-10 min-h-10 rounded-xl border-base-300 bg-base-200/30 text-sm text-base-content"
+                                                    menu-class="text-sm">
+                                                </custom-select>
                                             </div>
                                             <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-1">
                                                 <div class="text-xs text-base-content/40 font-medium">
@@ -1383,7 +1377,7 @@
                                         <div class="collapse-title font-medium flex items-center gap-3 py-4">
                                             <span class="badge badge-neutral font-mono">#{{ index + 1 }}</span>
                                             <span class="truncate text-base-content/80">{{ template.name || '未命名模板' }}</span>
-                                            <span class="badge badge-warning badge-outline ml-auto hidden md:inline-flex">绑定角色</span>
+                                            <span class="badge badge-warning badge-outline ml-auto hidden md:inline-flex">绑定</span>
                                         </div>
                                         <div class="collapse-content">
                                             <div class="flex flex-col gap-3 pt-2 pb-4">
@@ -1398,11 +1392,10 @@
                                                     <div class="form-control">
                                                         <label class="label py-1"><span
                                                                 class="label-text text-xs font-bold text-base-content/50 uppercase">插入位置</span></label>
-                                                        <select v-model="template.placement"
-                                                            class="select select-bordered select-sm bg-base-200/30">
-                                                            <option value="bottom">底部</option>
-                                                            <option value="top">顶部</option>
-                                                        </select>
+                                                        <custom-select v-model="template.placement" :options="uiTemplatePlacementOptions"
+                                                            button-class="h-10 min-h-10 rounded-xl border-base-300 bg-base-200/30 text-sm text-base-content"
+                                                            menu-class="text-sm">
+                                                        </custom-select>
                                                     </div>
                                                     <div class="form-control">
                                                         <label class="label py-1"><span
@@ -1716,6 +1709,9 @@
         const { createApp, ref, reactive, computed, watch, onMounted, nextTick } = Vue;
 
         createApp({
+            components: {
+                CustomSelect: window.RPHubCustomSelect
+            },
             setup() {
                 // Utility: Debounce
                 const debounce = (fn, delay) => {
@@ -1736,6 +1732,8 @@
                         return v.toString(16);
                     });
                 };
+
+                const cardUtils = window.RPHubCardUtils;
 
                 onMounted(() => {
                     // 模拟主站的 triggerSlash 功能，用于预览调试
@@ -2000,7 +1998,11 @@
                     { value: 'after_char', label: '角色设定后' },
                     { value: 'at_depth', label: '按深度插入' },
                     { value: 'user_top', label: '用户消息顶部' },
-                    { value: 'assistant_top', label: 'AI消息顶部' }
+                    { value: 'assistant_top', label: '助手消息顶部' }
+                ];
+                const uiTemplatePlacementOptions = [
+                    { value: 'bottom', label: '底部' },
+                    { value: 'top', label: '顶部' }
                 ];
 
                 const getValue = (source, keys, fallback) => {
@@ -2173,19 +2175,7 @@
 
                 const toUiTemplateExportEntry = (template) => {
                     const normalized = normalizeUiTemplate(template);
-                    return {
-                        id: normalized.id,
-                        name: normalized.name,
-                        enabled: normalized.enabled,
-                        scope: 'character',
-                        order: normalized.order,
-                        placement: normalized.placement,
-                        htmlTemplate: normalized.htmlTemplate,
-                        initialVariableState: cloneUiObject(normalized.initialVariableState),
-                        variableState: cloneUiObject(normalized.variableState),
-                        variableSchema: normalized.variableSchema,
-                        updateMode: normalized.updateMode
-                    };
+                    return cardUtils.toUiTemplateExportEntry(normalized, { scope: 'character' });
                 };
 
                 const sanitizeUiTemplateImportEntry = (template = {}) => {
@@ -2194,42 +2184,14 @@
                 };
 
                 const toRegexExportEntry = (script) => {
-                    const normalized = normalizeRegexScript(script);
-                    return {
-                        name: normalized.name,
-                        regex: normalized.regex,
-                        flags: normalized.flags,
-                        replacement: normalized.replacement,
-                        placement: normalized.placement,
-                        markdownOnly: normalized.markdownOnly,
-                        promptOnly: normalized.promptOnly,
-                        minDepth: normalized.minDepth,
-                        maxDepth: normalized.maxDepth,
-                        disabled: !normalized.enabled
-                    };
+                    const normalized = { ...script, ...normalizeRegexScript(script) };
+                    delete normalized.disabled;
+                    return cardUtils.toRegexExportEntry(normalized);
                 };
 
                 const toWorldInfoExportEntry = (entry, index = 0) => {
                     const normalized = normalizeWorldInfoEntry(entry);
-                    return {
-                        keys: normalized.keys,
-                        comment: normalized.comment || normalized.name || '',
-                        content: normalized.content,
-                        enabled: normalized.enabled,
-                        constant: normalized.constant,
-                        useRegex: normalized.useRegex,
-                        caseSensitive: normalized.caseSensitive,
-                        matchWholeWords: normalized.matchWholeWords,
-                        order: normalized.order,
-                        position: normalized.position,
-                        depth: normalized.depth,
-                        scanDepth: normalized.scanDepth,
-                        probability: normalized.probability,
-                        useProbability: normalized.useProbability,
-                        excludeRecursion: normalized.excludeRecursion,
-                        preventRecursion: normalized.preventRecursion,
-                        delayUntilRecursion: normalized.delayUntilRecursion
-                    };
+                    return cardUtils.toWorldInfoExportEntry(normalized);
                 };
 
                 const normalizeCharacterShape = (char) => {
@@ -2262,67 +2224,6 @@
                     regexScripts: [],
                     uiTemplates: []
                 });
-
-                const decodeBase64Utf8 = (value) => {
-                    try {
-                        const binary = atob(String(value || '').trim());
-                        const bytes = new Uint8Array(binary.length);
-                        for (let i = 0; i < binary.length; i++) {
-                            bytes[i] = binary.charCodeAt(i);
-                        }
-                        return new TextDecoder('utf-8').decode(bytes);
-                    } catch (e) {
-                        return String(value || '');
-                    }
-                };
-
-                const readPngChunks = (buffer) => {
-                    const view = new DataView(buffer);
-                    const chunks = {};
-                    let offset = 8;
-
-                    try {
-                        while (offset + 8 <= view.byteLength) {
-                            const length = view.getUint32(offset);
-                            const type = String.fromCharCode(
-                                view.getUint8(offset + 4),
-                                view.getUint8(offset + 5),
-                                view.getUint8(offset + 6),
-                                view.getUint8(offset + 7)
-                            );
-                            if (offset + 8 + length > view.byteLength) break;
-
-                            if (type === 'tEXt') {
-                                const data = new Uint8Array(buffer, offset + 8, length);
-                                const splitIndex = data.indexOf(0);
-                                if (splitIndex !== -1) {
-                                    const key = new TextDecoder().decode(data.slice(0, splitIndex));
-                                    const value = new TextDecoder().decode(data.slice(splitIndex + 1));
-                                    chunks[key] = value;
-                                }
-                            } else if (type === 'iTXt') {
-                                const data = new Uint8Array(buffer, offset + 8, length);
-                                let cursor = 0;
-                                while (cursor < data.length && data[cursor] !== 0) cursor++;
-                                const key = new TextDecoder().decode(data.slice(0, cursor));
-                                cursor += 3;
-                                while (cursor < data.length && data[cursor] !== 0) cursor++;
-                                cursor++;
-                                while (cursor < data.length && data[cursor] !== 0) cursor++;
-                                cursor++;
-                                if (key && cursor < data.length) {
-                                    chunks[key] = new TextDecoder().decode(data.slice(cursor));
-                                }
-                            }
-
-                            offset += 12 + length;
-                        }
-                    } catch (e) {
-                        console.warn('PNG 数据读取失败:', e);
-                    }
-
-                    return chunks;
-                };
 
                 const getArrayValues = (value) => {
                     if (Array.isArray(value)) return value;
@@ -2406,30 +2307,13 @@
 
                     if (file.type === 'image/png' || file.name.toLowerCase().endsWith('.png')) {
                         const reader = new FileReader();
-                        reader.onload = (e) => {
+                        reader.onload = async (e) => {
                             try {
                                 const buffer = e.target.result;
-                                const chunks = readPngChunks(buffer);
-                                let rawDataStr = chunks.chara || chunks.ccv3 || '';
-                                if (!rawDataStr) {
-                                    rawDataStr = Object.values(chunks).find(value => {
-                                        const text = String(value || '').trim();
-                                        return text.length > 50 && (text.startsWith('{') || text.startsWith('ey'));
-                                    }) || '';
-                                }
-                                if (!rawDataStr) throw new Error('未找到角色卡数据');
-
-                                let data;
-                                try {
-                                    data = JSON.parse(decodeBase64Utf8(rawDataStr));
-                                } catch (decodeError) {
-                                    data = JSON.parse(rawDataStr);
-                                }
-
+                                const { data } = cardUtils.parsePngCharacterData(buffer);
                                 const blob = new Blob([buffer], { type: 'image/png' });
-                                const avatarReader = new FileReader();
-                                avatarReader.onloadend = () => applyImportedCharacter(data, avatarReader.result);
-                                avatarReader.readAsDataURL(blob);
+                                const avatarUrl = await cardUtils.blobToDataUrl(blob);
+                                applyImportedCharacter(data, avatarUrl);
                             } catch (err) {
                                 showToast('PNG 角色卡解析失败', 'error');
                                 console.error('PNG import error:', err);
@@ -2450,10 +2334,10 @@
                 // Initialize localforage
                 localforage.config({ name: 'AICharGen', storeName: 'characters' });
 
-                // Load Data with Migration
+                // Load Data
                 const loadData = async () => {
                     try {
-                        // 1. Try to load from IndexedDB
+                        // Load from IndexedDB
                         const saved = await localforage.getItem('ai_chargen_characters');
                         if (saved) {
                             const parsed = JSON.parse(saved);
@@ -2463,27 +2347,6 @@
                                 normalizeCharacterShape(c);
                             });
                             characters.value = parsed;
-                        } else {
-
-                            // 2. Migration: Try to load from localStorage
-                            const lsSaved = localStorage.getItem('ai_chargen_characters');
-                            if (lsSaved) {
-                                console.log('Migrating data from localStorage to IndexedDB...');
-                                try {
-                                    const parsed = JSON.parse(lsSaved);
-                                    parsed.forEach(c => {
-                                        if (!c.id) c.id = generateUUID();
-                                        normalizeCharacterShape(c);
-                                    });
-                                    characters.value = parsed;
-                                    // Save to IndexedDB
-                                    await localforage.setItem('ai_chargen_characters', lsSaved);
-                                    showToast('已成功迁移数据至大容量存储', 'success');
-                                    // Optional: Clear old localStorage to free up space, but keeping for safety for now
-                                } catch (e) {
-                                    console.error('Migration parsing error', e);
-                                }
-                            }
                         }
 
                         // Restore active index
@@ -2541,6 +2404,13 @@
                 const worldInfo = computed(() => currentCharacter.value.worldInfo);
                 const regexScripts = computed(() => currentCharacter.value.regexScripts);
                 const uiTemplates = computed(() => currentCharacter.value.uiTemplates);
+                const uiTemplateTargetOptions = computed(() => [
+                    { value: -1, label: '请选择模板', disabled: true },
+                    ...uiTemplates.value.map((template, index) => ({
+                        value: index,
+                        label: `${index + 1}. ${template.name || '未命名模板'}`
+                    }))
+                ]);
 
                 const readJsonFile = (event, onData, errorMessage = '导入失败') => {
                     const file = event.target.files?.[0];
@@ -4387,9 +4257,9 @@ ${uiTemplatePrompt.value.trim() || '根据当前角色自动设计一个状态�
                         creator_notes: '作者注释',
                         system_prompt: '系统提示',
                         post_history_instructions: '后续指令',
-                        worldInfo: '世界书 (JSON)',
-                        regexScripts: '正则脚本 (JSON)',
-                        uiTemplates: 'UI模板 (JSON)'
+                        worldInfo: '世界书',
+                        regexScripts: '正则脚本',
+                        uiTemplates: 'UI模板'
                     };
                     return map[key] || key;
                 };
@@ -5140,25 +5010,11 @@ JSON 字段（世界书/正则脚本）必须输出为合法的 JSON 数组，**
 
                 const getCardData = () => {
                     const char = currentCharacter.value;
-                    return {
-                        data: {
-                            name: char.name,
-                            description: char.description,
-                            personality: char.personality,
-                            scenario: char.scenario,
-                            first_mes: char.first_mes,
-                            creator_notes: char.creator_notes,
-                            uiTemplates: char.uiTemplates.length > 0 ? char.uiTemplates.map(template => toUiTemplateExportEntry(template)) : [],
-                            extensions: {
-                                rp_hub_watermark: 'rp-hub',
-                                regex_scripts: char.regexScripts.length > 0 ? char.regexScripts.map(s => toRegexExportEntry(s)) : [],
-                                rp_hub_ui_templates: char.uiTemplates.length > 0 ? char.uiTemplates.map(template => toUiTemplateExportEntry(template)) : []
-                            },
-                            character_book: char.worldInfo.length > 0 ? {
-                                entries: char.worldInfo.map((entry, idx) => toWorldInfoExportEntry(entry, idx))
-                            } : undefined
-                        }
-                    };
+                    return cardUtils.buildCharacterCardData(char, {
+                        worldInfoMapper: (entry, idx) => toWorldInfoExportEntry(entry, idx),
+                        regexScriptMapper: (script) => toRegexExportEntry(script),
+                        uiTemplateMapper: (template) => toUiTemplateExportEntry(template)
+                    });
                 };
 
                 // 文件名净化函数
@@ -5173,25 +5029,8 @@ JSON 字段（世界书/正则脚本）必须输出为合法的 JSON 数组，**
                     return sanitizeFilename(String(name || '').replace(/\s+/g, '_'), defaultName).slice(0, 48) || defaultName;
                 };
 
-                // 通用下载函数，解决部分浏览器（如 Via）不兼容异步下载的问题
                 const downloadFile = (blob, filename) => {
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = filename;
-
-                    // 某些移动端浏览器（如 Via, UC）在没有 target="_blank" 的情况下可能拦截下载
-                    a.target = '_blank';
-
-                    a.style.display = 'none';
-                    document.body.appendChild(a);
-                    a.click();
-
-                    // 延迟释放，确保浏览器已开始处理下载
-                    setTimeout(() => {
-                        document.body.removeChild(a);
-                        URL.revokeObjectURL(url);
-                    }, 2000);
+                    cardUtils.downloadBlob(blob, filename, { targetBlank: true, revokeDelay: 2000 });
                 };
 
                 const exportJSON = () => {
@@ -5207,37 +5046,19 @@ JSON 字段（世界书/正则脚本）必须输出为合法的 JSON 数组，**
                         return;
                     }
 
-                    const canvas = document.createElement('canvas');
-                    const ctx = canvas.getContext('2d');
-                    const img = new Image();
+                    const imageOptions = {};
                     if (/^https?:\/\//i.test(currentCharacter.value.avatar)) {
-                        img.crossOrigin = 'anonymous';
-                        img.referrerPolicy = 'no-referrer';
-                    }
-
-                    await new Promise((resolve, reject) => {
-                        img.onload = resolve;
-                        img.onerror = reject;
-                        img.src = currentCharacter.value.avatar;
-                    });
-
-                    canvas.width = img.width;
-                    canvas.height = img.height;
-                    ctx.drawImage(img, 0, 0);
-
-                    const base64 = canvas.toDataURL('image/png');
-                    const binary = atob(base64.split(',')[1]);
-                    const array = new Uint8Array(binary.length);
-                    for (let i = 0; i < binary.length; i++) {
-                        array[i] = binary.charCodeAt(i);
+                        imageOptions.crossOrigin = 'anonymous';
+                        imageOptions.referrerPolicy = 'no-referrer';
                     }
 
                     const cardData = getCardData();
-                    const jsonStr = JSON.stringify(cardData);
-                    const jsonBase64 = btoa(unescape(encodeURIComponent(jsonStr)));
-
-                    const newPng = injectPngChunk(array, 'chara', jsonBase64);
-
+                    const pngBytes = await cardUtils.imageUrlToPngBytes(currentCharacter.value.avatar, imageOptions);
+                    const newPng = cardUtils.injectPngTextChunk(
+                        pngBytes,
+                        'chara',
+                        cardUtils.encodeBase64Utf8(JSON.stringify(cardData))
+                    );
                     const blob = new Blob([newPng], { type: 'image/png' });
                     const filename = sanitizeFilename(currentCharacter.value.name) + '.png';
                     downloadFile(blob, filename);
@@ -5251,13 +5072,7 @@ JSON 字段（世界书/正则脚本）必须输出为合法的 JSON 数组，**
                             source: worldInfo.value,
                             name: (entry, index) => entry.comment || entry.name || entry.keys?.[0] || `世界书条目 ${index + 1}`,
                             description: (entry) => Array.isArray(entry.keys) && entry.keys.length ? entry.keys.join('、') : entry.content,
-                            build: (items) => {
-                                const entries = {};
-                                items.forEach((entry, index) => {
-                                    entries[index] = toWorldInfoExportEntry(entry, index);
-                                });
-                                return { entries };
-                            }
+                            build: (items) => ({ entries: items.map((entry, index) => toWorldInfoExportEntry(entry, index)) })
                         },
                         regex: {
                             title: '正则',
@@ -5331,63 +5146,6 @@ JSON 字段（世界书/正则脚本）必须输出为合法的 JSON 数组，**
                 const exportRegex = () => openSelectiveExport('regex');
                 const exportUiTemplates = () => openSelectiveExport('ui');
 
-                const injectPngChunk = (pngBuffer, key, value) => {
-                    const signature = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
-                    const keyBytes = new TextEncoder().encode(key);
-                    const valBytes = new TextEncoder().encode(value);
-                    const chunkData = new Uint8Array(keyBytes.length + 1 + valBytes.length);
-                    chunkData.set(keyBytes, 0);
-                    chunkData[keyBytes.length] = 0;
-                    chunkData.set(valBytes, keyBytes.length + 1);
-
-                    const crcTable = [];
-                    for (let n = 0; n < 256; n++) {
-                        let c = n;
-                        for (let k = 0; k < 8; k++) {
-                            if (c & 1) c = 0xedb88320 ^ (c >>> 1);
-                            else c = c >>> 1;
-                        }
-                        crcTable[n] = c;
-                    }
-                    const crc32 = (buf) => {
-                        let c = 0xffffffff;
-                        for (let i = 0; i < buf.length; i++) {
-                            c = crcTable[(c ^ buf[i]) & 0xff] ^ (c >>> 8);
-                        }
-                        return c ^ 0xffffffff;
-                    };
-
-                    const type = new TextEncoder().encode('tEXt');
-                    const crcInput = new Uint8Array(type.length + chunkData.length);
-                    crcInput.set(type, 0);
-                    crcInput.set(chunkData, type.length);
-                    const crc = crc32(crcInput);
-
-                    const chunkLen = chunkData.length;
-                    const fullChunk = new Uint8Array(4 + 4 + chunkLen + 4);
-                    new DataView(fullChunk.buffer).setUint32(0, chunkLen, false);
-                    fullChunk.set(type, 4);
-                    fullChunk.set(chunkData, 8);
-                    new DataView(fullChunk.buffer).setUint32(8 + chunkLen, crc, false);
-
-                    let pos = 8;
-                    while (pos < pngBuffer.length) {
-                        const len = new DataView(pngBuffer.buffer).getUint32(pos, false);
-                        const typeStr = String.fromCharCode(...pngBuffer.slice(pos + 4, pos + 8));
-                        if (typeStr === 'IHDR') {
-                            pos += 8 + len + 4;
-                            break;
-                        }
-                        pos += 8 + len + 4;
-                    }
-
-                    const result = new Uint8Array(pngBuffer.length + fullChunk.length);
-                    result.set(pngBuffer.slice(0, pos), 0);
-                    result.set(fullChunk, pos);
-                    result.set(pngBuffer.slice(pos), pos + fullChunk.length);
-                    return result;
-                };
-
                 return {
                     showSettings,
                     showPreview,
@@ -5411,6 +5169,8 @@ JSON 字段（世界书/正则脚本）必须输出为合法的 JSON 数组，**
                     uiTemplatePrompt,
                     uiTemplateGenerationMode,
                     uiTemplateTargetIndex,
+                    uiTemplateTargetOptions,
+                    uiTemplatePlacementOptions,
                     worldInfoPositionOptions,
                     tabs,
                     createNewCharacter,

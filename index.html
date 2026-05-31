@@ -79,6 +79,16 @@
 </head>
 
 <body class="bg-gray-50 text-gray-900 font-sans selection:bg-primary-200 selection:text-primary-900">
+    <div class="entry-transition" aria-hidden="true">
+        <div class="entry-transition-brand">
+            <div class="entry-transition-logo">
+                <span class="entry-logo-rp">RP</span>
+                <span class="entry-logo-hub">HUB</span>
+                <i></i>
+            </div>
+        </div>
+    </div>
+
     <div id="app" v-cloak class="h-full flex flex-col md:flex-row relative"
         :class="{ 'app-native-fullscreen': isChatFullscreen, 'mobile-keyboard-active': isMobileKeyboardOpen }">
         <component is="style" v-if="settings.fontSize">
@@ -128,15 +138,18 @@
 
 
         <!-- Mobile Sidebar Overlay -->
-        <div v-if="showMobileMenu" @click="showMobileMenu = false"
-            class="fixed inset-0 bg-black/30 backdrop-blur-sm z-40 md:hidden transition-opacity animate-fade-in mobile-overlay">
-        </div>
+        <transition name="mobile-overlay-fade">
+            <div v-if="showMobileMenu" @click="showMobileMenu = false"
+                class="fixed inset-0 bg-black/30 backdrop-blur-sm z-40 md:hidden mobile-overlay">
+            </div>
+        </transition>
 
         <!-- Sidebar (Desktop & Mobile Drawer) -->
         <div
-            :class="['app-sidebar fixed inset-y-0 left-0 z-50 bg-white border-r border-gray-200 transform transition-all duration-300 md:relative md:translate-x-0 flex flex-col shadow-lg md:shadow-none md:rounded-none rounded-r-2xl', showMobileMenu ? 'translate-x-0' : '-translate-x-full', isSidebarCollapsed ? 'md:w-16' : 'md:w-72', 'w-72']">
+            class="app-sidebar fixed inset-y-0 left-0 z-50 w-72 md:w-72 bg-white/95 border-r border-gray-200/80 transform transition-all duration-300 md:relative md:translate-x-0 flex flex-col shadow-2xl md:shadow-sm md:rounded-none rounded-r-3xl overflow-hidden"
+            :class="[showMobileMenu ? 'mobile-drawer-open' : 'mobile-drawer-closed', isSidebarCollapsed ? 'md:w-16' : 'md:w-72']">
             <!-- Sidebar Header -->
-            <div class="h-16 flex items-center border-b border-gray-100 transition-all duration-300"
+            <div class="h-16 flex items-center border-b border-gray-100/80 bg-white/70 backdrop-blur-xl transition-all duration-300"
                 :class="isSidebarCollapsed ? 'justify-center px-0' : 'justify-between px-6'">
                 <div v-show="!isSidebarCollapsed" class="relative inline-flex items-baseline gap-1.5 pr-1 min-w-0">
                     <span class="text-[21px] font-extrabold text-gray-800 tracking-[0.08em] leading-none">RP</span>
@@ -144,7 +157,7 @@
                     <span class="absolute -bottom-1 left-0 h-[2px] w-11 rounded-full bg-primary-500/60"></span>
                 </div>
                 <button @click="isSidebarCollapsed = !isSidebarCollapsed"
-                    class="hidden md:flex p-1.5 hover:bg-gray-100 rounded-lg text-gray-500 transition-colors"
+                    :class="['hidden md:flex items-center justify-center bg-white hover:bg-gray-50 border border-gray-200/80 rounded-xl text-gray-500 hover:text-primary-600 transition-all shadow-sm active:scale-95', isSidebarCollapsed ? 'w-12 h-12 p-0' : 'p-2']"
                     :title="isSidebarCollapsed ? '展开侧边栏' : '收起侧边栏'">
                     <svg v-if="!isSidebarCollapsed" class="w-5 h-5" fill="none" stroke="currentColor"
                         viewBox="0 0 24 24">
@@ -159,10 +172,11 @@
             </div>
 
             <!-- Navigation -->
-            <div class="flex-1 overflow-y-auto py-4 transition-all duration-300"
-                :class="isSidebarCollapsed ? 'px-2 space-y-4' : 'px-3 space-y-1'">
+            <div class="sidebar-nav custom-scrollbar flex-1 overflow-y-auto py-4 transition-all duration-300"
+                :class="isSidebarCollapsed ? 'px-2 space-y-2' : 'px-3 space-y-1.5'">
                 <button @click="currentView = 'chat'; showMobileMenu = false"
-                    :class="['w-full flex items-center rounded-lg transition-all duration-200 font-medium', currentView === 'chat' ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900', isSidebarCollapsed ? 'justify-center px-0 py-3' : 'px-3 py-2']">
+                    title="聊天"
+                    :class="['sidebar-nav-button flex items-center rounded-xl transition-all duration-200 font-medium', currentView === 'chat' ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900', isSidebarCollapsed ? 'w-12 h-12 mx-auto justify-center p-0' : 'w-full px-3 py-2.5']">
                     <svg class="w-5 h-5" :class="isSidebarCollapsed ? 'mr-0' : 'mr-3'" fill="none" stroke="currentColor"
                         viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -172,7 +186,8 @@
                     <span v-show="!isSidebarCollapsed" class="whitespace-nowrap overflow-hidden">聊天</span>
                 </button>
                 <button @click="currentView = 'memory'; showMobileMenu = false"
-                    :class="['w-full flex items-center rounded-lg transition-all duration-200 font-medium', currentView === 'memory' ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900', isSidebarCollapsed ? 'justify-center px-0 py-3' : 'px-3 py-2']">
+                    title="记忆系统"
+                    :class="['sidebar-nav-button flex items-center rounded-xl transition-all duration-200 font-medium', currentView === 'memory' ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900', isSidebarCollapsed ? 'w-12 h-12 mx-auto justify-center p-0' : 'w-full px-3 py-2.5']">
                     <svg class="w-5 h-5" :class="isSidebarCollapsed ? 'mr-0' : 'mr-3'" fill="none" stroke="currentColor"
                         viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -185,17 +200,19 @@
                     </span>
                 </button>
                 <button @click="currentView = 'tools'; showMobileMenu = false"
-                    :class="['w-full flex items-center rounded-lg transition-all duration-200 font-medium', currentView === 'tools' ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900', isSidebarCollapsed ? 'justify-center px-0 py-3' : 'px-3 py-2']">
+                    title="工具"
+                    :class="['sidebar-nav-button flex items-center rounded-xl transition-all duration-200 font-medium', currentView === 'tools' ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900', isSidebarCollapsed ? 'w-12 h-12 mx-auto justify-center p-0' : 'w-full px-3 py-2.5']">
                     <svg class="w-5 h-5" :class="isSidebarCollapsed ? 'mr-0' : 'mr-3'" fill="none" stroke="currentColor"
                         viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                             d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94L14.7 6.3z">
                         </path>
                     </svg>
-                    <span v-show="!isSidebarCollapsed" class="whitespace-nowrap overflow-hidden">工具(Beta)</span>
+                    <span v-show="!isSidebarCollapsed" class="whitespace-nowrap overflow-hidden">工具</span>
                 </button>
                 <button @click="currentView = 'characters'; showMobileMenu = false"
-                    :class="['w-full flex items-center rounded-lg transition-all duration-200 font-medium', currentView === 'characters' ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900', isSidebarCollapsed ? 'justify-center px-0 py-3' : 'px-3 py-2']">
+                    title="角色卡管理"
+                    :class="['sidebar-nav-button flex items-center rounded-xl transition-all duration-200 font-medium', currentView === 'characters' ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900', isSidebarCollapsed ? 'w-12 h-12 mx-auto justify-center p-0' : 'w-full px-3 py-2.5']">
                     <svg class="w-5 h-5" :class="isSidebarCollapsed ? 'mr-0' : 'mr-3'" fill="none" stroke="currentColor"
                         viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -205,7 +222,8 @@
                     <span v-show="!isSidebarCollapsed" class="whitespace-nowrap overflow-hidden">角色卡管理</span>
                 </button>
                 <button @click="currentView = 'generator'; showMobileMenu = false"
-                    :class="['w-full flex items-center rounded-lg transition-all duration-200 font-medium', currentView === 'generator' ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900', isSidebarCollapsed ? 'justify-center px-0 py-3' : 'px-3 py-2']">
+                    title="角色卡生成"
+                    :class="['sidebar-nav-button flex items-center rounded-xl transition-all duration-200 font-medium', currentView === 'generator' ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900', isSidebarCollapsed ? 'w-12 h-12 mx-auto justify-center p-0' : 'w-full px-3 py-2.5']">
                     <svg class="w-5 h-5" :class="isSidebarCollapsed ? 'mr-0' : 'mr-3'" fill="none" stroke="currentColor"
                         viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -214,7 +232,8 @@
                     <span v-show="!isSidebarCollapsed" class="whitespace-nowrap overflow-hidden">角色卡生成</span>
                 </button>
                 <button @click="currentView = 'square'; showMobileMenu = false"
-                    :class="['w-full flex items-center rounded-lg transition-all duration-200 font-medium', currentView === 'square' ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900', isSidebarCollapsed ? 'justify-center px-0 py-3' : 'px-3 py-2']">
+                    title="万相广场"
+                    :class="['sidebar-nav-button flex items-center rounded-xl transition-all duration-200 font-medium', currentView === 'square' ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900', isSidebarCollapsed ? 'w-12 h-12 mx-auto justify-center p-0' : 'w-full px-3 py-2.5']">
                     <svg class="w-5 h-5" :class="isSidebarCollapsed ? 'mr-0' : 'mr-3'" fill="none" stroke="currentColor"
                         viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -225,7 +244,8 @@
                 </button>
 
                 <button @click="currentView = 'presets'; showMobileMenu = false"
-                    :class="['w-full flex items-center rounded-lg transition-all duration-200 font-medium', currentView === 'presets' ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900', isSidebarCollapsed ? 'justify-center px-0 py-3' : 'px-3 py-2']">
+                    title="预设"
+                    :class="['sidebar-nav-button flex items-center rounded-xl transition-all duration-200 font-medium', currentView === 'presets' ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900', isSidebarCollapsed ? 'w-12 h-12 mx-auto justify-center p-0' : 'w-full px-3 py-2.5']">
                     <svg class="w-5 h-5" :class="isSidebarCollapsed ? 'mr-0' : 'mr-3'" fill="none" stroke="currentColor"
                         viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -235,7 +255,8 @@
                     <span v-show="!isSidebarCollapsed" class="whitespace-nowrap overflow-hidden">预设</span>
                 </button>
                 <button @click="currentView = 'uitemplates'; showMobileMenu = false"
-                    :class="['w-full flex items-center rounded-lg transition-all duration-200 font-medium', currentView === 'uitemplates' ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900', isSidebarCollapsed ? 'justify-center px-0 py-3' : 'px-3 py-2']">
+                    title="UI模板"
+                    :class="['sidebar-nav-button flex items-center rounded-xl transition-all duration-200 font-medium', currentView === 'uitemplates' ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900', isSidebarCollapsed ? 'w-12 h-12 mx-auto justify-center p-0' : 'w-full px-3 py-2.5']">
                     <svg class="w-5 h-5" :class="isSidebarCollapsed ? 'mr-0' : 'mr-3'" fill="none" stroke="currentColor"
                         viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -243,12 +264,12 @@
                         </path>
                     </svg>
                     <span v-show="!isSidebarCollapsed" class="whitespace-nowrap overflow-hidden">UI模板</span>
-                    <span v-if="!isSidebarCollapsed && uiTemplateUpdateStatus.state === 'running' && uiTemplateUpdateStatus.remaining > 0"
-                        class="ml-auto text-[10px] px-1.5 py-0.5 rounded-full bg-primary-100 text-primary-600 font-bold">{{
-                        uiTemplateUpdateStatus.remaining }}</span>
+                    <span v-if="!isSidebarCollapsed && uiTemplateUpdateStatus.state === 'running'"
+                        class="ml-auto text-[10px] px-1.5 py-0.5 rounded-full bg-primary-100 text-primary-600 font-bold">分析中</span>
                 </button>
                 <button @click="currentView = 'worldinfo'; showMobileMenu = false"
-                    :class="['w-full flex items-center rounded-lg transition-all duration-200 font-medium', currentView === 'worldinfo' ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900', isSidebarCollapsed ? 'justify-center px-0 py-3' : 'px-3 py-2']">
+                    title="世界书"
+                    :class="['sidebar-nav-button flex items-center rounded-xl transition-all duration-200 font-medium', currentView === 'worldinfo' ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900', isSidebarCollapsed ? 'w-12 h-12 mx-auto justify-center p-0' : 'w-full px-3 py-2.5']">
                     <svg class="w-5 h-5" :class="isSidebarCollapsed ? 'mr-0' : 'mr-3'" fill="none" stroke="currentColor"
                         viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -259,7 +280,8 @@
                 </button>
 
                 <button @click="currentView = 'regex'; showMobileMenu = false"
-                    :class="['w-full flex items-center rounded-lg transition-all duration-200 font-medium', currentView === 'regex' ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900', isSidebarCollapsed ? 'justify-center px-0 py-3' : 'px-3 py-2']">
+                    title="正则脚本"
+                    :class="['sidebar-nav-button flex items-center rounded-xl transition-all duration-200 font-medium', currentView === 'regex' ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900', isSidebarCollapsed ? 'w-12 h-12 mx-auto justify-center p-0' : 'w-full px-3 py-2.5']">
                     <svg class="w-5 h-5" :class="isSidebarCollapsed ? 'mr-0' : 'mr-3'" fill="none" stroke="currentColor"
                         viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -268,7 +290,8 @@
                     <span v-show="!isSidebarCollapsed" class="whitespace-nowrap overflow-hidden">正则脚本</span>
                 </button>
                 <button @click="currentView = 'settings'; showMobileMenu = false"
-                    :class="['w-full flex items-center rounded-lg transition-all duration-200 font-medium', currentView === 'settings' ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900', isSidebarCollapsed ? 'justify-center px-0 py-3' : 'px-3 py-2']">
+                    title="设置"
+                    :class="['sidebar-nav-button flex items-center rounded-xl transition-all duration-200 font-medium', currentView === 'settings' ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900', isSidebarCollapsed ? 'w-12 h-12 mx-auto justify-center p-0' : 'w-full px-3 py-2.5']">
                     <svg class="w-5 h-5" :class="isSidebarCollapsed ? 'mr-0' : 'mr-3'" fill="none" stroke="currentColor"
                         viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -283,9 +306,10 @@
             </div>
 
             <!-- User Profile Mini -->
-            <div class="p-4 border-t border-gray-100">
-                <div class="flex items-center" :class="isSidebarCollapsed ? 'justify-center' : ''">
-                    <div class="w-10 h-10 rounded-full overflow-hidden shadow-sm flex-shrink-0">
+            <div class="p-3 border-t border-gray-100/80 bg-white/70 backdrop-blur-xl">
+                <div class="flex items-center transition-all"
+                    :class="isSidebarCollapsed ? 'justify-center' : 'rounded-2xl border border-gray-200/70 bg-gray-50/80 px-3 py-2 shadow-sm'">
+                    <div class="w-10 h-10 rounded-2xl overflow-hidden shadow-sm flex-shrink-0 ring-2 ring-white">
                         <img v-if="user?.avatar" :src="user?.avatar" class="w-full h-full object-cover">
                         <div v-else
                             class="w-full h-full bg-gradient-to-br from-primary-500 to-primary-600 flex items-center justify-center text-white font-bold">
@@ -293,7 +317,7 @@
                         </div>
                     </div>
                     <div v-if="!isSidebarCollapsed" class="ml-3 whitespace-nowrap overflow-hidden">
-                        <div class="text-sm font-medium text-gray-900 truncate">{{ user.name }}</div>
+                        <div class="text-sm font-bold text-gray-900 truncate">{{ user.name }}</div>
                         <div class="text-xs text-gray-500">User</div>
                     </div>
                 </div>
@@ -316,100 +340,86 @@
                 <!-- Blur Overlay for Description Panel -->
                 <transition name="fade">
                     <div v-if="showDescriptionPanel" @click="showDescriptionPanel = false"
-                        class="absolute inset-0 bg-black/5 backdrop-blur-[2px] z-[35] transition-opacity duration-300 desc-panel-overlay">
+                        class="absolute inset-0 bg-black/5 z-[35] transition-opacity duration-300 desc-panel-overlay">
                     </div>
                 </transition>
-
                 <!-- Character Description Panel -->
                 <transition name="dropdown">
                     <div v-if="showDescriptionPanel && currentCharacter"
-                        class="absolute top-14 left-4 right-4 md:w-[460px] md:left-[60px] md:right-auto md:top-[60px] md:ml-0 max-h-[calc(100dvh-5rem)] md:max-h-[calc(100dvh-7rem)] bg-white/95 backdrop-blur-2xl border border-white/60 shadow-[0_20px_60px_-10px_rgba(0,0,0,0.15)] rounded-3xl z-40 overflow-hidden ring-1 ring-black/5 origin-top-left transform-gpu flex flex-col desc-panel">
-                        <!-- Decorative Header Background -->
-                        <div
-                            class="absolute top-0 left-0 right-0 h-32 bg-gradient-to-br from-primary-50 via-purple-50 to-pink-50 z-0">
-                            <div class="absolute inset-0 bg-white/40 backdrop-blur-[1px] desc-panel-decor"></div>
-                            <!-- Abstract decoration -->
-                            <div
-                                class="absolute top-[-20%] right-[-10%] w-40 h-40 bg-gradient-to-br from-primary-200/30 to-purple-200/30 rounded-full blur-3xl">
-                            </div>
-                            <div
-                                class="absolute bottom-[-10%] left-[-10%] w-32 h-32 bg-gradient-to-tr from-blue-200/30 to-pink-200/30 rounded-full blur-2xl">
-                            </div>
-                        </div>
-
-                        <div class="relative z-10 p-4 pt-6 flex flex-col min-h-0 max-h-[inherit] overflow-hidden">
-                            <!-- Close Button -->
-                            <button @click="showDescriptionPanel = false"
-                                class="absolute top-3 right-3 p-1.5 text-gray-400 hover:text-gray-600 hover:bg-white/60 rounded-full transition-all backdrop-blur-sm shadow-sm hover:shadow border border-transparent hover:border-gray-100 z-20 desc-close-btn">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                        d="M6 18L18 6M6 6l12 12"></path>
-                                </svg>
+                        class="absolute top-14 left-3 right-3 md:w-[420px] md:left-[60px] md:right-auto md:top-[60px] md:ml-0 max-h-[calc(100dvh-5rem)] md:max-h-[calc(100dvh-7rem)] bg-white border border-gray-200/90 shadow-[0_18px_48px_-26px_rgba(15,23,42,0.5)] rounded-2xl z-40 overflow-hidden ring-1 ring-black/5 origin-top-left transform-gpu flex flex-col desc-panel">
+                        <div class="flex items-center gap-3 p-3.5 pr-12 border-b border-gray-100/80 bg-white flex-shrink-0">
+                            <button type="button" @click="editCharacter(currentCharacterIndex)"
+                                class="group flex-shrink-0 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-300"
+                                title="编辑角色">
+                                <img :src="currentCharacter?.avatar"
+                                    class="w-14 h-14 rounded-xl object-cover border border-white shadow-sm transition-transform duration-200 group-hover:scale-[1.02]">
                             </button>
 
-                            <div class="flex flex-row md:flex-col items-center md:items-center mb-5 gap-4 md:gap-0 flex-shrink-0">
-                                <!-- Avatar Container with Glow -->
-                                <div class="relative group cursor-pointer flex-shrink-0 mb-0 md:mb-4"
-                                    @click="editCharacter(currentCharacterIndex)">
-                                    <div
-                                        class="absolute -inset-1 bg-gradient-to-r from-primary-400 to-purple-400 rounded-full opacity-30 blur group-hover:opacity-50 transition-opacity duration-500">
-                                    </div>
-                                    <div
-                                        class="relative w-20 h-20 md:w-24 md:h-24 rounded-full p-1 bg-white shadow-lg ring-1 ring-black/5">
-                                        <img :src="currentCharacter?.avatar"
-                                            class="w-full h-full rounded-full object-cover transition-transform duration-500 group-hover:scale-[1.02]">
-                                    </div>
-                                    <div
-                                        class="absolute bottom-0 right-0 p-1.5 bg-white rounded-full shadow-md border border-gray-100 text-gray-400 group-hover:text-primary-500 transition-colors">
+                            <div class="min-w-0 flex-1">
+                                <div class="flex items-center gap-2 min-w-0">
+                                    <h3 class="font-bold text-gray-900 text-lg leading-tight truncate">
+                                        {{ currentCharacter.name }}</h3>
+                                    <button @click="editCharacter(currentCharacterIndex)"
+                                        class="p-1.5 rounded-lg text-gray-400 hover:text-primary-600 hover:bg-primary-50 transition-colors flex-shrink-0"
+                                        title="编辑角色">
                                         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                                 d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z">
                                             </path>
                                         </svg>
-                                    </div>
+                                    </button>
                                 </div>
-
-                                <!-- Name & Badges -->
-                                <div class="flex flex-col items-start md:items-center min-w-0 flex-1 w-full">
-                                    <h3
-                                        class="font-bold text-gray-900 text-xl leading-tight mb-2 tracking-tight truncate w-full md:text-center">
-                                        {{ currentCharacter.name }}</h3>
-                                    <div class="flex flex-wrap justify-start md:justify-center gap-2">
-                                        <span
-                                            class="px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wide bg-primary-50 text-primary-600 border border-primary-100 shadow-sm">
-                                            {{ chatRoundStats.floors }} 楼 · {{ totalContextLength }} 字
-                                        </span>
-                                    </div>
+                                <div class="mt-1.5 flex items-center gap-2 text-[11px] font-medium text-gray-400 desc-panel-stats">
+                                    <span class="inline-flex items-baseline gap-1">
+                                        <span class="text-[13px] font-bold leading-none text-gray-700 desc-panel-stat-number">{{ chatRoundStats.floors }}</span>
+                                        <span class="desc-panel-stat-unit">楼</span>
+                                    </span>
+                                    <span class="h-3 w-px rounded-full bg-gray-200"></span>
+                                    <span class="inline-flex items-baseline gap-1">
+                                        <span class="text-[13px] font-bold leading-none text-gray-700 desc-panel-stat-number">{{ Number(totalContextLength || 0).toLocaleString() }}</span>
+                                        <span class="desc-panel-stat-unit">字</span>
+                                    </span>
                                 </div>
                             </div>
 
-                            <!-- Description Box -->
-                            <div
-                                class="bg-gray-50/50 rounded-2xl p-1 border border-gray-100 shadow-inner min-h-0 flex-1 flex flex-col overflow-hidden group">
-                                <div class="min-h-0 flex-1 overflow-y-auto custom-scrollbar p-2 space-y-2 pr-2">
-                                    <div v-if="currentCharacter.description"
-                                        class="prose prose-sm prose-gray max-w-none">
-                                        <div class="text-sm text-gray-600 leading-relaxed font-normal font-sans markdown-body"
-                                            v-html="renderMarkdown(currentCharacter.description, 'assistant', true)">
-                                        </div>
-                                    </div>
-                                    <div v-else
-                                        class="flex flex-col items-center justify-center py-8 text-gray-400 italic text-sm">
-                                        <svg class="w-8 h-8 mb-2 opacity-50" fill="none" stroke="currentColor"
-                                            viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
-                                                d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z">
-                                            </path>
-                                        </svg>
-                                        暂无描述信息
-                                    </div>
-                                </div>
-                            </div>
-
+                            <button @click="showDescriptionPanel = false"
+                                class="absolute top-3 right-3 p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-xl transition-all z-20 desc-close-btn"
+                                title="关闭">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M6 18L18 6M6 6l12 12"></path>
+                                </svg>
+                            </button>
                         </div>
-                        <!-- Bottom Gradient Border -->
-                        <div
-                            class="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-primary-400/50 via-purple-400/50 to-pink-400/50 opacity-80">
+
+                        <div class="min-h-0 flex-1 p-3.5 flex flex-col overflow-hidden">
+                            <div class="mb-2 flex items-center justify-between px-0.5">
+                                <div class="flex items-center gap-2 text-[11px] font-bold text-gray-400">
+                                    <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z">
+                                        </path>
+                                    </svg>
+                                    角色卡简介
+                                </div>
+                            </div>
+                            <div class="min-h-0 flex-1 overflow-y-auto custom-scrollbar rounded-xl bg-gray-50/55 p-3">
+                                <div v-if="currentCharacter.description" class="prose prose-sm prose-gray max-w-none">
+                                    <div class="text-sm text-gray-700 leading-relaxed font-normal font-sans markdown-body"
+                                        v-html="renderMarkdown(currentCharacter.description, 'assistant', true)">
+                                    </div>
+                                </div>
+                                <div v-else
+                                    class="flex min-h-32 flex-col items-center justify-center text-gray-400 italic text-sm">
+                                    <svg class="w-8 h-8 mb-2 opacity-50" fill="none" stroke="currentColor"
+                                        viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                                            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z">
+                                        </path>
+                                    </svg>
+                                    暂无描述信息
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </transition>
@@ -557,7 +567,8 @@
                                         <div v-if="msg.isEditing_Message"
                                             class="relative z-10 animate-fade-in w-full p-3 md:p-4">
                                             <textarea v-model="msg.editMessageContent"
-                                                class="w-full h-[600px] min-h-[400px] p-3 text-sm text-gray-700 bg-white/50 backdrop-blur-md rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-primary-400 focus:bg-white transition-all shadow-inner resize-y custom-scrollbar"
+                                                :style="{ height: (msg.editMessageHeight || 160) + 'px' }"
+                                                class="w-full min-h-[88px] max-h-[70vh] p-3 text-sm text-gray-700 bg-white/50 backdrop-blur-md rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-primary-400 focus:bg-white transition-all shadow-inner resize-y custom-scrollbar"
                                                 placeholder="编辑消息..."></textarea>
                                             <div class="flex justify-end space-x-2 mt-3">
                                                 <button @click="cancelEditMessage(index)"
@@ -827,11 +838,7 @@
                                                     </div>
                                                     <div class="ui-template-pending-content">
                                                         <div class="ui-template-pending-row">
-                                                            <span class="ui-template-pending-title">变量同步中</span>
-                                                            <span class="ui-template-pending-count">剩余 {{ uiTemplateUpdateStatus.remaining }}</span>
-                                                        </div>
-                                                        <div class="ui-template-pending-subtitle">
-                                                            {{ uiTemplateUpdateStatus.message || '正在读取最近剧情，整理状态栏变量' }}
+                                                            <span class="ui-template-pending-title">分析中</span>
                                                         </div>
                                                         <div class="ui-template-pending-bars" aria-hidden="true">
                                                             <i></i><i></i><i></i>
@@ -858,7 +865,7 @@
                                                                     d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z">
                                                                 </path>
                                                             </svg>
-                                                            <span class="text-xs font-bold truncate">分析过程 (COT)</span>
+                                                            <span class="text-xs font-bold truncate">分析过程</span>
                                                         </div>
                                                         <span class="native-thinking-meta">
                                                             {{ (parseCot(msg.content).cot || '').length }} 字
@@ -947,11 +954,7 @@
                                                     </div>
                                                     <div class="ui-template-pending-content">
                                                         <div class="ui-template-pending-row">
-                                                            <span class="ui-template-pending-title">变量同步中</span>
-                                                            <span class="ui-template-pending-count">剩余 {{ uiTemplateUpdateStatus.remaining }}</span>
-                                                        </div>
-                                                        <div class="ui-template-pending-subtitle">
-                                                            {{ uiTemplateUpdateStatus.message || '正在读取最近剧情，整理状态栏变量' }}
+                                                            <span class="ui-template-pending-title">分析中</span>
                                                         </div>
                                                         <div class="ui-template-pending-bars" aria-hidden="true">
                                                             <i></i><i></i><i></i>
@@ -1219,7 +1222,7 @@
                                         </span>
                                         <span v-else-if="memoryExtractStatus !== 'extracting'" class="whitespace-nowrap">
                                             {{ memoryExtractStatus === 'waiting' ? '等待中' :
-                                            memoryExtractStatus === 'success' ? '已记忆' : '生成失败' }}
+                                            memoryExtractStatus === 'success' ? '已记忆' : '记忆失败' }}
                                         </span>
                                     </div>
                                 </transition>
@@ -1573,6 +1576,18 @@
                                         d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
                                 </svg>
                             </button>
+                            <button @click.stop="toggleCharacterFavorite(char.originalIndex)"
+                                class="p-2 bg-white/20 backdrop-blur-md rounded-full border border-white/20 active:bg-white/40 shadow-lg transition-colors"
+                                :class="isCharacterFavorite(char) ? 'text-amber-300' : 'text-white'"
+                                :title="isCharacterFavorite(char) ? '取消收藏' : '收藏角色'"
+                                :aria-label="isCharacterFavorite(char) ? '取消收藏' : '收藏角色'">
+                                <svg class="w-4 h-4" :fill="isCharacterFavorite(char) ? 'currentColor' : 'none'"
+                                    stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.196-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118L2.63 10.1c-.783-.57-.38-1.81.588-1.81h4.915a1 1 0 00.95-.69l1.519-4.674z">
+                                    </path>
+                                </svg>
+                            </button>
 
                         </div>
 
@@ -1642,6 +1657,18 @@
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                             d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
+                                    </svg>
+                                </button>
+                                <button @click.stop="toggleCharacterFavorite(char.originalIndex)"
+                                    class="p-2 bg-white/90 backdrop-blur-sm rounded-full shadow-lg transition-all hover:scale-110"
+                                    :class="isCharacterFavorite(char) ? 'text-amber-500 hover:text-amber-600' : 'text-gray-700 hover:text-amber-500'"
+                                    :title="isCharacterFavorite(char) ? '取消收藏' : '收藏角色'"
+                                    :aria-label="isCharacterFavorite(char) ? '取消收藏' : '收藏角色'">
+                                    <svg class="w-4 h-4" :fill="isCharacterFavorite(char) ? 'currentColor' : 'none'"
+                                        stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.196-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118L2.63 10.1c-.783-.57-.38-1.81.588-1.81h4.915a1 1 0 00.95-.69l1.519-4.674z">
+                                        </path>
                                     </svg>
                                 </button>
 
@@ -2370,13 +2397,12 @@
                                         生成参数
                                     </h4>
                                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        <!-- Temperature -->
+                                        <!-- 温度 -->
                                         <div
                                             class="bg-gray-50 p-4 rounded-xl border border-gray-100 hover:bg-white hover:border-gray-200 hover:shadow-sm transition-all duration-200">
                                             <div class="flex justify-between items-center mb-3">
                                                 <label
-                                                    class="text-xs font-bold text-gray-500 uppercase tracking-wider">温度
-                                                    (Temperature)</label>
+                                                    class="text-xs font-bold text-gray-500 uppercase tracking-wider">温度</label>
                                                 <span
                                                     class="text-xs font-mono text-teal-600 bg-teal-50 px-1.5 py-0.5 rounded border border-teal-100">{{
                                                     settings.temperature }}</span>
@@ -2401,14 +2427,10 @@
                                             class="bg-gray-50 p-4 rounded-xl border border-gray-100 hover:bg-white hover:border-gray-200 hover:shadow-sm transition-all duration-200 flex flex-col justify-center">
                                             <label
                                                 class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">生图风格</label>
-                                            <select v-model="settings.imageStyle"
-                                                class="w-full bg-white border border-gray-200 rounded-lg px-3 py-1.5 text-gray-700 text-sm focus:ring-2 focus:ring-teal-100 focus:border-teal-400 focus:outline-none transition-all shadow-sm">
-                                                <option value="vertical">韩漫小清新风</option>
-                                                <option value="r18">2.5D唯美风</option>
-                                                <option value="lolita25d">2.5D唯美风（萝）</option>
-                                                <option value="anime">本子动漫风</option>
-                                                <option value="galgame">GalGame风</option>
-                                            </select>
+                                            <custom-select v-model="settings.imageStyle" :options="imageStyleOptions"
+                                                button-class="rounded-lg px-3 py-1.5 text-sm text-gray-700 focus:border-teal-400 focus:ring-teal-100"
+                                                menu-class="text-sm">
+                                            </custom-select>
                                         </div>
 
                                         <!-- Image Size -->
@@ -2416,12 +2438,10 @@
                                             class="bg-gray-50 p-4 rounded-xl border border-gray-100 hover:bg-white hover:border-gray-200 hover:shadow-sm transition-all duration-200 flex flex-col justify-center">
                                             <label
                                                 class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">生图比例</label>
-                                            <select v-model="settings.imageSize"
-                                                class="w-full bg-white border border-gray-200 rounded-lg px-3 py-1.5 text-gray-700 text-sm focus:ring-2 focus:ring-teal-100 focus:border-teal-400 focus:outline-none transition-all shadow-sm">
-                                                <option value="竖图">竖图</option>
-                                                <option value="横图">横图</option>
-                                                <option value="方图">方图</option>
-                                            </select>
+                                            <custom-select v-model="settings.imageSize" :options="imageSizeOptions"
+                                                button-class="rounded-lg px-3 py-1.5 text-sm text-gray-700 focus:border-teal-400 focus:ring-teal-100"
+                                                menu-class="text-sm">
+                                            </custom-select>
                                         </div>
                                     </div>
                                 </div>
@@ -2489,7 +2509,7 @@
                                         </div>
                                     </div>
                                     <span
-                                        class="text-sm font-medium text-gray-600 group-hover:text-gray-900 transition-colors">使用角色卡背景</span>
+                                        class="text-sm font-medium text-gray-600 group-hover:text-gray-900 transition-colors">使用封面背景</span>
                                 </label>
                                 <label
                                     class="flex items-center p-3 rounded-xl border-2 border-transparent hover:border-gray-100 hover:bg-gray-50 transition-all cursor-pointer group">
@@ -2622,7 +2642,12 @@
                                 </svg>
                             </div>
                             <div class="flex-1">
-                                <h3 class="font-bold text-gray-800">{{ preset.name }}</h3>
+                                <div class="flex items-center gap-2 flex-wrap">
+                                    <h3 class="font-bold text-gray-800">{{ preset.name }}</h3>
+                                    <span :class="['text-[10px] px-2 py-0.5 rounded-full border font-bold', getPresetRoleBadgeClass(preset)]">
+                                        {{ getPresetRoleDisplayLabel(preset) }}
+                                    </span>
+                                </div>
                             </div>
                         </div>
                         <div class="flex items-center space-x-4">
@@ -2828,7 +2853,7 @@
                                     <h3 class="font-bold text-gray-800 truncate">{{ template.name }}</h3>
                                     <span class="text-[10px] px-2 py-0.5 rounded-full border"
                                         :class="template.scope === 'global' ? 'bg-purple-50 text-purple-700 border-purple-200' : 'bg-yellow-50 text-yellow-700 border-yellow-200'">
-                                        {{ template.scope === 'global' ? '全局' : '绑定角色' }}
+                                        {{ template.scope === 'global' ? '全局' : '绑定' }}
                                     </span>
                                 </div>
                                 <p class="text-xs text-gray-500 mt-1">{{ Object.keys(template.variableState || {}).length }} 个变量 · {{ (template.changeLog || []).length }} 条记录</p>
@@ -2937,7 +2962,7 @@
                                     <h3 class="font-bold text-gray-800 truncate">{{ script.name }}</h3>
                                     <span class="text-[10px] px-2 py-0.5 rounded-full border flex-shrink-0"
                                         :class="script.scope === 'global' ? 'bg-purple-50 text-purple-700 border-purple-200' : 'bg-yellow-50 text-yellow-700 border-yellow-200'">
-                                        {{ script.scope === 'global' ? '全局' : '绑定角色' }}
+                                        {{ script.scope === 'global' ? '全局' : '绑定' }}
                                     </span>
                                 </div>
                             </div>
@@ -2997,6 +3022,51 @@
                             </svg>
                             工具
                         </h2>
+                    </div>
+                </div>
+
+                <div
+                    class="bg-white/70 backdrop-blur-sm p-1 rounded-2xl border border-gray-200 shadow-sm mb-4 overflow-hidden">
+                    <button @click="showActiveToolSettings = !showActiveToolSettings"
+                        :class="['w-full flex justify-between items-center px-4 py-3 rounded-xl transition-all font-bold',
+                                     showActiveToolSettings ? 'bg-primary-50 text-primary-700' : 'text-gray-700 hover:bg-gray-50']">
+                        <span class="flex items-center min-w-0">
+                            <div
+                                :class="['p-1.5 rounded-lg mr-3 transition-colors', showActiveToolSettings ? 'bg-primary-100 text-primary-600' : 'bg-gray-100 text-gray-500']">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4">
+                                    </path>
+                                </svg>
+                            </div>
+                            <span class="truncate">工具全局设置</span>
+                        </span>
+                        <span class="flex items-center flex-shrink-0">
+                            <svg :class="{'transform rotate-180': showActiveToolSettings}"
+                                class="w-5 h-5 transition-transform duration-300" fill="none" stroke="currentColor"
+                                viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7">
+                                </path>
+                            </svg>
+                        </span>
+                    </button>
+                    <div v-show="showActiveToolSettings" class="px-3 pb-3 pt-2 border-t border-gray-100 animate-fade-in">
+                        <div class="bg-gray-50/80 p-2.5 rounded-xl border border-gray-100">
+                            <div class="flex items-center mb-2">
+                                <label class="text-xs font-medium text-gray-500">调用工具积极性</label>
+                            </div>
+                            <div class="grid grid-cols-3 gap-1 rounded-xl bg-white border border-gray-200 p-1">
+                                <button v-for="option in activeToolAggressivenessOptions" :key="option.value"
+                                    type="button"
+                                    @click="settings.activeToolAggressiveness = option.value"
+                                    :class="['h-8 rounded-lg text-[13px] font-bold transition-all active:scale-[0.98]',
+                                        settings.activeToolAggressiveness === option.value
+                                            ? 'bg-primary-50 text-primary-700 shadow-sm ring-1 ring-primary-100'
+                                            : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50']">
+                                    {{ option.label }}
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -3488,7 +3558,7 @@
                                     <h3 class="font-bold text-gray-800 truncate">{{ entry.comment || '未命名条目' }}</h3>
                                     <span class="ml-2 text-[10px] px-2 py-0.5 rounded-full border flex-shrink-0"
                                         :class="entry.scope === 'global' ? 'bg-purple-50 text-purple-700 border-purple-200' : 'bg-yellow-50 text-yellow-700 border-yellow-200'">
-                                        {{ entry.scope === 'global' ? '全局' : '绑定角色' }}
+                                        {{ entry.scope === 'global' ? '全局' : '绑定' }}
                                     </span>
                                 </div>
                             </div>
@@ -3828,10 +3898,10 @@
 
         <!-- Character Editor Modal -->
         <div v-if="showCharacterEditor"
-            class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-0 md:p-4">
+            class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-0 md:p-4 animate-fade-in">
             <div
                 class="bg-white md:rounded-2xl border-0 md:border border-gray-200 w-full max-w-2xl h-full md:h-[750px] flex flex-col shadow-2xl overflow-hidden">
-                <div class="p-3 md:p-5 border-b border-gray-100 flex flex-col gap-4 bg-gray-50/50">
+                <div class="p-3 md:p-5 border-b border-gray-100 flex flex-col gap-4 bg-gray-50/80 backdrop-blur-sm flex-shrink-0">
                     <div class="flex justify-between items-center">
                         <h3 class="text-lg md:text-xl font-bold text-gray-800 flex items-center">
                             <svg class="w-5 h-5 mr-2 text-primary-600" fill="none" stroke="currentColor"
@@ -3874,7 +3944,7 @@
                         </button>
                     </div>
                 </div>
-                <div class="flex-1 overflow-y-auto p-3 md:p-8 custom-scrollbar flex flex-col">
+                <div class="flex-1 overflow-y-auto p-3 md:p-8 custom-scrollbar flex flex-col bg-gray-50/30">
                     <!-- Basic (Name & Avatar) -->
                     <div v-if="editorTab === 'basic'"
                         class="animate-fade-in flex-1 flex flex-col gap-4 md:gap-6 items-center justify-center min-h-0">
@@ -3908,7 +3978,7 @@
                     <!-- Description -->
                     <div v-if="editorTab === 'description'" class="animate-fade-in h-full flex flex-col">
                         <div class="flex justify-between items-center mb-2">
-                            <label class="block text-sm font-bold text-gray-600">简短描述 (Description)</label>
+                            <label class="block text-sm font-bold text-gray-600">简短描述</label>
                             <span class="text-[10px] text-gray-400 font-mono bg-gray-100 px-1.5 py-0.5 rounded">{{
                                 (editingCharacter.data.description || '').length }} 字</span>
                         </div>
@@ -3920,7 +3990,7 @@
                     <!-- Personality -->
                     <div v-if="editorTab === 'personality'" class="animate-fade-in h-full flex flex-col">
                         <div class="flex justify-between items-center mb-2">
-                            <label class="block text-sm font-bold text-gray-600">具体人设 (Personality)</label>
+                            <label class="block text-sm font-bold text-gray-600">具体人设</label>
                             <span class="text-[10px] text-gray-400 font-mono bg-gray-100 px-1.5 py-0.5 rounded">{{
                                 (editingCharacter.data.personality || '').length }} 字</span>
                         </div>
@@ -3932,7 +4002,7 @@
                     <!-- Scenario -->
                     <div v-if="editorTab === 'scenario'" class="animate-fade-in h-full flex flex-col">
                         <div class="flex justify-between items-center mb-2">
-                            <label class="block text-sm font-bold text-gray-600">场景 (Scenario)</label>
+                            <label class="block text-sm font-bold text-gray-600">场景</label>
                             <span class="text-[10px] text-gray-400 font-mono bg-gray-100 px-1.5 py-0.5 rounded">{{
                                 (editingCharacter.data.scenario || '').length }} 字</span>
                         </div>
@@ -3944,7 +4014,7 @@
                     <!-- First Message -->
                     <div v-if="editorTab === 'first_mes'" class="animate-fade-in h-full flex flex-col">
                         <div class="flex justify-between items-center mb-2">
-                            <label class="block text-sm font-bold text-gray-600">开场白 (First Message)</label>
+                            <label class="block text-sm font-bold text-gray-600">开场白</label>
                             <span class="text-[10px] text-gray-400 font-mono bg-gray-100 px-1.5 py-0.5 rounded">{{
                                 (editingCharacter.data.first_mes || '').length }} 字</span>
                         </div>
@@ -3953,7 +4023,7 @@
                             placeholder="角色在对话开始时说的第一句话..."></textarea>
                     </div>
                 </div>
-                <div class="p-3 md:p-5 border-t border-gray-100 flex justify-end space-x-3 bg-gray-50/50">
+                <div class="p-3 md:p-5 border-t border-gray-100 flex justify-end space-x-3 bg-gray-50/80 backdrop-blur-sm flex-shrink-0">
                     <button @click="closeCharacterEditor"
                         class="px-6 py-2.5 bg-white hover:bg-gray-100 text-gray-700 border border-gray-300 rounded-xl transition-all font-bold text-sm shadow-sm active:scale-95">取消</button>
                     <button @click="saveCharacter"
@@ -3987,7 +4057,7 @@
                         <div>
                             <h3 class="text-lg font-bold text-gray-800 leading-tight">{{ editingPreset.id !== undefined
                                 ? '编辑预设' : '新建预设' }}</h3>
-                            <p class="text-xs text-gray-500">System Prompt Preset</p>
+                            <p class="text-xs text-gray-500">{{ getPresetRoleLabel(editingPreset.data) }}</p>
                         </div>
                     </div>
                     <button @click="showPresetEditor = false"
@@ -4008,16 +4078,22 @@
                             placeholder="例如：沉浸式叙事">
                     </div>
                     <div>
+                        <label class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">注入位置</label>
+                        <custom-select v-model="editingPreset.data.role" :options="presetRoleOptions"
+                            button-class="font-medium">
+                        </custom-select>
+                    </div>
+                    <div>
                         <label
                             class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5 flex justify-between">
-                            <span>系统提示词内容 (System Prompt)</span>
+                            <span>{{ getPresetRoleLabel(editingPreset.data) }}内容</span>
                             <span
                                 class="text-[10px] font-normal normal-case bg-gray-100 px-1.5 rounded text-gray-500">{{
                                 (editingPreset.data.content || '').length }} 字符</span>
                         </label>
                         <textarea v-model="editingPreset.data.content" rows="12"
                             class="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-gray-800 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:outline-none font-mono text-sm shadow-inner leading-relaxed resize-y min-h-[200px]"
-                            placeholder="在此输入系统提示词内容..."></textarea>
+                            placeholder="在此输入预设内容..."></textarea>
                     </div>
                 </div>
 
@@ -4068,7 +4144,7 @@
                     </button>
                 </div>
 
-                <div class="flex-1 overflow-y-auto custom-scrollbar p-5 bg-gray-50/30 space-y-5">
+                <div class="flex-1 overflow-y-auto custom-scrollbar p-6 bg-gray-50/30 space-y-6">
                     <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
                         <div>
                             <label class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">模板名称</label>
@@ -4078,19 +4154,13 @@
                         </div>
                         <div>
                             <label class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">作用范围</label>
-                            <select v-model="editingUiTemplate.data.scope"
-                                class="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:outline-none transition-all shadow-sm">
-                                <option value="character" :disabled="!currentCharacter">绑定当前角色</option>
-                                <option value="global">全局生效</option>
-                            </select>
+                            <custom-select v-model="editingUiTemplate.data.scope" :options="scopeOptions">
+                            </custom-select>
                         </div>
                         <div>
                             <label class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">插入位置</label>
-                            <select v-model="editingUiTemplate.data.placement"
-                                class="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:outline-none transition-all shadow-sm">
-                                <option value="top">对话顶部</option>
-                                <option value="bottom">对话底部</option>
-                            </select>
+                            <custom-select v-model="editingUiTemplate.data.placement" :options="uiTemplatePlacementOptions">
+                            </custom-select>
                         </div>
                         <div>
                             <label class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">排序</label>
@@ -4159,14 +4229,26 @@
 
         <!-- Regex Editor Modal -->
         <div v-if="showRegexEditor"
-            class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+            class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fade-in">
             <div
-                class="bg-white rounded-xl border border-gray-200 w-full max-w-lg flex flex-col shadow-2xl max-h-[85vh] overflow-hidden animate-fade-in">
-                <div class="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50 flex-shrink-0">
-                    <h3 class="text-lg font-bold text-gray-800">{{ editingRegex.id !== undefined ? '编辑正则脚本' : '新建正则脚本'
-                        }}</h3>
+                class="bg-white rounded-2xl border border-gray-200 w-full max-w-lg flex flex-col shadow-2xl max-h-[90vh] overflow-hidden">
+                <div
+                    class="p-4 md:p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50/80 backdrop-blur-sm flex-shrink-0">
+                    <div class="flex items-center gap-3">
+                        <div class="p-2 bg-primary-50 text-primary-600 rounded-lg">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path>
+                            </svg>
+                        </div>
+                        <div>
+                            <h3 class="text-lg font-bold text-gray-800 leading-tight">{{ editingRegex.id !== undefined
+                                ? '编辑正则脚本' : '新建正则脚本' }}</h3>
+                            <p class="text-xs text-gray-500">匹配与替换规则</p>
+                        </div>
+                    </div>
                     <button @click="showRegexEditor = false"
-                        class="text-gray-400 hover:text-gray-600 transition-colors p-1 rounded-md hover:bg-gray-100">
+                        class="text-gray-400 hover:text-gray-600 hover:bg-gray-100 p-2 rounded-full transition-all">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                 d="M6 18L18 6M6 6l12 12"></path>
@@ -4174,33 +4256,30 @@
                     </button>
                 </div>
 
-                <div class="flex-1 overflow-y-auto custom-scrollbar p-5 space-y-5">
+                <div class="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-6 bg-gray-50/30">
                     <!-- Name -->
                     <div>
                         <label class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">脚本名称</label>
                         <input v-model="editingRegex.data.name" type="text"
-                            class="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:outline-none transition-all shadow-sm"
+                            class="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:outline-none transition-all shadow-sm"
                             placeholder="例如：去除多余空行">
                     </div>
                     <div>
                         <label class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">作用范围</label>
-                        <select v-model="editingRegex.data.scope"
-                            class="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:outline-none transition-all shadow-sm">
-                            <option value="character" :disabled="!currentCharacter">绑定当前角色</option>
-                            <option value="global">全局生效</option>
-                        </select>
+                        <custom-select v-model="editingRegex.data.scope" :options="scopeOptions"
+                            button-class="bg-white">
+                        </custom-select>
                     </div>
 
                     <!-- Regex & Flags -->
                     <div class="grid grid-cols-4 gap-3">
                         <div class="col-span-3">
-                            <label class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">正则表达式
-                                (Regex)</label>
+                            <label class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">正则表达式</label>
                             <div class="relative">
                                 <span
                                     class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-mono text-sm">/</span>
                                 <input v-model="editingRegex.data.regex" type="text"
-                                    class="w-full bg-gray-50 border border-gray-200 rounded-xl pl-6 pr-4 py-2.5 text-gray-800 font-mono text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:outline-none transition-all shadow-sm"
+                                    class="w-full bg-white border border-gray-200 rounded-xl pl-6 pr-4 py-2.5 text-gray-800 font-mono text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:outline-none transition-all shadow-sm"
                                     placeholder="pattern">
                                 <span
                                     class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 font-mono text-sm">/</span>
@@ -4210,17 +4289,16 @@
                             <label
                                 class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">Flags</label>
                             <input v-model="editingRegex.data.flags" type="text"
-                                class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-gray-800 font-mono text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:outline-none transition-all shadow-sm text-center"
+                                class="w-full bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-gray-800 font-mono text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:outline-none transition-all shadow-sm text-center"
                                 placeholder="gim">
                         </div>
                     </div>
 
                     <!-- Replacement -->
                     <div>
-                        <label class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">替换内容
-                            (Replacement)</label>
+                        <label class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">替换内容</label>
                         <textarea v-model="editingRegex.data.replacement" rows="9"
-                            class="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 font-mono text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:outline-none transition-all shadow-sm resize-y min-h-[190px]"
+                            class="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 font-mono text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:outline-none transition-all shadow-sm resize-y min-h-[190px]"
                             placeholder="支持 $1, $2 等捕获组引用"></textarea>
                     </div>
 
@@ -4249,7 +4327,7 @@
                                 <label
                                     class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">生效位置</label>
                                 <div class="flex gap-3">
-                                    <label v-for="(label, val) in {1: 'User (用户)', 2: 'AI (角色)'}" :key="val"
+                                    <label v-for="(label, val) in {1: '用户消息', 2: '角色消息'}" :key="val"
                                         :class="['flex-1 flex items-center space-x-2 cursor-pointer p-2 rounded-xl border transition-all select-none shadow-sm active:scale-95',
                                                    editingRegex.data.placement && editingRegex.data.placement.includes(Number(val)) ? 'bg-primary-50 border-primary-200 text-primary-700' : 'bg-white border-gray-100 text-gray-600 hover:border-primary-200']">
                                         <input type="checkbox"
@@ -4311,9 +4389,10 @@
                     </details>
                 </div>
 
-                <div class="p-4 border-t border-gray-100 flex justify-end space-x-3 bg-gray-50/50 flex-shrink-0">
+                <div
+                    class="p-4 md:p-5 border-t border-gray-100 flex justify-end space-x-3 bg-gray-50/80 backdrop-blur-sm flex-shrink-0">
                     <button @click="showRegexEditor = false"
-                        class="px-5 py-2.5 bg-white hover:bg-gray-50 text-gray-700 border border-gray-200 rounded-xl transition-all shadow-sm font-medium text-sm active:scale-95">取消</button>
+                        class="px-5 py-2.5 bg-white hover:bg-gray-100 text-gray-700 border border-gray-200 rounded-xl transition-all shadow-sm font-medium text-sm active:scale-95">取消</button>
                     <button @click="saveRegex"
                         class="px-6 py-2.5 bg-primary-600 hover:bg-primary-700 text-white rounded-xl transition-all shadow-md hover:shadow-lg font-bold text-sm active:scale-95 flex items-center">
                         <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -4328,11 +4407,24 @@
 
         <!-- Active Tool Editor Modal -->
         <div v-if="showActiveToolEditor"
-            class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+            class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fade-in">
             <div
-                class="bg-white rounded-2xl border border-gray-200 w-full max-w-3xl flex flex-col shadow-2xl max-h-[90vh] overflow-hidden animate-fade-in">
+                class="bg-white rounded-2xl border border-gray-200 w-full max-w-3xl flex flex-col shadow-2xl max-h-[90vh] overflow-hidden">
                 <div
-                    class="p-4 md:p-5 border-b border-gray-100 flex justify-end items-center bg-gray-50/80 backdrop-blur-sm flex-shrink-0 z-10">
+                    class="p-4 md:p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50/80 backdrop-blur-sm flex-shrink-0">
+                    <div class="flex items-center gap-3">
+                        <div class="p-2 bg-primary-50 text-primary-600 rounded-lg">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94L14.7 6.3z">
+                                </path>
+                            </svg>
+                        </div>
+                        <div>
+                            <h3 class="text-lg font-bold text-gray-800 leading-tight">编辑工具</h3>
+                            <p class="text-xs text-gray-500">{{ editingActiveTool.data.name || '未命名工具' }}</p>
+                        </div>
+                    </div>
                     <button @click="showActiveToolEditor = false"
                         class="text-gray-400 hover:text-gray-600 hover:bg-gray-100 p-2 rounded-full transition-all">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -4342,7 +4434,7 @@
                     </button>
                 </div>
 
-                <div class="flex-1 overflow-y-auto custom-scrollbar p-5 md:p-7 space-y-6 bg-gray-50/30">
+                <div class="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-6 bg-gray-50/30">
                     <div class="max-w-2xl mx-auto text-center">
                         <div
                             class="w-14 h-14 mx-auto rounded-2xl bg-primary-50 text-primary-600 flex items-center justify-center shadow-sm border border-primary-100">
@@ -4416,14 +4508,14 @@
                             <label class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">Tavily API Key</label>
                             <input v-model.trim="editingActiveTool.data.tavilyApiKey"
                                 type="password"
-                                class="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-800 focus:ring-4 focus:ring-primary-500/10 focus:border-primary-500 focus:outline-none transition-all"
+                                class="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-800 focus:ring-4 focus:ring-primary-500/10 focus:border-primary-500 focus:outline-none transition-all"
                                 placeholder="tvly-...">
                         </div>
                     </div>
                 </div>
 
                 <div
-                    class="p-4 md:p-5 border-t border-gray-100 flex justify-end space-x-3 bg-gray-50/80 backdrop-blur-sm flex-shrink-0 z-10">
+                    class="p-4 md:p-5 border-t border-gray-100 flex justify-end space-x-3 bg-gray-50/80 backdrop-blur-sm flex-shrink-0">
                     <button @click="showActiveToolEditor = false"
                         class="px-5 py-2.5 bg-white hover:bg-gray-100 text-gray-700 border border-gray-200 rounded-xl transition-all shadow-sm font-medium text-sm active:scale-95">取消</button>
                     <button @click="saveActiveTool"
@@ -4574,7 +4666,7 @@
                     </h3>
 
                     <div class="grid grid-cols-1 gap-3">
-                        <button @click="confirmCharacterExport(false)"
+                        <button @click="confirmCharacterExport('json')"
                             class="flex items-center p-4 bg-gray-50 hover:bg-primary-50 text-gray-700 hover:text-primary-700 rounded-xl transition-all group border border-gray-100 hover:border-primary-200 text-left">
                             <div
                                 class="w-10 h-10 bg-white rounded-lg shadow-sm flex items-center justify-center mr-4 group-hover:scale-110 transition-transform flex-shrink-0">
@@ -4585,25 +4677,41 @@
                                 </svg>
                             </div>
                             <div class="flex-1">
-                                <div class="font-bold text-base mb-0.5">仅导出角色卡</div>
-                                <div class="text-[11px] text-gray-500">仅导出包含角色设定的 .png 图片</div>
+                                <div class="font-bold text-base mb-0.5">导出为 JSON 文件</div>
+                                <div class="text-[11px] text-gray-500">导出角色卡数据 .json</div>
                             </div>
                         </button>
 
-                        <button @click="confirmCharacterExport(true)"
+                        <button @click="confirmCharacterExport('png')"
                             class="flex items-center p-4 bg-gray-50 hover:bg-primary-50 text-gray-700 hover:text-primary-700 rounded-xl transition-all group border border-gray-100 hover:border-primary-200 text-left">
                             <div
                                 class="w-10 h-10 bg-white rounded-lg shadow-sm flex items-center justify-center mr-4 group-hover:scale-110 transition-transform flex-shrink-0">
                                 <svg class="w-6 h-6 text-primary-600" fill="none" stroke="currentColor"
                                     viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                        d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z">
+                                        d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
+                                </svg>
+                            </div>
+                            <div class="flex-1">
+                                <div class="font-bold text-base mb-0.5">导出为 PNG 文件</div>
+                                <div class="text-[11px] text-gray-500">导出带头像图片的角色卡 .png</div>
+                            </div>
+                        </button>
+
+                        <button @click="confirmCharacterExport('chat')"
+                            class="flex items-center p-4 bg-gray-50 hover:bg-primary-50 text-gray-700 hover:text-primary-700 rounded-xl transition-all group border border-gray-100 hover:border-primary-200 text-left">
+                            <div
+                                class="w-10 h-10 bg-white rounded-lg shadow-sm flex items-center justify-center mr-4 group-hover:scale-110 transition-transform flex-shrink-0">
+                                <svg class="w-6 h-6 text-primary-600" fill="none" stroke="currentColor"
+                                    viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z">
                                     </path>
                                 </svg>
                             </div>
                             <div class="flex-1">
-                                <div class="font-bold text-base mb-0.5">连带聊天数据导出</div>
-                                <div class="text-[11px] text-gray-500">一并导出对应的聊天记录 .jsonl</div>
+                                <div class="font-bold text-base mb-0.5">导出聊天记录</div>
+                                <div class="text-[11px] text-gray-500">单独导出当前角色的聊天记录 .jsonl</div>
                             </div>
                         </button>
                     </div>
@@ -4618,12 +4726,12 @@
 
         <!-- World Info Editor Modal -->
         <div v-if="showWorldInfoEditor"
-            class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+            class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fade-in">
             <div
-                class="bg-white rounded-2xl border border-gray-200 w-full max-w-3xl flex flex-col shadow-2xl max-h-[90vh] overflow-hidden animate-fade-in">
+                class="bg-white rounded-2xl border border-gray-200 w-full max-w-3xl flex flex-col shadow-2xl max-h-[90vh] overflow-hidden">
                 <!-- Header -->
                 <div
-                    class="p-4 md:p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50/80 backdrop-blur-sm flex-shrink-0 z-10">
+                    class="p-4 md:p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50/80 backdrop-blur-sm flex-shrink-0">
                     <div class="flex items-center gap-3">
                         <div class="p-2 bg-primary-50 text-primary-600 rounded-lg">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -4634,8 +4742,8 @@
                         </div>
                         <div>
                             <h3 class="text-lg font-bold text-gray-800 leading-tight">{{ editingWorldInfo.id !==
-                                undefined ? '编辑条目' : '新建条目' }}</h3>
-                            <p class="text-xs text-gray-500">World Info Entry</p>
+                                undefined ? '编辑世界书' : '新建世界书' }}</h3>
+                            <p class="text-xs text-gray-500">世界书条目</p>
                         </div>
                     </div>
                     <button @click="showWorldInfoEditor = false"
@@ -4648,7 +4756,7 @@
                 </div>
 
                 <!-- Body -->
-                <div class="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-6 space-y-6 bg-gray-50/30">
+                <div class="flex-1 p-6 space-y-6 bg-gray-50/30 overflow-y-auto custom-scrollbar">
 
                     <!-- 1. 基础信息 & 触发条件 -->
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -4664,11 +4772,8 @@
                             </div>
                             <div>
                                 <label class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">作用范围</label>
-                                <select v-model="editingWorldInfo.data.scope"
-                                    class="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:outline-none transition-all shadow-sm">
-                                    <option value="character" :disabled="!currentCharacter">绑定当前角色</option>
-                                    <option value="global">全局生效</option>
-                                </select>
+                                <custom-select v-model="editingWorldInfo.data.scope" :options="scopeOptions">
+                                </custom-select>
                             </div>
                             <div>
                                 <label class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">主关键词
@@ -4744,37 +4849,17 @@
                             <div class="space-y-4">
                                 <div>
                                     <label
-                                        class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">插入位置
-                                        (Position)</label>
-                                    <div class="relative group">
-                                        <select v-model="editingWorldInfo.data.position"
-                                            class="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-800 focus:ring-4 focus:ring-primary-500/10 focus:border-primary-500 focus:outline-none appearance-none transition-all shadow-sm cursor-pointer group-hover:border-gray-300">
-                                            <optgroup label="System Prompt (系统提示词)">
-                                                <option value="system_top">System Top (最顶)</option>
-                                                <option value="global_note">Global Note (全局)</option>
-                                                <option value="before_char">Before Character (角色前)</option>
-                                                <option value="after_char">After Character (角色后)</option>
-                                            </optgroup>
-                                            <optgroup label="In-Chat (对话中)">
-                                                <option value="at_depth">@ Depth (按深度)</option>
-                                                <option value="user_top">User Message Top (用户消息顶)</option>
-                                                <option value="assistant_top">AI Message Top (AI消息顶)</option>
-                                            </optgroup>
-                                        </select>
-                                        <div
-                                            class="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400 group-hover:text-gray-600 transition-colors">
-                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"
-                                                    d="M19 9l-7 7-7-7"></path>
-                                            </svg>
-                                        </div>
-                                    </div>
+                                        class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">插入位置</label>
+                                    <custom-select v-model="editingWorldInfo.data.position" :options="worldInfoPositionOptions"
+                                        button-class="bg-white text-sm focus:ring-4 focus:ring-primary-500/10"
+                                        menu-class="text-sm">
+                                    </custom-select>
                                 </div>
                                 <div class="grid grid-cols-2 gap-3">
                                     <div>
-                                        <label class="block text-xs text-gray-500 mb-1">顺序 (Order)</label>
+                                        <label class="block text-xs text-gray-500 mb-1">顺序</label>
                                         <input type="number" v-model.number="editingWorldInfo.data.order"
-                                            class="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-primary-500 focus:outline-none"
+                                            class="w-full bg-white border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-primary-500 focus:outline-none"
                                             placeholder="100">
                                     </div>
                                     <div>
@@ -4803,10 +4888,10 @@
                                 </div>
                                 <div v-if="editingWorldInfo.data.position === 'at_depth'"
                                     class="pt-2 border-t border-gray-100">
-                                    <label class="block text-xs text-gray-500 mb-1">插入深度 (Depth) <span
+                                    <label class="block text-xs text-gray-500 mb-1">插入深度 <span
                                             class="text-[10px] text-gray-400">@D</span></label>
                                     <input type="number" v-model.number="editingWorldInfo.data.depth"
-                                        class="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-primary-500 focus:outline-none"
+                                        class="w-full bg-white border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-primary-500 focus:outline-none"
                                         placeholder="4">
                                 </div>
                             </div>
@@ -4817,7 +4902,7 @@
                     <div>
                         <label
                             class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5 flex justify-between">
-                            <span>内容 (Content)</span>
+                            <span>内容</span>
                             <span
                                 class="text-[10px] font-normal normal-case bg-gray-100 px-1.5 rounded text-gray-500">{{
                                 (editingWorldInfo.data.content || '').length }} 字符</span>
@@ -4877,7 +4962,7 @@
                                 <div class="flex items-center gap-2 mt-2">
                                     <span class="text-xs text-gray-600 whitespace-nowrap">自定义扫描深度:</span>
                                     <input type="number" v-model.number="editingWorldInfo.data.scanDepth"
-                                        class="w-16 bg-gray-50 border border-gray-200 rounded px-2 py-1 text-xs"
+                                        class="w-16 bg-white border border-gray-200 rounded px-2 py-1 text-xs"
                                         placeholder="默认">
                                 </div>
                             </div>
@@ -4888,7 +4973,7 @@
 
                 <!-- Footer -->
                 <div
-                    class="p-4 md:p-5 border-t border-gray-100 flex justify-end space-x-3 bg-gray-50/80 backdrop-blur-sm flex-shrink-0 z-10 wi-footer">
+                    class="p-4 md:p-5 border-t border-gray-100 flex justify-end space-x-3 bg-gray-50/80 backdrop-blur-sm flex-shrink-0 wi-footer">
                     <button @click="showWorldInfoEditor = false"
                         class="px-5 py-2.5 bg-white hover:bg-gray-100 text-gray-700 border border-gray-200 rounded-xl transition-all shadow-sm font-medium text-sm active:scale-95">取消</button>
                     <button @click="saveWorldInfo"
@@ -4950,7 +5035,7 @@
                                         d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253">
                                     </path>
                                 </svg>
-                                <span>本次插入的世界书/记忆 (共 {{ lastTriggeredWorldInfos.length }} 项)</span>
+                                <span>本次插入的世界书 (共 {{ lastTriggeredWorldInfos.length }} 项)</span>
                                 <div class="ml-auto flex items-center">
                                     <svg class="w-4 h-4 text-blue-500 group-open:rotate-180 transition-transform duration-300"
                                         fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -5076,6 +5161,8 @@
 
     <script>
         document.write('<script src="assets/js/utils.js?v=' + new Date().getTime() + '"><\/script>');
+        document.write('<script src="assets/js/card-utils.js?v=' + new Date().getTime() + '"><\/script>');
+        document.write('<script src="assets/js/ui-select.js?v=' + new Date().getTime() + '"><\/script>');
         document.write('<script src="assets/js/app.js?v=' + new Date().getTime() + '"><\/script>');
     </script>
 </body>
