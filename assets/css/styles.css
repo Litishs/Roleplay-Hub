@@ -324,21 +324,80 @@
                 will-change: opacity, visibility;
             }
 
+            .entry-transition::before {
+                animation: entry-transition-mobile-sheen 4s cubic-bezier(0.22, 0.66, 0.24, 1) forwards;
+            }
+
             .entry-transition::after {
                 content: none;
                 display: none;
                 animation: none;
             }
+
+            .entry-transition-brand {
+                animation: entry-transition-brand-mobile 4s cubic-bezier(0.22, 0.66, 0.24, 1) forwards;
+            }
+
+            .entry-transition-brand::before {
+                animation: entry-brand-plate-mobile 4s cubic-bezier(0.22, 0.66, 0.24, 1) 0.12s forwards;
+            }
         }
 
         @keyframes entry-transition-mobile-fade {
-            0%, 72% {
+            0%, 50% {
                 opacity: 1;
                 visibility: visible;
             }
             100% {
                 opacity: 0;
                 visibility: hidden;
+            }
+        }
+
+        @keyframes entry-transition-mobile-sheen {
+            0% {
+                opacity: 0;
+                transform: translate3d(-5%, 2%, 0) scale(1.02);
+            }
+            24%, 50% {
+                opacity: 0.58;
+            }
+            100% {
+                opacity: 0;
+                transform: translate3d(4%, -2%, 0) scale(1.04);
+            }
+        }
+
+        @keyframes entry-transition-brand-mobile {
+            0% {
+                opacity: 0;
+                filter: blur(10px);
+                transform: translateY(14px) scale(0.975);
+            }
+            16%, 50% {
+                opacity: 1;
+                filter: blur(0);
+                transform: translateY(0) scale(1);
+            }
+            100% {
+                opacity: 0;
+                filter: blur(6px);
+                transform: translateY(-8px) scale(1.018);
+            }
+        }
+
+        @keyframes entry-brand-plate-mobile {
+            0% {
+                opacity: 0;
+                transform: translate3d(-50%, -50%, 0) scaleX(0.72);
+            }
+            20%, 50% {
+                opacity: 1;
+                transform: translate3d(-50%, -50%, 0) scaleX(1);
+            }
+            100% {
+                opacity: 0;
+                transform: translate3d(-50%, -50%, 0) scaleX(1.04);
             }
         }
 

@@ -2635,23 +2635,23 @@
                 <div id="presets-list" class="space-y-4">
                     <div v-for="(preset, index) in presets" :key="preset.name + index"
                         class="bg-white p-4 rounded-xl border border-gray-200 flex items-center justify-between group shadow-sm hover:shadow-md transition-all">
-                        <div class="flex items-center flex-1">
-                            <div class="cursor-move text-gray-400 mr-3 hover:text-gray-600" title="拖动排序">
+                        <div class="flex items-center flex-1 min-w-0 mr-4">
+                            <div class="cursor-move text-gray-400 mr-3 hover:text-gray-600 flex-shrink-0" title="拖动排序">
                                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                         d="M4 8h16M4 16h16"></path>
                                 </svg>
                             </div>
-                            <div class="flex-1">
-                                <div class="flex items-center gap-2 flex-wrap">
-                                    <h3 class="font-bold text-gray-800">{{ preset.name }}</h3>
-                                    <span :class="['text-[10px] px-2 py-0.5 rounded-full border font-bold', getPresetRoleBadgeClass(preset)]">
+                            <div class="flex-1 min-w-0">
+                                <div class="flex items-center gap-2 min-w-0">
+                                    <h3 class="font-bold text-gray-800 truncate">{{ preset.name }}</h3>
+                                    <span :class="['text-[10px] px-2 py-0.5 rounded-full border font-bold flex-shrink-0', getPresetRoleBadgeClass(preset)]">
                                         {{ getPresetRoleDisplayLabel(preset) }}
                                     </span>
                                 </div>
                             </div>
                         </div>
-                        <div class="flex items-center space-x-4">
+                        <div class="flex items-center space-x-4 flex-shrink-0">
                             <label class="relative inline-flex items-center cursor-pointer">
                                 <input type="checkbox" v-model="preset.enabled" class="sr-only peer">
                                 <div
