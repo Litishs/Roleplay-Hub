@@ -927,10 +927,6 @@
             .app-sidebar.mobile-drawer-open .sidebar-nav-button:nth-child(11) { animation-delay: 0.355s; }
             .app-sidebar.mobile-drawer-open .sidebar-nav-button:nth-child(n + 12) { animation-delay: 0.385s; }
 
-            .app-sidebar.mobile-drawer-open > .p-3:last-child {
-                animation: mobile-drawer-footer-in 0.3s cubic-bezier(0.2, 0.82, 0.25, 1) 0.4s both;
-            }
-
             @keyframes mobile-drawer-header-in {
                 from {
                     opacity: 0;
@@ -950,17 +946,6 @@
                 to {
                     opacity: 1;
                     transform: translate3d(0, 0, 0) scale(1);
-                }
-            }
-
-            @keyframes mobile-drawer-footer-in {
-                from {
-                    opacity: 0;
-                    transform: translate3d(-10px, 8px, 0);
-                }
-                to {
-                    opacity: 1;
-                    transform: translate3d(0, 0, 0);
                 }
             }
 
@@ -1072,8 +1057,7 @@
             }
 
             .app-sidebar.mobile-drawer-open > .h-16,
-            .app-sidebar.mobile-drawer-open .sidebar-nav-button,
-            .app-sidebar.mobile-drawer-open > .p-3:last-child {
+            .app-sidebar.mobile-drawer-open .sidebar-nav-button {
                 animation: none !important;
             }
         }
