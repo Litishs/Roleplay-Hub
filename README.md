@@ -48,6 +48,8 @@ Roleplay-Hub/
 │   │   └── styles.css    # 核心样式文件
 │   └── js/
 │       ├── app.js        # 核心业务逻辑
+│       ├── card-utils.js # 角色卡导入导出相关工具
+│       ├── ui-select.js  # 自定义选择器组件
 │       └── utils.js      # 工具函数库
 └── README.md             # 本说明文件
 ```
