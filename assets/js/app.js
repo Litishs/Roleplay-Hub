@@ -287,7 +287,6 @@ createApp({
         const messageElements = ref([]);
         let mobileViewportRaf = null;
         let mobileKeyboardBlurTimer = null;
-        let mobileKeyboardScrollTimer = null;
         let lastAppliedMobileViewportHeight = 0;
         let lastAppliedMobileKeyboardInset = 0;
         let lastAppliedMobileBackgroundHeight = 0;
@@ -302,6 +301,7 @@ createApp({
             }
             if (newEl) {
                 chatResizeObserver = new ResizeObserver(() => {
+                    if (isMobileKeyboardOpen.value && document.activeElement === inputBox.value) return;
                     if (settings.autoScroll && currentView.value === 'chat') {
                         // Only scroll to bottom if there's more than just the greeting
                         if (chatHistory.value.length > 1) {
@@ -418,28 +418,25 @@ createApp({
             const height = viewport?.height || window.innerHeight || document.documentElement.clientHeight;
             const layoutHeight = window.innerHeight || document.documentElement.clientHeight || height;
             const viewportOffsetTop = viewport?.offsetTop || 0;
+            const visualHeightForLayout = viewport ? height + viewportOffsetTop : height;
             const inputFocused = document.activeElement === inputBox.value;
             const keyboardInset = viewport
                 ? Math.max(0, layoutHeight - height - viewportOffsetTop)
                 : 0;
             const viewportCompressed = viewport && height < layoutHeight - 80;
             const keyboardOpen = !!(viewportCompressed || keyboardInset > 40);
-            // If visualViewport already shrank, bottom inset would double-count the keyboard.
-            const keyboardInsetForLayout = keyboardOpen && !viewportCompressed ? keyboardInset : 0;
+            const keyboardInsetForLayout = keyboardOpen ? keyboardInset : 0;
+            const appHeightForLayout = keyboardInsetForLayout > 0 ? layoutHeight : visualHeightForLayout;
             const freezeBackground = inputFocused || keyboardOpen || isMobileKeyboardOpen.value;
             const backgroundHeight = freezeBackground
-                ? Math.max(lastAppliedMobileBackgroundHeight, lastAppliedMobileViewportHeight, layoutHeight, height)
-                : Math.max(layoutHeight, height);
+                ? Math.max(lastAppliedMobileBackgroundHeight, lastAppliedMobileViewportHeight, appHeightForLayout)
+                : Math.max(layoutHeight, visualHeightForLayout);
 
-            applyMobileVisualViewportHeight(height, { force });
+            applyMobileVisualViewportHeight(appHeightForLayout, { force });
             applyMobileKeyboardInset(keyboardInsetForLayout, { force });
             applyMobileBackgroundHeight(backgroundHeight, { force });
             isMobileKeyboardOpen.value = !!(inputFocused || keyboardOpen);
 
-            if (isMobileKeyboardOpen.value && currentView.value === 'chat') {
-                clearTimeout(mobileKeyboardScrollTimer);
-                mobileKeyboardScrollTimer = setTimeout(scrollToBottom, 90);
-            }
         };
 
         const scheduleMobileVisualViewportSync = (options = {}) => {
@@ -455,8 +452,6 @@ createApp({
             clearTimeout(mobileKeyboardBlurTimer);
             isMobileKeyboardOpen.value = true;
             scheduleMobileVisualViewportSync({ force: true });
-            clearTimeout(mobileKeyboardScrollTimer);
-            mobileKeyboardScrollTimer = setTimeout(scrollToBottom, 120);
         };
 
         const handleChatInputBlur = () => {
@@ -10417,7 +10412,6 @@ image###生成的提示词###
             window.removeEventListener('resize', handleMobileViewportResize);
             if (mobileViewportRaf) cancelAnimationFrame(mobileViewportRaf);
             clearTimeout(mobileKeyboardBlurTimer);
-            clearTimeout(mobileKeyboardScrollTimer);
         });
         // 解析并截断生成的包含 HTML UI 的正文，避免闪屏问题
         const processMainContent = (mainText, isGeneratingState) => {

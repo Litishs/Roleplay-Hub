@@ -880,7 +880,7 @@
                 opacity: 0.98;
                 border-top-right-radius: 1.5rem;
                 border-bottom-right-radius: 1.5rem;
-                transform: translate3d(-104%, 0, 0) scale(0.985);
+                transform: translate3d(-104%, 0, 0);
                 transform-origin: left center;
                 transition:
                     transform 0.32s cubic-bezier(0.18, 0.86, 0.22, 1),
@@ -894,7 +894,7 @@
             .app-sidebar.mobile-drawer-open {
                 opacity: 1;
                 pointer-events: auto;
-                transform: translate3d(0, 0, 0) scale(1);
+                transform: translate3d(0, 0, 0);
                 box-shadow:
                     18px 0 54px -24px rgba(15, 23, 42, 0.45),
                     0 0 0 1px rgba(255, 255, 255, 0.72) inset;
@@ -902,7 +902,7 @@
 
             .app-sidebar.mobile-drawer-closed {
                 pointer-events: none;
-                transform: translate3d(-104%, 0, 0) scale(0.985);
+                transform: translate3d(-104%, 0, 0);
                 box-shadow: 8px 0 26px -24px rgba(15, 23, 42, 0.3);
             }
 
@@ -911,21 +911,21 @@
             }
 
             .app-sidebar.mobile-drawer-open .sidebar-nav-button {
-                animation: mobile-drawer-item-fly-in 0.34s cubic-bezier(0.2, 0.82, 0.25, 1) both;
+                animation: mobile-drawer-item-fly-in 0.3s cubic-bezier(0.2, 0.82, 0.25, 1) both;
             }
 
-            .app-sidebar.mobile-drawer-open .sidebar-nav-button:nth-child(1) { animation-delay: 0.055s; }
-            .app-sidebar.mobile-drawer-open .sidebar-nav-button:nth-child(2) { animation-delay: 0.085s; }
-            .app-sidebar.mobile-drawer-open .sidebar-nav-button:nth-child(3) { animation-delay: 0.115s; }
-            .app-sidebar.mobile-drawer-open .sidebar-nav-button:nth-child(4) { animation-delay: 0.145s; }
-            .app-sidebar.mobile-drawer-open .sidebar-nav-button:nth-child(5) { animation-delay: 0.175s; }
-            .app-sidebar.mobile-drawer-open .sidebar-nav-button:nth-child(6) { animation-delay: 0.205s; }
-            .app-sidebar.mobile-drawer-open .sidebar-nav-button:nth-child(7) { animation-delay: 0.235s; }
-            .app-sidebar.mobile-drawer-open .sidebar-nav-button:nth-child(8) { animation-delay: 0.265s; }
-            .app-sidebar.mobile-drawer-open .sidebar-nav-button:nth-child(9) { animation-delay: 0.295s; }
-            .app-sidebar.mobile-drawer-open .sidebar-nav-button:nth-child(10) { animation-delay: 0.325s; }
-            .app-sidebar.mobile-drawer-open .sidebar-nav-button:nth-child(11) { animation-delay: 0.355s; }
-            .app-sidebar.mobile-drawer-open .sidebar-nav-button:nth-child(n + 12) { animation-delay: 0.385s; }
+            .app-sidebar.mobile-drawer-open .sidebar-nav-button:nth-child(1) { animation-delay: 0.035s; }
+            .app-sidebar.mobile-drawer-open .sidebar-nav-button:nth-child(2) { animation-delay: 0.055s; }
+            .app-sidebar.mobile-drawer-open .sidebar-nav-button:nth-child(3) { animation-delay: 0.075s; }
+            .app-sidebar.mobile-drawer-open .sidebar-nav-button:nth-child(4) { animation-delay: 0.095s; }
+            .app-sidebar.mobile-drawer-open .sidebar-nav-button:nth-child(5) { animation-delay: 0.115s; }
+            .app-sidebar.mobile-drawer-open .sidebar-nav-button:nth-child(6) { animation-delay: 0.135s; }
+            .app-sidebar.mobile-drawer-open .sidebar-nav-button:nth-child(7) { animation-delay: 0.155s; }
+            .app-sidebar.mobile-drawer-open .sidebar-nav-button:nth-child(8) { animation-delay: 0.175s; }
+            .app-sidebar.mobile-drawer-open .sidebar-nav-button:nth-child(9) { animation-delay: 0.195s; }
+            .app-sidebar.mobile-drawer-open .sidebar-nav-button:nth-child(10) { animation-delay: 0.215s; }
+            .app-sidebar.mobile-drawer-open .sidebar-nav-button:nth-child(11) { animation-delay: 0.235s; }
+            .app-sidebar.mobile-drawer-open .sidebar-nav-button:nth-child(n + 12) { animation-delay: 0.255s; }
 
             @keyframes mobile-drawer-header-in {
                 from {
@@ -940,12 +940,10 @@
 
             @keyframes mobile-drawer-item-fly-in {
                 from {
-                    opacity: 0;
-                    transform: translate3d(-52px, 6px, 0) scale(0.94);
+                    transform: translate3d(-110vw, 0, 0);
                 }
                 to {
-                    opacity: 1;
-                    transform: translate3d(0, 0, 0) scale(1);
+                    transform: translate3d(0, 0, 0);
                 }
             }
 

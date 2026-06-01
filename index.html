@@ -489,7 +489,7 @@
                 <!-- Chat Messages -->
                 <div ref="chatContainer" @click="suggestedReplies = []; showChatModelSelector = false"
                     @scroll="handleChatScroll"
-                    class="flex-1 overflow-y-auto px-2 pt-14 md:pt-16 pb-40 md:pb-56 relative z-0 transition-all duration-500"
+                    class="flex-1 overflow-y-auto overflow-x-hidden px-2 pt-14 md:pt-16 pb-40 md:pb-56 relative z-0 transition-all duration-500"
                     :class="[
                         settings.immersiveMode ? 'space-y-12 md:space-y-16' : 'space-y-10 md:space-y-14',
                         !settings.useCharacterBackground || !currentCharacter || !currentCharacter?.avatar ? 'bg-gray-50' : ''
