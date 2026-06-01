@@ -9308,6 +9308,8 @@ image###生成的提示词###
             const file = event.target.files[0];
             if (!file) return;
 
+            showAddCharacterMenu.value = false;
+
             // Reset file input
             event.target.value = '';
 
