@@ -1876,7 +1876,7 @@
                     window.addEventListener('message', (event) => {
                         const { type, settings: mainSettings } = event.data;
                         if (type === 'SYNC_SETTINGS' && mainSettings) {
-                            console.log('%c[Settings Sync Received]', 'color: #10b981; font-weight: bold;', mainSettings);
+                            console.log('%c[Settings Sync Received]', 'color: #10b981; font-weight: bold;');
 
                             // Sync API
                             if (mainSettings.apiUrl) api.url = mainSettings.apiUrl;
@@ -4400,9 +4400,9 @@ ${uiTemplatePrompt.value.trim() || '根据当前角色自动设计一个状态�
                     cacheAvatar(e.target);
                 };
 
-                const onAvatarError = (e) => {
+                const onAvatarError = () => {
                     isAvatarLoading.value = false;
-                    console.error('Avatar load error:', e);
+                    console.error('Avatar load error');
                     showToast('头像加载失败', 'error');
                 };
 

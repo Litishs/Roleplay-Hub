@@ -2829,13 +2829,13 @@
                                     <label class="text-xs font-medium text-gray-500">分析对话层数</label>
                                     <span
                                         class="text-xs font-mono text-primary-600 bg-primary-50 px-1.5 py-0.5 rounded border border-primary-100">
-                                        {{ settings.uiTemplateAnalysisDepth === 0 ? '无限' : settings.uiTemplateAnalysisDepth + ' 层' }}
+                                        {{ uiTemplateAnalysisDepthSlider + ' 层' }}
                                     </span>
                                 </div>
-                                <input type="range" v-model.number="uiTemplateAnalysisDepthSlider" min="4" max="21"
+                                <input type="range" v-model.number="uiTemplateAnalysisDepthSlider" min="4" max="8"
                                     step="1"
                                     class="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary-500">
-                                <p class="text-[10px] text-gray-400 mt-1.5">发送给变量分析模型的最近对话层数，拖到最右侧使用全部可用历史</p>
+                                <p class="text-[10px] text-gray-400 mt-1.5">发送给变量分析模型的最近对话层数，最高 8 层</p>
                             </div>
                         </div>
                     </div>

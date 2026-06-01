@@ -4334,7 +4334,7 @@ ${content}
 
             const uiTemplateAnalysisDepth = Number(settings.uiTemplateAnalysisDepth);
             const normalizedUiTemplateAnalysisDepth = Number.isFinite(uiTemplateAnalysisDepth)
-                ? Math.max(0, Math.min(20, uiTemplateAnalysisDepth))
+                ? Math.max(4, Math.min(8, uiTemplateAnalysisDepth))
                 : 4;
             const sourceMessages = getPostprocessedChatMessages(contextMessages, { includeSystem: false })
                 .map(m => ({
@@ -4342,9 +4342,7 @@ ${content}
                     name: m.role === 'user' ? user.name : (m.name || currentCharacter.value.name),
                     content: parseCot(m.content || '').main
                 }));
-            const recentMessages = normalizedUiTemplateAnalysisDepth === 0
-                ? sourceMessages
-                : sourceMessages.slice(-Math.max(4, normalizedUiTemplateAnalysisDepth));
+            const recentMessages = sourceMessages.slice(-normalizedUiTemplateAnalysisDepth);
 
             const fallbackModel = (settings.uiTemplateModel || '').trim();
             if (!fallbackModel) {
@@ -10570,10 +10568,10 @@ image###生成的提示词###
                         : Math.max(MEMORY_KEEP_FLOORS_MIN, Math.min(MEMORY_KEEP_FLOORS_MAX, val));
                 }
             }),
-            // 滑块值映射：4-20 为分析消息层数，21 为无限（uiTemplateAnalysisDepth=0）
+            // 滑块值映射：4-8 为变量分析消息层数。
             uiTemplateAnalysisDepthSlider: computed({
-                get: () => settings.uiTemplateAnalysisDepth === 0 ? 21 : (settings.uiTemplateAnalysisDepth || 4),
-                set: (val) => { settings.uiTemplateAnalysisDepth = val >= 21 ? 0 : Math.max(4, Math.min(20, val)); }
+                get: () => Math.max(4, Math.min(8, Number(settings.uiTemplateAnalysisDepth) || 4)),
+                set: (val) => { settings.uiTemplateAnalysisDepth = Math.max(4, Math.min(8, Number(val) || 4)); }
             }),
             displayedVectorMemorySearchResults: computed(() => {
                 const result = [...vectorMemorySearchResults.value];
