@@ -516,7 +516,7 @@
                     </div>
 
                     <template v-if="currentCharacter && chatHistory.length > 0">
-                    <template v-for="({ msg, index }, displayIndex) in displayedChatMessages" :key="msg.id || index">
+                    <template v-for="({ msg, index }, displayIndex) in displayedChatMessages" :key="index">
                     <div ref="messageElements"
                         :data-role="msg.role"
                         :data-chat-index="index"

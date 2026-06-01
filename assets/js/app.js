@@ -291,10 +291,6 @@ createApp({
         let lastAppliedMobileViewportHeight = 0;
         let lastAppliedMobileKeyboardInset = 0;
         let lastAppliedMobileBackgroundHeight = 0;
-        let shouldStickChatToBottom = true;
-        let suppressChatResizeAutoScrollUntil = 0;
-        let lastChatScrollTop = 0;
-
         // IntersectionObserver for lazy loading images or other visibility triggers could go here
 
         // Use ResizeObserver for robust automatic scrolling to bottom
@@ -306,22 +302,13 @@ createApp({
             }
             if (newEl) {
                 chatResizeObserver = new ResizeObserver(() => {
-                    if (
-                        settings.autoScroll
-                        && currentView.value === 'chat'
-                        && shouldStickChatToBottom
-                        && !isLoadingEarlierChatMessages
-                        && Date.now() >= suppressChatResizeAutoScrollUntil
-                    ) {
+                    if (settings.autoScroll && currentView.value === 'chat') {
                         // Only scroll to bottom if there's more than just the greeting
                         if (chatHistory.value.length > 1) {
                             newEl.scrollTop = newEl.scrollHeight;
-                            shouldStickChatToBottom = true;
-                            lastChatScrollTop = newEl.scrollTop;
                         } else {
                             // Keep at top for new/single-message chats
                             newEl.scrollTop = 0;
-                            lastChatScrollTop = 0;
                         }
                     }
                 });
@@ -330,11 +317,8 @@ createApp({
                 nextTick(() => {
                     if (chatHistory.value.length > 1) {
                         newEl.scrollTop = newEl.scrollHeight;
-                        shouldStickChatToBottom = true;
-                        lastChatScrollTop = newEl.scrollTop;
                     } else {
                         newEl.scrollTop = 0;
-                        lastChatScrollTop = 0;
                     }
                 });
             }
@@ -736,8 +720,6 @@ createApp({
         const chatRenderLimit = ref(CHAT_RENDER_INITIAL_LIMIT);
         let isLoadingEarlierChatMessages = false;
         let isChatTopUnlockArmed = true;
-        let suppressEarlierChatLoadUntil = 0;
-        let keepChatBottomForNextAssistant = false;
         const lastActiveCharacterId = ref(null); // For persistence
         const hasActiveToolInlineWork = computed(() => {
             if (activeToolHandoffPending.value || activeToolContinuationMessageId.value || activeToolContinuationPending.value || activeToolQueueRunning.value) return true;
@@ -3112,8 +3094,6 @@ ${content}
         const resetChatRenderWindow = () => {
             chatRenderLimit.value = CHAT_RENDER_INITIAL_LIMIT;
             isChatTopUnlockArmed = true;
-            shouldStickChatToBottom = true;
-            lastChatScrollTop = 0;
         };
 
         const hiddenChatMessageCount = computed(() => Math.max(0, chatHistory.value.length - chatRenderLimit.value));
@@ -3155,13 +3135,11 @@ ${content}
             const containerTop = container.getBoundingClientRect().top;
             const newTopOffset = anchorElement.getBoundingClientRect().top - containerTop;
             container.scrollTop += newTopOffset - anchor.topOffset;
-            lastChatScrollTop = container.scrollTop;
         };
 
         const loadEarlierChatMessages = async (batchSize = CHAT_RENDER_BATCH_SIZE) => {
             if (hiddenChatMessageCount.value <= 0 || isLoadingEarlierChatMessages) return;
             isLoadingEarlierChatMessages = true;
-            suppressChatResizeAutoScrollUntil = Date.now() + 600;
             const anchor = getChatScrollAnchor();
 
             chatRenderLimit.value = Math.min(
@@ -3170,23 +3148,12 @@ ${content}
             );
 
             await restoreChatScrollAnchor(anchor);
-            suppressChatResizeAutoScrollUntil = Date.now() + 160;
             isLoadingEarlierChatMessages = false;
         };
 
         const handleChatScroll = () => {
             const container = chatContainer.value;
-            if (!container) return;
-            const currentScrollTop = container.scrollTop;
-            const isScrollingUp = currentScrollTop < lastChatScrollTop - 2;
-            lastChatScrollTop = currentScrollTop;
-            if (isScrollingUp && !isChatNearBottom(24)) {
-                shouldStickChatToBottom = false;
-            } else {
-                shouldStickChatToBottom = isChatNearBottom(120);
-            }
-            if (hiddenChatMessageCount.value <= 0) return;
-            if (Date.now() < suppressEarlierChatLoadUntil) return;
+            if (!container || hiddenChatMessageCount.value <= 0) return;
             if (container.scrollTop > 160) {
                 isChatTopUnlockArmed = true;
                 return;
@@ -4100,12 +4067,6 @@ ${content}
             if (!userInput.value.trim() || isConversationBusy.value) return;
 
             const content = userInput.value.trim();
-            const shouldKeepBottomAfterSend = isChatNearBottom(240);
-            keepChatBottomForNextAssistant = shouldKeepBottomAfterSend;
-            if (shouldKeepBottomAfterSend) {
-                suppressEarlierChatLoadUntil = Date.now() + 900;
-            }
-
             const startTime = Date.now(); // Record click time
             userInput.value = '';
 
@@ -4125,25 +4086,18 @@ ${content}
                 avatar: user.avatar
             });
             await nextTick();
-            if (shouldKeepBottomAfterSend) {
-                suppressEarlierChatLoadUntil = Date.now() + 900;
-                scrollToBottom({ force: true });
-                requestAnimationFrame(() => scrollToBottom({ force: true }));
-            }
+            // scrollToBottom(); // Removed auto-scroll before generation
 
             // Single player
             await generateResponse(startTime);
         };
 
-        const scrollToBottom = ({ force = false } = {}) => {
-            if (chatContainer.value && (force || (settings.autoScroll && shouldStickChatToBottom))) {
+        const scrollToBottom = () => {
+            if (chatContainer.value && settings.autoScroll) {
                 if (chatHistory.value.length > 1) {
                     chatContainer.value.scrollTop = chatContainer.value.scrollHeight;
-                    shouldStickChatToBottom = true;
-                    lastChatScrollTop = chatContainer.value.scrollTop;
                 } else {
                     chatContainer.value.scrollTop = 0;
-                    lastChatScrollTop = 0;
                 }
             }
         };
@@ -4620,10 +4574,17 @@ ${content}
             if (isGenerating.value) return;
 
             const startTime = Date.now(); // Record click time
+            const startRegenerationStatus = () => {
+                isGenerating.value = true;
+                isReceiving.value = false;
+                isThinking.value = false;
+                currentWaitTime.value = '0.0';
+            };
 
             const msg = chatHistory.value[index];
 
             if (msg.role === 'user') {
+                startRegenerationStatus();
                 // 如果是用户消息，直接基于当前上下文生成（重试/继续）
                 abortUiTemplateUpdate();
                 abortMemoryExtraction(); // 中断正在进行的记忆提取
@@ -4632,10 +4593,11 @@ ${content}
                 const currentTurn = snapshot.turns.length;
                 await filterMemoriesAsync(m => (m.turn || 0) < currentTurn);
                 saveMemoriesNow();
-                await generateResponse(startTime);
+                await generateResponse(startTime, { reuseGeneratingState: true });
             } else {
                 // 如果是 AI 消息，删除它（及之后）然后重新生成
                 confirmAction('确定要重新生成这条消息吗？该楼层的记忆将被清除。', async () => {
+                    startRegenerationStatus();
                     abortUiTemplateUpdate();
                     abortMemoryExtraction(); // 中断正在进行的记忆提取
                     // 计算被删除区间的 assistant 轮次，只删除 >= 该轮次的记忆
@@ -4652,7 +4614,7 @@ ${content}
                     chatHistory.value = chatHistory.value.slice(0, index);
                     await saveConversationMutationNow({ saveTemplateRuntime: uiCleanup.logs > 0 || uiCleanup.blocks > 0 });
                     if (worldInfoRollback.applied > 0) await saveWorldInfoStateNow();
-                    await generateResponse(startTime);
+                    await generateResponse(startTime, { reuseGeneratingState: true });
                 });
             }
         };
@@ -4838,7 +4800,8 @@ ${content}
         // Refactored generation logic
         let _wasCancelled = false;
         const generateResponse = async (startTime = null, options = {}) => {
-            if (isGenerating.value) return;
+            const reuseGeneratingState = options.reuseGeneratingState === true;
+            if (isGenerating.value && !reuseGeneratingState) return;
             const activeToolDepth = Number(options.activeToolDepth) || 0;
             const continueAssistantMessageId = options.continueAssistantMessageId || null;
             const continuationToolCallId = options.continuationToolCallId || null;
@@ -5635,16 +5598,7 @@ ${content}
 
                 assistantMessage = createAssistantMessage(content, reasoning);
                 promoteActiveToolCallsFromAssistant(assistantMessage);
-                const shouldKeepBottomAfterAssistant = keepChatBottomForNextAssistant && isChatNearBottom(400);
-                keepChatBottomForNextAssistant = false;
                 chatHistory.value.push(assistantMessage);
-                if (shouldKeepBottomAfterAssistant) {
-                    suppressEarlierChatLoadUntil = Date.now() + 900;
-                    nextTick(() => {
-                        scrollToBottom({ force: true });
-                        requestAnimationFrame(() => scrollToBottom({ force: true }));
-                    });
-                }
                 isReceiving.value = true;
                 return assistantMessage;
             };
