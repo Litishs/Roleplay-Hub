@@ -140,7 +140,7 @@ createApp({
         const pendingActiveToolContext = ref('');
         const activeToolResultContexts = ref([]);
         const tempUserSetup = reactive({ name: '', description: '', person: 'second' });
-        const characterDisplayLimit = ref(20);
+        const characterDisplayLimit = ref(8);
 
         // Quota State
         const showQuotaPanel = ref(false);
@@ -704,7 +704,7 @@ createApp({
         const currentCharacterIndex = ref(-1);
 
         const chatHistory = ref([]);
-        const CHAT_RENDER_INITIAL_LIMIT = 25;
+        const CHAT_RENDER_INITIAL_LIMIT = 20;
         const CHAT_RENDER_BATCH_SIZE = 10;
         const chatRenderLimit = ref(CHAT_RENDER_INITIAL_LIMIT);
         let isLoadingEarlierChatMessages = false;
@@ -3077,7 +3077,7 @@ ${content}
         });
 
         const loadMoreCharacters = () => {
-            characterDisplayLimit.value += 20;
+            characterDisplayLimit.value += 8;
         };
 
         const resetChatRenderWindow = () => {
@@ -3155,7 +3155,7 @@ ${content}
 
         // Reset limit when search query changes
         watch(characterSearchQuery, () => {
-            characterDisplayLimit.value = 20;
+            characterDisplayLimit.value = 8;
         });
 
         const activeRegexCount = computed(() => regexScripts.value.filter(r => r.enabled !== false && !systemRegexNames.includes(r.name)).length);
@@ -9310,7 +9310,7 @@ image###生成的提示词###
             // Reset file input
             event.target.value = '';
 
-            const processCharacterData = (rawData, avatarUrl) => {
+            const processCharacterData = async (rawData, avatarUrl) => {
                 try {
                     console.log('Processing Raw Data:', rawData);
                     let charData = rawData;
@@ -9513,8 +9513,11 @@ image###生成的提示词###
 
                     characters.value.push(char);
 
-                    // Auto-select the new character
-                    selectCharacter(characters.value.length - 1, true);
+                    // Auto-select the new character and enter chat immediately.
+                    const newCharacterIndex = characters.value.length - 1;
+                    showAddCharacterMenu.value = false;
+                    currentView.value = 'chat';
+                    await selectCharacter(newCharacterIndex, true);
 
                 } catch (err) {
                     console.error("Character processing error:", err);
@@ -9524,10 +9527,10 @@ image###生成的提示词###
 
             if (file.type === 'application/json') {
                 const reader = new FileReader();
-                reader.onload = (e) => {
+                reader.onload = async (e) => {
                     try {
                         const data = JSON.parse(e.target.result);
-                        processCharacterData(data, null);
+                        await processCharacterData(data, null);
                     } catch (err) {
                         showToast('JSON解析失败: ' + err.message, 'error');
                     }
@@ -9541,7 +9544,7 @@ image###生成的提示词###
                         const { data } = cardUtils.parsePngCharacterData(buffer);
                         const blob = new Blob([buffer], { type: 'image/png' });
                         const avatarUrl = await cardUtils.blobToDataUrl(blob);
-                        processCharacterData(data, avatarUrl);
+                        await processCharacterData(data, avatarUrl);
                     } catch (err) {
                         if (err.chunks) console.warn("Available chunks:", Object.keys(err.chunks));
                         console.error(err);
