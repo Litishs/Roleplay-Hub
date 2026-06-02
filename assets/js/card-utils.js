@@ -1,6 +1,39 @@
 (function () {
-    const textDecoder = new TextDecoder('utf-8');
-    const textEncoder = new TextEncoder();
+    const textDecoder = typeof TextDecoder !== 'undefined' ? new TextDecoder('utf-8') : null;
+    const textEncoder = typeof TextEncoder !== 'undefined' ? new TextEncoder() : null;
+
+    const encodeUtf8 = (value) => {
+        if (textEncoder) return textEncoder.encode(String(value ?? ''));
+        const encoded = encodeURIComponent(String(value ?? ''));
+        const bytes = [];
+        for (let i = 0; i < encoded.length; i += 1) {
+            if (encoded[i] === '%') {
+                bytes.push(parseInt(encoded.slice(i + 1, i + 3), 16));
+                i += 2;
+            } else {
+                bytes.push(encoded.charCodeAt(i));
+            }
+        }
+        return new Uint8Array(bytes);
+    };
+
+    const decodeUtf8 = (bytes) => {
+        if (textDecoder) return textDecoder.decode(bytes);
+        let encoded = '';
+        for (let i = 0; i < bytes.length; i += 1) {
+            const hex = bytes[i].toString(16);
+            encoded += '%' + (hex.length === 1 ? '0' + hex : hex);
+        }
+        try {
+            return decodeURIComponent(encoded);
+        } catch (_) {
+            let text = '';
+            for (let i = 0; i < bytes.length; i += 1) {
+                text += String.fromCharCode(bytes[i]);
+            }
+            return text;
+        }
+    };
 
     const toBytes = (value) => {
         if (value instanceof Uint8Array) return value;
@@ -12,7 +45,7 @@
     };
 
     const encodeBase64Utf8 = (value) => {
-        const bytes = textEncoder.encode(String(value ?? ''));
+        const bytes = encodeUtf8(value);
         let binary = '';
         for (let i = 0; i < bytes.length; i += 1) {
             binary += String.fromCharCode(bytes[i]);
@@ -27,7 +60,7 @@
             for (let i = 0; i < binary.length; i += 1) {
                 bytes[i] = binary.charCodeAt(i);
             }
-            return textDecoder.decode(bytes);
+            return decodeUtf8(bytes);
         } catch (_) {
             return String(value || '');
         }
@@ -56,13 +89,13 @@
                 if (type === 'tEXt') {
                     const splitIndex = data.indexOf(0);
                     if (splitIndex !== -1) {
-                        const key = textDecoder.decode(data.slice(0, splitIndex));
-                        chunks[key] = textDecoder.decode(data.slice(splitIndex + 1));
+                        const key = decodeUtf8(data.slice(0, splitIndex));
+                        chunks[key] = decodeUtf8(data.slice(splitIndex + 1));
                     }
                 } else if (type === 'iTXt') {
                     let cursor = 0;
                     while (cursor < data.length && data[cursor] !== 0) cursor += 1;
-                    const key = textDecoder.decode(data.slice(0, cursor));
+                    const key = decodeUtf8(data.slice(0, cursor));
                     cursor += 1;
 
                     if (cursor + 2 <= data.length) {
@@ -74,7 +107,7 @@
                         cursor += 1;
 
                         if (key && cursor < data.length && compressionFlag === 0) {
-                            chunks[key] = textDecoder.decode(data.slice(cursor));
+                            chunks[key] = decodeUtf8(data.slice(cursor));
                         }
                     }
                 }
@@ -263,9 +296,9 @@
     };
 
     const createTextChunk = (key, value) => {
-        const type = textEncoder.encode('tEXt');
-        const keyData = textEncoder.encode(key);
-        const valueData = textEncoder.encode(value);
+        const type = encodeUtf8('tEXt');
+        const keyData = encodeUtf8(key);
+        const valueData = encodeUtf8(value);
         const chunkData = new Uint8Array(keyData.length + 1 + valueData.length);
         chunkData.set(keyData, 0);
         chunkData[keyData.length] = 0;

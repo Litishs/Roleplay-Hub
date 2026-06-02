@@ -1733,7 +1733,17 @@
                     });
                 };
 
-                const cardUtils = window.RPHubCardUtils;
+                const cardUtils = new Proxy({}, {
+                    get(_, key) {
+                        const utils = window.RPHubCardUtils;
+                        if (!utils) throw new Error('角色卡工具还没加载完成，请稍后再试');
+                        const value = utils[key];
+                        if (typeof key === 'string' && value === undefined) {
+                            throw new Error(`角色卡工具缺少 ${key}，请刷新后重试`);
+                        }
+                        return value;
+                    }
+                });
 
                 onMounted(() => {
                     // 模拟主站的 triggerSlash 功能，用于预览调试

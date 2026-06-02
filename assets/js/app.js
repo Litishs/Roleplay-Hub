@@ -17,7 +17,17 @@ createApp({
         CustomSelect: window.RPHubCustomSelect
     },
     setup() {
-        const cardUtils = window.RPHubCardUtils;
+        const cardUtils = new Proxy({}, {
+            get(_, key) {
+                const utils = window.RPHubCardUtils;
+                if (!utils) throw new Error('角色卡工具还没加载完成，请稍后再试');
+                const value = utils[key];
+                if (typeof key === 'string' && value === undefined) {
+                    throw new Error(`角色卡工具缺少 ${key}，请刷新后重试`);
+                }
+                return value;
+            }
+        });
 
         // Default Avatar (Simple Gray Background)
         const defaultAvatar = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0iI2U1ZTdlYiIvPjwvc3ZnPg==';

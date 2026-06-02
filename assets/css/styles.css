@@ -53,7 +53,7 @@
                     rgba(0, 0, 0, 0.42) calc(var(--entry-reveal-radius) - 1.5vmax),
                     rgba(0, 0, 0, 0.82) calc(var(--entry-reveal-radius) + 4vmax),
                     #000 calc(var(--entry-reveal-radius) + var(--entry-reveal-feather)));
-            animation: entry-transition-reveal 4.45s cubic-bezier(0.22, 0.66, 0.24, 1) forwards;
+            animation: entry-transition-reveal 5.45s cubic-bezier(0.22, 0.66, 0.24, 1) forwards;
             will-change: opacity, visibility, --entry-reveal-radius;
         }
 
@@ -65,7 +65,7 @@
                 linear-gradient(112deg, transparent 30%, rgba(255, 255, 255, 0.82) 42%, rgba(59, 130, 246, 0.14) 50%, transparent 62%);
             opacity: 0;
             transform: translate3d(-6%, 3%, 0) scale(1.03);
-            animation: entry-transition-sheen 3.9s cubic-bezier(0.22, 0.66, 0.24, 1) forwards;
+            animation: entry-transition-sheen 4.9s cubic-bezier(0.22, 0.66, 0.24, 1) forwards;
             will-change: opacity, transform;
         }
 
@@ -84,7 +84,7 @@
                 0 0 110px 34px rgba(59, 130, 246, 0.14);
             opacity: 0;
             transform: translate3d(-50%, -50%, 0) scale(0.04);
-            animation: entry-transition-aperture 4.45s cubic-bezier(0.22, 0.66, 0.24, 1) forwards;
+            animation: entry-transition-aperture 5.45s cubic-bezier(0.22, 0.66, 0.24, 1) forwards;
             will-change: opacity, transform;
         }
 
@@ -98,7 +98,7 @@
             min-height: 8.5rem;
             color: #1f2937;
             letter-spacing: 0;
-            animation: entry-transition-brand 3.85s cubic-bezier(0.22, 0.66, 0.24, 1) forwards;
+            animation: entry-transition-brand 4.85s cubic-bezier(0.22, 0.66, 0.24, 1) forwards;
             will-change: opacity, transform, filter;
         }
 
@@ -117,7 +117,7 @@
                 0 24px 58px -42px rgba(37, 99, 235, 0.6);
             opacity: 0;
             transform: translate3d(-50%, -50%, 0) scaleX(0.72);
-            animation: entry-brand-plate 3.35s cubic-bezier(0.22, 0.66, 0.24, 1) 0.12s forwards;
+            animation: entry-brand-plate 4.35s cubic-bezier(0.22, 0.66, 0.24, 1) 0.12s forwards;
         }
 
         .entry-transition-logo {
@@ -320,12 +320,12 @@
                 --entry-reveal-feather: 0vmax;
                 -webkit-mask-image: none;
                 mask-image: none;
-                animation: entry-transition-mobile-fade 4s cubic-bezier(0.22, 0.66, 0.24, 1) forwards;
+                animation: entry-transition-mobile-fade 5s cubic-bezier(0.22, 0.66, 0.24, 1) forwards;
                 will-change: opacity, visibility;
             }
 
             .entry-transition::before {
-                animation: entry-transition-mobile-sheen 4s cubic-bezier(0.22, 0.66, 0.24, 1) forwards;
+                animation: entry-transition-mobile-sheen 5s cubic-bezier(0.22, 0.66, 0.24, 1) forwards;
             }
 
             .entry-transition::after {
@@ -335,11 +335,11 @@
             }
 
             .entry-transition-brand {
-                animation: entry-transition-brand-mobile 4s cubic-bezier(0.22, 0.66, 0.24, 1) forwards;
+                animation: entry-transition-brand-mobile 5s cubic-bezier(0.22, 0.66, 0.24, 1) forwards;
             }
 
             .entry-transition-brand::before {
-                animation: entry-brand-plate-mobile 4s cubic-bezier(0.22, 0.66, 0.24, 1) 0.12s forwards;
+                animation: entry-brand-plate-mobile 5s cubic-bezier(0.22, 0.66, 0.24, 1) 0.12s forwards;
             }
         }
 
@@ -348,7 +348,7 @@
                 opacity: 1;
                 visibility: visible;
             }
-            78%, 100% {
+            72%, 100% {
                 opacity: 0;
                 visibility: hidden;
             }
@@ -362,7 +362,7 @@
             24%, 50% {
                 opacity: 0.58;
             }
-            78%, 100% {
+            72%, 100% {
                 opacity: 0;
                 transform: translate3d(4%, -2%, 0) scale(1.04);
             }
@@ -379,7 +379,7 @@
                 filter: blur(0);
                 transform: translateY(0) scale(1);
             }
-            78%, 100% {
+            72%, 100% {
                 opacity: 0;
                 filter: blur(6px);
                 transform: translateY(-8px) scale(1.018);
@@ -395,7 +395,7 @@
                 opacity: 1;
                 transform: translate3d(-50%, -50%, 0) scaleX(1);
             }
-            78%, 100% {
+            72%, 100% {
                 opacity: 0;
                 transform: translate3d(-50%, -50%, 0) scaleX(1.04);
             }
