@@ -9558,7 +9558,6 @@ image###生成的提示词###
                     // Auto-select the new character and enter chat immediately.
                     const newCharacterIndex = characters.value.length - 1;
                     showAddCharacterMenu.value = false;
-                    currentView.value = 'chat';
                     await selectCharacter(newCharacterIndex, true);
 
                 } catch (err) {
