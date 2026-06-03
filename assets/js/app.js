@@ -4408,6 +4408,7 @@ ${content}
                     const model = fallbackModel;
                     try {
                         const currentVariableJson = JSON.stringify(template.variableState || {}, null, 2);
+                        const variableSchemaText = stringifyUiSchema(template.variableSchema).trim();
                         const response = await fetch(url, {
                             method: 'POST',
                             headers: {
@@ -4431,7 +4432,12 @@ ${content}
                                             '没有变化则返回 {}。不要返回模板id，不要套updates/variables，不要修改HTML。',
                                             '',
                                             '当前变量JSON如下：',
-                                            currentVariableJson
+                                            currentVariableJson,
+                                            variableSchemaText ? [
+                                                '',
+                                                '变量说明如下（给AI参考，必须按这里理解字段含义和生成规则）：',
+                                                variableSchemaText
+                                            ].join('\n') : ''
                                         ].join('\n')
                                     },
                                     {
