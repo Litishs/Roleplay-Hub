@@ -28,6 +28,26 @@ createApp({
                 return value;
             }
         });
+        const waitForCardUtils = (timeoutMs = 8000) => new Promise((resolve, reject) => {
+            if (window.RPHubCardUtils) {
+                resolve(window.RPHubCardUtils);
+                return;
+            }
+
+            const startedAt = Date.now();
+            const timer = setInterval(() => {
+                if (window.RPHubCardUtils) {
+                    clearInterval(timer);
+                    resolve(window.RPHubCardUtils);
+                    return;
+                }
+
+                if (Date.now() - startedAt >= timeoutMs) {
+                    clearInterval(timer);
+                    reject(new Error('角色卡工具加载超时，请刷新后重试'));
+                }
+            }, 50);
+        });
 
         // Default Avatar (Simple Gray Background)
         const defaultAvatar = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0iI2U1ZTdlYiIvPjwvc3ZnPg==';
@@ -202,21 +222,18 @@ createApp({
             isUpdateScrolledToBottom.value = (el.scrollHeight - el.scrollTop - el.clientHeight) < 10;
         };
         const latestUpdate = reactive({
-            id: 10142, // 确保这是一个五位数ID，每次更新内容时增加这个数字
+            id: 10143, // 确保这是一个五位数ID，每次更新内容时增加这个数字
             date: new Date().toISOString().split('T')[0],
             title: '网站公告',
             content: `
-### RP-Hub 1.6.8
+### RP-Hub 1.6.9
 
-- 大幅度减轻了卡顿现象的发生
-- 优化了部分动画效果，减轻了移动端渲染压力
-- 解决了部分浏览器输入框高度异常的问题
-- 解决了输入框滚动机制异常的问题
-- 解决了PC端偶发左右滚动的问题
+- 支持2K/4K生图选项
+- 修复了部分BUG
 
 本项目为全开源公益项目，严禁倒卖源码，二改需经作者授权
 
-#### 更新时间：06/02/07:07
+#### 更新时间：06/03/23:37
                     `
         });
 
@@ -754,9 +771,15 @@ createApp({
             { value: 'galgame', label: 'GalGame风' }
         ];
         const imageSizeOptions = [
-            { value: '竖图', label: '竖图' },
-            { value: '横图', label: '横图' },
-            { value: '方图', label: '方图' }
+            { value: '竖图', label: '竖图(-1)' },
+            { value: '横图', label: '横图(-1)' },
+            { value: '方图', label: '方图(-1)' },
+            { value: '2K竖图', label: '2K竖图(-8)' },
+            { value: '2K横图', label: '2K横图(-8)' },
+            { value: '2K方图', label: '2K方图(-8)' },
+            { value: '4K竖图', label: '4K竖图(-15)' },
+            { value: '4K横图', label: '4K横图(-15)' },
+            { value: '4K方图', label: '4K方图(-15)' }
         ];
         const uiTemplatePlacementOptions = [
             { value: 'top', label: '对话顶部' },
@@ -9560,9 +9583,10 @@ image###生成的提示词###
                 reader.onload = async (e) => {
                     try {
                         const buffer = e.target.result;
-                        const { data } = cardUtils.parsePngCharacterData(buffer);
+                        const utils = await waitForCardUtils();
+                        const { data } = utils.parsePngCharacterData(buffer);
                         const blob = new Blob([buffer], { type: 'image/png' });
-                        const avatarUrl = await cardUtils.blobToDataUrl(blob);
+                        const avatarUrl = await utils.blobToDataUrl(blob);
                         await processCharacterData(data, avatarUrl);
                     } catch (err) {
                         if (err.chunks) console.warn("Available chunks:", Object.keys(err.chunks));

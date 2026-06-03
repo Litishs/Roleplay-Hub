@@ -1744,6 +1744,26 @@
                         return value;
                     }
                 });
+                const waitForCardUtils = (timeoutMs = 8000) => new Promise((resolve, reject) => {
+                    if (window.RPHubCardUtils) {
+                        resolve(window.RPHubCardUtils);
+                        return;
+                    }
+
+                    const startedAt = Date.now();
+                    const timer = setInterval(() => {
+                        if (window.RPHubCardUtils) {
+                            clearInterval(timer);
+                            resolve(window.RPHubCardUtils);
+                            return;
+                        }
+
+                        if (Date.now() - startedAt >= timeoutMs) {
+                            clearInterval(timer);
+                            reject(new Error('角色卡工具加载超时，请刷新后重试'));
+                        }
+                    }, 50);
+                });
 
                 onMounted(() => {
                     // 模拟主站的 triggerSlash 功能，用于预览调试
@@ -2320,9 +2340,10 @@
                         reader.onload = async (e) => {
                             try {
                                 const buffer = e.target.result;
-                                const { data } = cardUtils.parsePngCharacterData(buffer);
+                                const utils = await waitForCardUtils();
+                                const { data } = utils.parsePngCharacterData(buffer);
                                 const blob = new Blob([buffer], { type: 'image/png' });
-                                const avatarUrl = await cardUtils.blobToDataUrl(blob);
+                                const avatarUrl = await utils.blobToDataUrl(blob);
                                 applyImportedCharacter(data, avatarUrl);
                             } catch (err) {
                                 showToast('PNG 角色卡解析失败', 'error');
