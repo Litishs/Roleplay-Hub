@@ -269,8 +269,9 @@
                         </path>
                     </svg>
                     <span v-show="!isSidebarCollapsed" class="whitespace-nowrap overflow-hidden">UI模板</span>
-                    <span v-if="!isSidebarCollapsed && uiTemplateUpdateStatus.state === 'running'"
-                        class="ml-auto text-[10px] px-1.5 py-0.5 rounded-full bg-primary-100 text-primary-600 font-bold">分析中</span>
+                    <span v-if="!isSidebarCollapsed && uiTemplateUpdateStatus.state === 'running'" class="ml-auto">
+                        <span class="inline-block w-2 h-2 rounded-full bg-primary-500 memory-extracting"></span>
+                    </span>
                 </button>
                 <button @click="currentView = 'worldinfo'; closeMobileMenu()"
                     title="世界书"
@@ -1037,7 +1038,7 @@
                                     leave-from-class="opacity-100 translate-x-0"
                                     leave-to-class="opacity-0 translate-x-4">
                                     <div v-if="memorySettings.enabled"
-                                        class="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border shadow-sm transition-all duration-300 font-bold text-[10px] md:text-xs cursor-default"
+                                        class="flex items-center justify-center h-7 md:h-[30px] min-w-[38px] md:min-w-[42px] px-3 rounded-full border shadow-sm transition-all duration-300 cursor-default"
                                         :class="{
                                              'bg-blue-50 text-blue-700 border-blue-200': hasActiveToolInlineWork,
                                              'bg-gray-50 text-gray-600 border-gray-200': !hasActiveToolInlineWork && memoryExtractStatus === 'waiting',
@@ -1070,13 +1071,6 @@
                                         <!-- Dot for waiting -->
                                         <div v-else class="w-1.5 h-1.5 rounded-full bg-gray-400"></div>
 
-                                        <span v-if="hasActiveToolInlineWork" class="whitespace-nowrap">
-                                            {{ activeToolInlineStatusText || '调用中' }}
-                                        </span>
-                                        <span v-else-if="memoryExtractStatus !== 'extracting'" class="whitespace-nowrap">
-                                            {{ memoryExtractStatus === 'waiting' ? '等待中' :
-                                            memoryExtractStatus === 'success' ? '已记忆' : '记忆失败' }}
-                                        </span>
                                     </div>
                                 </transition>
                                 <div class="relative">
