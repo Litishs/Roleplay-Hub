@@ -83,6 +83,9 @@ createApp({
         const systemRegexNames = ['Auto Replace {{user}}', 'NAI画图正则'];
         const systemWorldInfoNames = ['自动生图'];
 
+        const IMAGE_GEN_DEFAULT_TOKEN = 'STA1N-c-Z5BnscH-l-D7kN1HyRobUj';
+        const IMAGE_GEN_BASE_URL = 'https://nai.sta1n.cn';
+
         // --- Default API Configuration ---
         const DEFAULT_API_PROVIDER_ID = 'sta1n';
         const DEFAULT_API_CONFIG = {
@@ -150,7 +153,7 @@ createApp({
         };
 
         const currentView = ref('chat');
-        const showMobileMenu = ref(false);
+        let isMobileSidebarOpen = false;
         const isSidebarCollapsed = ref(false);
         const showDescriptionPanel = ref(false);
         const showModelSelector = ref(false);
@@ -183,15 +186,15 @@ createApp({
             quotaLoading.value = true;
             quotaError.value = false;
             try {
-                const imageGenToken = settings.imageGenKey ? settings.imageGenKey : 'STD-QMqT4lxiWqWMVneiePiE';
-                const baseUrl = imageGenToken.trim().toUpperCase().startsWith('STA1N') ? 'https://nai.sta1n.cn' : 'https://std.loliyc.com';
+                const imageGenToken = (settings.imageGenKey || IMAGE_GEN_DEFAULT_TOKEN).trim();
+                const baseUrl = IMAGE_GEN_BASE_URL;
                 const response = await fetch(`${baseUrl}/api/api/getUser`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ toUserId: imageGenToken })
                 });
                 const data = await response.json();
-                if (data.status === 'ok' && (data.type === 'std' || data.type === 'sta1n')) {
+                if (data.status === 'ok' && data.type === 'sta1n') {
                     const val = Number.parseInt(data.data?.value, 10);
                     if (!Number.isFinite(val)) throw new Error('Invalid quota value');
                     quotaValue.value = val;
@@ -401,6 +404,20 @@ createApp({
             || window.innerWidth <= 768
         );
 
+        const setMobileSidebarOpen = (open) => {
+            const shouldOpen = !!open && isMobileViewport();
+            isMobileSidebarOpen = shouldOpen;
+            document.documentElement.classList.toggle('mobile-sidebar-open', shouldOpen);
+        };
+
+        const toggleMobileMenu = () => {
+            setMobileSidebarOpen(!isMobileSidebarOpen);
+        };
+
+        const closeMobileMenu = () => {
+            setMobileSidebarOpen(false);
+        };
+
         const applyMobileVisualViewportHeight = (height, { force = false } = {}) => {
             if (!Number.isFinite(height) || height <= 0) return;
             const safeHeight = Math.max(320, Math.round(height));
@@ -432,6 +449,7 @@ createApp({
 
         const syncMobileVisualViewport = ({ force = false } = {}) => {
             if (!isMobileViewport()) {
+                closeMobileMenu();
                 isMobileKeyboardOpen.value = false;
                 lastAppliedMobileViewportHeight = 0;
                 lastAppliedMobileKeyboardInset = 0;
@@ -553,6 +571,8 @@ createApp({
             uiTemplateModel: '',
             uiTemplateAnalysisDepth: 4,
             uiTemplateInjectContext: false,
+            fontFamily: 'modern',
+            fontFamilyVersion: 4,
             fontSize: window.innerWidth > 768 ? 16 : 14,
             autoScroll: true,
             imageGenKey: '',
@@ -565,6 +585,12 @@ createApp({
             fastModel: DEFAULT_API_CONFIG.fastModel,
             suggestionModel: DEFAULT_API_CONFIG.suggestionModel
         });
+
+        const normalizeFontFamily = (value) => ['modern', 'serif', 'system'].includes(value) ? value : 'modern';
+        const applyFontFamily = (value) => {
+            document.documentElement.dataset.appFont = normalizeFontFamily(value);
+        };
+        watch(() => settings.fontFamily, applyFontFamily, { immediate: true });
 
         const showApiProviderSelector = ref(false);
         const selectedApiProviderId = ref(DEFAULT_API_PROVIDER_ID);
@@ -710,7 +736,7 @@ createApp({
         }, { deep: true });
 
         // Watch image gen and model settings for sync
-        watch(() => [settings.imageGenKey, settings.imageStyle, settings.customImageArtists, settings.imageGenCount, settings.qualityModel, settings.balancedModel, settings.fastModel, settings.suggestionModel, settings.uiTemplateModel], () => {
+        watch(() => [settings.imageGenKey, settings.imageStyle, settings.customImageArtists, settings.imageGenCount, settings.qualityModel, settings.balancedModel, settings.fastModel, settings.suggestionModel, settings.uiTemplateModel, settings.fontFamily, settings.fontFamilyVersion], () => {
             syncSettingsToGenerator();
         });
 
@@ -778,6 +804,11 @@ createApp({
             { value: 'system', label: '系统提示词' },
             { value: 'user', label: 'User消息' },
             { value: 'assistant', label: 'AI消息' }
+        ];
+        const fontFamilyOptions = [
+            { value: 'modern', label: '现代通用字体' },
+            { value: 'serif', label: '衬线字体' },
+            { value: 'system', label: '系统字体' }
         ];
         const imageStyleOptions = [
             { value: 'vertical', label: '韩漫小清新风' },
@@ -2018,6 +2049,12 @@ createApp({
                 } else {
                     normalizeApiProviderSettings();
                 }
+                if ((!savedSettings || Number(savedSettings.fontFamilyVersion || 0) < 4) && settings.fontFamily === 'serif') {
+                    settings.fontFamily = 'modern';
+                }
+                settings.fontFamily = normalizeFontFamily(settings.fontFamily);
+                settings.fontFamilyVersion = 4;
+                applyFontFamily(settings.fontFamily);
                 delete settings.renderLayerLimit;
                 settings.contextSize = MAX_CONTEXT_SIZE;
                 settings.stream = true;
@@ -2163,12 +2200,6 @@ createApp({
                 return entry ? entry.enabled : false;
             },
             set: (val) => {
-                // 如果要开启生图，必须先检查密钥
-                if (val && (!settings.imageGenKey || settings.imageGenKey.trim() === '')) {
-                    showToast('缺少生图密钥，请前往设置中配置', 'error');
-                    return;
-                }
-
                 const entry = worldInfo.value.find(w => w.comment === '自动生图');
                 if (entry) {
                     entry.enabled = val;
@@ -4064,8 +4095,8 @@ ${content}
                 const id = setTimeout(() => controller.abort(), 10000);
                 const startTime = performance.now();
 
-                const imageGenToken = settings.imageGenKey ? settings.imageGenKey : 'STD-QMqT4lxiWqWMVneiePiE';
-                const baseUrl = imageGenToken.trim().toUpperCase().startsWith('STA1N') ? 'https://nai.sta1n.cn' : 'https://std.loliyc.com';
+                const imageGenToken = (settings.imageGenKey || IMAGE_GEN_DEFAULT_TOKEN).trim();
+                const baseUrl = IMAGE_GEN_BASE_URL;
 
                 await fetch(baseUrl, {
                     method: 'HEAD',
@@ -4240,7 +4271,7 @@ ${content}
                     showToast('当前浏览器不支持全屏', 'warning');
                     return;
                 }
-                showMobileMenu.value = false;
+                closeMobileMenu();
                 isChatFullscreen.value = true;
                 await requestNativeFullscreen(fullscreenTarget);
             } catch (err) {
@@ -9027,8 +9058,8 @@ ${content}
         };
 
         const enforceSpecialRules = () => {
-            const imageGenToken = settings.imageGenKey ? settings.imageGenKey : 'STD-QMqT4lxiWqWMVneiePiE';
-            const baseUrl = imageGenToken.trim().toUpperCase().startsWith('STA1N') ? 'https://nai.sta1n.cn' : 'https://std.loliyc.com';
+            const imageGenToken = (settings.imageGenKey || IMAGE_GEN_DEFAULT_TOKEN).trim();
+            const baseUrl = IMAGE_GEN_BASE_URL;
 
             // 1. NAI画图正则 (统一版本)
             const imageGenRegexName = 'NAI画图正则';
@@ -10567,6 +10598,7 @@ image###生成的提示词###
         });
 
         onBeforeUnmount(() => {
+            document.documentElement.classList.remove('mobile-sidebar-open');
             document.removeEventListener('fullscreenchange', syncChatFullscreenState);
             document.removeEventListener('webkitfullscreenchange', syncChatFullscreenState);
             if (window.visualViewport) {
@@ -10645,7 +10677,7 @@ image###生成的提示词###
         return {
             switchProfile, createNewProfile, deleteProfile, userProfiles, activeProfileId, showProfileDropdown,
             processMainContent,
-            currentView, showMobileMenu, showDescriptionPanel, showModelSelector, modelSelectionTarget, openModelSelector, showChatModelSelector, showCharacterEditor, showAddCharacterMenu, showPresetEditor, showUiTemplateEditor,
+            currentView, showDescriptionPanel, showModelSelector, modelSelectionTarget, openModelSelector, showChatModelSelector, showCharacterEditor, showAddCharacterMenu, showPresetEditor, showUiTemplateEditor,
             showActiveToolEditor,
             showExportModal, sysInstruction, showInstructionPanel, exportType, exportItems, selectedExportIndices, // Export Modal
             showContextViewerModal, lastContextMessages, lastTriggeredWorldInfos, // Context Viewer
@@ -10653,7 +10685,7 @@ image###生成的提示词###
             showUpdateModal, updateCountdown, latestUpdate, closeUpdateModal, isUpdateScrolledToBottom, checkUpdateScroll, // Update Modal
             showConfirmModal, confirmMessage, modelMode, showNoMemoryNeededModal, // Export for template
             isGenerating, isRemoteGenerating, remoteEstimatedTime, isReceiving, isThinking, hasActiveToolInlineWork, activeToolInlineStatusText, isConversationBusy, activeToolContinuationMessageId, activeToolContinuationToolCallId, activeToolContinuationHasResponse, activeNativeReasoning, userInput, modelSearchQuery, activeModelTag, modelTags, characterSearchQuery, availableModels, filteredModels, filteredCharacters,
-            user, settings, apiProviderOptions, selectedApiProvider, isCustomApiProvider, customApiProviderOption, customApiProviderOptions, showApiProviderSelector, selectApiProvider, characters, currentCharacter, currentCharacterIndex, chatHistory, displayedChatMessages, handleChatScroll, presets, presetRoleOptions, imageStyleOptions, imageSizeOptions, imageGenCountOptions, scopeOptions, uiTemplatePlacementOptions, worldInfoPositionOptions, getPresetRoleLabel, getPresetRoleDisplayLabel, getPresetRoleBadgeClass, regexScripts, worldInfo,
+            user, settings, apiProviderOptions, selectedApiProvider, isCustomApiProvider, customApiProviderOption, customApiProviderOptions, showApiProviderSelector, selectApiProvider, characters, currentCharacter, currentCharacterIndex, chatHistory, displayedChatMessages, handleChatScroll, presets, presetRoleOptions, fontFamilyOptions, imageStyleOptions, imageSizeOptions, imageGenCountOptions, scopeOptions, uiTemplatePlacementOptions, worldInfoPositionOptions, getPresetRoleLabel, getPresetRoleDisplayLabel, getPresetRoleBadgeClass, regexScripts, worldInfo,
             activeTools, activeToolAggressivenessOptions: ACTIVE_TOOL_AGGRESSIVENESS_OPTIONS, getActiveToolAggressivenessLabel, editingActiveTool, normalizeActiveTools, isWebActiveTool, isWorldInfoActiveTool, getWorldInfoAccessMode, getActiveToolDisplayDescription, canConfigureActiveToolResultCount, getActiveToolResultCountMin, getActiveToolResultCountMax,
             getToolCallModeText, hasThinkingOrTools, isMessageThinkingOrRunning, isThinkingSummaryOpen, toggleThinkingSummary, markThinkingSummaryDetailOpened, getTimelineSteps,
             activeRegexCount, activeWorldInfoCount, activeUiTemplateCount, chatRoundStats, totalContextLength,
@@ -10802,7 +10834,7 @@ image###生成的提示词###
                 };
                 reader.readAsText(file);
             },
-            toggleMobileMenu: () => showMobileMenu.value = !showMobileMenu.value,
+            toggleMobileMenu, closeMobileMenu,
             scrollToPreviousMessage, scrollToNextMessage,
             fetchModels, selectModel, sendMessage, autoResizeInput, handleChatInputFocus, handleChatInputBlur, stopGeneration, clearChat, toggleChatFullscreen,
             handleConfirm, handleCancel, // Export handlers

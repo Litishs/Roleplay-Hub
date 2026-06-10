@@ -126,6 +126,7 @@
             align-items: baseline;
             gap: 0.32rem;
             padding-right: 0.08rem;
+            font-family: var(--app-font-serif) !important;
             animation: entry-logo-title-in 0.78s cubic-bezier(0.2, 0.88, 0.22, 1) 0.08s both;
         }
 
@@ -537,6 +538,14 @@
             scrollbar-width: none;
         }
 
+        :root {
+            --app-font-modern: "Inter", "HarmonyOS Sans SC", "MiSans", "OPPO Sans", "Alibaba PuHuiTi 3.0", "Alibaba PuHuiTi", "Noto Sans SC", "Source Han Sans SC", "Microsoft YaHei UI", "Segoe UI", Arial, sans-serif;
+            --app-font-system: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", Arial, sans-serif;
+            --app-font-serif: "Lora", "Noto Serif SC", "Source Han Serif SC", "Source Han Serif CN", STSong, SimSun, Georgia, Cambria, "Times New Roman", Times, serif;
+            --app-font-family: var(--app-font-modern);
+            --sidebar-nav-weight: 500;
+        }
+
         body {
             height: 100%;
             margin: 0;
@@ -544,7 +553,7 @@
             overflow: hidden;
             background-color: #f9fafb;
             color: #1f2937;
-            font-family: 'Lora', 'Noto Serif SC', 'Source Han Serif SC', 'Source Han Serif CN', 'STSong', 'SimSun', Georgia, Cambria, 'Times New Roman', Times, serif !important;
+            font-family: var(--app-font-family) !important;
             font-size: 100% !important;
             font-weight: 500 !important;
             -webkit-text-size-adjust: 100% !important;
@@ -558,8 +567,32 @@
         }
 
         #app {
+            font-family: var(--app-font-family) !important;
             height: var(--app-visual-height, 100%);
             min-height: 0;
+        }
+
+        :root[data-app-font="serif"] {
+            --app-font-family: var(--app-font-serif);
+            --sidebar-nav-weight: 600;
+        }
+
+        :root[data-app-font="modern"] {
+            --app-font-family: var(--app-font-modern);
+        }
+
+        :root[data-app-font="system"] {
+            --app-font-family: var(--app-font-system);
+        }
+
+        .app-logo {
+            font-family: var(--app-font-serif) !important;
+        }
+
+        .app-logo *,
+        .entry-transition-logo,
+        .entry-transition-logo * {
+            font-family: var(--app-font-serif) !important;
         }
 
         .app-native-fullscreen,
@@ -604,7 +637,8 @@
             position: relative;
             min-height: 2.75rem;
             overflow: hidden;
-            font-weight: 600 !important;
+            font-weight: var(--sidebar-nav-weight) !important;
+            transition-property: color, background-color, border-color, box-shadow, opacity, transform !important;
         }
 
         .sidebar-nav-button svg {
@@ -887,18 +921,20 @@
                 background:
                     radial-gradient(circle at 0% 24%, rgba(37, 99, 235, 0.18), transparent 34%),
                     linear-gradient(90deg, rgba(15, 23, 42, 0.5), rgba(15, 23, 42, 0.3)) !important;
-                opacity: 1;
-                touch-action: none;
-            }
-
-            .mobile-overlay-fade-enter-active,
-            .mobile-overlay-fade-leave-active {
-                transition: opacity 0.24s ease-out;
-            }
-
-            .mobile-overlay-fade-enter-from,
-            .mobile-overlay-fade-leave-to {
                 opacity: 0;
+                pointer-events: none;
+                visibility: hidden;
+                touch-action: none;
+                transition:
+                    opacity 0.24s ease-out,
+                    visibility 0s linear 0.24s;
+            }
+
+            html.mobile-sidebar-open .mobile-overlay {
+                opacity: 1;
+                pointer-events: auto;
+                visibility: visible;
+                transition-delay: 0s;
             }
 
             .app-sidebar {
@@ -918,7 +954,7 @@
                 backface-visibility: hidden;
             }
 
-            .app-sidebar.mobile-drawer-open {
+            html.mobile-sidebar-open .app-sidebar {
                 opacity: 1;
                 pointer-events: auto;
                 transform: translate3d(0, 0, 0);
@@ -927,32 +963,32 @@
                     0 0 0 1px rgba(255, 255, 255, 0.72) inset;
             }
 
-            .app-sidebar.mobile-drawer-closed {
+            html:not(.mobile-sidebar-open) .app-sidebar {
                 pointer-events: none;
                 transform: translate3d(-104%, 0, 0);
                 box-shadow: 8px 0 26px -24px rgba(15, 23, 42, 0.3);
             }
 
-            .app-sidebar.mobile-drawer-open > .h-16 {
+            html.mobile-sidebar-open .app-sidebar > .h-16 {
                 animation: mobile-drawer-header-in 0.26s cubic-bezier(0.2, 0.82, 0.25, 1) 0.03s both;
             }
 
-            .app-sidebar.mobile-drawer-open .sidebar-nav-button {
+            html.mobile-sidebar-open .app-sidebar .sidebar-nav-button {
                 animation: mobile-drawer-item-fly-in 0.3s cubic-bezier(0.2, 0.82, 0.25, 1) both;
             }
 
-            .app-sidebar.mobile-drawer-open .sidebar-nav-button:nth-child(1) { animation-delay: 0.035s; }
-            .app-sidebar.mobile-drawer-open .sidebar-nav-button:nth-child(2) { animation-delay: 0.055s; }
-            .app-sidebar.mobile-drawer-open .sidebar-nav-button:nth-child(3) { animation-delay: 0.075s; }
-            .app-sidebar.mobile-drawer-open .sidebar-nav-button:nth-child(4) { animation-delay: 0.095s; }
-            .app-sidebar.mobile-drawer-open .sidebar-nav-button:nth-child(5) { animation-delay: 0.115s; }
-            .app-sidebar.mobile-drawer-open .sidebar-nav-button:nth-child(6) { animation-delay: 0.135s; }
-            .app-sidebar.mobile-drawer-open .sidebar-nav-button:nth-child(7) { animation-delay: 0.155s; }
-            .app-sidebar.mobile-drawer-open .sidebar-nav-button:nth-child(8) { animation-delay: 0.175s; }
-            .app-sidebar.mobile-drawer-open .sidebar-nav-button:nth-child(9) { animation-delay: 0.195s; }
-            .app-sidebar.mobile-drawer-open .sidebar-nav-button:nth-child(10) { animation-delay: 0.215s; }
-            .app-sidebar.mobile-drawer-open .sidebar-nav-button:nth-child(11) { animation-delay: 0.235s; }
-            .app-sidebar.mobile-drawer-open .sidebar-nav-button:nth-child(n + 12) { animation-delay: 0.255s; }
+            html.mobile-sidebar-open .app-sidebar .sidebar-nav-button:nth-child(1) { animation-delay: 0.035s; }
+            html.mobile-sidebar-open .app-sidebar .sidebar-nav-button:nth-child(2) { animation-delay: 0.055s; }
+            html.mobile-sidebar-open .app-sidebar .sidebar-nav-button:nth-child(3) { animation-delay: 0.075s; }
+            html.mobile-sidebar-open .app-sidebar .sidebar-nav-button:nth-child(4) { animation-delay: 0.095s; }
+            html.mobile-sidebar-open .app-sidebar .sidebar-nav-button:nth-child(5) { animation-delay: 0.115s; }
+            html.mobile-sidebar-open .app-sidebar .sidebar-nav-button:nth-child(6) { animation-delay: 0.135s; }
+            html.mobile-sidebar-open .app-sidebar .sidebar-nav-button:nth-child(7) { animation-delay: 0.155s; }
+            html.mobile-sidebar-open .app-sidebar .sidebar-nav-button:nth-child(8) { animation-delay: 0.175s; }
+            html.mobile-sidebar-open .app-sidebar .sidebar-nav-button:nth-child(9) { animation-delay: 0.195s; }
+            html.mobile-sidebar-open .app-sidebar .sidebar-nav-button:nth-child(10) { animation-delay: 0.215s; }
+            html.mobile-sidebar-open .app-sidebar .sidebar-nav-button:nth-child(11) { animation-delay: 0.235s; }
+            html.mobile-sidebar-open .app-sidebar .sidebar-nav-button:nth-child(n + 12) { animation-delay: 0.255s; }
 
             @keyframes mobile-drawer-header-in {
                 from {
@@ -1075,14 +1111,13 @@
         }
 
         @media (max-width: 768px) and (prefers-reduced-motion: reduce) {
-            .mobile-overlay-fade-enter-active,
-            .mobile-overlay-fade-leave-active,
+            .mobile-overlay,
             .app-sidebar {
                 transition-duration: 0.16s !important;
             }
 
-            .app-sidebar.mobile-drawer-open > .h-16,
-            .app-sidebar.mobile-drawer-open .sidebar-nav-button {
+            html.mobile-sidebar-open .app-sidebar > .h-16,
+            html.mobile-sidebar-open .app-sidebar .sidebar-nav-button {
                 animation: none !important;
             }
         }

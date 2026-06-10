@@ -23,12 +23,35 @@
             text-size-adjust: 100% !important;
         }
 
+        :root {
+            --app-font-modern: "Inter", "HarmonyOS Sans SC", "MiSans", "OPPO Sans", "Alibaba PuHuiTi 3.0", "Alibaba PuHuiTi", "Noto Sans SC", "Source Han Sans SC", "Microsoft YaHei UI", "Segoe UI", Arial, sans-serif;
+            --app-font-system: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", Arial, sans-serif;
+            --app-font-serif: "Lora", "Noto Serif SC", "Source Han Serif SC", "Source Han Serif CN", STSong, SimSun, Georgia, Cambria, "Times New Roman", Times, serif;
+            --app-font-family: var(--app-font-modern);
+        }
+
+        :root[data-app-font="serif"] {
+            --app-font-family: var(--app-font-serif);
+        }
+
+        :root[data-app-font="modern"] {
+            --app-font-family: var(--app-font-modern);
+        }
+
+        :root[data-app-font="system"] {
+            --app-font-family: var(--app-font-system);
+        }
+
         body {
-            font-family: 'Lora', 'Noto Serif SC', 'Source Han Serif SC', 'Source Han Serif CN', 'STSong', 'SimSun', Georgia, Cambria, 'Times New Roman', Times, serif !important;
+            font-family: var(--app-font-family) !important;
             font-weight: 500 !important;
             background-color: #f3f4f6;
             -webkit-font-smoothing: antialiased;
             -moz-osx-font-smoothing: grayscale;
+        }
+
+        #app {
+            font-family: var(--app-font-family) !important;
         }
 
         .font-normal {
@@ -201,8 +224,8 @@
             theme: {
                 extend: {
                     fontFamily: {
-                        sans: ['Lora', 'Noto Serif SC', 'Source Han Serif SC', 'Source Han Serif CN', 'STSong', 'SimSun', 'Georgia', 'Cambria', 'Times New Roman', 'Times', 'serif'],
-                        serif: ['Lora', 'Noto Serif SC', 'Source Han Serif SC', 'Source Han Serif CN', 'STSong', 'SimSun', 'Georgia', 'Cambria', 'Times New Roman', 'Times', 'serif']
+                        sans: ['var(--app-font-family)', 'ui-sans-serif', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Microsoft YaHei', 'Noto Sans SC', 'Arial', 'sans-serif'],
+                        serif: ['var(--app-font-serif)', 'Lora', 'Noto Serif SC', 'Source Han Serif SC', 'Source Han Serif CN', 'STSong', 'SimSun', 'Georgia', 'Cambria', 'Times New Roman', 'Times', 'serif']
                     },
                     colors: {
                         primary: '#65c3c8',
@@ -1908,12 +1931,28 @@
                     return null;
                 };
 
+                const fontFamilyCssMap = {
+                    modern: '"Inter", "HarmonyOS Sans SC", "MiSans", "OPPO Sans", "Alibaba PuHuiTi 3.0", "Alibaba PuHuiTi", "Noto Sans SC", "Source Han Sans SC", "Microsoft YaHei UI", "Segoe UI", Arial, sans-serif',
+                    serif: '"Lora", "Noto Serif SC", "Source Han Serif SC", "Source Han Serif CN", STSong, SimSun, Georgia, Cambria, "Times New Roman", Times, serif',
+                    system: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", Arial, sans-serif'
+                };
+                const normalizeFontFamily = (value) => ['modern', 'serif', 'system'].includes(value) ? value : 'modern';
+                const getWorkshopFontCss = (value = document.documentElement.dataset.appFont) => fontFamilyCssMap[normalizeFontFamily(value)];
+                const applyFontFamily = (value) => {
+                    document.documentElement.dataset.appFont = normalizeFontFamily(value);
+                };
+                applyFontFamily('modern');
+                const IMAGE_GEN_DEFAULT_TOKEN = 'STA1N-c-Z5BnscH-l-D7kN1HyRobUj';
+                const IMAGE_GEN_BASE_URL = 'https://nai.sta1n.cn';
+
                 // Main Settings Sync Listener
                 const setupSyncListener = () => {
                     window.addEventListener('message', (event) => {
                         const { type, settings: mainSettings } = event.data;
                         if (type === 'SYNC_SETTINGS' && mainSettings) {
                             console.log('%c[Settings Sync Received]', 'color: #10b981; font-weight: bold;');
+
+                            applyFontFamily(mainSettings.fontFamily);
 
                             // Sync API
                             if (mainSettings.apiUrl) api.url = mainSettings.apiUrl;
@@ -2608,7 +2647,7 @@
                             -webkit-overflow-scrolling: touch !important;
                         }
                         body {
-                            font-family: 'Lora', 'Noto Serif SC', 'Source Han Serif SC', 'Source Han Serif CN', 'STSong', 'SimSun', Georgia, Cambria, 'Times New Roman', Times, serif !important;
+                            font-family: ${getWorkshopFontCss()} !important;
                             -webkit-font-smoothing: antialiased;
                             -moz-osx-font-smoothing: grayscale;
                             /* 确保 Body 可滚动且有高度 */
@@ -2978,7 +3017,7 @@
                     return renderUiTemplateString(normalized.htmlTemplate || '', vars);
                 };
 
-                const wrapUiTemplatePreview = (html) => `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><style>html,body{margin:0;min-height:100%;background:#fff;font-family:'Lora','Noto Serif SC','Source Han Serif SC','Source Han Serif CN','STSong','SimSun',Georgia,Cambria,'Times New Roman',Times,serif;}body{padding:16px;box-sizing:border-box;}*{box-sizing:border-box;}</style></head><body>${html || ''}</body></html>`;
+                const wrapUiTemplatePreview = (html) => `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><style>html,body{margin:0;min-height:100%;background:#fff;font-family:${getWorkshopFontCss()};}body{padding:16px;box-sizing:border-box;}*{box-sizing:border-box;}</style></head><body>${html || ''}</body></html>`;
 
                 const openUiTemplatePreview = (template) => {
                     previewOriginalOverride.value = null;
@@ -4462,7 +4501,7 @@ ${uiTemplatePrompt.value.trim() || '根据当前角色自动设计一个状态�
                 const generateAvatarUrl = (tag) => {
                     let url;
                     console.log('%c[Workshop Image Request]', 'color: #ec4899; font-weight: bold;', { style: options.avatarStyle, tag: tag });
-                    const tokenParam = options.imageGenKey ? options.imageGenKey : 'STD-QMqT4lxiWqWMVneiePiE';
+                    const tokenParam = (options.imageGenKey || IMAGE_GEN_DEFAULT_TOKEN).trim();
                     const defaultArtists = '[[[artist:dishwasher1910]]], {{yd_(orange_maru)}}, [artist:ciloranko], [artist:sho_(sho_lwlw)], [ningen mame], year 2024,';
                     const r18Artists = "0.9::misaka_12003-gou ::, dino_(dinoartforame), wanke, liduke, year 2025, realistic, 4k, -2::green ::, textless version, The image is highly intricate finished drawn. Only the character's face is in anime style, but their body is in realistic style. 1.35::A highly finished photo-style artwork that has lively color, graphic texture, realistic skin surface, and lifelike flesh with little obliques::. 1.63::photorealistic::, 1.63::photo(medium)::, \\n20::best quality, absurdres, very aesthetic, detailed, masterpiece::,, very aesthetic, masterpiece, no text,";
                     const lolita25dArtists = "0.9::misaka_12003-gou & dino, rurudo,  mignon,wanke & liduk::, year 2025, realistic, 4k, -2::green ::, textless version, The image is highly intricate finished drawn. Only the character's face is in anime style, but their body is in realistic style. 1.35::A highly finished photo-style artwork that has lively color, graphic texture, realistic skin surface, and lifelike flesh with little obliques::. 1.63::photorealistic::, 1.63::photo(medium)::, \\n20::best quality, absurdres, very aesthetic, detailed, masterpiece::,, very aesthetic, masterpiece, no text,";
@@ -4480,7 +4519,7 @@ ${uiTemplatePrompt.value.trim() || '根据当前角色自动设计一个状态�
                         targetArtists = galgameArtists;
                     }
 
-                    const baseUrl = tokenParam.trim().toUpperCase().startsWith('STA1N') ? 'https://nai.sta1n.cn' : 'https://std.loliyc.com';
+                    const baseUrl = IMAGE_GEN_BASE_URL;
                     url = `${baseUrl}/generate?tag=${encodeURIComponent(tag)}&token=${tokenParam}&model=nai-diffusion-4-5-full&artist=${encodeURIComponent(targetArtists)}&size=竖图&steps=40&scale=6&cfg=0&sampler=k_dpmpp_2m_sde&negative={{{{bad anatomy}}}},{bad feet},bad hands,{{{bad proportions}}},{blurry},cloned face,cropped,{{{deformed}}},{{{disfigured}}},error,{{{extra arms}}},{extra digit},{{{extra legs}}},extra limbs,{{extra limbs}},{fewer digits},{{{fused fingers}}},gross proportions,ink eyes,ink hair,jpeg artifacts,{{{{long neck}}}},low quality,{malformed limbs},{{missing arms}},{missing fingers},{{missing legs}},{{{more than 2 nipples}}},mutated hands,{{{mutation}}},normal quality,owres,{{poorly drawn face}},{{poorly drawn hands}},reen eyes,signature,text,{{too many fingers}},{{{ugly}}},username,uta,watermark,worst quality,{{{more than 2 legs}}},awkward hand sign,weird hand gesture,contorted hand,unnatural finger pose,deformed hand gesture{shaka},{hang loose},{{rock on}},{shaka sign}&nocache=0&noise_schedule=karras`;
                     return url;
                 };

@@ -21,8 +21,8 @@
             theme: {
                 extend: {
                     fontFamily: {
-                        sans: ['Lora', 'Noto Serif SC', 'Source Han Serif SC', 'Source Han Serif CN', 'STSong', 'SimSun', 'Georgia', 'Cambria', 'Times New Roman', 'Times', 'serif'],
-                        serif: ['Lora', 'Noto Serif SC', 'Source Han Serif SC', 'Source Han Serif CN', 'STSong', 'SimSun', 'Georgia', 'Cambria', 'Times New Roman', 'Times', 'serif']
+                        sans: ['var(--app-font-family)', 'ui-sans-serif', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Microsoft YaHei', 'Noto Sans SC', 'Arial', 'sans-serif'],
+                        serif: ['var(--app-font-serif)', 'Lora', 'Noto Serif SC', 'Source Han Serif SC', 'Source Han Serif CN', 'STSong', 'SimSun', 'Georgia', 'Cambria', 'Times New Roman', 'Times', 'serif']
                     },
                     colors: {
                         gray: {
@@ -145,20 +145,18 @@
 
 
         <!-- Mobile Sidebar Overlay -->
-        <transition name="mobile-overlay-fade">
-            <div v-if="showMobileMenu" @click="showMobileMenu = false"
-                class="fixed inset-0 bg-black/30 backdrop-blur-sm z-40 md:hidden mobile-overlay">
-            </div>
-        </transition>
+        <div @click="closeMobileMenu"
+            class="fixed inset-0 bg-black/30 backdrop-blur-sm z-40 md:hidden mobile-overlay">
+        </div>
 
         <!-- Sidebar (Desktop & Mobile Drawer) -->
         <div
             class="app-sidebar fixed inset-y-0 left-0 z-50 w-72 md:w-72 bg-white/95 border-r border-gray-200/80 transform transition-all duration-300 md:relative md:translate-x-0 flex flex-col shadow-2xl md:shadow-sm md:rounded-none rounded-r-3xl overflow-hidden"
-            :class="[showMobileMenu ? 'mobile-drawer-open' : 'mobile-drawer-closed', isSidebarCollapsed ? 'md:w-16' : 'md:w-72']">
+            :class="[isSidebarCollapsed ? 'md:w-16' : 'md:w-72']">
             <!-- Sidebar Header -->
             <div class="h-16 flex items-center border-b border-gray-100/80 bg-white/70 backdrop-blur-xl transition-all duration-300"
                 :class="isSidebarCollapsed ? 'justify-center px-0' : 'justify-between px-6'">
-                <div v-show="!isSidebarCollapsed" class="relative inline-flex items-baseline gap-1.5 pr-1 min-w-0">
+                <div v-show="!isSidebarCollapsed" class="app-logo relative inline-flex items-baseline gap-1.5 pr-1 min-w-0">
                     <span class="text-[21px] font-extrabold text-gray-800 tracking-[0.08em] leading-none">RP</span>
                     <span class="text-[16px] font-semibold text-primary-600 tracking-[0.18em] leading-none">HUB</span>
                     <span class="absolute -bottom-1 left-0 h-[2px] w-11 rounded-full bg-primary-500/60"></span>
@@ -181,7 +179,7 @@
             <!-- Navigation -->
             <div class="sidebar-nav custom-scrollbar flex-1 overflow-y-auto py-4 transition-all duration-300"
                 :class="isSidebarCollapsed ? 'px-2 space-y-2' : 'px-3 space-y-1.5'">
-                <button @click="currentView = 'chat'; showMobileMenu = false"
+                <button @click="currentView = 'chat'; closeMobileMenu()"
                     title="聊天"
                     :class="['sidebar-nav-button flex items-center rounded-xl transition-all duration-200 font-medium', currentView === 'chat' ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900', isSidebarCollapsed ? 'w-12 h-12 mx-auto justify-center p-0' : 'w-full px-3 py-2.5']">
                     <svg class="w-5 h-5" :class="isSidebarCollapsed ? 'mr-0' : 'mr-3'" fill="none" stroke="currentColor"
@@ -192,7 +190,7 @@
                     </svg>
                     <span v-show="!isSidebarCollapsed" class="whitespace-nowrap overflow-hidden">聊天</span>
                 </button>
-                <button @click="currentView = 'memory'; showMobileMenu = false"
+                <button @click="currentView = 'memory'; closeMobileMenu()"
                     title="记忆系统"
                     :class="['sidebar-nav-button flex items-center rounded-xl transition-all duration-200 font-medium', currentView === 'memory' ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900', isSidebarCollapsed ? 'w-12 h-12 mx-auto justify-center p-0' : 'w-full px-3 py-2.5']">
                     <svg class="w-5 h-5" :class="isSidebarCollapsed ? 'mr-0' : 'mr-3'" fill="none" stroke="currentColor"
@@ -206,7 +204,7 @@
                         <span class="inline-block w-2 h-2 rounded-full bg-primary-500 memory-extracting"></span>
                     </span>
                 </button>
-                <button @click="currentView = 'tools'; showMobileMenu = false"
+                <button @click="currentView = 'tools'; closeMobileMenu()"
                     title="工具"
                     :class="['sidebar-nav-button flex items-center rounded-xl transition-all duration-200 font-medium', currentView === 'tools' ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900', isSidebarCollapsed ? 'w-12 h-12 mx-auto justify-center p-0' : 'w-full px-3 py-2.5']">
                     <svg class="w-5 h-5" :class="isSidebarCollapsed ? 'mr-0' : 'mr-3'" fill="none" stroke="currentColor"
@@ -217,7 +215,7 @@
                     </svg>
                     <span v-show="!isSidebarCollapsed" class="whitespace-nowrap overflow-hidden">工具</span>
                 </button>
-                <button @click="currentView = 'characters'; showMobileMenu = false"
+                <button @click="currentView = 'characters'; closeMobileMenu()"
                     title="角色卡管理"
                     :class="['sidebar-nav-button flex items-center rounded-xl transition-all duration-200 font-medium', currentView === 'characters' ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900', isSidebarCollapsed ? 'w-12 h-12 mx-auto justify-center p-0' : 'w-full px-3 py-2.5']">
                     <svg class="w-5 h-5" :class="isSidebarCollapsed ? 'mr-0' : 'mr-3'" fill="none" stroke="currentColor"
@@ -228,7 +226,7 @@
                     </svg>
                     <span v-show="!isSidebarCollapsed" class="whitespace-nowrap overflow-hidden">角色卡管理</span>
                 </button>
-                <button @click="currentView = 'generator'; showMobileMenu = false"
+                <button @click="currentView = 'generator'; closeMobileMenu()"
                     title="角色卡生成"
                     :class="['sidebar-nav-button flex items-center rounded-xl transition-all duration-200 font-medium', currentView === 'generator' ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900', isSidebarCollapsed ? 'w-12 h-12 mx-auto justify-center p-0' : 'w-full px-3 py-2.5']">
                     <svg class="w-5 h-5" :class="isSidebarCollapsed ? 'mr-0' : 'mr-3'" fill="none" stroke="currentColor"
@@ -238,7 +236,7 @@
                     </svg>
                     <span v-show="!isSidebarCollapsed" class="whitespace-nowrap overflow-hidden">角色卡生成</span>
                 </button>
-                <button @click="currentView = 'square'; showMobileMenu = false"
+                <button @click="currentView = 'square'; closeMobileMenu()"
                     title="万相广场"
                     :class="['sidebar-nav-button flex items-center rounded-xl transition-all duration-200 font-medium', currentView === 'square' ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900', isSidebarCollapsed ? 'w-12 h-12 mx-auto justify-center p-0' : 'w-full px-3 py-2.5']">
                     <svg class="w-5 h-5" :class="isSidebarCollapsed ? 'mr-0' : 'mr-3'" fill="none" stroke="currentColor"
@@ -250,7 +248,7 @@
                     <span v-show="!isSidebarCollapsed" class="whitespace-nowrap overflow-hidden">万相广场</span>
                 </button>
 
-                <button @click="currentView = 'presets'; showMobileMenu = false"
+                <button @click="currentView = 'presets'; closeMobileMenu()"
                     title="预设"
                     :class="['sidebar-nav-button flex items-center rounded-xl transition-all duration-200 font-medium', currentView === 'presets' ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900', isSidebarCollapsed ? 'w-12 h-12 mx-auto justify-center p-0' : 'w-full px-3 py-2.5']">
                     <svg class="w-5 h-5" :class="isSidebarCollapsed ? 'mr-0' : 'mr-3'" fill="none" stroke="currentColor"
@@ -261,7 +259,7 @@
                     </svg>
                     <span v-show="!isSidebarCollapsed" class="whitespace-nowrap overflow-hidden">预设</span>
                 </button>
-                <button @click="currentView = 'uitemplates'; showMobileMenu = false"
+                <button @click="currentView = 'uitemplates'; closeMobileMenu()"
                     title="UI模板"
                     :class="['sidebar-nav-button flex items-center rounded-xl transition-all duration-200 font-medium', currentView === 'uitemplates' ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900', isSidebarCollapsed ? 'w-12 h-12 mx-auto justify-center p-0' : 'w-full px-3 py-2.5']">
                     <svg class="w-5 h-5" :class="isSidebarCollapsed ? 'mr-0' : 'mr-3'" fill="none" stroke="currentColor"
@@ -274,7 +272,7 @@
                     <span v-if="!isSidebarCollapsed && uiTemplateUpdateStatus.state === 'running'"
                         class="ml-auto text-[10px] px-1.5 py-0.5 rounded-full bg-primary-100 text-primary-600 font-bold">分析中</span>
                 </button>
-                <button @click="currentView = 'worldinfo'; showMobileMenu = false"
+                <button @click="currentView = 'worldinfo'; closeMobileMenu()"
                     title="世界书"
                     :class="['sidebar-nav-button flex items-center rounded-xl transition-all duration-200 font-medium', currentView === 'worldinfo' ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900', isSidebarCollapsed ? 'w-12 h-12 mx-auto justify-center p-0' : 'w-full px-3 py-2.5']">
                     <svg class="w-5 h-5" :class="isSidebarCollapsed ? 'mr-0' : 'mr-3'" fill="none" stroke="currentColor"
@@ -286,7 +284,7 @@
                     <span v-show="!isSidebarCollapsed" class="whitespace-nowrap overflow-hidden">世界书</span>
                 </button>
 
-                <button @click="currentView = 'regex'; showMobileMenu = false"
+                <button @click="currentView = 'regex'; closeMobileMenu()"
                     title="正则脚本"
                     :class="['sidebar-nav-button flex items-center rounded-xl transition-all duration-200 font-medium', currentView === 'regex' ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900', isSidebarCollapsed ? 'w-12 h-12 mx-auto justify-center p-0' : 'w-full px-3 py-2.5']">
                     <svg class="w-5 h-5" :class="isSidebarCollapsed ? 'mr-0' : 'mr-3'" fill="none" stroke="currentColor"
@@ -296,7 +294,7 @@
                     </svg>
                     <span v-show="!isSidebarCollapsed" class="whitespace-nowrap overflow-hidden">正则脚本</span>
                 </button>
-                <button @click="currentView = 'settings'; showMobileMenu = false"
+                <button @click="currentView = 'settings'; closeMobileMenu()"
                     title="设置"
                     :class="['sidebar-nav-button flex items-center rounded-xl transition-all duration-200 font-medium', currentView === 'settings' ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900', isSidebarCollapsed ? 'w-12 h-12 mx-auto justify-center p-0' : 'w-full px-3 py-2.5']">
                     <svg class="w-5 h-5" :class="isSidebarCollapsed ? 'mr-0' : 'mr-3'" fill="none" stroke="currentColor"
@@ -2370,6 +2368,17 @@
                                     高级参数
                                 </h4>
                                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <!-- Font Family Setting -->
+                                    <div
+                                        class="bg-gray-50/60 p-4 rounded-xl border border-gray-100 hover:bg-white hover:border-gray-200 hover:shadow-sm transition-all duration-200">
+                                        <label
+                                            class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">界面字体</label>
+                                        <custom-select v-model="settings.fontFamily" :options="fontFamilyOptions"
+                                            button-class="rounded-lg px-3 py-1.5 text-sm text-gray-700 focus:border-indigo-400 focus:ring-indigo-100"
+                                            menu-class="text-sm">
+                                        </custom-select>
+                                    </div>
+
                                     <!-- Font Size Setting -->
                                     <div
                                         class="bg-gray-50/60 p-4 rounded-xl border border-gray-100 hover:bg-white hover:border-gray-200 hover:shadow-sm transition-all duration-200">
