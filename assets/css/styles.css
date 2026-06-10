@@ -926,8 +926,8 @@
                 contain: paint;
                 transform: translateZ(0);
                 transition:
-                    opacity 0.22s cubic-bezier(0.22, 0.72, 0.2, 1),
-                    visibility 0s linear 0.22s;
+                    opacity 0.28s cubic-bezier(0.22, 0.78, 0.25, 1),
+                    visibility 0s linear 0.28s;
             }
 
             .mobile-overlay.mobile-sidebar-open {
