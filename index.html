@@ -821,7 +821,7 @@
                                     </div>
 
                                     <!-- Message Actions -->
-                                    <div v-if="!msg.isEditing_Message && !(index === chatHistory.length - 1 && !msg.isSelf && (isGenerating || isRemoteGenerating))"
+                                    <div v-if="!msg.isEditing_Message && !isMessageThinkingOrRunning(msg) && !(index === chatHistory.length - 1 && !msg.isSelf && (isGenerating || isRemoteGenerating))"
                                         :class="['absolute bottom-0 -mb-8 md:-mb-10 flex items-center space-x-1 md:space-x-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-200', msg.isSelf ? 'right-0' : 'left-0']">
                                         <button v-if="index === chatHistory.length - 1"
                                             @click="regenerateMessage(index)"

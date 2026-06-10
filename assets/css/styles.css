@@ -1603,6 +1603,12 @@ opacity: 0;
             gap: 0.55rem;
             color: #334155;
             font-size: 0.78rem;
+            font-family: inherit !important;
+        }
+
+        .tool-call-detail pre,
+        .tool-call-detail code {
+            font-family: inherit !important;
         }
 
         .tool-description-preview {
