@@ -2020,7 +2020,7 @@ createApp({
                             migrated = true;
                         }
                         if (Array.isArray(char.worldInfo)) {
-                            char.worldInfo = normalizeCharacterWorldInfoEntries(char.worldInfo);
+                            char.worldInfo = char.worldInfo.map(normalizeWorldInfoEntry).filter(entry => entry.scope !== 'global');
                         }
                         if (Array.isArray(char.regexScripts)) {
                             char.regexScripts = char.regexScripts.map(script => normalizeRegexScript(script, 'character')).filter(script => script.scope !== 'global');
@@ -2075,11 +2075,11 @@ createApp({
                 }
 
                 const savedGlobalWI = await getStoredValue('global_worldinfo');
-                if (savedGlobalWI) globalWorldInfo.value = normalizeGlobalWorldInfoEntries(savedGlobalWI);
+                if (savedGlobalWI) globalWorldInfo.value = savedGlobalWI.map(entry => normalizeWorldInfoEntry({ ...entry, scope: 'global' }));
 
                 const savedWI = await getStoredValue('worldinfo');
                 if (savedGlobalWI) {
-                    worldInfo.value = normalizeGlobalWorldInfoEntries(JSON.parse(JSON.stringify(globalWorldInfo.value)));
+                    worldInfo.value = JSON.parse(JSON.stringify(globalWorldInfo.value)).map(entry => normalizeWorldInfoEntry({ ...entry, scope: 'global' }));
                 } else if (savedWI) {
                     worldInfo.value = savedWI.map(normalizeWorldInfoEntry);
                 }
@@ -2156,13 +2156,13 @@ createApp({
             const normalized = JSON.parse(JSON.stringify(newVal)).map(normalizeWorldInfoEntry);
             const globalEntries = normalized.filter(entry => entry.scope === 'global');
             if (JSON.stringify(globalWorldInfo.value) !== JSON.stringify(globalEntries)) {
-                globalWorldInfo.value = normalizeGlobalWorldInfoEntries(globalEntries);
+                globalWorldInfo.value = globalEntries;
             }
             if (currentCharacterIndex.value !== -1 && characters.value[currentCharacterIndex.value]) {
                 if (_isApplyingCharacterScopedData) return;
                 // Only update if different to avoid infinite loops or unnecessary updates
                 const char = characters.value[currentCharacterIndex.value];
-                const characterEntries = normalizeCharacterWorldInfoEntries(normalized.filter(entry => entry.scope !== 'global'));
+                const characterEntries = normalized.filter(entry => entry.scope !== 'global');
                 if (JSON.stringify(char.worldInfo) !== JSON.stringify(characterEntries)) {
                     char.worldInfo = characterEntries;
                 }
@@ -3379,7 +3379,7 @@ ${content}
 
         const getCharacterWICount = (char) => {
             if (!char.worldInfo) return 0;
-            return normalizeCharacterWorldInfoEntries(char.worldInfo).length;
+            return char.worldInfo.filter(w => !systemWorldInfoNames.includes(w.comment)).length;
         };
 
         const getCharacterRegexCount = (char) => {
@@ -7546,9 +7546,9 @@ ${content}
             });
             worldInfo.value.splice(match.sourceIndex, 1, updatedEntry);
             const normalizedWorldInfo = JSON.parse(JSON.stringify(worldInfo.value)).map(normalizeWorldInfoEntry);
-            globalWorldInfo.value = normalizeGlobalWorldInfoEntries(normalizedWorldInfo.filter(entry => entry.scope === 'global'));
+            globalWorldInfo.value = normalizedWorldInfo.filter(entry => entry.scope === 'global');
             if (currentCharacterIndex.value !== -1 && characters.value[currentCharacterIndex.value]) {
-                characters.value[currentCharacterIndex.value].worldInfo = normalizeCharacterWorldInfoEntries(normalizedWorldInfo.filter(entry => entry.scope !== 'global'));
+                characters.value[currentCharacterIndex.value].worldInfo = normalizedWorldInfo.filter(entry => entry.scope !== 'global');
             }
             await saveData({ saveMemories: false });
 
@@ -7650,9 +7650,9 @@ ${content}
 
         const syncWorldInfoScopesFromCurrentList = () => {
             const normalizedWorldInfo = JSON.parse(JSON.stringify(worldInfo.value || [])).map(normalizeWorldInfoEntry);
-            globalWorldInfo.value = normalizeGlobalWorldInfoEntries(normalizedWorldInfo.filter(entry => entry.scope === 'global'));
+            globalWorldInfo.value = normalizedWorldInfo.filter(entry => entry.scope === 'global');
             if (currentCharacterIndex.value !== -1 && characters.value[currentCharacterIndex.value]) {
-                characters.value[currentCharacterIndex.value].worldInfo = normalizeCharacterWorldInfoEntries(normalizedWorldInfo.filter(entry => entry.scope !== 'global'));
+                characters.value[currentCharacterIndex.value].worldInfo = normalizedWorldInfo.filter(entry => entry.scope !== 'global');
             }
         };
 
@@ -9276,9 +9276,11 @@ image###生成的提示词###
             }
 
             // Load Character Specific Data
-            const characterWorldInfo = normalizeCharacterWorldInfoEntries(JSON.parse(JSON.stringify(char.worldInfo || [])));
+            const characterWorldInfo = Array.isArray(char.worldInfo)
+                ? JSON.parse(JSON.stringify(char.worldInfo)).map(entry => normalizeWorldInfoEntry({ ...entry, scope: 'character' })).filter(entry => entry.scope !== 'global')
+                : [];
             worldInfo.value = [
-                ...normalizeGlobalWorldInfoEntries(JSON.parse(JSON.stringify(globalWorldInfo.value))),
+                ...JSON.parse(JSON.stringify(globalWorldInfo.value)).map(entry => normalizeWorldInfoEntry({ ...entry, scope: 'global' })),
                 ...characterWorldInfo
             ];
 
@@ -9494,25 +9496,6 @@ image###生成的提示词###
             };
         };
 
-        function normalizeCharacterWorldInfoEntries(entries = []) {
-            return (Array.isArray(entries) ? entries : [])
-                .map(entry => {
-                    const normalized = normalizeWorldInfoEntry({ ...entry, scope: 'character' });
-                    normalized.scope = 'character';
-                    return normalized;
-                })
-                .filter(entry => !systemWorldInfoNames.includes(entry.comment));
-        }
-
-        function normalizeGlobalWorldInfoEntries(entries = []) {
-            return (Array.isArray(entries) ? entries : [])
-                .map(entry => {
-                    const normalized = normalizeWorldInfoEntry({ ...entry, scope: 'global' });
-                    normalized.scope = 'global';
-                    return normalized;
-                });
-        }
-
         const toWorldInfoExportEntry = (entry) => {
             const normalized = normalizeWorldInfoEntry(entry);
             return cardUtils.toWorldInfoExportEntry(normalized);
@@ -9640,7 +9623,9 @@ image###生成的提示词###
                     }
 
                     if (entries.length > 0) {
-                        char.worldInfo = normalizeCharacterWorldInfoEntries(entries);
+                        char.worldInfo = entries
+                            .map(entry => normalizeWorldInfoEntry({ ...entry, scope: 'character' }))
+                            .filter(entry => entry.scope !== 'global');
                         console.log(`Imported and normalized ${char.worldInfo.length} World Info entries.`);
                     }
 
@@ -10512,9 +10497,11 @@ image###生成的提示词###
                 }
 
                 // Load Char Specifics
-                const characterWorldInfo = normalizeCharacterWorldInfoEntries(JSON.parse(JSON.stringify(char.worldInfo || [])));
+                const characterWorldInfo = Array.isArray(char.worldInfo)
+                    ? JSON.parse(JSON.stringify(char.worldInfo)).map(entry => normalizeWorldInfoEntry({ ...entry, scope: 'character' })).filter(entry => entry.scope !== 'global')
+                    : [];
                 worldInfo.value = [
-                    ...normalizeGlobalWorldInfoEntries(JSON.parse(JSON.stringify(globalWorldInfo.value))),
+                    ...JSON.parse(JSON.stringify(globalWorldInfo.value)).map(entry => normalizeWorldInfoEntry({ ...entry, scope: 'global' })),
                     ...characterWorldInfo
                 ];
 
@@ -11151,7 +11138,7 @@ image###生成的提示词###
                             const normalizedEntries = entries.map(normalizeWorldInfoEntry);
                             worldInfo.value = [...worldInfo.value, ...normalizedEntries];
                             if (currentCharacterIndex.value !== -1) {
-                                characters.value[currentCharacterIndex.value].worldInfo = normalizeCharacterWorldInfoEntries(JSON.parse(JSON.stringify(worldInfo.value)));
+                                characters.value[currentCharacterIndex.value].worldInfo = JSON.parse(JSON.stringify(worldInfo.value));
                             }
                             showToast('世界书导入成功', 'success');
                         }
@@ -11226,7 +11213,7 @@ image###生成的提示词###
                 }
                 // Sync back to current character
                 if (currentCharacterIndex.value !== -1) {
-                    characters.value[currentCharacterIndex.value].worldInfo = normalizeCharacterWorldInfoEntries(JSON.parse(JSON.stringify(worldInfo.value)));
+                    characters.value[currentCharacterIndex.value].worldInfo = JSON.parse(JSON.stringify(worldInfo.value));
                 }
                 showWorldInfoEditor.value = false;
 
@@ -11235,7 +11222,7 @@ image###生成的提示词###
                 confirmAction('确定要删除这个世界书条目吗？此操作无法撤销。', () => {
                     worldInfo.value.splice(index, 1);
                     if (currentCharacterIndex.value !== -1) {
-                        characters.value[currentCharacterIndex.value].worldInfo = normalizeCharacterWorldInfoEntries(JSON.parse(JSON.stringify(worldInfo.value)));
+                        characters.value[currentCharacterIndex.value].worldInfo = JSON.parse(JSON.stringify(worldInfo.value));
                     }
                     showToast('世界书条目已删除', 'success');
                 });
