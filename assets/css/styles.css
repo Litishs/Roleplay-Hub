@@ -919,16 +919,22 @@
             /* Mobile sidebar drawer */
             .mobile-overlay {
                 background: rgba(15, 23, 42, 0.38) !important;
+                opacity: 0;
                 pointer-events: none;
                 visibility: hidden;
                 touch-action: none;
                 contain: paint;
                 transform: translateZ(0);
+                transition:
+                    opacity 0.22s cubic-bezier(0.22, 0.72, 0.2, 1),
+                    visibility 0s linear 0.22s;
             }
 
             .mobile-overlay.mobile-sidebar-open {
+                opacity: 1;
                 pointer-events: auto;
                 visibility: visible;
+                transition-delay: 0s;
             }
 
             .app-sidebar {
