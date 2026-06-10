@@ -8,6 +8,9 @@
     <title>Roleplay Hub</title>
     <!-- GitHub Pages rebuild marker for CSS-only animation update. -->
     <!-- <link rel="icon" href="logo.jpg" type="image/jpeg"> -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400..700;1,400..700&display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
@@ -18,7 +21,8 @@
             theme: {
                 extend: {
                     fontFamily: {
-                        sans: ['PingFang SC', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'Helvetica Neue', 'Arial', 'Noto Sans', 'sans-serif', 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji'],
+                        sans: ['Lora', 'Noto Serif SC', 'Source Han Serif SC', 'Source Han Serif CN', 'STSong', 'SimSun', 'Georgia', 'Cambria', 'Times New Roman', 'Times', 'serif'],
+                        serif: ['Lora', 'Noto Serif SC', 'Source Han Serif SC', 'Source Han Serif CN', 'STSong', 'SimSun', 'Georgia', 'Cambria', 'Times New Roman', 'Times', 'serif']
                     },
                     colors: {
                         gray: {
@@ -52,6 +56,9 @@
                         'slide-down': 'slideDown 0.3s ease-out',
                         'bounce-slow': 'bounce 1.5s infinite',
                     },
+                    transitionTimingFunction: {
+                        'modal-fade': 'cubic-bezier(0.22, 0.61, 0.36, 1)',
+                    },
                     keyframes: {
                         fadeIn: {
                             '0%': { opacity: '0' },
@@ -78,7 +85,6 @@
         document.write('<link rel="stylesheet" href="assets/css/styles.css?v=' + new Date().getTime() + '">');
     </script>
 </head>
-
 <body class="bg-gray-50 text-gray-900 font-sans selection:bg-primary-200 selection:text-primary-900">
     <div class="entry-transition" aria-hidden="true">
         <div class="entry-transition-brand">
@@ -100,9 +106,9 @@
         <!-- Toast Notification Container -->
         <div
             class="fixed top-6 left-1/2 transform -translate-x-1/2 z-[100] flex flex-col gap-2 pointer-events-none items-center">
-            <transition-group name="list" tag="div" class="flex flex-col items-center">
+            <transition-group name="list" tag="div" class="toast-stack flex flex-col items-center gap-2">
                 <div v-for="toast in toasts" :key="toast.id"
-                    class="pointer-events-auto flex items-center px-6 py-3 mb-2 rounded-full shadow-lg border bg-white text-gray-800 min-w-[300px] transform transition-all duration-300 backdrop-blur-sm bg-opacity-95 toast-item"
+                    class="pointer-events-auto flex items-center px-6 py-3 rounded-full shadow-lg border bg-white text-gray-800 min-w-[300px] transform backdrop-blur-sm bg-opacity-95 toast-item"
                     :class="{
                         'border-green-200 text-green-800 bg-green-50': toast.type === 'success',
                         'border-red-200 text-red-800 bg-red-50': toast.type === 'error',
@@ -489,7 +495,7 @@
                 <!-- Chat Messages -->
                 <div ref="chatContainer" @click="suggestedReplies = []; showChatModelSelector = false"
                     @scroll="handleChatScroll"
-                    class="flex-1 overflow-y-auto overflow-x-hidden px-2 pt-14 md:pt-16 pb-40 md:pb-56 relative z-0 transition-all duration-500"
+                    class="chat-scrollbar flex-1 overflow-y-auto overflow-x-hidden px-2 pt-14 md:pt-16 pb-40 md:pb-56 relative z-0 transition-all duration-500"
                     :class="[
                         settings.immersiveMode ? 'space-y-12 md:space-y-16' : 'space-y-10 md:space-y-14',
                         !settings.useCharacterBackground || !currentCharacter || !currentCharacter?.avatar ? 'bg-gray-50' : ''
@@ -603,30 +609,21 @@
 
                                         <div v-else class="message-content-wrapper"
                                             :class="{'w-full': messageUsesWideLayout(msg)}">
-                                            <!-- Native Model Reasoning Part -->
-                                            <div v-if="getAssistantReasoningText(msg) && settings.showNativeReasoning !== false" class="native-thinking-wrapper">
-                                                <div class="cot-ui native-thinking-card"
-                                                    :class="{ 'is-live': index === chatHistory.length - 1 && isThinking, 'is-open': msg.isReasoningOpen !== false }">
-                                                    <button type="button" class="cot-header native-thinking-header"
-                                                        @click="msg.isReasoningUserToggled = true; msg.isReasoningOpen = msg.isReasoningOpen === false">
-                                                        <div v-if="index === chatHistory.length - 1 && isThinking"
-                                                            class="flex items-center text-primary-600 min-w-0">
-                                                            <span class="live-dots mr-2" aria-hidden="true"><i></i><i></i><i></i></span>
-                                                            <span class="text-xs font-bold truncate">原生思考中</span>
-                                                        </div>
-                                                        <div v-else class="flex items-center min-w-0">
-                                                            <svg class="w-3.5 h-3.5 mr-2 opacity-70" fill="none"
-                                                                stroke="currentColor" viewBox="0 0 24 24">
-                                                                <path stroke-linecap="round" stroke-linejoin="round"
-                                                                    stroke-width="2"
-                                                                    d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z">
+                                                                                        <!-- Unified Summary Timeline Part -->
+                                            <div v-if="hasThinkingOrTools(msg)" class="native-thinking-wrapper">
+                                                <div class="cot-ui native-thinking-card summary-timeline-card"
+                                                    :class="{ 'is-live': isMessageThinkingOrRunning(msg), 'is-open': isThinkingSummaryOpen(msg) }">
+                                                    <button type="button" class="cot-header native-thinking-header justify-between"
+                                                        @click="toggleThinkingSummary(msg)">
+                                                        <div class="flex items-center min-w-0">
+                                                            <span v-if="isMessageThinkingOrRunning(msg)" class="live-dots mr-2" aria-hidden="true"><i></i><i></i><i></i></span>
+                                                            <svg v-else class="w-3.5 h-3.5 mr-2 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                                    d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2">
                                                                 </path>
                                                             </svg>
-                                                            <span class="text-xs font-bold truncate">原生思考</span>
+                                                            <span class="text-sm font-bold truncate">Thinking</span>
                                                         </div>
-                                                        <span class="native-thinking-plain-meta">
-                                                            {{ getAssistantReasoningText(msg).length }} 字
-                                                        </span>
                                                         <svg class="w-3.5 h-3.5 ml-2 opacity-60 chevron" fill="none"
                                                             stroke="currentColor" viewBox="0 0 24 24">
                                                             <path stroke-linecap="round" stroke-linejoin="round"
@@ -634,170 +631,69 @@
                                                         </svg>
                                                     </button>
                                                     <div class="cot-body native-thinking-body"
-                                                        :class="{ 'is-open': msg.isReasoningOpen !== false }">
+                                                        :class="{ 'is-open': isThinkingSummaryOpen(msg) }">
                                                         <div class="cot-inner native-thinking-inner">
-                                                            <div class="cot-content native-thinking-scroll cot-thinking-scroll custom-scrollbar"
-                                                                :style="settings.fontSize ? { fontSize: (settings.fontSize - 1) + 'px' } : {}">
-                                                                <div class="markdown-body"
-                                                                    v-html="renderMarkdown(getAssistantReasoningText(msg), 'assistant', true)">
+                                                            <div class="relative pl-6 border-l border-gray-300/90 space-y-7 py-1 ml-3.5 pt-4 pb-4 pr-4">
+                                                                <div v-for="step in getTimelineSteps(msg)" :key="step.id" class="relative group/step">
+                                                                    <!-- Marker Node -->
+                                                                    <div class="absolute -left-[38px] top-0 flex items-center justify-center w-7 h-5">
+                                                                        <div class="w-3 h-3 rounded-full bg-white border-2 border-gray-400/80 shadow-sm transition-all group-hover/step:border-primary-500"
+                                                                            :class="{ 'border-red-300': step.status === 'error', 'border-primary-400': step.status === 'running' || step.status === 'receiving' }">
+                                                                        </div>
+                                                                    </div>
+
+                                                                    <!-- Content Box -->
+                                                                    <div class="flex flex-col min-w-0">
+                                                                        <details class="group/detail" @toggle="markThinkingSummaryDetailOpened(msg, $event)">
+                                                                            <summary class="list-none outline-none cursor-pointer flex items-center justify-between gap-3 text-gray-500 text-xs leading-relaxed select-none hover:text-gray-900 transition-colors">
+                                                                                <div class="flex items-center gap-2 min-w-0">
+                                                                                    <span class="text-sm font-bold text-gray-700 select-none truncate">{{ step.title }}</span>
+                                                                                    <span v-if="step.type === 'thinking'" class="text-xs text-gray-400 font-normal whitespace-nowrap">{{ step.text.length }} 字</span>
+                                                                                    <svg v-else-if="step.status === 'done'" class="w-4 h-4 text-green-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path>
+                                                                                    </svg>
+                                                                                    <span v-else-if="step.status === 'error'" class="bg-red-50 text-red-700 border border-red-100 rounded px-1.5 py-0.5 text-[9px] font-semibold whitespace-nowrap">失败</span>
+                                                                                    <span v-else class="bg-blue-50 text-blue-700 border border-blue-100 rounded px-1.5 py-0.5 text-[9px] font-semibold animate-pulse whitespace-nowrap">{{ step.progressText }}</span>
+                                                                                </div>
+                                                                                <span class="text-[10px] text-primary-500 opacity-60 group-hover/detail:opacity-100 flex items-center gap-0.5 font-bold whitespace-nowrap flex-shrink-0 ml-auto">
+                                                                                    详情
+                                                                                    <svg class="w-2.5 h-2.5 transform group-open/detail:rotate-180 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                                                                                    </svg>
+                                                                                </span>
+                                                                            </summary>
+                                                                            <div class="mt-2 bg-gray-50 border border-gray-100/60 rounded-xl p-3 text-[13px] text-gray-700 overflow-x-auto custom-scrollbar shadow-inner select-text">
+                                                                                <div v-if="step.type === 'thinking'" class="markdown-body"
+                                                                                    :style="settings.fontSize ? { fontSize: (settings.fontSize - 1.5) + 'px' } : {}"
+                                                                                    v-html="renderMarkdown(step.text, 'assistant', true)">
+                                                                                </div>
+                                                                                <div v-else class="tool-call-detail flex flex-col gap-3 text-[13px]">
+                                                                                    <div class="flex justify-between items-center text-[13px] border-b border-gray-200 pb-2">
+                                                                                        <span>调用标签: <code class="font-mono bg-white px-1 border rounded text-primary-600">&lt;{{ step.toolCall.callName }}&gt;</code></span>
+                                                                                        <span class="text-gray-400 font-semibold">{{ getToolCallModeText(step.toolCall) }}</span>
+                                                                                    </div>
+                                                                                    <div class="flex flex-col gap-1.5">
+                                                                                        <span class="text-xs font-semibold text-gray-500">参数输入:</span>
+                                                                                        <pre class="bg-gray-50 p-3 rounded-lg border border-gray-200 font-mono text-[13px] leading-relaxed text-gray-800 whitespace-pre-wrap max-h-40 overflow-y-auto custom-scrollbar break-all">{{ step.toolCall.query }}</pre>
+                                                                                    </div>
+                                                                                    <div v-if="step.toolCall.error" class="text-red-600 bg-red-50 border border-red-100 rounded-lg p-3 mt-1 font-mono text-[13px] leading-relaxed">
+                                                                                        {{ step.toolCall.error }}
+                                                                                    </div>
+                                                                                    <div v-else-if="step.toolCall.resultText" class="flex flex-col gap-1.5 mt-1">
+                                                                                        <span class="text-xs font-semibold text-gray-500">执行输出:</span>
+                                                                                        <pre class="bg-gray-50 p-3 rounded-lg border border-gray-200 font-mono text-[13px] leading-relaxed text-gray-800 whitespace-pre-wrap max-h-56 overflow-y-auto custom-scrollbar break-all">{{ step.toolCall.resultText }}</pre>
+                                                                                    </div>
+                                                                                </div>
+                                                                            </div>
+                                                                        </details>
+                                                                    </div>
                                                                 </div>
                                                             </div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <div v-else-if="getAssistantReasoningText(msg) && index === chatHistory.length - 1 && isThinking"
-                                                class="native-thinking-wrapper">
-                                                <div class="cot-ui native-thinking-card is-live">
-                                                    <div class="cot-header native-thinking-header">
-                                                        <div class="flex items-center text-primary-600 min-w-0">
-                                                            <span class="live-dots mr-2" aria-hidden="true"><i></i><i></i><i></i></span>
-                                                            <span class="text-xs font-bold truncate">已响应，正在思考</span>
                                                         </div>
                                                     </div>
                                                 </div>
                                             </div>
                                             <!-- Active Tool Calls -->
-                                            <div v-if="msg.role === 'assistant' && msg.toolCalls && msg.toolCalls.length"
-                                                class="native-thinking-wrapper">
-                                                <template v-for="(toolCall, toolIndex) in getVisibleToolCalls(msg.toolCalls)"
-                                                    :key="'active-tool-call-' + (toolCall.id || toolIndex)">
-                                                <div class="cot-ui native-thinking-card"
-                                                    :class="{ 'is-live': isMergedToolCallLive(msg.toolCalls, toolCall), 'is-open': toolCall.isOpen }">
-                                                    <button type="button" class="cot-header native-thinking-header"
-                                                        @click="toolCall.isOpen = !toolCall.isOpen">
-                                                        <div class="flex flex-1 items-center min-w-0"
-                                                            :class="{ 'text-primary-600': isMergedToolCallLive(msg.toolCalls, toolCall), 'text-red-600': isMergedToolCallError(msg.toolCalls, toolCall) }">
-                                                            <span v-if="isMergedToolCallLive(msg.toolCalls, toolCall)" class="live-dots mr-2" aria-hidden="true"><i></i><i></i><i></i></span>
-                                                            <svg v-else class="w-3.5 h-3.5 mr-2 opacity-70" fill="none"
-                                                                stroke="currentColor" viewBox="0 0 24 24">
-                                                                <path stroke-linecap="round" stroke-linejoin="round"
-                                                                    stroke-width="2"
-                                                                    d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94L14.7 6.3z">
-                                                                </path>
-                                                            </svg>
-                                                            <span class="text-xs font-bold truncate">{{ getMergedToolCallTitle(msg.toolCalls, toolCall) }}</span>
-                                                        </div>
-                                                        <span v-if="isMergedToolCallDone(msg.toolCalls, toolCall)"
-                                                            class="native-thinking-meta tool-call-success-badge" aria-label="工具调用成功">
-                                                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor"
-                                                                viewBox="0 0 24 24">
-                                                                <path stroke-linecap="round" stroke-linejoin="round"
-                                                                    stroke-width="2.5" d="M5 13l4 4L19 7"></path>
-                                                            </svg>
-                                                        </span>
-                                                        <svg class="w-3.5 h-3.5 ml-2 opacity-60 chevron" fill="none"
-                                                            stroke="currentColor" viewBox="0 0 24 24">
-                                                            <path stroke-linecap="round" stroke-linejoin="round"
-                                                                stroke-width="2" d="M19 9l-7 7-7-7"></path>
-                                                        </svg>
-                                                    </button>
-                                                    <div class="cot-body native-thinking-body"
-                                                        :class="{ 'is-open': toolCall.isOpen }">
-                                                        <div class="cot-inner native-thinking-inner">
-                                                            <div class="native-thinking-scroll tool-call-scroll custom-scrollbar">
-                                                                <div class="tool-call-detail">
-                                                                    <div class="tool-call-row">
-                                                                        <span>工具</span>
-                                                                        <strong>{{ getMergedToolCallTitle(msg.toolCalls, toolCall) }}</strong>
-                                                                    </div>
-                                                                    <template v-if="getMergedToolCallCount(msg.toolCalls, toolCall) === 1">
-                                                                        <div class="tool-call-row">
-                                                                            <span>调用</span>
-                                                                            <code>&lt;{{ toolCall.callName || 'tool_memory_add' }}:{{ toolCall.query }}&gt;</code>
-                                                                        </div>
-                                                                        <div class="tool-call-row">
-                                                                            <span>模式</span>
-                                                                            <strong>{{ getToolCallModeText(toolCall) }}</strong>
-                                                                        </div>
-                                                                        <div v-if="toolCall.status === 'receiving'" class="tool-call-muted">
-                                                                            正在编辑世界书...
-                                                                        </div>
-                                                                        <div v-else-if="toolCall.status === 'queued'" class="tool-call-muted">
-                                                                            等待上一个工具完成...
-                                                                        </div>
-                                                                        <div v-else-if="toolCall.status === 'running'" class="tool-call-muted">
-                                                                            正在检索...
-                                                                        </div>
-                                                                        <div v-else-if="toolCall.error" class="tool-call-error">
-                                                                            {{ toolCall.error }}
-                                                                        </div>
-                                                                        <pre v-if="toolCall.resultText && !toolCall.error" class="tool-call-result">{{ toolCall.resultText }}</pre>
-                                                                    </template>
-                                                                    <div v-else class="tool-call-group-list">
-                                                                        <div v-for="(mergedCall, mergedIndex) in getMergedToolCallItems(msg.toolCalls, toolCall)"
-                                                                            :key="'merged-tool-call-' + (mergedCall.id || mergedIndex)"
-                                                                            class="tool-call-group-item">
-                                                                            <div class="tool-call-group-head">
-                                                                                <span class="tool-call-group-index">#{{ mergedIndex + 1 }}</span>
-                                                                                <strong>{{ getToolCallModeText(mergedCall) }}</strong>
-                                                                                <span class="tool-call-group-status"
-                                                                                    :class="'is-' + (mergedCall.status || 'queued')">{{ getToolCallStatusText(mergedCall) }}</span>
-                                                                            </div>
-                                                                            <code>&lt;{{ mergedCall.callName || 'tool_memory_add' }}:{{ mergedCall.query }}&gt;</code>
-                                                                            <div v-if="mergedCall.status === 'receiving'" class="tool-call-muted">
-                                                                                正在编辑世界书...
-                                                                            </div>
-                                                                            <div v-else-if="mergedCall.status === 'queued'" class="tool-call-muted">
-                                                                                等待上一个工具完成...
-                                                                            </div>
-                                                                            <div v-else-if="mergedCall.status === 'running'" class="tool-call-muted">
-                                                                                正在检索...
-                                                                            </div>
-                                                                            <div v-else-if="mergedCall.error" class="tool-call-error">
-                                                                                {{ mergedCall.error }}
-                                                                            </div>
-                                                                            <pre v-if="mergedCall.resultText && !mergedCall.error" class="tool-call-result">{{ mergedCall.resultText }}</pre>
-                                                                        </div>
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                                <div v-if="getMergedToolCallReasoningText(msg.toolCalls, toolCall)"
-                                                    class="cot-ui native-thinking-card"
-                                                    :class="{ 'is-live': isMergedToolCallReasoningLive(msg.toolCalls, toolCall), 'is-open': isMergedToolCallReasoningOpen(msg.toolCalls, toolCall) }">
-                                                    <button type="button" class="cot-header native-thinking-header"
-                                                        @click="toggleMergedToolCallReasoning(msg.toolCalls, toolCall)">
-                                                        <div v-if="isMergedToolCallReasoningLive(msg.toolCalls, toolCall)"
-                                                            class="flex items-center text-primary-600 min-w-0">
-                                                            <span class="live-dots mr-2" aria-hidden="true"><i></i><i></i><i></i></span>
-                                                            <span class="text-xs font-bold truncate">原生思考中</span>
-                                                        </div>
-                                                        <div v-else class="flex items-center min-w-0">
-                                                            <svg class="w-3.5 h-3.5 mr-2 opacity-70" fill="none"
-                                                                stroke="currentColor" viewBox="0 0 24 24">
-                                                                <path stroke-linecap="round" stroke-linejoin="round"
-                                                                    stroke-width="2"
-                                                                    d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z">
-                                                                </path>
-                                                            </svg>
-                                                            <span class="text-xs font-bold truncate">原生思考</span>
-                                                        </div>
-                                                        <span class="native-thinking-plain-meta">
-                                                            {{ getMergedToolCallReasoningText(msg.toolCalls, toolCall).length }} 字
-                                                        </span>
-                                                        <svg class="w-3.5 h-3.5 ml-2 opacity-60 chevron" fill="none"
-                                                            stroke="currentColor" viewBox="0 0 24 24">
-                                                            <path stroke-linecap="round" stroke-linejoin="round"
-                                                                stroke-width="2" d="M19 9l-7 7-7-7"></path>
-                                                        </svg>
-                                                    </button>
-                                                    <div class="cot-body native-thinking-body"
-                                                        :class="{ 'is-open': isMergedToolCallReasoningOpen(msg.toolCalls, toolCall) }">
-                                                        <div class="cot-inner native-thinking-inner">
-                                                            <div class="cot-content native-thinking-scroll cot-thinking-scroll custom-scrollbar"
-                                                                :style="settings.fontSize ? { fontSize: (settings.fontSize - 1) + 'px' } : {}">
-                                                                <div class="markdown-body"
-                                                                    v-html="renderMarkdown(getMergedToolCallReasoningText(msg.toolCalls, toolCall), 'assistant', true)">
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                                </template>
-                                            </div>
                                             <div v-if="msg.role === 'assistant' && activeToolContinuationMessageId === msg.id && (isGenerating || isRemoteGenerating) && !activeToolContinuationHasResponse && !isThinking"
                                                 class="active-tool-waiting">
                                                 <div class="typing-indicator scale-125">
@@ -848,48 +744,6 @@
                                                 </div>
                                             </div>
                                             <!-- CoT Part -->
-                                            <div v-if="parseCot(msg.content).cot" class="cot-wrapper native-thinking-wrapper">
-                                                <div class="cot-ui native-thinking-card"
-                                                    :class="{ 'is-live': index === chatHistory.length - 1 && (isGenerating || isRemoteGenerating) && !parseCot(msg.content).isFinished, 'is-open': msg.isCotOpen }">
-                                                    <button type="button" class="cot-header native-thinking-header"
-                                                        @click="msg.isCotOpen = !msg.isCotOpen">
-                                                        <div v-if="index === chatHistory.length - 1 && (isGenerating || isRemoteGenerating) && !parseCot(msg.content).isFinished"
-                                                            class="flex items-center text-primary-600 min-w-0">
-                                                            <span class="live-dots mr-2" aria-hidden="true"><i></i><i></i><i></i></span>
-                                                            <span class="text-xs font-bold">正在分析...</span>
-                                                        </div>
-                                                        <div v-else class="flex items-center min-w-0">
-                                                            <svg class="w-3.5 h-3.5 mr-2 opacity-70" fill="none"
-                                                                stroke="currentColor" viewBox="0 0 24 24">
-                                                                <path stroke-linecap="round" stroke-linejoin="round"
-                                                                    stroke-width="2"
-                                                                    d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z">
-                                                                </path>
-                                                            </svg>
-                                                            <span class="text-xs font-bold truncate">分析过程</span>
-                                                        </div>
-                                                        <span class="native-thinking-meta">
-                                                            {{ (parseCot(msg.content).cot || '').length }} 字
-                                                        </span>
-                                                        <svg class="w-3.5 h-3.5 ml-2 opacity-60 chevron" fill="none"
-                                                            stroke="currentColor" viewBox="0 0 24 24">
-                                                            <path stroke-linecap="round" stroke-linejoin="round"
-                                                                stroke-width="2" d="M19 9l-7 7-7-7"></path>
-                                                        </svg>
-                                                    </button>
-                                                    <div class="cot-body native-thinking-body"
-                                                        :class="{ 'is-open': msg.isCotOpen }">
-                                                        <div class="cot-inner native-thinking-inner">
-                                                            <div class="cot-content native-thinking-scroll cot-thinking-scroll"
-                                                                :style="settings.fontSize ? { fontSize: (settings.fontSize - 1) + 'px' } : {}">
-                                                                <div class="markdown-body"
-                                                                    v-html="renderMarkdown(parseCot(msg.content).cot, 'assistant', true)">
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
                                             <!-- Main Part -->
                                             <template v-if="parseCot(msg.content).main">
                                                 <template
@@ -1103,7 +957,7 @@
                                     </svg>
                                 </button>
                                 <!-- Auto Image Button -->
-                                <button @click="isAutoImageGenEnabled = !isAutoImageGenEnabled"
+                                <button @click="toggleAutoImageGen"
                                     :class="[isAutoImageGenEnabled ? 'bg-primary-500 text-white shadow-primary-500/30 border-primary-500' : 'bg-white text-gray-500 hover:text-gray-700 hover:bg-gray-50 border-gray-200 shadow-sm']"
                                     class="rounded-full w-8 h-8 flex items-center justify-center border transition-all active:scale-95"
                                     title="自动生图开关">
@@ -1157,7 +1011,7 @@
                                                     </button>
                                                 </div>
                                                 <textarea v-model="sysInstruction"
-                                                    class="w-full h-20 p-2.5 text-sm text-gray-700 bg-gray-50/50 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-primary-400 focus:bg-white transition-all shadow-inner resize-none custom-scrollbar"
+                                                    class="w-full h-20 p-2.5 text-sm text-gray-700 bg-gray-50/30 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-primary-400 focus:bg-white transition-all shadow-inner resize-none custom-scrollbar"
                                                     placeholder="输入您想让AI遵守的临时规范指令... (随下次发送附带)"></textarea>
                                             </div>
                                         </div>
@@ -1185,7 +1039,7 @@
                                     leave-from-class="opacity-100 translate-x-0"
                                     leave-to-class="opacity-0 translate-x-4">
                                     <div v-if="memorySettings.enabled"
-                                        class="flex items-center gap-1.5 px-3 py-1 md:py-1.5 rounded-full border shadow-sm transition-all duration-300 font-bold text-[10px] md:text-xs cursor-default"
+                                        class="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border shadow-sm transition-all duration-300 font-bold text-[10px] md:text-xs cursor-default"
                                         :class="{
                                              'bg-blue-50 text-blue-700 border-blue-200': hasActiveToolInlineWork,
                                              'bg-gray-50 text-gray-600 border-gray-200': !hasActiveToolInlineWork && memoryExtractStatus === 'waiting',
@@ -1236,80 +1090,40 @@
                                         leave-from-class="opacity-100 translate-y-0 scale-100"
                                         leave-to-class="opacity-0 translate-y-2 scale-95">
                                         <div v-if="showChatModelSelector"
-                                            class="absolute bottom-full right-0 mb-4 z-50 pointer-events-auto min-w-[180px] md:min-w-[240px] transform-gpu origin-bottom-right">
+                                            class="absolute bottom-full right-0 mb-4 z-50 pointer-events-auto min-w-[240px] md:min-w-[320px] max-w-[380px] transform-gpu origin-bottom-right">
                                             <div
-                                                class="bg-white/95 backdrop-blur-xl border border-gray-200 shadow-xl rounded-2xl p-1.5 flex flex-col gap-1 ring-1 ring-black/5">
+                                                class="bg-white/95 backdrop-blur-xl border border-gray-200/80 shadow-[0_12px_40px_rgba(0,0,0,0.12)] rounded-2xl p-2 flex flex-col gap-1.5 ring-1 ring-black/5">
                                                 <button @click="modelMode = 'quality'; showChatModelSelector = false"
-                                                    :class="['w-full px-3 py-2.5 rounded-xl text-xs font-bold transition-all duration-200 flex items-center justify-between active:scale-95', modelMode === 'quality' ? 'bg-primary-50 text-primary-700 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900']">
-                                                    <div class="flex flex-col items-start gap-0.5">
-                                                        <div class="flex items-center">
-                                                            <svg class="w-4 h-4 mr-2"
-                                                                :class="modelMode === 'quality' ? 'text-primary-500' : 'text-gray-400'"
-                                                                fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                <path stroke-linecap="round" stroke-linejoin="round"
-                                                                    stroke-width="2"
-                                                                    d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z">
-                                                                </path>
-                                                            </svg>
-                                                            模型1
-                                                        </div>
-                                                        <div class="text-[10px] font-medium text-gray-500/80 ml-6 tracking-wide truncate max-w-[140px] md:max-w-[190px]"
-                                                            :title="settings.qualityModel">{{ settings.qualityModel }}
-                                                        </div>
-                                                    </div>
+                                                    :class="['w-full px-4 py-3 rounded-xl text-[13px] md:text-sm font-semibold transition-all duration-200 flex items-center justify-between active:scale-[0.98]', modelMode === 'quality' ? 'bg-primary-50/80 text-primary-700 shadow-sm font-bold' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900']">
+                                                    <span class="truncate flex-1 text-left pr-3"
+                                                        :title="settings.qualityModel">{{ settings.qualityModel }}</span>
                                                     <svg v-if="modelMode === 'quality'"
-                                                        class="w-3.5 h-3.5 text-primary-500" fill="none"
+                                                        class="w-4 h-4 text-primary-600 flex-shrink-0" fill="none"
                                                         stroke="currentColor" viewBox="0 0 24 24">
                                                         <path stroke-linecap="round" stroke-linejoin="round"
-                                                            stroke-width="2" d="M5 13l4 4L19 7"></path>
+                                                            stroke-width="2.5" d="M5 13l4 4L19 7"></path>
                                                     </svg>
                                                 </button>
                                                 <button @click="modelMode = 'balanced'; showChatModelSelector = false"
-                                                    :class="['w-full px-3 py-2.5 rounded-xl text-xs font-bold transition-all duration-200 flex items-center justify-between active:scale-95', modelMode === 'balanced' ? 'bg-primary-50 text-primary-700 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900']">
-                                                    <div class="flex flex-col items-start gap-0.5">
-                                                        <div class="flex items-center">
-                                                            <svg class="w-4 h-4 mr-2"
-                                                                :class="modelMode === 'balanced' ? 'text-primary-500' : 'text-gray-400'"
-                                                                fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                <path stroke-linecap="round" stroke-linejoin="round"
-                                                                    stroke-width="2"
-                                                                    d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3">
-                                                                </path>
-                                                            </svg>
-                                                            模型2
-                                                        </div>
-                                                        <div class="text-[10px] font-medium text-gray-500/80 ml-6 tracking-wide truncate max-w-[140px] md:max-w-[190px]"
-                                                            :title="settings.balancedModel">{{ settings.balancedModel }}
-                                                        </div>
-                                                    </div>
+                                                    :class="['w-full px-4 py-3 rounded-xl text-[13px] md:text-sm font-semibold transition-all duration-200 flex items-center justify-between active:scale-[0.98]', modelMode === 'balanced' ? 'bg-primary-50/80 text-primary-700 shadow-sm font-bold' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900']">
+                                                    <span class="truncate flex-1 text-left pr-3"
+                                                        :title="settings.balancedModel">{{ settings.balancedModel }}</span>
                                                     <svg v-if="modelMode === 'balanced'"
-                                                        class="w-3.5 h-3.5 text-primary-500" fill="none"
+                                                        class="w-4 h-4 text-primary-600 flex-shrink-0" fill="none"
                                                         stroke="currentColor" viewBox="0 0 24 24">
                                                         <path stroke-linecap="round" stroke-linejoin="round"
-                                                            stroke-width="2" d="M5 13l4 4L19 7"></path>
+                                                            stroke-width="2.5" d="M5 13l4 4L19 7"></path>
                                                     </svg>
                                                 </button>
                                                 <button @click="modelMode = 'fast'; showChatModelSelector = false"
-                                                    :class="['w-full px-3 py-2.5 rounded-xl text-xs font-bold transition-all duration-200 flex items-center justify-between active:scale-95', modelMode === 'fast' ? 'bg-primary-50 text-primary-700 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900']">
-                                                    <div class="flex flex-col items-start gap-0.5">
-                                                        <div class="flex items-center">
-                                                            <svg class="w-4 h-4 mr-2"
-                                                                :class="modelMode === 'fast' ? 'text-primary-500' : 'text-gray-400'"
-                                                                fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                <path stroke-linecap="round" stroke-linejoin="round"
-                                                                    stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z">
-                                                                </path>
-                                                            </svg>
-                                                            模型3
-                                                        </div>
-                                                        <div class="text-[10px] font-medium text-gray-500/80 ml-6 tracking-wide truncate max-w-[140px] md:max-w-[190px]"
-                                                            :title="settings.fastModel">{{ settings.fastModel }}</div>
-                                                    </div>
+                                                    :class="['w-full px-4 py-3 rounded-xl text-[13px] md:text-sm font-semibold transition-all duration-200 flex items-center justify-between active:scale-[0.98]', modelMode === 'fast' ? 'bg-primary-50/80 text-primary-700 shadow-sm font-bold' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900']">
+                                                    <span class="truncate flex-1 text-left pr-3"
+                                                        :title="settings.fastModel">{{ settings.fastModel }}</span>
                                                     <svg v-if="modelMode === 'fast'"
-                                                        class="w-3.5 h-3.5 text-primary-500" fill="none"
+                                                        class="w-4 h-4 text-primary-600 flex-shrink-0" fill="none"
                                                         stroke="currentColor" viewBox="0 0 24 24">
                                                         <path stroke-linecap="round" stroke-linejoin="round"
-                                                            stroke-width="2" d="M5 13l4 4L19 7"></path>
+                                                            stroke-width="2.5" d="M5 13l4 4L19 7"></path>
                                                     </svg>
                                                 </button>
                                             </div>
@@ -1337,8 +1151,7 @@
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                                 d="M13 10V3L4 14h7v7l9-11h-7z"></path>
                                         </svg>
-                                        {{ modelMode === 'quality' ? '模型1' : modelMode === 'balanced' ? '模型2' : '模型3'
-                                        }}
+                                        模型
                                     </button>
                                 </div>
                             </div>
@@ -1805,7 +1618,7 @@
 
             <!-- Settings View -->
             <div v-if="currentView === 'settings'" class="p-4 md:p-6 h-full overflow-y-auto animate-fade-in">
-                <div class="flex items-center mb-4 md:mb-6">
+                <div class="max-w-3xl mx-auto flex items-center mb-4 md:mb-6">
                     <button @click="toggleMobileMenu"
                         class="md:hidden mr-3 text-gray-500 md:hover:text-gray-700 active:text-gray-700 transition-colors">
                         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1825,7 +1638,7 @@
                         设置
                     </h2>
                 </div>
-                <div class="max-w-3xl space-y-4 md:space-y-8">
+                <div class="max-w-3xl mx-auto space-y-4 md:space-y-8">
 
 
                     <!-- User Settings - Optimized UI -->
@@ -2004,7 +1817,7 @@
                                                     </svg>
                                                 </div>
                                                 <input v-model="user.name" type="text"
-                                                    class="w-full bg-gray-50 border-2 border-gray-100 rounded-xl pl-11 pr-4 py-2.5 text-gray-800 font-medium focus:bg-white focus:border-primary-500 focus:ring-4 focus:ring-primary-100 focus:outline-none transition-all placeholder-gray-400"
+                                                    class="w-full bg-gray-50/60 border-2 border-gray-100 rounded-xl pl-11 pr-4 py-2.5 text-gray-800 font-medium focus:bg-white focus:border-primary-500 focus:ring-4 focus:ring-primary-100 focus:outline-none transition-all placeholder-gray-400"
                                                     placeholder="您的名字">
                                             </div>
                                         </div>
@@ -2013,7 +1826,7 @@
                                         <div>
                                             <label
                                                 class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 ml-1">叙事视角</label>
-                                            <div class="bg-gray-100 p-1 rounded-xl flex shadow-inner relative">
+                                            <div class="bg-gray-50/60 p-1 rounded-xl flex shadow-inner relative">
                                                 <!-- Sliding Indicator -->
                                                 <div class="absolute inset-y-1 w-[calc(50%-4px)] bg-white rounded-lg shadow-sm ring-1 ring-black/5 transition-all duration-300 ease-out z-0"
                                                     :class="isSecondPerson ? 'left-1' : 'left-[calc(50%+2px)]'"></div>
@@ -2040,7 +1853,7 @@
                                         <div class="relative">
                                             <textarea v-model="user.description" rows="6"
                                                 placeholder="描述您的外貌、性格、背景故事等..."
-                                                class="w-full bg-gray-50 border-2 border-gray-100 rounded-xl px-4 py-3 text-gray-800 focus:bg-white focus:border-primary-500 focus:ring-4 focus:ring-primary-100 focus:outline-none transition-all resize-y"></textarea>
+                                                class="w-full bg-gray-50/60 border-2 border-gray-100 rounded-xl px-4 py-3 text-gray-800 focus:bg-white focus:border-primary-500 focus:ring-4 focus:ring-primary-100 focus:outline-none transition-all resize-y"></textarea>
                                             <div class="absolute right-3 bottom-3 text-gray-300 pointer-events-none">
                                                 <svg class="w-5 h-5" fill="none" stroke="currentColor"
                                                     viewBox="0 0 24 24">
@@ -2099,7 +1912,7 @@
                                 <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                                     <!-- General API Status -->
                                     <div
-                                        class="flex items-center p-3 bg-gray-50 rounded-xl border border-gray-100 hover:bg-white hover:border-gray-200 hover:shadow-sm transition-all duration-200">
+                                        class="flex items-center p-3 bg-white rounded-xl border border-gray-100/80 shadow-sm shadow-gray-100/60 hover:border-gray-200 hover:shadow-md hover:shadow-gray-100/70 transition-all duration-200">
                                         <div
                                             :class="['w-2.5 h-2.5 rounded-full mr-3 shadow-sm flex-shrink-0', apiStatus === 'connected' ? 'bg-green-500 shadow-green-200' : (apiStatus === 'checking' ? 'bg-yellow-400 animate-pulse shadow-yellow-200' : (apiStatus === 'error' ? 'bg-red-500 shadow-red-200' : 'bg-gray-300'))]">
                                         </div>
@@ -2107,37 +1920,30 @@
                                             <div class="flex justify-between items-center mb-0.5">
                                                 <div class="text-xs font-bold text-gray-700 truncate">API 接口</div>
                                                 <span v-if="apiStatus === 'connected'"
-                                                    class="text-[10px] font-mono text-teal-600 bg-teal-50 px-1.5 rounded">{{
+                                                    class="text-xs font-mono font-medium text-teal-600">{{
                                                     apiLatency }}ms</span>
-                                            </div>
-                                            <div class="text-[10px] text-gray-500 truncate">
-                                                <span v-if="apiStatus === 'connected'">正常</span>
-                                                <span v-else-if="apiStatus === 'checking'">检测中...</span>
-                                                <span v-else-if="apiStatus === 'error'">连接失败</span>
-                                                <span v-else>未检测</span>
                                             </div>
                                         </div>
                                     </div>
                                     <!-- Image API Status -->
                                     <div
-                                        class="flex items-center p-3 bg-gray-50 rounded-xl border border-gray-100 hover:bg-white hover:border-gray-200 hover:shadow-sm transition-all duration-200">
+                                        class="flex items-center p-3 bg-white rounded-xl border border-gray-100/80 shadow-sm shadow-gray-100/60 hover:border-gray-200 hover:shadow-md hover:shadow-gray-100/70 transition-all duration-200">
                                         <div
                                             :class="['w-2.5 h-2.5 rounded-full mr-3 shadow-sm flex-shrink-0', imageGenStatus === 'connected' ? 'bg-green-500 shadow-green-200' : (imageGenStatus === 'checking' ? 'bg-yellow-400 animate-pulse shadow-yellow-200' : (imageGenStatus === 'error' ? 'bg-red-500 shadow-red-200' : 'bg-gray-300'))]">
                                         </div>
                                         <div class="flex-1 min-w-0">
                                             <div class="flex justify-between items-center mb-0.5">
-                                                <div class="text-xs font-bold text-gray-700 truncate">生图服务</div>
+                                                <div class="flex items-center gap-1.5 min-w-0 text-xs font-bold text-gray-700 truncate">
+                                                    <span>生图服务</span>
+                                                    <span class="text-gray-400">·</span>
+                                                    <span class="text-gray-500 font-medium whitespace-nowrap">
+                                                        <span v-if="quotaLoading">获取中...</span>
+                                                        <span v-else>{{ quotaError ? '查询失败' : quotaValue + ' 次' }}</span>
+                                                    </span>
+                                                </div>
                                                 <span v-if="imageGenStatus === 'connected'"
-                                                    class="text-[10px] font-mono text-teal-600 bg-teal-50 px-1.5 rounded">{{
+                                                    class="text-xs font-mono font-medium text-teal-600">{{
                                                     imageGenLatency }}ms</span>
-                                            </div>
-                                            <div class="text-[10px] text-gray-500 truncate">
-                                                <span v-if="imageGenStatus === 'connected'">正常<span
-                                                        v-if="quotaLoading">（获取中...）</span><span v-else>（{{ quotaError ?
-                                                        '查询失败' : quotaValue + ' 次' }}）</span></span>
-                                                <span v-else-if="imageGenStatus === 'checking'">检测中...</span>
-                                                <span v-else-if="imageGenStatus === 'error'">连接失败</span>
-                                                <span v-else>未检测</span>
                                             </div>
                                         </div>
                                     </div>
@@ -2152,7 +1958,7 @@
                                         提供商</label>
                                     <div class="relative mb-2 api-provider-selector-container">
                                         <button type="button" @click="showApiProviderSelector = !showApiProviderSelector"
-                                            class="w-full h-12 bg-gray-50 border-2 border-gray-100 rounded-xl px-3 py-0 flex items-center justify-between text-left hover:bg-white hover:border-teal-300 hover:shadow-sm transition-all active:scale-[0.99]">
+                                            class="w-full h-12 bg-gray-50/60 border-2 border-gray-100 rounded-xl px-3 py-0 flex items-center justify-between text-left hover:bg-white hover:border-teal-300 hover:shadow-sm transition-all active:scale-[0.99]">
                                             <span class="flex items-center min-w-0">
                                                 <span
                                                     class="w-7 h-7 rounded-lg bg-white border border-gray-100 shadow-sm flex items-center justify-center mr-2 shrink-0 overflow-hidden">
@@ -2237,7 +2043,7 @@
                                             </svg>
                                         </div>
                                         <input v-model="settings.apiUrl" type="text"
-                                            class="w-full h-12 bg-gray-50 border-2 border-gray-100 rounded-xl pl-11 pr-4 py-0 text-gray-800 font-medium focus:bg-white focus:border-teal-500 focus:ring-4 focus:ring-teal-100 focus:outline-none transition-all placeholder-gray-400 font-mono text-sm"
+                                            class="w-full h-12 bg-gray-50/60 border-2 border-gray-100 rounded-xl pl-11 pr-4 py-0 text-gray-800 font-medium focus:bg-white focus:border-teal-500 focus:ring-4 focus:ring-teal-100 focus:outline-none transition-all placeholder-gray-400 font-mono text-sm"
                                             placeholder="https://your-api.example/v1">
                                     </div>
                                 </div>
@@ -2255,7 +2061,7 @@
                                             </svg>
                                         </div>
                                         <input v-model="settings.apiKey" type="password"
-                                            class="w-full h-12 bg-gray-50 border-2 border-gray-100 rounded-xl pl-11 pr-4 py-0 text-gray-800 font-medium focus:bg-white focus:border-teal-500 focus:ring-4 focus:ring-teal-100 focus:outline-none transition-all placeholder-gray-400 font-mono text-sm"
+                                            class="w-full h-12 bg-gray-50/60 border-2 border-gray-100 rounded-xl pl-11 pr-4 py-0 text-gray-800 font-medium focus:bg-white focus:border-teal-500 focus:ring-4 focus:ring-teal-100 focus:outline-none transition-all placeholder-gray-400 font-mono text-sm"
                                             placeholder="sk-...">
                                     </div>
                                 </div>
@@ -2278,7 +2084,7 @@
                                                 </svg>
                                             </div>
                                             <div
-                                                class="w-full bg-gray-50 border-2 border-gray-100 rounded-xl pl-11 pr-4 py-3 text-gray-800 font-medium flex items-center justify-between cursor-pointer hover:bg-white hover:border-teal-300 hover:shadow-md transition-all active:scale-[0.99]">
+                                                class="w-full bg-gray-50/60 border-2 border-gray-100 rounded-xl pl-11 pr-4 py-3 text-gray-800 font-medium flex items-center justify-between cursor-pointer hover:bg-white hover:border-teal-300 hover:shadow-md transition-all active:scale-[0.99]">
                                                 <span class="truncate mr-2 font-mono text-sm">{{ settings.qualityModel
                                                     || '请选择模型' }}</span>
                                                 <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor"
@@ -2305,7 +2111,7 @@
                                                 </svg>
                                             </div>
                                             <div
-                                                class="w-full bg-gray-50 border-2 border-gray-100 rounded-xl pl-11 pr-4 py-3 text-gray-800 font-medium flex items-center justify-between cursor-pointer hover:bg-white hover:border-teal-300 hover:shadow-md transition-all active:scale-[0.99]">
+                                                class="w-full bg-gray-50/60 border-2 border-gray-100 rounded-xl pl-11 pr-4 py-3 text-gray-800 font-medium flex items-center justify-between cursor-pointer hover:bg-white hover:border-teal-300 hover:shadow-md transition-all active:scale-[0.99]">
                                                 <span class="truncate mr-2 font-mono text-sm">{{ settings.balancedModel
                                                     || '请选择模型' }}</span>
                                                 <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor"
@@ -2330,7 +2136,7 @@
                                                 </svg>
                                             </div>
                                             <div
-                                                class="w-full bg-gray-50 border-2 border-gray-100 rounded-xl pl-11 pr-4 py-3 text-gray-800 font-medium flex items-center justify-between cursor-pointer hover:bg-white hover:border-teal-300 hover:shadow-md transition-all active:scale-[0.99]">
+                                                class="w-full bg-gray-50/60 border-2 border-gray-100 rounded-xl pl-11 pr-4 py-3 text-gray-800 font-medium flex items-center justify-between cursor-pointer hover:bg-white hover:border-teal-300 hover:shadow-md transition-all active:scale-[0.99]">
                                                 <span class="truncate mr-2 font-mono text-sm">{{ settings.fastModel ||
                                                     '请选择模型' }}</span>
                                                 <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor"
@@ -2357,7 +2163,7 @@
                                                 </svg>
                                             </div>
                                             <div
-                                                class="w-full bg-gray-50 border-2 border-gray-100 rounded-xl pl-11 pr-4 py-3 text-gray-800 font-medium flex items-center justify-between cursor-pointer hover:bg-white hover:border-teal-300 hover:shadow-md transition-all active:scale-[0.99]">
+                                                class="w-full bg-gray-50/60 border-2 border-gray-100 rounded-xl pl-11 pr-4 py-3 text-gray-800 font-medium flex items-center justify-between cursor-pointer hover:bg-white hover:border-teal-300 hover:shadow-md transition-all active:scale-[0.99]">
                                                 <span class="truncate mr-2 font-mono text-sm">{{
                                                     settings.suggestionModel || '请选择模型' }}</span>
                                                 <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor"
@@ -2400,7 +2206,7 @@
                                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         <!-- 温度 -->
                                         <div
-                                            class="bg-gray-50 p-4 rounded-xl border border-gray-100 hover:bg-white hover:border-gray-200 hover:shadow-sm transition-all duration-200">
+                                            class="bg-gray-50/60 p-4 rounded-xl border border-gray-100 hover:bg-white hover:border-gray-200 hover:shadow-sm transition-all duration-200">
                                             <div class="flex justify-between items-center mb-3">
                                                 <label
                                                     class="text-xs font-bold text-gray-500 uppercase tracking-wider">温度</label>
@@ -2415,7 +2221,7 @@
 
                                         <!-- Image Key -->
                                         <div
-                                            class="bg-gray-50 p-4 rounded-xl border border-gray-100 hover:bg-white hover:border-gray-200 hover:shadow-sm transition-all duration-200 flex flex-col justify-center">
+                                            class="bg-gray-50/60 p-4 rounded-xl border border-gray-100 hover:bg-white hover:border-gray-200 hover:shadow-sm transition-all duration-200 flex flex-col justify-center">
                                             <label
                                                 class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">自动生图密钥</label>
                                             <input v-model="settings.imageGenKey" type="password"
@@ -2425,21 +2231,36 @@
 
                                         <!-- Image Style -->
                                         <div
-                                            class="bg-gray-50 p-4 rounded-xl border border-gray-100 hover:bg-white hover:border-gray-200 hover:shadow-sm transition-all duration-200 flex flex-col justify-center">
+                                            class="bg-gray-50/60 p-4 rounded-xl border border-gray-100 hover:bg-white hover:border-gray-200 hover:shadow-sm transition-all duration-200 flex flex-col justify-center">
                                             <label
                                                 class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">生图风格</label>
                                             <custom-select v-model="settings.imageStyle" :options="imageStyleOptions"
                                                 button-class="rounded-lg px-3 py-1.5 text-sm text-gray-700 focus:border-teal-400 focus:ring-teal-100"
                                                 menu-class="text-sm">
                                             </custom-select>
+                                            <textarea v-if="settings.imageStyle === 'custom'"
+                                                v-model="settings.customImageArtists" rows="3"
+                                                class="mt-3 w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-gray-700 text-sm focus:ring-2 focus:ring-teal-100 focus:border-teal-400 focus:outline-none transition-all shadow-sm resize-y custom-scrollbar"
+                                                placeholder="输入自定义画师串"></textarea>
                                         </div>
 
                                         <!-- Image Size -->
                                         <div
-                                            class="bg-gray-50 p-4 rounded-xl border border-gray-100 hover:bg-white hover:border-gray-200 hover:shadow-sm transition-all duration-200 flex flex-col justify-center">
+                                            class="bg-gray-50/60 p-4 rounded-xl border border-gray-100 hover:bg-white hover:border-gray-200 hover:shadow-sm transition-all duration-200 flex flex-col justify-center">
                                             <label
                                                 class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">生图比例</label>
                                             <custom-select v-model="settings.imageSize" :options="imageSizeOptions"
+                                                button-class="rounded-lg px-3 py-1.5 text-sm text-gray-700 focus:border-teal-400 focus:ring-teal-100"
+                                                menu-class="text-sm">
+                                            </custom-select>
+                                        </div>
+
+                                        <!-- Image Count -->
+                                        <div
+                                            class="bg-gray-50/60 p-4 rounded-xl border border-gray-100 hover:bg-white hover:border-gray-200 hover:shadow-sm transition-all duration-200 flex flex-col justify-center">
+                                            <label
+                                                class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">期望生图数量</label>
+                                            <custom-select v-model="settings.imageGenCount" :options="imageGenCountOptions"
                                                 button-class="rounded-lg px-3 py-1.5 text-sm text-gray-700 focus:border-teal-400 focus:ring-teal-100"
                                                 menu-class="text-sm">
                                             </custom-select>
@@ -2534,17 +2355,6 @@
                                     <span
                                         class="text-sm font-medium text-gray-600 group-hover:text-gray-900 transition-colors">沉浸模式</span>
                                 </label>
-                                <label
-                                    class="flex items-center p-3 rounded-xl border-2 border-transparent hover:border-gray-100 hover:bg-gray-50 transition-all cursor-pointer group">
-                                    <div class="relative inline-flex items-center mr-2.5">
-                                        <input type="checkbox" v-model="settings.showNativeReasoning" class="sr-only peer">
-                                        <div
-                                            class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-500">
-                                        </div>
-                                    </div>
-                                    <span
-                                        class="text-sm font-medium text-gray-600 group-hover:text-gray-900 transition-colors">展示原生思考</span>
-                                </label>
                             </div>
 
                             <!-- Render Layer Limit Setting -->
@@ -2562,7 +2372,7 @@
                                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <!-- Font Size Setting -->
                                     <div
-                                        class="bg-gray-50 p-4 rounded-xl border border-gray-100 hover:bg-white hover:border-gray-200 hover:shadow-sm transition-all duration-200">
+                                        class="bg-gray-50/60 p-4 rounded-xl border border-gray-100 hover:bg-white hover:border-gray-200 hover:shadow-sm transition-all duration-200">
                                         <div class="flex justify-between items-center mb-3">
                                             <label
                                                 class="text-xs font-bold text-gray-500 uppercase tracking-wider">对话字体大小</label>
@@ -2815,7 +2625,7 @@
                                     <label class="text-xs font-medium text-gray-500 block mb-1.5">分析模型</label>
                                     <div class="flex gap-2">
                                         <button @click="openModelSelector('uiTemplateModel')"
-                                            class="flex-1 px-3 py-2 text-sm text-left bg-gray-50/80 border border-gray-200 rounded-xl hover:border-primary-300 hover:bg-white transition-all cursor-pointer truncate"
+                                            class="flex-1 px-3 py-2 text-sm text-left bg-gray-50/60 border border-gray-200 rounded-xl hover:border-primary-300 hover:bg-white transition-all cursor-pointer truncate"
                                             :title="settings.uiTemplateModel || '未选择模型'">
                                             <span
                                                 :class="settings.uiTemplateModel ? 'text-gray-800 font-mono' : 'text-gray-400'">{{
@@ -2824,7 +2634,7 @@
                                     </div>
                                 </div>
                             </div>
-                            <div class="bg-gray-50/80 p-3 rounded-xl border border-gray-100">
+                            <div class="bg-gray-50/60 p-3 rounded-xl border border-gray-100">
                                 <div class="flex justify-between items-center mb-2">
                                     <label class="text-xs font-medium text-gray-500">分析对话层数</label>
                                     <span
@@ -3052,7 +2862,7 @@
                         </span>
                     </button>
                     <div v-show="showActiveToolSettings" class="px-3 pb-3 pt-2 border-t border-gray-100 animate-fade-in">
-                        <div class="bg-gray-50/80 p-2.5 rounded-xl border border-gray-100">
+                        <div class="bg-gray-50/60 p-2.5 rounded-xl border border-gray-100">
                             <div class="flex items-center mb-2">
                                 <label class="text-xs font-medium text-gray-500">调用工具积极性</label>
                             </div>
@@ -3276,7 +3086,7 @@
                         <div v-if="memorySettings.enabled"
                             class="space-y-3 pt-3 border-t border-gray-100 animate-fade-in">
                             <div class="space-y-3">
-                                <div class="bg-gray-50/80 p-3 rounded-xl border border-gray-100">
+                                <div class="bg-gray-50/60 p-3 rounded-xl border border-gray-100">
                                     <label class="text-xs font-medium text-gray-500 block mb-2">向量嵌入模型</label>
                                     <button @click="openModelSelector('memoryEmbeddingModel')"
                                         class="w-full px-3 py-2 text-sm text-left bg-white/80 border border-gray-200 rounded-xl hover:border-primary-300 hover:bg-white transition-all cursor-pointer truncate"
@@ -3286,7 +3096,7 @@
                                             memorySettings.embeddingModel || '请选择向量嵌入模型' }}</span>
                                     </button>
                                 </div>
-                                <div class="bg-gray-50/80 p-3 rounded-xl border border-gray-100">
+                                <div class="bg-gray-50/60 p-3 rounded-xl border border-gray-100">
                                     <div class="flex justify-between items-center mb-2">
                                         <label class="text-xs font-medium text-gray-500">记忆召回分片数</label>
                                         <span
@@ -3300,7 +3110,7 @@
 
                             <!-- Context Compression Settings -->
                             <div class="pt-3 border-t border-gray-100 mt-1">
-                                <div class="bg-gray-50/80 p-3 rounded-xl border border-gray-100">
+                                <div class="bg-gray-50/60 p-3 rounded-xl border border-gray-100">
                                     <div class="flex justify-between items-center mb-2">
                                         <label class="text-xs font-medium text-gray-500">保留最近楼层</label>
                                         <span
@@ -3351,7 +3161,7 @@
                         <form @submit.prevent="searchVectorMemories()" class="flex flex-col sm:flex-row gap-2">
                             <input v-model="vectorMemorySearchQuery"
                                 :disabled="isVectorMemorySearching"
-                                class="flex-1 min-w-0 px-3 py-2 text-sm bg-gray-50/80 border border-gray-200 rounded-xl focus:bg-white focus:border-primary-300 focus:ring-2 focus:ring-primary-100 outline-none transition-all"
+                                class="flex-1 min-w-0 px-3 py-2 text-sm bg-gray-50/60 border border-gray-200 rounded-xl focus:bg-white focus:border-primary-300 focus:ring-2 focus:ring-primary-100 outline-none transition-all"
                                 placeholder="输入需要检索的内容">
                             <button type="submit"
                                 :disabled="isVectorMemorySearching || !vectorMemorySearchQuery.trim() || memoryStats.vector === 0"
@@ -3566,7 +3376,8 @@
                         </div>
                         <div class="flex items-center space-x-4 flex-shrink-0">
                             <label class="relative inline-flex items-center cursor-pointer">
-                                <input type="checkbox" v-model="entry.enabled" class="sr-only peer">
+                                <input type="checkbox" :checked="entry.enabled"
+                                    @change="setWorldInfoEnabled(entry, $event.target.checked, $event)" class="sr-only peer">
                                 <div
                                     class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600">
                                 </div>
@@ -3684,12 +3495,12 @@
                             <label class="block text-sm font-medium text-gray-700 mb-1">您的称呼 <span
                                     class="text-red-500">*</span></label>
                             <input v-model="tempUserSetup.name" type="text"
-                                class="w-full bg-gray-50 border border-gray-300 rounded-lg px-4 py-2 text-gray-800 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:outline-none transition-all"
+                                class="w-full bg-gray-50/60 border border-gray-300 rounded-lg px-4 py-2 text-gray-800 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:outline-none transition-all"
                                 placeholder="角色对您的称呼">
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-2">旁白叙事视角</label>
-                            <div class="flex p-1 bg-gray-100 rounded-xl gap-1">
+                            <div class="flex p-1 bg-gray-50/60 rounded-xl gap-1">
                                 <button @click="tempUserSetup.person = 'second'"
                                     :class="['flex-1 py-2 text-sm font-bold transition-all rounded-lg', tempUserSetup.person === 'second' ? 'bg-white text-primary-600 shadow-sm' : 'text-gray-500 hover:text-gray-700']">
                                     第二人称 (你)
@@ -3704,7 +3515,7 @@
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1">详细设定 (可选)</label>
                             <textarea v-model="tempUserSetup.description" rows="6"
-                                class="w-full bg-gray-50 border border-gray-300 rounded-lg px-4 py-2 text-gray-800 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:outline-none transition-all resize-y"
+                                class="w-full bg-gray-50/60 border border-gray-300 rounded-lg px-4 py-2 text-gray-800 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:outline-none transition-all resize-y"
                                 placeholder="例如：您的外貌、性格、人设等..."></textarea>
                         </div>
 
@@ -3768,7 +3579,7 @@
                             :placeholder="modelSelectionTarget === 'memoryEmbeddingModel' ? '已锁定：embedding' : '检索模型...'"
                             :readonly="modelSelectionTarget === 'memoryEmbeddingModel'"
                             :title="modelSelectionTarget === 'memoryEmbeddingModel' ? '模型选择已锁定' : ''"
-                            :class="['w-full border rounded-lg px-4 py-2 focus:outline-none transition-all shadow-sm', modelSelectionTarget === 'memoryEmbeddingModel' ? 'bg-gray-100 border-gray-200 text-gray-400 placeholder-gray-400 cursor-not-allowed shadow-none select-none' : 'bg-gray-50 border-gray-300 text-gray-800 focus:ring-2 focus:ring-primary-500 focus:shadow-md']">
+                            :class="['w-full border rounded-lg px-4 py-2 focus:outline-none transition-all shadow-sm', modelSelectionTarget === 'memoryEmbeddingModel' ? 'bg-gray-100 border-gray-200 text-gray-400 placeholder-gray-400 cursor-not-allowed shadow-none select-none' : 'bg-gray-50/60 border-gray-300 text-gray-800 focus:ring-2 focus:ring-primary-500 focus:shadow-md']">
 
                         <!-- Model Category Tags -->
                         <div class="flex flex-wrap gap-2 max-h-[160px] overflow-y-auto custom-scrollbar items-center py-1">
@@ -3971,7 +3782,7 @@
                                 <label
                                     class="block text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-wider">角色名称</label>
                                 <input v-model="editingCharacter.data.name" type="text"
-                                    class="w-full bg-gray-50 border border-gray-300 rounded-xl px-4 py-2.5 text-gray-800 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:outline-none text-lg font-bold shadow-inner transition-all text-center"
+                                    class="w-full bg-gray-50/60 border border-gray-300 rounded-xl px-4 py-2.5 text-gray-800 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:outline-none text-lg font-bold shadow-inner transition-all text-center"
                                     placeholder="输入角色名称...">
                             </div>
                         </div>
@@ -3984,7 +3795,7 @@
                                 (editingCharacter.data.description || '').length }} 字</span>
                         </div>
                         <textarea v-model="editingCharacter.data.description"
-                            class="w-full bg-gray-50 border border-gray-300 rounded-xl px-4 py-3 text-gray-800 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:outline-none flex-1 resize-none shadow-inner transition-all leading-relaxed"
+                            class="w-full bg-gray-50/60 border border-gray-300 rounded-xl px-4 py-3 text-gray-800 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:outline-none flex-1 resize-none shadow-inner transition-all leading-relaxed"
                             placeholder="对角色的简短介绍..."></textarea>
                     </div>
 
@@ -3996,7 +3807,7 @@
                                 (editingCharacter.data.personality || '').length }} 字</span>
                         </div>
                         <textarea v-model="editingCharacter.data.personality"
-                            class="w-full bg-gray-50 border border-gray-300 rounded-xl px-4 py-3 text-gray-800 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:outline-none flex-1 resize-none shadow-inner transition-all leading-relaxed"
+                            class="w-full bg-gray-50/60 border border-gray-300 rounded-xl px-4 py-3 text-gray-800 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:outline-none flex-1 resize-none shadow-inner transition-all leading-relaxed"
                             placeholder="详细的角色性格、外貌、喜好等设定..."></textarea>
                     </div>
 
@@ -4008,7 +3819,7 @@
                                 (editingCharacter.data.scenario || '').length }} 字</span>
                         </div>
                         <textarea v-model="editingCharacter.data.scenario"
-                            class="w-full bg-gray-50 border border-gray-300 rounded-xl px-4 py-3 text-gray-800 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:outline-none flex-1 resize-none shadow-inner transition-all leading-relaxed"
+                            class="w-full bg-gray-50/60 border border-gray-300 rounded-xl px-4 py-3 text-gray-800 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:outline-none flex-1 resize-none shadow-inner transition-all leading-relaxed"
                             placeholder="当前故事发生的背景、环境或特定情况..."></textarea>
                     </div>
 
@@ -4020,7 +3831,7 @@
                                 (editingCharacter.data.first_mes || '').length }} 字</span>
                         </div>
                         <textarea v-model="editingCharacter.data.first_mes"
-                            class="w-full bg-gray-50 border border-gray-300 rounded-xl px-4 py-3 text-gray-800 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:outline-none flex-1 resize-none shadow-inner transition-all leading-relaxed"
+                            class="w-full bg-gray-50/60 border border-gray-300 rounded-xl px-4 py-3 text-gray-800 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:outline-none flex-1 resize-none shadow-inner transition-all leading-relaxed"
                             placeholder="角色在对话开始时说的第一句话..."></textarea>
                     </div>
                 </div>
@@ -4093,7 +3904,7 @@
                                 (editingPreset.data.content || '').length }} 字符</span>
                         </label>
                         <textarea v-model="editingPreset.data.content" rows="12"
-                            class="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-gray-800 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:outline-none font-mono text-sm shadow-inner leading-relaxed resize-y min-h-[200px]"
+                            class="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-gray-800 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:outline-none text-sm shadow-inner leading-relaxed resize-y min-h-[200px]"
                             placeholder="在此输入预设内容..."></textarea>
                     </div>
                 </div>
@@ -4195,7 +4006,7 @@
                         <div>
                             <label class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">变量JSON</label>
                             <textarea v-model="editingUiTemplate.data.variableStateText" rows="22"
-                                class="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-gray-800 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:outline-none font-mono text-sm shadow-inner leading-relaxed resize-y min-h-[460px]"
+                                class="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-gray-800 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:outline-none text-sm shadow-inner leading-relaxed resize-y min-h-[460px]"
                                 placeholder='{"status":"平稳","equipment":[{"slot":"武器","name":"短剑","durability":80}]}'></textarea>
                         </div>
                         <div>
@@ -4909,7 +4720,7 @@
                                 (editingWorldInfo.data.content || '').length }} 字符</span>
                         </label>
                         <textarea v-model="editingWorldInfo.data.content" rows="12"
-                            class="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-gray-800 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:outline-none font-mono text-sm shadow-inner leading-relaxed resize-y min-h-[260px]"
+                            class="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-gray-800 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:outline-none text-sm shadow-inner leading-relaxed resize-y min-h-[260px]"
                             placeholder="在此输入世界书条目的具体内容..."></textarea>
                     </div>
 
@@ -4990,7 +4801,7 @@
         </div>
 
         <!-- Context Viewer Modal -->
-        <transition enter-active-class="transition-opacity duration-300 ease-out" enter-from-class="opacity-0"
+        <transition enter-active-class="transition-opacity duration-300 ease-modal-fade" enter-from-class="opacity-0"
             enter-to-class="opacity-100" leave-active-class="transition-opacity duration-200 ease-in"
             leave-from-class="opacity-100" leave-to-class="opacity-0">
             <div v-if="showContextViewerModal"
@@ -5109,7 +4920,7 @@
                                         </div>
                                     </summary>
 
-                                    <div class="p-4 bg-white border-t border-gray-100 font-mono text-[13px] text-gray-700 whitespace-pre-wrap leading-relaxed max-h-[500px] overflow-y-auto custom-scrollbar decoration-clone selection:bg-blue-200 selection:text-blue-900 break-words"
+                                    <div class="p-4 bg-white border-t border-gray-100 text-[13px] text-gray-700 whitespace-pre-wrap leading-relaxed max-h-[500px] overflow-y-auto custom-scrollbar decoration-clone selection:bg-blue-200 selection:text-blue-900 break-words"
                                         v-html="msg.renderedContent">
                                     </div>
                                 </details>
@@ -5133,7 +4944,7 @@
         </transition>
 
         <!-- Theme-compliant Global Confirm Modal -->
-        <transition enter-active-class="transition duration-300 ease-out" enter-from-class="opacity-0"
+        <transition enter-active-class="transition duration-300 ease-modal-fade" enter-from-class="opacity-0"
             enter-to-class="opacity-100" leave-active-class="transition duration-200 ease-in"
             leave-from-class="opacity-100" leave-to-class="opacity-0">
             <div v-if="globalConfirmModal.show" class="fixed inset-0 z-[200] flex items-center justify-center px-4 pt-4 pb-20 text-center sm:p-0">

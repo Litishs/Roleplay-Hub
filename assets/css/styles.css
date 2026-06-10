@@ -544,12 +544,17 @@
             overflow: hidden;
             background-color: #f9fafb;
             color: #1f2937;
-            font-family: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji' !important;
+            font-family: 'Lora', 'Noto Serif SC', 'Source Han Serif SC', 'Source Han Serif CN', 'STSong', 'SimSun', Georgia, Cambria, 'Times New Roman', Times, serif !important;
             font-size: 100% !important;
+            font-weight: 500 !important;
             -webkit-text-size-adjust: 100% !important;
             -moz-text-size-adjust: 100% !important;
             -ms-text-size-adjust: 100% !important;
             text-size-adjust: 100% !important;
+        }
+
+        .font-normal {
+            font-weight: 500 !important;
         }
 
         #app {
@@ -587,16 +592,19 @@
             background:
                 linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(249, 250, 251, 0.94));
             box-shadow: 20px 0 60px -36px rgba(15, 23, 42, 0.4);
+            overflow-x: hidden;
         }
 
         .sidebar-nav {
             scrollbar-gutter: stable;
+            overflow-x: hidden;
         }
 
         .sidebar-nav-button {
             position: relative;
             min-height: 2.75rem;
             overflow: hidden;
+            font-weight: 600 !important;
         }
 
         .sidebar-nav-button svg {
@@ -649,7 +657,7 @@
             padding-left: 0.9rem;
             padding-right: 0.8rem;
             margin-bottom: 0.75em;
-            text-align: justify;
+            text-align: left;
         }
 
         /* Top/Bottom padding simulation */
@@ -710,6 +718,7 @@
         .markdown-body div[style*="rgba(20, 10, 20, 0.7)"] {
             color: #ffffff !important;
             white-space: pre-wrap; /* Kept pre-wrap strictly for this known regex */
+            white-space: pre-wrap; /* Kept pre-wrap strictly for this known regex */
         }
 
         .glass-panel {
@@ -719,24 +728,42 @@
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
         }
 
+
+
+        /* --- Common Role Card Styles (Universal Support) --- */
+        /* Main Container */
+        .main-container, #role-card-container {
+            line-height: 1.6;
+            background-color: #fff;
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            padding: 16px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+            margin-bottom: 12px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .c-tongqiu { border-left-color: #f59e0b; } .c-tongqiu .bar-fill { background: #f59e0b; }
+        .c-yufan { border-left-color: #3b82f6; } .c-yufan .bar-fill { background: #3b82f6; }
+        .c-linghu { border-left-color: #8b5cf6; } .c-linghu .bar-fill { background: #8b5cf6; }
+        .c-chongtian { border-left-color: #ef4444; } .c-chongtian .bar-fill { background: #ef4444; }
+
+
+
         .msg-bubble-glass {
             background-color: rgba(255, 255, 255, 0.88) !important;
         }
 
-        .desc-panel-stats {
-            font-family: "PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        }
+
 
         .desc-panel-stat-number {
-            font-family: "Bahnschrift SemiCondensed", "Bahnschrift", "DIN Alternate", "Cascadia Mono", "Consolas", "Segoe UI", sans-serif !important;
             font-variant-numeric: tabular-nums;
             font-feature-settings: "tnum" 1;
             letter-spacing: 0.01em;
         }
 
-        .desc-panel-stat-unit {
-            font-family: "PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        }
+
 
         @media (min-width: 769px) {
             .immersive-message-row {
@@ -835,6 +862,29 @@
                 backdrop-filter: none !important;
                 -webkit-backdrop-filter: none !important;
                 -webkit-overflow-scrolling: touch !important;
+            }
+
+            .chat-scrollbar {
+                -ms-overflow-style: auto !important;
+                scrollbar-width: thin !important;
+                scrollbar-color: rgba(148, 163, 184, 0.68) transparent !important;
+            }
+
+            .chat-scrollbar::-webkit-scrollbar {
+                display: block !important;
+                width: 4px !important;
+                height: 0 !important;
+            }
+
+            .chat-scrollbar::-webkit-scrollbar-track,
+            .chat-scrollbar::-webkit-scrollbar-corner {
+                background: transparent !important;
+            }
+
+            .chat-scrollbar::-webkit-scrollbar-thumb {
+                min-height: 36px !important;
+                border-radius: 999px !important;
+                background: rgba(148, 163, 184, 0.58) !important;
             }
 
             /* Disable Tailwind blur-* classes (filter: blur) on mobile, except .char-bg-blur */
@@ -1121,14 +1171,35 @@
         }
 
         /* Toast Transitions */
+        .toast-stack {
+            position: relative;
+        }
+
+        .toast-item {
+            will-change: transform, opacity;
+            transform-origin: top center;
+        }
+
         .list-enter-active,
         .list-leave-active {
-            transition: all 0.4s ease;
+            transition:
+                opacity 0.26s cubic-bezier(0.22, 0.61, 0.36, 1),
+                transform 0.34s cubic-bezier(0.22, 1, 0.36, 1);
         }
+
+        .list-move {
+            transition: transform 0.38s cubic-bezier(0.22, 1, 0.36, 1);
+        }
+
+        .list-leave-active {
+            position: absolute;
+            z-index: 0;
+        }
+
         .list-enter-from,
         .list-leave-to {
             opacity: 0;
-            transform: translateY(-20px);
+            transform: translateY(-10px) scale(0.98);
         }
 
         /* Enhanced Dropdown Animation */
@@ -1149,6 +1220,11 @@ animation: dropdown-out 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 /* Fade Animation */
+.fixed.inset-0.animate-fade-in {
+    animation-duration: 0.32s;
+    animation-timing-function: cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
 .fade-enter-active,
 .fade-leave-active {
 transition: opacity 0.3s ease;
@@ -1192,25 +1268,7 @@ opacity: 0;
         .bar-bg { height: 4px; background: #f3f4f6; border-radius: 2px; overflow: hidden; margin-top: 6px; }
         .bar-fill { height: 100%; background: #10b981; border-radius: 2px; }
         
-        .c-tongqiu { border-left-color: #f59e0b; } .c-tongqiu .bar-fill { background: #f59e0b; }
-        .c-yufan { border-left-color: #3b82f6; } .c-yufan .bar-fill { background: #3b82f6; }
-        .c-linghu { border-left-color: #8b5cf6; } .c-linghu .bar-fill { background: #8b5cf6; }
-        .c-chongtian { border-left-color: #ef4444; } .c-chongtian .bar-fill { background: #ef4444; }
 
-        /* --- Common Role Card Styles (Universal Support) --- */
-        /* Main Container */
-        .main-container, #role-card-container {
-            font-family: 'PingFang SC', system-ui, -apple-system, sans-serif;
-            line-height: 1.6;
-            background-color: #fff;
-            border: 1px solid #e5e7eb;
-            border-radius: 12px;
-            padding: 16px;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
-            margin-bottom: 12px;
-            position: relative;
-            overflow: hidden;
-        }
         
         /* Headers & Decorations */
         .scene-header, .panel-header {
@@ -1380,18 +1438,21 @@ opacity: 0;
         }
 
         /* CoT Tree List Style */
-        .cot-content .markdown-body ul {
+        .cot-content .markdown-body ul,
+        .native-thinking-body .markdown-body ul {
             list-style: none !important;
             padding-left: 0.5rem !important;
             margin-left: 0.25rem !important;
         }
-        .cot-content .markdown-body ul > li {
+        .cot-content .markdown-body ul > li,
+        .native-thinking-body .markdown-body ul > li {
             position: relative;
             padding-left: 1.25rem;
             margin-bottom: 0.25rem;
         }
         /* Vertical connecting line */
-        .cot-content .markdown-body ul > li::before {
+        .cot-content .markdown-body ul > li::before,
+        .native-thinking-body .markdown-body ul > li::before {
             content: '';
             position: absolute;
             left: 0;
@@ -1401,11 +1462,13 @@ opacity: 0;
             background-color: #cbd5e1;
         }
         /* Stop vertical line for last item */
-        .cot-content .markdown-body ul > li:last-child::before {
+        .cot-content .markdown-body ul > li:last-child::before,
+        .native-thinking-body .markdown-body ul > li:last-child::before {
             height: 0.65em;
         }
         /* Horizontal indicator line */
-        .cot-content .markdown-body ul > li::after {
+        .cot-content .markdown-body ul > li::after,
+        .native-thinking-body .markdown-body ul > li::after {
             content: '';
             position: absolute;
             left: 0;
@@ -1424,6 +1487,12 @@ opacity: 0;
         .native-thinking-card {
             margin-top: 0.5rem;
             margin-bottom: 0.5rem;
+        }
+
+        .summary-timeline-card,
+        .summary-timeline-card.is-open {
+            margin: 0.25rem 0.1rem 0.35rem;
+            width: calc(100% - 0.2rem);
         }
 
         .native-thinking-header {
@@ -1478,6 +1547,11 @@ opacity: 0;
 
         .cot-thinking-scroll .markdown-body {
             white-space: normal;
+        }
+
+        .native-thinking-body .markdown-body > * {
+            padding-left: 0.4rem !important;
+            padding-right: 0.4rem !important;
         }
 
         .cot-thinking-scroll .markdown-body > * {
@@ -2109,4 +2183,178 @@ opacity: 0;
     .memory-card .group-hover\:opacity-100 {
         opacity: 1 !important;
     }
+}
+
+
+/* --- Premium Interface Styling System --- */
+.premium-panel {
+    background: rgba(255, 255, 255, 0.45);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.65);
+    box-shadow: 
+        0 10px 30px -10px rgba(15, 23, 42, 0.04),
+        0 1px 1px 0 rgba(255, 255, 255, 0.8) inset;
+    border-radius: 1.25rem;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.premium-panel:hover {
+    background: rgba(255, 255, 255, 0.55);
+    border-color: rgba(255, 255, 255, 0.85);
+    box-shadow: 
+        0 20px 40px -15px rgba(15, 23, 42, 0.08),
+        0 1px 1px 0 rgba(255, 255, 255, 0.9) inset;
+}
+
+.premium-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    cursor: pointer;
+    font-weight: 700;
+}
+
+.premium-btn:hover {
+    transform: translateY(-1px);
+}
+
+.premium-btn:active {
+    transform: scale(0.97);
+}
+
+.premium-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    transform: none !important;
+}
+
+/* Premium Range Input */
+.premium-range {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 6px;
+    background: #e2e8f0;
+    border-radius: 999px;
+    outline: none;
+    transition: background 0.3s ease;
+}
+
+.premium-range::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+    box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.25), 0 2px 4px rgba(0, 0, 0, 0.1);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.premium-range::-webkit-slider-thumb:hover {
+    transform: scale(1.15);
+    box-shadow: 0 0 0 6px rgba(59, 130, 246, 0.35), 0 3px 6px rgba(0, 0, 0, 0.15);
+}
+
+.premium-range::-moz-range-thumb {
+    width: 18px;
+    height: 18px;
+    border: none;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+    box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.25), 0 2px 4px rgba(0, 0, 0, 0.1);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.premium-range::-moz-range-thumb:hover {
+    transform: scale(1.15);
+    box-shadow: 0 0 0 6px rgba(59, 130, 246, 0.35), 0 3px 6px rgba(0, 0, 0, 0.15);
+}
+
+/* Premium Stat Cards */
+.premium-stat-card {
+    background: rgba(255, 255, 255, 0.45);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.6);
+    border-radius: 1rem;
+    padding: 1rem 1.25rem;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.02);
+    transition: all 0.3s ease;
+}
+
+.premium-stat-card:hover {
+    transform: translateY(-2px);
+    background: rgba(255, 255, 255, 0.65);
+    box-shadow: 0 12px 20px -8px rgba(37, 99, 235, 0.08);
+}
+
+/* Timeline Components */
+.premium-timeline {
+    position: relative;
+    padding-left: 1.5rem;
+    border-left: 2px dashed rgba(226, 232, 240, 0.8);
+    margin-left: 0.5rem;
+}
+
+.premium-timeline-item {
+    position: relative;
+    margin-bottom: 1.5rem;
+}
+
+.premium-timeline-item:last-child {
+    margin-bottom: 0;
+}
+
+.premium-timeline-node {
+    position: absolute;
+    left: calc(-1.5rem - 6px);
+    top: 6px;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #3b82f6;
+    border: 2px solid #fff;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.18);
+    z-index: 2;
+    transition: all 0.25s ease;
+}
+
+.premium-timeline-item:hover .premium-timeline-node {
+    transform: scale(1.25);
+    background: #2563eb;
+    box-shadow: 0 0 0 5px rgba(37, 99, 235, 0.25);
+}
+
+.premium-timeline-card {
+    background: rgba(248, 250, 252, 0.65);
+    border: 1px solid rgba(241, 245, 249, 0.8);
+    border-radius: 0.75rem;
+    padding: 0.85rem 1rem;
+    transition: all 0.25s ease;
+}
+
+.premium-timeline-card:hover {
+    background: #ffffff;
+    border-color: rgba(203, 213, 225, 0.6);
+    box-shadow: 0 6px 12px -4px rgba(15, 23, 42, 0.04);
+}
+
+/* Switch styling for general toggle custom inputs */
+[class*="peer-checked:after:translate-x"]::after {
+    transition: none !important;
+}
+
+label:active [class*="peer-checked:after:translate-x"]::after,
+label:focus-within [class*="peer-checked:after:translate-x"]::after {
+    transition: all 0.2s ease !important;
+}
+
+.premium-toggle-checkbox:checked + .premium-toggle-switch {
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+    box-shadow: 0 2px 8px -2px rgba(37, 99, 235, 0.5);
 }

@@ -234,7 +234,7 @@
                             ref="menuRef"
                             :style="menuStyle"
                             :class="[
-                                'overflow-y-auto rounded-xl border border-gray-200 bg-white/95 p-1.5 shadow-2xl shadow-gray-900/15 backdrop-blur-xl custom-scrollbar',
+                                'overflow-y-auto rounded-xl border border-gray-200 bg-white p-1.5 shadow-2xl shadow-gray-900/15 backdrop-blur-xl custom-scrollbar',
                                 menuClass
                             ]"
                             role="listbox"

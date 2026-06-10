@@ -6,6 +6,9 @@
     <meta name="viewport"
         content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>角色卡工坊</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400..700;1,400..700&display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdn.jsdelivr.net/npm/daisyui@4.7.2/dist/full.min.css" rel="stylesheet" type="text/css" />
     <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
@@ -21,10 +24,15 @@
         }
 
         body {
-            font-family: 'PingFang SC', 'PingFang TC', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
+            font-family: 'Lora', 'Noto Serif SC', 'Source Han Serif SC', 'Source Han Serif CN', 'STSong', 'SimSun', Georgia, Cambria, 'Times New Roman', Times, serif !important;
+            font-weight: 500 !important;
             background-color: #f3f4f6;
             -webkit-font-smoothing: antialiased;
             -moz-osx-font-smoothing: grayscale;
+        }
+
+        .font-normal {
+            font-weight: 500 !important;
         }
 
         ::-webkit-scrollbar {
@@ -192,6 +200,10 @@
             },
             theme: {
                 extend: {
+                    fontFamily: {
+                        sans: ['Lora', 'Noto Serif SC', 'Source Han Serif SC', 'Source Han Serif CN', 'STSong', 'SimSun', 'Georgia', 'Cambria', 'Times New Roman', 'Times', 'serif'],
+                        serif: ['Lora', 'Noto Serif SC', 'Source Han Serif SC', 'Source Han Serif CN', 'STSong', 'SimSun', 'Georgia', 'Cambria', 'Times New Roman', 'Times', 'serif']
+                    },
                     colors: {
                         primary: '#65c3c8',
                         secondary: '#ef9fbc',
@@ -1164,95 +1176,90 @@
                                             <div class="flex flex-col gap-3 pt-2 pb-4">
                                                 <div class="form-control">
                                                     <label class="label py-1"><span
-                                                            class="label-text text-xs font-bold text-base-content/50 uppercase">脚本名称
-                                                            Name</span></label>
+                                                            class="label-text text-xs font-bold text-base-content/50 uppercase">脚本名称 NAME</span></label>
                                                     <input type="text" v-model="script.name"
-                                                        class="input input-bordered input-sm bg-base-200/30 focus:bg-base-100"
+                                                        class="input input-bordered input-sm bg-base-200/30"
                                                         placeholder="脚本名称" />
                                                 </div>
-                                                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                                <div class="grid grid-cols-1 gap-3">
                                                     <div class="form-control">
                                                         <label class="label py-1"><span
-                                                                class="label-text text-xs font-bold text-base-content/50 uppercase">正则
-                                                                 正则表达式</span></label>
+                                                                class="label-text text-xs font-bold text-base-content/50 uppercase">正则表达式</span></label>
                                                         <div class="flex flex-col gap-1">
                                                             <input type="text" v-model="script.regex"
-                                                                class="input input-bordered input-sm font-mono text-xs bg-base-200/30 w-full"
+                                                                class="input input-bordered input-sm font-mono text-sm bg-base-200/30 w-full"
                                                                  placeholder="正则表达式" />
-                                                            <div class="flex items-center gap-2 px-1">
+                                                            <div class="flex flex-wrap items-center gap-x-3 gap-y-1 px-1 min-h-7">
                                                                 <span
-                                                                    class="text-[10px] font-bold text-base-content/30 uppercase">标志:</span>
+                                                                    class="text-xs font-bold text-base-content/50">标签:</span>
                                                                 <label
-                                                                    class="cursor-pointer flex items-center gap-1 hover:text-primary transition-colors"
+                                                                    class="label py-0 cursor-pointer gap-1 justify-start hover:text-primary transition-colors"
                                                                     title="全局匹配"><input type="checkbox"
                                                                         :checked="hasFlag(script, 'g')"
                                                                         @change="toggleFlag(script, 'g')"
-                                                                        class="checkbox checkbox-xs checkbox-primary rounded-sm w-3 h-3" /><span
-                                                                        class="text-[10px] font-mono font-bold">g</span></label>
+                                                                        class="checkbox checkbox-xs checkbox-primary" /><span
+                                                                        class="label-text text-xs font-mono font-bold">g</span></label>
                                                                 <label
-                                                                    class="cursor-pointer flex items-center gap-1 hover:text-primary transition-colors"
+                                                                    class="label py-0 cursor-pointer gap-1 justify-start hover:text-primary transition-colors"
                                                                     title="忽略大小写"><input type="checkbox"
                                                                         :checked="hasFlag(script, 'i')"
                                                                         @change="toggleFlag(script, 'i')"
-                                                                        class="checkbox checkbox-xs checkbox-primary rounded-sm w-3 h-3" /><span
-                                                                        class="text-[10px] font-mono font-bold">i</span></label>
+                                                                        class="checkbox checkbox-xs checkbox-primary" /><span
+                                                                        class="label-text text-xs font-mono font-bold">i</span></label>
                                                                 <label
-                                                                    class="cursor-pointer flex items-center gap-1 hover:text-primary transition-colors"
+                                                                    class="label py-0 cursor-pointer gap-1 justify-start hover:text-primary transition-colors"
                                                                     title="多行模式"><input type="checkbox"
                                                                         :checked="hasFlag(script, 'm')"
                                                                         @change="toggleFlag(script, 'm')"
-                                                                        class="checkbox checkbox-xs checkbox-primary rounded-sm w-3 h-3" /><span
-                                                                        class="text-[10px] font-mono font-bold">m</span></label>
+                                                                        class="checkbox checkbox-xs checkbox-primary" /><span
+                                                                        class="label-text text-xs font-mono font-bold">m</span></label>
                                                                 <label
-                                                                    class="cursor-pointer flex items-center gap-1 hover:text-primary transition-colors"
+                                                                    class="label py-0 cursor-pointer gap-1 justify-start hover:text-primary transition-colors"
                                                                     title="点号匹配换行"><input
                                                                         type="checkbox" :checked="hasFlag(script, 's')"
                                                                         @change="toggleFlag(script, 's')"
-                                                                        class="checkbox checkbox-xs checkbox-primary rounded-sm w-3 h-3" /><span
-                                                                        class="text-[10px] font-mono font-bold">s</span></label>
+                                                                        class="checkbox checkbox-xs checkbox-primary" /><span
+                                                                        class="label-text text-xs font-mono font-bold">s</span></label>
                                                                 <input type="text" v-model="script.flags"
-                                                                    class="input input-bordered input-xs font-mono w-20 h-6 px-2"
+                                                                    class="input input-bordered input-xs font-mono w-20 h-7 px-2 bg-base-200/30"
                                                                     placeholder="gim" />
                                                             </div>
                                                         </div>
                                                     </div>
                                                     <div class="form-control">
                                                         <label class="label py-1"><span
-                                                                class="label-text text-xs font-bold text-base-content/50 uppercase">替换
-                                                                替换内容</span></label>
+                                                                class="label-text text-xs font-bold text-base-content/50 uppercase">替换内容</span></label>
                                                         <textarea v-model="script.replacement" rows="4"
-                                                            class="textarea textarea-bordered text-xs font-mono bg-base-200/30 min-h-28"
+                                                            class="textarea textarea-bordered h-32 text-sm font-mono bg-base-200/30"
                                                             placeholder="支持 $1、$2 等捕获组引用"></textarea>
                                                     </div>
                                                 </div>
 
                                                 <!-- Advanced Regex Settings -->
-                                                <div class="flex flex-col gap-2 bg-base-200/30 p-3 rounded-lg mt-2">
-                                                    <div class="flex flex-wrap gap-4 items-center">
-                                                        <div
-                                                            class="flex items-center gap-2 border-r border-base-content/10 pr-3">
-                                                            <span
-                                                                class="text-xs font-bold text-base-content/50">生效位置:</span>
-                                                            <label class="cursor-pointer flex items-center gap-1"><input
-                                                                    type="checkbox" :value="1"
-                                                                    v-model="script.placement"
-                                                                    class="checkbox checkbox-xs" /><span
-                                                                    class="text-xs">用户</span></label>
-                                                            <label class="cursor-pointer flex items-center gap-1"><input
-                                                                    type="checkbox" :value="2"
-                                                                    v-model="script.placement"
-                                                                    class="checkbox checkbox-xs" /><span
-                                                                    class="text-xs">AI</span></label>
-                                                        </div>
-                                                        <label class="cursor-pointer flex items-center gap-1"><input
-                                                                type="checkbox" v-model="script.markdownOnly"
-                                                                class="checkbox checkbox-xs" /><span class="text-xs">仅 Markdown</span></label>
-                                                        <label class="cursor-pointer flex items-center gap-1"><input
-                                                                type="checkbox" v-model="script.promptOnly"
-                                                                class="checkbox checkbox-xs" /><span
-                                                                class="text-xs">仅 Prompt</span></label>
+                                                <div class="flex flex-col gap-3 bg-base-200/30 p-3 rounded-lg mt-2">
+                                                    <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                                        <label class="label py-0 cursor-pointer gap-2 justify-start">
+                                                            <input type="checkbox" :value="1" v-model="script.placement"
+                                                                class="checkbox checkbox-xs checkbox-primary" />
+                                                            <span class="label-text text-xs font-bold text-base-content/50">用户消息</span>
+                                                        </label>
+                                                        <label class="label py-0 cursor-pointer gap-2 justify-start">
+                                                            <input type="checkbox" :value="2" v-model="script.placement"
+                                                                class="checkbox checkbox-xs checkbox-primary" />
+                                                            <span class="label-text text-xs font-bold text-base-content/50">AI消息</span>
+                                                        </label>
+                                                        <label class="label py-0 cursor-pointer gap-2 justify-start">
+                                                            <input type="checkbox" v-model="script.markdownOnly"
+                                                                class="checkbox checkbox-xs checkbox-primary" />
+                                                            <span class="label-text text-xs font-bold text-base-content/50">仅 Markdown</span>
+                                                        </label>
+                                                        <label class="label py-0 cursor-pointer gap-2 justify-start">
+                                                            <input type="checkbox" v-model="script.promptOnly"
+                                                                class="checkbox checkbox-xs checkbox-primary" />
+                                                            <span class="label-text text-xs font-bold text-base-content/50">仅 Prompt</span>
+                                                        </label>
                                                     </div>
-                                                    <div class="flex gap-3 items-center">
+                                                    <div class="flex gap-3 items-center pt-2">
                                                         <div class="join shadow-sm">
                                                             <span
                                                                 class="join-item btn btn-xs btn-static bg-base-200 border-base-300 font-normal text-xs">深度</span>
@@ -2507,7 +2514,12 @@
                     let processed = text;
 
                     const { isDisplay = true, isPrompt = false, role = 'assistant', depth = 0 } = options;
-                    for (const rawScript of scripts) {
+                    const orderedScripts = [...scripts].sort((a, b) => {
+                        const aIsImageGen = (a.name || a.scriptName) === 'NAI画图正则';
+                        const bIsImageGen = (b.name || b.scriptName) === 'NAI画图正则';
+                        return aIsImageGen === bIsImageGen ? 0 : (aIsImageGen ? 1 : -1);
+                    });
+                    for (const rawScript of orderedScripts) {
                         const script = normalizeRegexScript(rawScript);
                         if (!script.enabled) continue;
                         if (role === 'user' && !script.placement.includes(1)) continue;
@@ -2596,7 +2608,7 @@
                             -webkit-overflow-scrolling: touch !important;
                         }
                         body {
-                            font-family: 'PingFang SC', 'PingFang TC', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
+                            font-family: 'Lora', 'Noto Serif SC', 'Source Han Serif SC', 'Source Han Serif CN', 'STSong', 'SimSun', Georgia, Cambria, 'Times New Roman', Times, serif !important;
                             -webkit-font-smoothing: antialiased;
                             -moz-osx-font-smoothing: grayscale;
                             /* 确保 Body 可滚动且有高度 */
@@ -2966,7 +2978,7 @@
                     return renderUiTemplateString(normalized.htmlTemplate || '', vars);
                 };
 
-                const wrapUiTemplatePreview = (html) => `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><style>html,body{margin:0;min-height:100%;background:#fff;font-family:'PingFang SC','Microsoft YaHei',system-ui,sans-serif;}body{padding:16px;box-sizing:border-box;}*{box-sizing:border-box;}</style></head><body>${html || ''}</body></html>`;
+                const wrapUiTemplatePreview = (html) => `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><style>html,body{margin:0;min-height:100%;background:#fff;font-family:'Lora','Noto Serif SC','Source Han Serif SC','Source Han Serif CN','STSong','SimSun',Georgia,Cambria,'Times New Roman',Times,serif;}body{padding:16px;box-sizing:border-box;}*{box-sizing:border-box;}</style></head><body>${html || ''}</body></html>`;
 
                 const openUiTemplatePreview = (template) => {
                     previewOriginalOverride.value = null;
