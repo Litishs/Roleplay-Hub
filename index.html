@@ -1038,10 +1038,10 @@
                                     leave-from-class="opacity-100 translate-x-0"
                                     leave-to-class="opacity-0 translate-x-4">
                                     <div v-if="memorySettings.enabled"
-                                        class="flex items-center justify-center h-7 md:h-[30px] min-w-[38px] md:min-w-[42px] px-3 rounded-full border shadow-sm transition-all duration-300 cursor-default"
+                                        class="flex items-center justify-center h-7 min-w-[34px] md:min-w-[36px] px-2 rounded-full border shadow-sm transition-all duration-300 cursor-default"
                                         :class="{
                                              'bg-blue-50 text-blue-700 border-blue-200': hasActiveToolInlineWork,
-                                             'bg-gray-50 text-gray-600 border-gray-200': !hasActiveToolInlineWork && memoryExtractStatus === 'waiting',
+                                             'bg-white text-gray-500 border-gray-200': !hasActiveToolInlineWork && memoryExtractStatus === 'waiting',
                                              'bg-amber-50 text-amber-600 border-amber-200': !hasActiveToolInlineWork && memoryExtractStatus === 'extracting',
                                              'bg-[#ecfdf5] text-[#047857] border-[#a7f3d0]': !hasActiveToolInlineWork && memoryExtractStatus === 'success',
                                              'bg-red-50 text-red-600 border-red-200': !hasActiveToolInlineWork && memoryExtractStatus === 'error',
