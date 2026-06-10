@@ -918,100 +918,43 @@
 
             /* Mobile sidebar drawer */
             .mobile-overlay {
-                background:
-                    radial-gradient(circle at 0% 24%, rgba(37, 99, 235, 0.18), transparent 34%),
-                    linear-gradient(90deg, rgba(15, 23, 42, 0.5), rgba(15, 23, 42, 0.3)) !important;
-                opacity: 0;
+                background: rgba(15, 23, 42, 0.38) !important;
                 pointer-events: none;
                 visibility: hidden;
                 touch-action: none;
                 contain: paint;
                 transform: translateZ(0);
-                will-change: opacity;
-                transition:
-                    opacity 0.24s ease-out,
-                    visibility 0s linear 0.24s;
             }
 
             .mobile-overlay.mobile-sidebar-open {
-                opacity: 1;
                 pointer-events: auto;
                 visibility: visible;
-                transition-delay: 0s;
             }
 
             .app-sidebar {
                 width: min(18rem, 84vw);
                 max-width: 84vw;
-                opacity: 0.98;
                 border-top-right-radius: 1.5rem;
                 border-bottom-right-radius: 1.5rem;
                 transform: translate3d(-104%, 0, 0);
                 transform-origin: left center;
-                transition:
-                    transform 0.32s cubic-bezier(0.18, 0.86, 0.22, 1),
-                    opacity 0.24s ease,
-                    box-shadow 0.32s ease,
-                    border-radius 0.32s ease;
+                transition: transform 0.28s cubic-bezier(0.22, 0.78, 0.25, 1);
                 contain: layout paint style;
-                will-change: transform, opacity;
+                will-change: transform;
                 backface-visibility: hidden;
-            }
-
-            .app-sidebar.mobile-sidebar-open {
-                opacity: 1;
-                pointer-events: auto;
-                transform: translate3d(0, 0, 0);
                 box-shadow:
                     18px 0 54px -24px rgba(15, 23, 42, 0.45),
                     0 0 0 1px rgba(255, 255, 255, 0.72) inset;
             }
 
+            .app-sidebar.mobile-sidebar-open {
+                pointer-events: auto;
+                transform: translate3d(0, 0, 0);
+            }
+
             .app-sidebar:not(.mobile-sidebar-open) {
                 pointer-events: none;
                 transform: translate3d(-104%, 0, 0);
-                box-shadow: 8px 0 26px -24px rgba(15, 23, 42, 0.3);
-            }
-
-            .app-sidebar.mobile-sidebar-open > .h-16 {
-                animation: mobile-drawer-header-in 0.26s cubic-bezier(0.2, 0.82, 0.25, 1) 0.03s both;
-            }
-
-            .app-sidebar.mobile-sidebar-open .sidebar-nav-button {
-                animation: mobile-drawer-item-fly-in 0.3s cubic-bezier(0.2, 0.82, 0.25, 1) both;
-            }
-
-            .app-sidebar.mobile-sidebar-open .sidebar-nav-button:nth-child(1) { animation-delay: 0.035s; }
-            .app-sidebar.mobile-sidebar-open .sidebar-nav-button:nth-child(2) { animation-delay: 0.055s; }
-            .app-sidebar.mobile-sidebar-open .sidebar-nav-button:nth-child(3) { animation-delay: 0.075s; }
-            .app-sidebar.mobile-sidebar-open .sidebar-nav-button:nth-child(4) { animation-delay: 0.095s; }
-            .app-sidebar.mobile-sidebar-open .sidebar-nav-button:nth-child(5) { animation-delay: 0.115s; }
-            .app-sidebar.mobile-sidebar-open .sidebar-nav-button:nth-child(6) { animation-delay: 0.135s; }
-            .app-sidebar.mobile-sidebar-open .sidebar-nav-button:nth-child(7) { animation-delay: 0.155s; }
-            .app-sidebar.mobile-sidebar-open .sidebar-nav-button:nth-child(8) { animation-delay: 0.175s; }
-            .app-sidebar.mobile-sidebar-open .sidebar-nav-button:nth-child(9) { animation-delay: 0.195s; }
-            .app-sidebar.mobile-sidebar-open .sidebar-nav-button:nth-child(10) { animation-delay: 0.215s; }
-            .app-sidebar.mobile-sidebar-open .sidebar-nav-button:nth-child(11) { animation-delay: 0.235s; }
-            .app-sidebar.mobile-sidebar-open .sidebar-nav-button:nth-child(n + 12) { animation-delay: 0.255s; }
-
-            @keyframes mobile-drawer-header-in {
-                from {
-                    opacity: 0;
-                    transform: translate3d(-10px, 0, 0);
-                }
-                to {
-                    opacity: 1;
-                    transform: translate3d(0, 0, 0);
-                }
-            }
-
-            @keyframes mobile-drawer-item-fly-in {
-                from {
-                    transform: translate3d(-110vw, 0, 0);
-                }
-                to {
-                    transform: translate3d(0, 0, 0);
-                }
             }
 
             /* Summarizing overlay - deep solid bg */
@@ -1115,14 +1058,8 @@
         }
 
         @media (max-width: 768px) and (prefers-reduced-motion: reduce) {
-            .mobile-overlay,
             .app-sidebar {
                 transition-duration: 0.16s !important;
-            }
-
-            .app-sidebar.mobile-sidebar-open > .h-16,
-            .app-sidebar.mobile-sidebar-open .sidebar-nav-button {
-                animation: none !important;
             }
         }
         
