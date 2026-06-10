@@ -864,29 +864,6 @@
                 -webkit-overflow-scrolling: touch !important;
             }
 
-            .chat-scrollbar {
-                -ms-overflow-style: auto !important;
-                scrollbar-width: thin !important;
-                scrollbar-color: rgba(148, 163, 184, 0.68) transparent !important;
-            }
-
-            .chat-scrollbar::-webkit-scrollbar {
-                display: block !important;
-                width: 4px !important;
-                height: 0 !important;
-            }
-
-            .chat-scrollbar::-webkit-scrollbar-track,
-            .chat-scrollbar::-webkit-scrollbar-corner {
-                background: transparent !important;
-            }
-
-            .chat-scrollbar::-webkit-scrollbar-thumb {
-                min-height: 36px !important;
-                border-radius: 999px !important;
-                background: rgba(148, 163, 184, 0.58) !important;
-            }
-
             /* Disable Tailwind blur-* classes (filter: blur) on mobile, except .char-bg-blur */
             [class*="blur-"]:not(.char-bg-blur) {
                 --tw-blur: !important;
