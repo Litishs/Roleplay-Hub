@@ -1942,7 +1942,6 @@
                     document.documentElement.dataset.appFont = normalizeFontFamily(value);
                 };
                 applyFontFamily('modern');
-                const IMAGE_GEN_DEFAULT_TOKEN = 'STA1N-c-Z5BnscH-l-D7kN1HyRobUj';
                 const IMAGE_GEN_BASE_URL = 'https://nai.sta1n.cn';
 
                 // Main Settings Sync Listener
@@ -1960,7 +1959,7 @@
 
                             // Sync Image Gen
                             // Always sync key even if empty to ensure reset
-                            options.imageGenKey = mainSettings.imageGenKey || '';
+                            options.imageGenKey = mainSettings.imageGenKey;
 
                             // Map imageStyle to avatarStyle (vertical -> default, r18 -> hentai)
                             if (mainSettings.imageStyle === 'r18') {
@@ -4501,7 +4500,7 @@ ${uiTemplatePrompt.value.trim() || '根据当前角色自动设计一个状态�
                 const generateAvatarUrl = (tag) => {
                     let url;
                     console.log('%c[Workshop Image Request]', 'color: #ec4899; font-weight: bold;', { style: options.avatarStyle, tag: tag });
-                    const tokenParam = (options.imageGenKey || IMAGE_GEN_DEFAULT_TOKEN).trim();
+                    const tokenParam = options.imageGenKey.trim();
                     const defaultArtists = '[[[artist:dishwasher1910]]], {{yd_(orange_maru)}}, [artist:ciloranko], [artist:sho_(sho_lwlw)], [ningen mame], year 2024,';
                     const r18Artists = "0.9::misaka_12003-gou ::, dino_(dinoartforame), wanke, liduke, year 2025, realistic, 4k, -2::green ::, textless version, The image is highly intricate finished drawn. Only the character's face is in anime style, but their body is in realistic style. 1.35::A highly finished photo-style artwork that has lively color, graphic texture, realistic skin surface, and lifelike flesh with little obliques::. 1.63::photorealistic::, 1.63::photo(medium)::, \\n20::best quality, absurdres, very aesthetic, detailed, masterpiece::,, very aesthetic, masterpiece, no text,";
                     const lolita25dArtists = "0.9::misaka_12003-gou & dino, rurudo,  mignon,wanke & liduk::, year 2025, realistic, 4k, -2::green ::, textless version, The image is highly intricate finished drawn. Only the character's face is in anime style, but their body is in realistic style. 1.35::A highly finished photo-style artwork that has lively color, graphic texture, realistic skin surface, and lifelike flesh with little obliques::. 1.63::photorealistic::, 1.63::photo(medium)::, \\n20::best quality, absurdres, very aesthetic, detailed, masterpiece::,, very aesthetic, masterpiece, no text,";

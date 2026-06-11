@@ -83,7 +83,6 @@ createApp({
         const systemRegexNames = ['Auto Replace {{user}}', 'NAI画图正则'];
         const systemWorldInfoNames = ['自动生图'];
 
-        const IMAGE_GEN_DEFAULT_TOKEN = 'STA1N-c-Z5BnscH-l-D7kN1HyRobUj';
         const IMAGE_GEN_BASE_URL = 'https://nai.sta1n.cn';
 
         // --- Default API Configuration ---
@@ -186,7 +185,12 @@ createApp({
             quotaLoading.value = true;
             quotaError.value = false;
             try {
-                const imageGenToken = (settings.imageGenKey || IMAGE_GEN_DEFAULT_TOKEN).trim();
+                const imageGenToken = settings.imageGenKey.trim();
+                if (!imageGenToken) {
+                    quotaValue.value = 0;
+                    quotaAvailable.value = false;
+                    return;
+                }
                 const baseUrl = IMAGE_GEN_BASE_URL;
                 const response = await fetch(`${baseUrl}/api/api/getUser`, {
                     method: 'POST',
@@ -4096,7 +4100,6 @@ ${content}
                 const id = setTimeout(() => controller.abort(), 10000);
                 const startTime = performance.now();
 
-                const imageGenToken = (settings.imageGenKey || IMAGE_GEN_DEFAULT_TOKEN).trim();
                 const baseUrl = IMAGE_GEN_BASE_URL;
 
                 await fetch(baseUrl, {
@@ -9059,7 +9062,7 @@ ${content}
         };
 
         const enforceSpecialRules = () => {
-            const imageGenToken = (settings.imageGenKey || IMAGE_GEN_DEFAULT_TOKEN).trim();
+            const imageGenToken = settings.imageGenKey.trim();
             const baseUrl = IMAGE_GEN_BASE_URL;
 
             // 1. NAI画图正则 (统一版本)
@@ -9931,9 +9934,9 @@ image###生成的提示词###
         onMounted(async () => {
             document.addEventListener('fullscreenchange', syncChatFullscreenState);
             document.addEventListener('webkitfullscreenchange', syncChatFullscreenState);
-            fetchQuota(); // Fetch quota on load
 
             await loadData();
+            fetchQuota(); // Fetch quota after saved settings are loaded
 
             checkUpdate(); // Check for updates — 必须在 loadData 之后，否则 localStorage 代理中的 update_id 还未从服务端加载
 
