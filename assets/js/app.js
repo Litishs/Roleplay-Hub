@@ -3506,8 +3506,9 @@ ${content}
                 if (role === 'assistant' && !placement.includes(2)) return;
 
                 // Mode Check
+                const userOnly = script.markdownOnly || (!script.markdownOnly && !script.promptOnly);
                 if (isDisplay && script.promptOnly) return; // 显示模式下，跳过仅AI可见的正则
-                if (isPrompt && script.markdownOnly) return; // 发送给AI前，跳过仅用户可见的正则
+                if (isPrompt && userOnly) return; // 发送给AI前，跳过仅用户可见的正则；两项都没勾也按仅用户可见处理
 
                 // Depth Check
                 if (script.minDepth !== null && script.minDepth !== undefined && depth < script.minDepth) return;
