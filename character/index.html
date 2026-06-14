@@ -4612,8 +4612,8 @@ ${options.generateExtra ? `### World Info
 - order (数字，1-99): 插入顺序，数字不允许重复，多个条目应确保使用不同的插入顺序
 - probability (数字 0-100): 触发概率
 - useProbability (布尔): 是否启用概率；只影响非 常驻 条目的关键词/正则触发
-- depth (数字): 扫描深度 (仅当 position 为 "at_depth" 时有效，建议值为0-4)
-- scanDepth (数字): 触发扫描深度
+- depth (数字): 插入深度，仅当 position 为 "at_depth" 时有效，建议值为0-4
+- scanDepth (数字): 关键词触发时向上扫描的对话深度
 )
 ### Regex Scripts
 (正则脚本，必须生成，用于美化输出或处理特定逻辑，必须是合法的 JSON 数组格式。包含字段：

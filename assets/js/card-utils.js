@@ -199,25 +199,28 @@
     });
 
     const toRegexExportEntry = (script = {}) => {
-        const exported = { ...script };
-        if (!exported.name && exported.scriptName) exported.name = exported.scriptName;
-        if (!exported.regex && exported.findRegex) exported.regex = exported.findRegex;
-        if (!exported.replacement && exported.replaceString) exported.replacement = exported.replaceString;
-        if (!exported.flags && exported.regexFlags) exported.flags = exported.regexFlags;
-        if (!exported.flags) exported.flags = 'g';
-        if (!Array.isArray(exported.placement)) exported.placement = [1, 2];
-        if (exported.markdownOnly === undefined) exported.markdownOnly = false;
-        if (exported.promptOnly === undefined) exported.promptOnly = false;
-        if (exported.markdownOnly && exported.promptOnly) exported.promptOnly = false;
-        if (exported.runOnEdit === undefined) exported.runOnEdit = false;
-        if (exported.minDepth === undefined) exported.minDepth = null;
-        if (exported.maxDepth === undefined) exported.maxDepth = null;
-        if (!exported.scope) exported.scope = 'character';
-        exported.disabled = exported.disabled !== undefined
-            ? toBoolean(exported.disabled, false)
-            : !toBoolean(exported.enabled, true);
-        delete exported.enabled;
-        return exported;
+        const placement = Array.isArray(script.placement)
+            ? script.placement.map(Number).filter(value => value === 1 || value === 2)
+            : [1, 2];
+        const markdownOnly = toBoolean(script.markdownOnly, false);
+        const promptOnly = markdownOnly ? false : toBoolean(script.promptOnly, false);
+
+        return {
+            name: script.name || script.scriptName || '',
+            regex: script.regex || script.findRegex || '',
+            flags: script.flags || script.regexFlags || 'g',
+            replacement: script.replacement !== undefined ? script.replacement : (script.replaceString || ''),
+            placement: placement.length ? placement : [2],
+            markdownOnly,
+            promptOnly,
+            runOnEdit: toBoolean(script.runOnEdit, false),
+            minDepth: toNumber(script.minDepth, null),
+            maxDepth: toNumber(script.maxDepth, null),
+            scope: script.scope || 'character',
+            disabled: script.disabled !== undefined
+                ? toBoolean(script.disabled, false)
+                : !toBoolean(script.enabled, true)
+        };
     };
 
     const toUiTemplateExportEntry = (template = {}, options = {}) => {

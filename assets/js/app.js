@@ -2102,14 +2102,6 @@ createApp({
 
                 const savedWISettings = await getStoredValue('worldinfo_settings');
                 if (savedWISettings) {
-                    delete savedWISettings.contextPercent;
-                    delete savedWISettings.tokenBudget;
-                    delete savedWISettings['use' + 'GroupScoring'];
-                    delete savedWISettings['overflow' + 'Warning'];
-                    delete savedWISettings['case' + 'Sensitive'];
-                    delete savedWISettings['case_' + 'sensitive'];
-                    delete savedWISettings['match' + 'WholeWords'];
-                    delete savedWISettings['match_' + 'whole_words'];
                     ['scanDepth', 'maxDepth'].forEach(key => {
                         if (savedWISettings[key] !== undefined) worldInfoSettings[key] = savedWISettings[key];
                     });
@@ -3500,9 +3492,11 @@ ${content}
         };
         const processRegex = (text, options = {}) => {
             if (!text) return '';
-            let result = text;
             // options: { isDisplay, isPrompt, role, depth }
             const { isDisplay = false, isPrompt = false, role = null, depth = 0 } = options;
+            if (role === 'system') return text;
+
+            let result = text;
             const orderedScripts = [...regexScripts.value].sort((a, b) => {
                 const aIsImageGen = (a.name || a.scriptName) === 'NAI画图正则';
                 const bIsImageGen = (b.name || b.scriptName) === 'NAI画图正则';
@@ -11205,10 +11199,6 @@ image###生成的提示词###
 
                 // New fields defaults
                 if (data.useRegex === undefined) data.useRegex = false;
-                delete data['case' + 'Sensitive'];
-                delete data['case_' + 'sensitive'];
-                delete data['match' + 'WholeWords'];
-                delete data['match_' + 'whole_words'];
                 if (data.scanDepth === undefined) data.scanDepth = 2;
                 if (data.constant === undefined) data.constant = false;
 
