@@ -189,18 +189,13 @@
         scope: entry.scope || 'character',
         keys: Array.isArray(entry.keys) ? entry.keys : [],
         useRegex: toBoolean(entry.useRegex, false),
-        caseSensitive: toBoolean(entry.caseSensitive, false),
-        matchWholeWords: toBoolean(entry.matchWholeWords, true),
         constant: toBoolean(entry.constant, false),
         position: entry.position || 'at_depth',
         order: toNumber(entry.order, 0),
         depth: toNumber(entry.depth, 4),
         scanDepth: toNumber(entry.scanDepth, null),
         probability: toNumber(entry.probability, 100),
-        useProbability: toBoolean(entry.useProbability, true),
-        excludeRecursion: toBoolean(entry.excludeRecursion, false),
-        preventRecursion: toBoolean(entry.preventRecursion, false),
-        delayUntilRecursion: toBoolean(entry.delayUntilRecursion, false)
+        useProbability: toBoolean(entry.useProbability, true)
     });
 
     const toRegexExportEntry = (script = {}) => {
@@ -213,6 +208,7 @@
         if (!Array.isArray(exported.placement)) exported.placement = [1, 2];
         if (exported.markdownOnly === undefined) exported.markdownOnly = false;
         if (exported.promptOnly === undefined) exported.promptOnly = false;
+        if (exported.markdownOnly && exported.promptOnly) exported.promptOnly = false;
         if (exported.runOnEdit === undefined) exported.runOnEdit = false;
         if (exported.minDepth === undefined) exported.minDepth = null;
         if (exported.maxDepth === undefined) exported.maxDepth = null;
