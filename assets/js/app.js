@@ -8357,7 +8357,6 @@ ${content}
                 .trim();
 
             message.content = nextContent;
-            message.shouldAnimate = false;
             message.skipReveal = true;
         };
 
@@ -8386,7 +8385,6 @@ ${content}
                 }
                 toolUis.push(nextUi);
             });
-            message.shouldAnimate = false;
             message.skipReveal = true;
             return toolUis;
         };
@@ -8412,7 +8410,6 @@ ${content}
             toolUi.reason = cleanActiveToolCallReason(toolCall.reason || toolUi.reason || '');
             toolUi.raw = toolCall.raw || toolUi.raw || '';
             toolUi.status = 'receiving';
-            message.shouldAnimate = false;
             message.skipReveal = true;
             return toolUi;
         };
@@ -8461,7 +8458,6 @@ ${content}
                     query: String(pendingCall.toolRaw || toolBuffer || '').replace(new RegExp(`^\\s*<\\s*${escapeRegexText(pendingCall.callLabel)}\\s*:\\s*`, 'i'), '')
                 });
                 message._activeToolPendingText = toolBuffer;
-                message.shouldAnimate = false;
                 message.skipReveal = true;
                 activeToolHandoffPending.value = true;
                 return [];
@@ -8485,7 +8481,6 @@ ${content}
                 activeToolHandoffPending.value = true;
             }
             message._activeToolPendingText = removeActiveToolCallRawsFromText(toolBuffer, callsForUi);
-            message.shouldAnimate = false;
             return toolUis;
         };
 
