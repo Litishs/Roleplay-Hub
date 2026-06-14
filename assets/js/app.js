@@ -332,38 +332,6 @@ createApp({
         let lastAppliedMobileBackgroundHeight = 0;
         // IntersectionObserver for lazy loading images or other visibility triggers could go here
 
-        // Use ResizeObserver for robust automatic scrolling to bottom
-        let chatResizeObserver = null;
-        watch(chatContainer, (newEl, oldEl) => {
-            if (oldEl && chatResizeObserver) {
-                chatResizeObserver.disconnect();
-                chatResizeObserver = null;
-            }
-            if (newEl) {
-                chatResizeObserver = new ResizeObserver(() => {
-                    if (isMobileKeyboardOpen.value && document.activeElement === inputBox.value) return;
-                    if (settings.autoScroll && currentView.value === 'chat') {
-                        // Only scroll to bottom if there's more than just the greeting
-                        if (chatHistory.value.length > 1) {
-                            newEl.scrollTop = newEl.scrollHeight;
-                        } else {
-                            // Keep at top for new/single-message chats
-                            newEl.scrollTop = 0;
-                        }
-                    }
-                });
-                chatResizeObserver.observe(newEl);
-                // Initial check when container is mounted
-                nextTick(() => {
-                    if (chatHistory.value.length > 1) {
-                        newEl.scrollTop = newEl.scrollHeight;
-                    } else {
-                        newEl.scrollTop = 0;
-                    }
-                });
-            }
-        });
-
         let scrollRevealObserver = null;
         const initScrollReveal = () => {
             if (window.IntersectionObserver) {
@@ -584,7 +552,6 @@ createApp({
             fontFamily: 'modern',
             fontFamilyVersion: 4,
             fontSize: window.innerWidth > 768 ? 16 : 14,
-            autoScroll: true,
             imageGenKey: '',
             imageStyle: 'vertical',
             customImageArtists: '',
@@ -1638,8 +1605,6 @@ createApp({
                 isSquareLoading.value = true;
                 // Add timestamp to force refresh
                 squareUrl.value = `https://rphforum.zeabur.app/?t=${Date.now()}`;
-            } else if (newView === 'chat') {
-                // ResizeObserver handles the initial scroll
             } else if (newView === 'presets') {
                 nextTick(() => {
                     const el = document.getElementById('presets-list');
@@ -3214,15 +3179,27 @@ ${content}
             };
         };
 
-        const restoreChatScrollAnchor = async (anchor) => {
+        const restoreChatScrollAnchor = async (anchor, scrollSnapshot = null) => {
             const container = chatContainer.value;
-            if (!container || !anchor) return;
+            if (!container) return;
 
             await nextTick();
-            await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+
+            const restoreByHeight = () => {
+                if (!scrollSnapshot) return;
+                container.scrollTop = scrollSnapshot.scrollTop + (container.scrollHeight - scrollSnapshot.scrollHeight);
+            };
+
+            if (!anchor) {
+                restoreByHeight();
+                return;
+            }
 
             const anchorElement = container.querySelector(`[data-chat-index="${anchor.index}"]`);
-            if (!anchorElement) return;
+            if (!anchorElement) {
+                restoreByHeight();
+                return;
+            }
 
             const containerTop = container.getBoundingClientRect().top;
             const newTopOffset = anchorElement.getBoundingClientRect().top - containerTop;
@@ -3233,13 +3210,28 @@ ${content}
             if (hiddenChatMessageCount.value <= 0 || isLoadingEarlierChatMessages) return;
             isLoadingEarlierChatMessages = true;
             const anchor = getChatScrollAnchor();
-
-            chatRenderLimit.value = Math.min(
+            const container = chatContainer.value;
+            const scrollSnapshot = container ? {
+                scrollTop: container.scrollTop,
+                scrollHeight: container.scrollHeight
+            } : null;
+            const previousStartIndex = Math.max(0, chatHistory.value.length - chatRenderLimit.value);
+            const nextRenderLimit = Math.min(
                 chatHistory.value.length,
                 chatRenderLimit.value + batchSize
             );
+            const nextStartIndex = Math.max(0, chatHistory.value.length - nextRenderLimit);
 
-            await restoreChatScrollAnchor(anchor);
+            for (let i = nextStartIndex; i < previousStartIndex; i++) {
+                const message = chatHistory.value[i];
+                if (!message || !['user', 'assistant'].includes(message.role)) continue;
+                message.skipReveal = true;
+                message.shouldAnimate = false;
+            }
+
+            chatRenderLimit.value = nextRenderLimit;
+
+            await restoreChatScrollAnchor(anchor, scrollSnapshot);
             isLoadingEarlierChatMessages = false;
         };
 
@@ -4163,12 +4155,6 @@ ${content}
             return !isConversationBusy.value;
         };
 
-        const isChatNearBottom = (threshold = 160) => {
-            const container = chatContainer.value;
-            if (!container) return true;
-            return container.scrollHeight - container.scrollTop - container.clientHeight <= threshold;
-        };
-
         const sendMessage = async () => {
             if (!userInput.value.trim() || isConversationBusy.value) return;
 
@@ -4193,20 +4179,16 @@ ${content}
                 avatar: user.avatar
             });
             await nextTick();
-            // scrollToBottom(); // Removed auto-scroll before generation
 
             // Single player
             await generateResponse(startTime);
         };
 
-        const scrollToBottom = () => {
-            if (chatContainer.value && settings.autoScroll) {
-                if (chatHistory.value.length > 1) {
-                    chatContainer.value.scrollTop = chatContainer.value.scrollHeight;
-                } else {
-                    chatContainer.value.scrollTop = 0;
-                }
-            }
+        const scrollChatToBottom = async () => {
+            await nextTick();
+            const container = chatContainer.value;
+            if (!container) return;
+            container.scrollTop = chatHistory.value.length > 1 ? container.scrollHeight : 0;
         };
 
         const clearChat = () => {
@@ -5819,7 +5801,6 @@ ${content}
                                                     collapseNativeReasoning(assistantMessage);
                                                 }
 
-                                                // scrollToBottom(); // Removed auto-scroll during generation
                                             }
                                         } catch (e) {
                                             if (e.isApiError) throw e;
@@ -5861,7 +5842,6 @@ ${content}
                                     } else if (reasoning && content) {
                                         collapseNativeReasoning(assistantMessage);
                                     }
-                                    // scrollToBottom(); // Removed auto-scroll during generation
                                 }
                             } catch (e) {
                                 if (e.isApiError) throw e;
@@ -5906,7 +5886,6 @@ ${content}
                                         collapseNativeReasoning(assistantMessage);
                                     }
 
-                                    // scrollToBottom(); // Removed auto-scroll during generation
                                 }
                             }
                         }
@@ -9379,6 +9358,7 @@ image###生成的提示词###
             _memoriesLoaded = true;
 
             currentView.value = 'chat';
+            await scrollChatToBottom();
             showToast(`已切换到角色: ${char.name}`, 'success');
 
             // 弹出自动生图询问 (仅在导入新卡时)
@@ -9801,8 +9781,6 @@ image###生成的提示词###
                                 }
 
                                 showToast(`成功为 ${char.name} 导入 ${importedChat.length} 条聊天记录`, 'success');
-                                await nextTick();
-                                scrollToBottom();
                             } else {
                                 showToast('请先选择一个角色才能导入聊天记录', 'warning');
                             }
@@ -9950,7 +9928,6 @@ image###生成的提示词###
             chatHistory.value = [...chatHistory.value, newMessage];
 
             await nextTick();
-            scrollToBottom();
 
             await generateResponse(startTime);
         };
@@ -10572,8 +10549,7 @@ image###生成的提示词###
                 }
 
                 // showToast(`欢迎回来，${user.name}`, 'success'); // Removed per user request
-                await nextTick();
-                scrollToBottom();
+                await scrollChatToBottom();
             } else if (characters.value.length > 0) {
                 // Fallback to first character if no last active
                 selectCharacter(0);
