@@ -4188,6 +4188,7 @@ ${content}
                 name: user.name,
                 content: finalContent,
                 shouldAnimate: true,
+                skipReveal: true,
                 isSelf: true,
                 avatar: user.avatar
             });
@@ -9944,7 +9945,7 @@ image###生成的提示词###
             const startTime = Date.now(); // Record trigger time
 
             // Add user message with explicit reactivity update
-            const newMessage = { role: 'user', content: text, isSelf: true, isTriggered: true, shouldAnimate: true };
+            const newMessage = { role: 'user', content: text, isSelf: true, isTriggered: true, shouldAnimate: true, skipReveal: true };
             // Push and force update to ensure v-if picks up the new property
             chatHistory.value = [...chatHistory.value, newMessage];
 

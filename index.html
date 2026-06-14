@@ -883,18 +883,18 @@
                         <div
                             :class="['flex flex-row', settings.immersiveMode ? 'immersive-message-shell max-w-[99%]' : 'max-w-[99%] md:max-w-[75%] lg:max-w-[70%]']">
                             <div v-show="!settings.immersiveMode" class="flex-shrink-0 animate-message-in"
-                                style="animation-delay: 200ms;">
+                                style="animation-delay: 100ms;">
                                 <img :src="currentCharacter?.avatar"
                                     class="w-9 h-9 rounded-full object-cover mr-1.5 border border-gray-200 shadow-sm">
                             </div>
                             <div :class="['flex flex-col min-w-0 items-start', settings.immersiveMode ? 'immersive-message-column' : '']">
                                 <div v-show="!settings.immersiveMode"
                                     class="text-[10px] font-bold text-gray-600 mb-1 select-none px-1.5 py-0.5 rounded-md bg-white/50 backdrop-blur-sm border border-white/20 w-fit shadow-sm mr-auto ml-1 truncate max-w-[150px] md:max-w-[250px] msg-name-tag animate-message-in"
-                                    style="animation-delay: 200ms;">
+                                    style="animation-delay: 100ms;">
                                     {{ currentCharacter.name }}
                                 </div>
                                 <div :class="['min-w-[150px] min-h-[4.5rem] px-6 py-4 rounded-2xl bg-white/70 backdrop-blur-md glass-stabilize border border-white/40 shadow-card flex flex-col items-center justify-center gap-2 transition-all duration-500 typing-bubble animate-message-in', settings.immersiveMode ? '' : 'rounded-tl-none']"
-                                    style="animation-delay: 200ms;">
+                                    style="animation-delay: 100ms;">
                                     <div class="typing-indicator scale-125">
                                         <span></span><span></span><span></span>
                                     </div>
