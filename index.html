@@ -335,7 +335,7 @@
 
 
             <!-- Chat View -->
-            <div v-if="currentView === 'chat'" class="chat-view-root flex flex-col h-full relative">
+            <div v-show="currentView === 'chat'" class="chat-view-root flex flex-col h-full relative">
 
                 <!-- Character Background Layer -->
                 <div v-if="settings.useCharacterBackground && currentCharacter && currentCharacter?.avatar"
