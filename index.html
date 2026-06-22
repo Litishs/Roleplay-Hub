@@ -769,7 +769,7 @@
                                                 <template v-else>
                                                     <div class="markdown-body"
                                                         :style="settings.fontSize ? { fontSize: settings.fontSize + 'px' } : {}"
-                                                        v-html="renderMarkdown(parseCot(msg.content).main, msg.role)">
+                                                        v-html="renderMarkdown(processMainContent(parseCot(msg.content).main, false).text, msg.role)">
                                                     </div>
                                                 </template>
                                             </template>
@@ -2152,7 +2152,7 @@
                                                     class="text-xs font-mono text-teal-600 bg-teal-50 px-1.5 py-0.5 rounded border border-teal-100">{{
                                                     settings.temperature }}</span>
                                             </div>
-                                            <input v-model.number="settings.temperature" type="range" min="0" max="2"
+                                            <input v-model.number="settings.temperature" type="range" min="0" max="1"
                                                 step="0.01"
                                                 class="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-teal-500 hover:accent-teal-400 transition-all">
                                         </div>
@@ -2532,10 +2532,11 @@
                                     </div>
                                 </label>
                             </div>
-                            <div class="flex items-center gap-2">
+                            <div class="flex items-center justify-end gap-2 min-h-[30px]">
                                 <button @click="updateUiTemplatesFromChat({ manual: true })"
                                     :disabled="!settings.uiTemplateEnabled"
-                                    class="inline-flex items-center text-xs px-3 py-1.5 bg-gradient-to-r from-primary-50 to-blue-50 hover:from-primary-100 hover:to-blue-100 text-primary-700 rounded-lg border border-primary-200/80 transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-sm hover:shadow font-medium active:scale-95">
+                                    class="inline-flex items-center text-xs px-3 py-1.5 bg-gradient-to-r from-primary-50 to-blue-50 hover:from-primary-100 hover:to-blue-100 text-primary-700 rounded-lg border border-primary-200/80 transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed shadow-sm hover:shadow font-medium active:scale-95"
+                                    :class="settings.uiTemplateMainModelAnalysis ? 'invisible opacity-0 pointer-events-none' : 'visible opacity-100'">
                                     <svg class="w-3.5 h-3.5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                             d="M13 10V3L4 14h7v7l9-11h-7z"></path>
@@ -2545,6 +2546,23 @@
                             </div>
                         </div>
                         <div v-if="settings.uiTemplateEnabled"
+                            class="mb-3 animate-fade-in">
+                            <div class="bg-gray-50/60 p-1 rounded-xl flex shadow-inner relative w-full">
+                                <div class="absolute inset-y-1 w-[calc(50%-4px)] bg-white rounded-lg shadow-sm ring-1 ring-black/5 transition-all duration-300 ease-out z-0"
+                                    :class="settings.uiTemplateMainModelAnalysis ? 'left-1' : 'left-[calc(50%+2px)]'"></div>
+                                <button type="button" @click="settings.uiTemplateMainModelAnalysis = true"
+                                    class="relative z-10 flex-1 py-2 text-xs font-bold rounded-lg transition-colors duration-200 flex items-center justify-center"
+                                    :class="settings.uiTemplateMainModelAnalysis ? 'text-primary-600' : 'text-gray-500 hover:text-gray-700'">
+                                    主模型
+                                </button>
+                                <button type="button" @click="settings.uiTemplateMainModelAnalysis = false"
+                                    class="relative z-10 flex-1 py-2 text-xs font-bold rounded-lg transition-colors duration-200 flex items-center justify-center"
+                                    :class="!settings.uiTemplateMainModelAnalysis ? 'text-primary-600' : 'text-gray-500 hover:text-gray-700'">
+                                    副模型
+                                </button>
+                            </div>
+                        </div>
+                        <div v-if="settings.uiTemplateEnabled && !settings.uiTemplateMainModelAnalysis"
                             class="flex items-center justify-between mb-3 animate-fade-in">
                             <div class="flex items-center space-x-3">
                                 <span class="text-sm font-bold text-gray-700">将变量注入上下文</span>
@@ -2556,7 +2574,7 @@
                                 </label>
                             </div>
                         </div>
-                        <div v-if="settings.uiTemplateEnabled"
+                        <div v-if="settings.uiTemplateEnabled && !settings.uiTemplateMainModelAnalysis"
                             class="space-y-3 pt-3 border-t border-gray-100 animate-fade-in">
                             <div class="grid grid-cols-1 gap-3">
                                 <div>
@@ -2580,10 +2598,10 @@
                                         {{ uiTemplateAnalysisDepthSlider + ' 层' }}
                                     </span>
                                 </div>
-                                <input type="range" v-model.number="uiTemplateAnalysisDepthSlider" min="4" max="8"
+                                <input type="range" v-model.number="uiTemplateAnalysisDepthSlider" min="4" max="10"
                                     step="1"
                                     class="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary-500">
-                                <p class="text-[10px] text-gray-400 mt-1.5">发送给变量分析模型的最近对话层数，最高 8 层</p>
+                                <p class="text-[10px] text-gray-400 mt-1.5">变量分析使用的最近对话层数，最高 10 层</p>
                             </div>
                         </div>
                     </div>
@@ -3040,7 +3058,7 @@
                                             memorySettings.keepFloors === 0 ? '关闭' : memorySettings.keepFloors + ' 楼'
                                             }}</span>
                                     </div>
-                                    <input type="range" v-model.number="keepFloorsSlider" min="20" max="65" step="5"
+                                    <input type="range" v-model.number="keepFloorsSlider" min="30" max="85" step="5"
                                         class="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary-500">
                                     <p class="text-[10px] text-gray-400 mt-1.5">仅保留最近 N 楼原始消息，更早的楼层使用记忆引擎替代，拖到最右侧关闭
                                     </p>
@@ -4535,11 +4553,21 @@
                                     (Keys)</label>
                                 <div class="relative">
                                     <input
-                                        :value="editingWorldInfo.data.keys ? editingWorldInfo.data.keys.join(', ') : ''"
-                                        @input="editingWorldInfo.data.keys = $event.target.value.split(/[,，]/).map(k => k.trim()).filter(Boolean)"
+                                        :value="worldInfoKeysText"
+                                        @input="updateEditingWorldInfoKeys($event.target.value)"
                                         type="text"
                                         class="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:outline-none transition-all shadow-sm"
                                         placeholder="逗号分隔，留空则需勾选'常驻'">
+                                </div>
+                                <div v-if="editingWorldInfo.data.keys && editingWorldInfo.data.keys.length"
+                                    class="mt-2 flex flex-wrap gap-1.5">
+                                    <span v-for="(key, keyIndex) in editingWorldInfo.data.keys"
+                                        :key="'wi-key-' + keyIndex + '-' + key"
+                                        :title="key"
+                                        class="inline-flex items-center max-w-full rounded-xl border border-primary-100 bg-primary-50 px-2.5 py-1.5 text-xs font-bold text-primary-700 shadow-sm"
+                                        :class="editingWorldInfo.data.useRegex ? 'font-mono' : ''">
+                                        <span :class="editingWorldInfo.data.useRegex ? 'break-all whitespace-normal leading-relaxed' : 'truncate'">{{ key }}</span>
+                                    </span>
                                 </div>
                             </div>
                             <!-- Match Strategy Tags -->
@@ -4547,7 +4575,8 @@
                                 <label
                                     :class="['flex-1 flex items-center justify-center space-x-1.5 cursor-pointer px-3 py-1.5 border rounded-xl transition-all select-none shadow-sm active:scale-95',
                                                editingWorldInfo.data.useRegex ? 'bg-primary-50 border-primary-200 text-primary-700' : 'bg-white border-gray-200 text-gray-600 hover:border-primary-300']">
-                                    <input type="checkbox" v-model="editingWorldInfo.data.useRegex" class="hidden">
+                                    <input type="checkbox" v-model="editingWorldInfo.data.useRegex"
+                                        @change="updateEditingWorldInfoKeys(worldInfoKeysText)" class="hidden">
                                     <svg v-if="editingWorldInfo.data.useRegex" class="w-3.5 h-3.5" fill="none"
                                         stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3"
