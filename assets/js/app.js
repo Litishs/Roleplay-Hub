@@ -228,13 +228,13 @@ createApp({
             isUpdateScrolledToBottom.value = (el.scrollHeight - el.scrollTop - el.clientHeight) < 10;
         };
         const latestUpdate = reactive({
-            id: 10150, // 确保这是一个五位数ID，每次更新内容时增加这个数字
+            id: 10151, // 确保这是一个五位数ID，每次更新内容时增加这个数字
             date: new Date().toISOString().split('T')[0],
             title: '网站公告',
             content: `
 ### RP-Hub 1.7.3
 
-- 大幅增强主模型变量成功率
+- 大幅增强了主模型变量分析成功率
 - 优化了部分默认设置与预设
 - 修复世界书关键词标签字体异常问题
 - 修复了副模型变量分析时的用户信息识别
