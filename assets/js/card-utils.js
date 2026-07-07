@@ -262,7 +262,6 @@
             name: character.name,
             description: character.description,
             personality: character.personality,
-            scenario: character.scenario,
             first_mes: character.first_mes,
             creator_notes: character.creator_notes || 'Exported from RolePlay Hub',
             uiTemplates,

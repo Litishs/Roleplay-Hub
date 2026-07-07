@@ -3041,7 +3041,7 @@
                                         <label class="text-xs font-medium text-gray-500">记忆召回分片数</label>
                                         <span
                                             class="text-xs font-mono text-primary-600 bg-primary-50 px-1.5 py-0.5 rounded border border-primary-100">{{
-                                            memorySettings.vectorTopK || 15 }} 个分片</span>
+                                            memorySettings.vectorTopK || 10 }} 个分片</span>
                                     </div>
                                     <input type="range" v-model.number="memorySettings.vectorTopK" min="10" max="20" step="1"
                                         class="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary-500">
@@ -3645,10 +3645,6 @@
                             :class="['flex-1 px-4 py-2 text-sm font-bold transition-all rounded-lg whitespace-nowrap', editorTab === 'personality' ? 'bg-white text-primary-600 shadow-sm' : 'text-gray-500 hover:text-gray-700 hover:bg-white/50']">
                             人设
                         </button>
-                        <button @click="editorTab = 'scenario'"
-                            :class="['flex-1 px-4 py-2 text-sm font-bold transition-all rounded-lg whitespace-nowrap', editorTab === 'scenario' ? 'bg-white text-primary-600 shadow-sm' : 'text-gray-500 hover:text-gray-700 hover:bg-white/50']">
-                            场景
-                        </button>
                         <button @click="editorTab = 'first_mes'"
                             :class="['flex-1 px-4 py-2 text-sm font-bold transition-all rounded-lg whitespace-nowrap', editorTab === 'first_mes' ? 'bg-white text-primary-600 shadow-sm' : 'text-gray-500 hover:text-gray-700 hover:bg-white/50']">
                             开场白
@@ -3708,18 +3704,6 @@
                         <textarea v-model="editingCharacter.data.personality"
                             class="w-full bg-gray-50/60 border border-gray-300 rounded-xl px-4 py-3 text-gray-800 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:outline-none flex-1 resize-none shadow-inner transition-all leading-relaxed"
                             placeholder="详细的角色性格、外貌、喜好等设定..."></textarea>
-                    </div>
-
-                    <!-- Scenario -->
-                    <div v-if="editorTab === 'scenario'" class="animate-fade-in h-full flex flex-col">
-                        <div class="flex justify-between items-center mb-2">
-                            <label class="block text-sm font-bold text-gray-600">场景</label>
-                            <span class="text-[10px] text-gray-400 font-mono bg-gray-100 px-1.5 py-0.5 rounded">{{
-                                (editingCharacter.data.scenario || '').length }} 字</span>
-                        </div>
-                        <textarea v-model="editingCharacter.data.scenario"
-                            class="w-full bg-gray-50/60 border border-gray-300 rounded-xl px-4 py-3 text-gray-800 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:outline-none flex-1 resize-none shadow-inner transition-all leading-relaxed"
-                            placeholder="当前故事发生的背景、环境或特定情况..."></textarea>
                     </div>
 
                     <!-- First Message -->
@@ -4225,37 +4209,7 @@
                         </p>
                     </div>
 
-                    <div v-if="isWorldInfoActiveTool(editingActiveTool.data)"
-                        class="max-w-2xl mx-auto bg-white border border-gray-200 rounded-2xl p-5 md:p-6 shadow-sm">
-                        <div class="flex items-center justify-between gap-4 mb-4">
-                            <div>
-                                <div class="text-sm font-bold text-gray-800">世界书权限</div>
-                            </div>
-                        </div>
-                        <div class="grid grid-cols-2 gap-3">
-                            <button type="button"
-                                @click="editingActiveTool.data.worldInfoAccessMode = 'read'"
-                                class="px-4 py-3 rounded-xl border text-left transition-all"
-                                :class="getWorldInfoAccessMode(editingActiveTool.data) === 'read'
-                                    ? 'border-primary-500 bg-primary-50 text-primary-700 shadow-sm'
-                                    : 'border-gray-200 bg-gray-50 text-gray-600 hover:bg-gray-100'">
-                                <div class="text-sm font-bold">阅读</div>
-                                <div class="text-xs mt-1 opacity-80">列出名字、读取完整内容</div>
-                            </button>
-                            <button type="button"
-                                @click="editingActiveTool.data.worldInfoAccessMode = 'edit'"
-                                class="px-4 py-3 rounded-xl border text-left transition-all"
-                                :class="getWorldInfoAccessMode(editingActiveTool.data) === 'edit'
-                                    ? 'border-primary-500 bg-primary-50 text-primary-700 shadow-sm'
-                                    : 'border-gray-200 bg-gray-50 text-gray-600 hover:bg-gray-100'">
-                                <div class="text-sm font-bold">编辑</div>
-                                <div class="text-xs mt-1 opacity-80">读取内容，也允许修改内容</div>
-                            </button>
-                        </div>
-                    </div>
-
-                    <div v-if="canConfigureActiveToolResultCount(editingActiveTool.data)"
-                        class="max-w-2xl mx-auto bg-white border border-gray-200 rounded-2xl p-5 md:p-6 shadow-sm">
+                    <div class="max-w-2xl mx-auto bg-white border border-gray-200 rounded-2xl p-5 md:p-6 shadow-sm">
                         <div class="flex items-center justify-between gap-4 mb-5">
                             <div>
                                 <div class="text-sm font-bold text-gray-800">返回条数</div>
@@ -4564,8 +4518,7 @@
                                     <span v-for="(key, keyIndex) in editingWorldInfo.data.keys"
                                         :key="'wi-key-' + keyIndex + '-' + key"
                                         :title="key"
-                                        class="inline-flex items-center max-w-full rounded-xl border border-primary-100 bg-primary-50 px-2.5 py-1.5 text-xs font-bold text-primary-700 shadow-sm"
-                                        :class="editingWorldInfo.data.useRegex ? 'font-mono' : ''">
+                                        class="inline-flex items-center max-w-full rounded-xl border border-primary-100 bg-primary-50 px-2.5 py-1.5 text-xs font-bold text-primary-700 shadow-sm">
                                         <span :class="editingWorldInfo.data.useRegex ? 'break-all whitespace-normal leading-relaxed' : 'truncate'">{{ key }}</span>
                                     </span>
                                 </div>

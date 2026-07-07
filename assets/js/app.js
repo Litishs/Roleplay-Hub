@@ -228,26 +228,21 @@ createApp({
             isUpdateScrolledToBottom.value = (el.scrollHeight - el.scrollTop - el.clientHeight) < 10;
         };
         const latestUpdate = reactive({
-            id: 10148, // 确保这是一个五位数ID，每次更新内容时增加这个数字
+            id: 10150, // 确保这是一个五位数ID，每次更新内容时增加这个数字
             date: new Date().toISOString().split('T')[0],
             title: '网站公告',
             content: `
-### RP-Hub 1.7.2
+### RP-Hub 1.7.3
 
-- 新增主模型变量分析功能
-- 支持了世界书关键词标签查看
-- 为“韩漫小清新”“漫画同人”“2.5D唯美”更换了画师串
-- 优化了记忆引擎的效果
-- 优化了部分预设的效果
-- 优化了部分设置的范围调整
-- 优化了变量插入上下文的位置
-- 修复了UI模板未生成reason的问题
-- 修复了世界书关键词输入异常的问题
-- 修复了世界书正则匹配的部分问题
+- 大幅增强主模型变量成功率
+- 优化了部分默认设置与预设
+- 修复世界书关键词标签字体异常问题
+- 修复了副模型变量分析时的用户信息识别
+- 去除了世界书工具
 
 本项目为全开源公益项目，严禁倒卖源码，二改需经作者授权
 
-#### 更新时间：06/23/01:48
+#### 更新时间：07/07/19:40
                     `
         });
 
@@ -502,6 +497,11 @@ createApp({
             avatar: '',
             person: 'second', //记录人称偏好：second 或 third
         });
+        const buildUserInfoPrompt = () => [
+            '[User Info]',
+            `Name: ${user.name || ''}`,
+            `Description: ${user.description || ''}`
+        ].join('\n');
 
         const userProfiles = ref([]);
         const activeProfileId = ref(null);
@@ -1074,11 +1074,11 @@ createApp({
         const MEMORY_VECTOR_MERGE_MAX_LENGTH = 400;
         const MEMORY_VECTOR_MIN_TOP_K = 10;
         const MEMORY_VECTOR_MAX_TOP_K = 20;
-        const MEMORY_VECTOR_DEFAULT_TOP_K = 15;
+        const MEMORY_VECTOR_DEFAULT_TOP_K = 10;
         const MEMORY_VECTOR_DEFAULT_DEPTH = 1;
         const MEMORY_KEEP_FLOORS_MIN = 30;
         const MEMORY_KEEP_FLOORS_MAX = 80;
-        const MEMORY_KEEP_FLOORS_DEFAULT = 40;
+        const MEMORY_KEEP_FLOORS_DEFAULT = 50;
         const MEMORY_KEEP_FLOORS_OFF_SLIDER_VALUE = 85;
         const memories = ref([]);
         const memorySettings = reactive({
@@ -1107,15 +1107,11 @@ createApp({
         const ACTIVE_TOOL_VECTOR_TYPE = 'vector_memory';
         const ACTIVE_TOOL_KEYWORD_TYPE = 'keyword_dialogue';
         const ACTIVE_TOOL_WEB_TYPE = 'web_search';
-        const ACTIVE_TOOL_WORLD_TYPE = 'world_info';
         const ACTIVE_TOOL_MIN_RESULT_COUNT = 5;
         const ACTIVE_TOOL_DEFAULT_RESULT_COUNT = 5;
         const ACTIVE_TOOL_MAX_RESULT_COUNT = 10;
         const ACTIVE_TOOL_RESULT_COUNT_VERSION = 4;
-        const ACTIVE_TOOL_WORLD_ACCESS_VERSION = 2;
         const ACTIVE_TOOL_MAX_AUTO_CONTINUE = 4;
-        const ACTIVE_TOOL_WORLD_ACCESS_READ = 'read';
-        const ACTIVE_TOOL_WORLD_ACCESS_EDIT = 'edit';
         const ACTIVE_TOOL_AGGRESSIVENESS_FORCE = 'force';
         const ACTIVE_TOOL_AGGRESSIVENESS_ACTIVE = 'active';
         const ACTIVE_TOOL_AGGRESSIVENESS_ADAPTIVE = 'adaptive';
@@ -1161,12 +1157,6 @@ createApp({
         const ACTIVE_TOOL_GREP_DEFAULT_DISPLAY_DESCRIPTION = '按关键词精准抓取当前对话历史里的原文片段，适合找台词、名称、物品、地点和具体前文。';
         const ACTIVE_TOOL_WEB_DEFAULT_DESCRIPTION = '当本地上下文、角色记忆、关键词检索都不足以确认作品设定、同人资料、冷门角色、现实最新信息或网页资料时，单独输出 <tool_web_add:联网搜索内容或网页链接> 或 <tool_web_cover:联网搜索内容或网页链接>。先用具体关键词搜索，再按需读取真实 URL；查询优先包含作品名、角色名、设定名、站点、语言关键词或别名。多个独立信息点必须拆开，单次回复最多 5 个工具标签。本轮第一次联网搜索或首次读取 URL 一律用 add；看到结果后，若旧结果有用且需要保留就 add；若搜索结果偏题、太宽、重复、来源噪声多，或新搜索/网页读取能替代旧结果，应优先用 cover 清理上下文冗余，避免无关网页摘要干扰判断。';
         const ACTIVE_TOOL_WEB_DEFAULT_DISPLAY_DESCRIPTION = '通过 Tavily 联网搜索补充外部资料，也能进入链接读取网页详情，适合同人设定、作品百科、冷门角色和最新信息。';
-        const ACTIVE_TOOL_WORLD_READ_DESCRIPTION = '当需要查看世界书时，在正文中单独输出 <tool_world_add:list> 或 <tool_world_add:read 世界书名字>。流程是先获取已开启世界书名字列表，再由你决定阅读哪些世界书的完整内容。当前为阅读模式，不能编辑世界书。系统只处理已开启且非系统内置的世界书。';
-        const ACTIVE_TOOL_WORLD_READ_DISPLAY_DESCRIPTION = '阅读已开启世界书：支持列出世界书列表，阅读世界书内容，不允许编辑世界书内容。';
-        const ACTIVE_TOOL_WORLD_EDIT_DESCRIPTION = '当需要查看或修改世界书时，在正文中单独输出 <tool_world_add:list>、<tool_world_add:read 世界书名字> 或 <tool_world_add:{"action":"edit","name":"世界书名字","operation":"replace","content":"新的完整内容"}>。流程是先获取已开启世界书名字列表，再由你决定阅读哪些世界书的完整内容，最后只在用户明确要求时编辑内容。系统只处理已开启且非系统内置的世界书。';
-        const ACTIVE_TOOL_WORLD_EDIT_DISPLAY_DESCRIPTION = '管理已开启世界书：支持列出世界书列表，阅读世界书内容，编辑世界书内容。';
-        const ACTIVE_TOOL_WORLD_DEFAULT_DESCRIPTION = ACTIVE_TOOL_WORLD_READ_DESCRIPTION;
-        const ACTIVE_TOOL_WORLD_DEFAULT_DISPLAY_DESCRIPTION = ACTIVE_TOOL_WORLD_READ_DISPLAY_DESCRIPTION;
         const ACTIVE_TOOL_TAVILY_ENDPOINT = 'https://api.tavily.com/search';
         const ACTIVE_TOOL_TAVILY_EXTRACT_ENDPOINT = 'https://api.tavily.com/extract';
         const ACTIVE_TOOL_TAVILY_SEARCH_DEPTH = 'advanced';
@@ -1205,43 +1195,10 @@ createApp({
             displayDescription: ACTIVE_TOOL_WEB_DEFAULT_DISPLAY_DESCRIPTION,
             tavilyApiKey: ''
         });
-
-        const normalizeWorldInfoAccessMode = (value) => (
-            String(value || '').trim().toLowerCase() === ACTIVE_TOOL_WORLD_ACCESS_EDIT
-                ? ACTIVE_TOOL_WORLD_ACCESS_EDIT
-                : ACTIVE_TOOL_WORLD_ACCESS_READ
-        );
-
-        const getWorldInfoToolDescription = (accessMode) => (
-            normalizeWorldInfoAccessMode(accessMode) === ACTIVE_TOOL_WORLD_ACCESS_READ
-                ? ACTIVE_TOOL_WORLD_READ_DESCRIPTION
-                : ACTIVE_TOOL_WORLD_EDIT_DESCRIPTION
-        );
-
-        const getWorldInfoToolDisplayDescription = (accessMode) => (
-            normalizeWorldInfoAccessMode(accessMode) === ACTIVE_TOOL_WORLD_ACCESS_READ
-                ? ACTIVE_TOOL_WORLD_READ_DISPLAY_DESCRIPTION
-                : ACTIVE_TOOL_WORLD_EDIT_DISPLAY_DESCRIPTION
-        );
-
-        const createDefaultWorldTool = () => ({
-            id: 'tool_world',
-            name: '世界书阅读/管理',
-            enabled: false,
-            type: ACTIVE_TOOL_WORLD_TYPE,
-            callName: 'tool_world',
-            resultCount: ACTIVE_TOOL_DEFAULT_RESULT_COUNT,
-            resultCountVersion: ACTIVE_TOOL_RESULT_COUNT_VERSION,
-            worldInfoAccessMode: ACTIVE_TOOL_WORLD_ACCESS_READ,
-            worldInfoAccessModeVersion: ACTIVE_TOOL_WORLD_ACCESS_VERSION,
-            description: ACTIVE_TOOL_WORLD_DEFAULT_DESCRIPTION,
-            displayDescription: ACTIVE_TOOL_WORLD_DEFAULT_DISPLAY_DESCRIPTION
-        });
         const getDefaultActiveToolDefinitions = () => [
             createDefaultActiveTool(),
             createDefaultGrepTool(),
             createDefaultWebTool(),
-            createDefaultWorldTool()
         ];
         const activeTools = ref(getDefaultActiveToolDefinitions());
 
@@ -1280,17 +1237,27 @@ createApp({
         const normalizeActiveTool = (tool = {}) => {
             const resultCount = Number(tool.resultCount);
             const rawCallName = normalizeActiveToolBaseCallName(tool.callName || tool.callPattern || 'tool_memory');
-            const legacyWorldToolNames = ['tool_world_list', 'tool_world_read', 'tool_world_edit'];
-            const isLegacyWorldTool = legacyWorldToolNames.includes(rawCallName)
-                || ['world_info_list', 'world_info_read', 'world_info_edit'].includes(tool.type)
-                || ['tool_world_list', 'tool_world_read', 'tool_world_edit'].includes(tool.id);
+            const removedWorldToolNames = [
+                'tool_world',
+                'tool_world_add',
+                'tool_world_cover',
+                'tool_world_list',
+                'tool_world_read',
+                'tool_world_edit'
+            ];
+            const isRemovedWorldTool = removedWorldToolNames.includes(rawCallName)
+                || ['world_info', 'world_info_list', 'world_info_read', 'world_info_edit'].includes(tool.type)
+                || removedWorldToolNames.includes(tool.id);
+            if (isRemovedWorldTool) {
+                return null;
+            }
             const isLegacyWebTool = rawCallName === 'tool_web'
                 || ['web_search', 'tavily', 'tavily_search'].includes(tool.type)
                 || ['tool_web', 'tool_web_add', 'tool_web_cover'].includes(tool.id)
                 || /tavily|联网搜索/i.test(String(tool.name || ''));
-            const callName = isLegacyWorldTool ? 'tool_world' : (isLegacyWebTool ? 'tool_web' : rawCallName);
+            const callName = isLegacyWebTool ? 'tool_web' : rawCallName;
             const defaultTool = getDefaultActiveToolDefinitions()
-                .find(item => item.id === (isLegacyWorldTool ? 'tool_world' : (isLegacyWebTool ? 'tool_web' : tool.id)) || item.callName === callName);
+                .find(item => item.id === (isLegacyWebTool ? 'tool_web' : tool.id) || item.callName === callName);
             const fallback = defaultTool || createDefaultActiveTool();
             const normalizedCallName = defaultTool ? defaultTool.callName : callName;
             const resultCountVersion = Number(tool.resultCountVersion) || 1;
@@ -1327,25 +1294,6 @@ createApp({
             if (normalizedType === ACTIVE_TOOL_WEB_TYPE) {
                 normalized.tavilyApiKey = String(tool.tavilyApiKey || tool.apiKey || fallback.tavilyApiKey || '').trim();
             }
-            if (normalizedType === ACTIVE_TOOL_WORLD_TYPE) {
-                const worldInfoAccessModeVersion = Number(tool.worldInfoAccessModeVersion) || 1;
-                normalized.worldInfoAccessMode = normalizeWorldInfoAccessMode(
-                    tool.worldInfoAccessMode
-                    || tool.worldInfoMode
-                    || tool.accessMode
-                    || fallback.worldInfoAccessMode
-                );
-                if (isDefaultTool
-                    && normalized.id === 'tool_world'
-                    && worldInfoAccessModeVersion < ACTIVE_TOOL_WORLD_ACCESS_VERSION) {
-                    normalized.worldInfoAccessMode = fallback.worldInfoAccessMode;
-                }
-                normalized.worldInfoAccessModeVersion = ACTIVE_TOOL_WORLD_ACCESS_VERSION;
-                if (isDefaultTool) {
-                    normalized.description = getWorldInfoToolDescription(normalized.worldInfoAccessMode);
-                    normalized.displayDescription = getWorldInfoToolDisplayDescription(normalized.worldInfoAccessMode);
-                }
-            }
             return normalized;
         };
 
@@ -1353,7 +1301,7 @@ createApp({
             const normalized = [];
             (Array.isArray(items) ? items : [])
                 .map(normalizeActiveTool)
-                .filter(tool => tool.callName)
+                .filter(tool => tool && tool.callName)
                 .forEach(tool => {
                     const duplicateIndex = normalized.findIndex(item => item.id === tool.id || item.callName === tool.callName);
                     if (duplicateIndex >= 0) {
@@ -1530,7 +1478,7 @@ createApp({
 
         // Editing States
         const editingCharacter = reactive({ id: undefined, data: {} });
-        const editorTab = ref('basic'); // 'basic', 'description', 'personality', 'scenario', 'first_mes'
+        const editorTab = ref('basic'); // 'basic', 'description', 'personality', 'first_mes'
         const isBatchDeleteMode = ref(false);
         const selectedCharacterIndices = ref(new Set());
         const editingPreset = reactive({ id: undefined, data: {} });
@@ -1992,6 +1940,10 @@ createApp({
                         if (!char.createdAt) {
                             // Use a slightly offset timestamp based on index to preserve some order for old cards
                             char.createdAt = Date.now() - (savedChars.length - index) * 1000;
+                            migrated = true;
+                        }
+                        if (Object.prototype.hasOwnProperty.call(char, 'scenario')) {
+                            delete char.scenario;
                             migrated = true;
                         }
                         if (Array.isArray(char.worldInfo)) {
@@ -3380,9 +3332,9 @@ ${content}
                 .map(p => p.content)
                 .join('\n\n');
 
-            const charPrompt = `Name: ${currentCharacter.value.name}\nPersonality: ${currentCharacter.value.personality}\nScenario: ${currentCharacter.value.scenario}`;
+            const charPrompt = `Name: ${currentCharacter.value.name}\nPersonality: ${currentCharacter.value.personality}`;
             const mesExample = currentCharacter.value.mes_example || '';
-            const userPrompt = `[User Info]\nName: ${user.name}\nDescription: ${user.description || ''}`;
+            const userPrompt = buildUserInfoPrompt();
 
             // 2. World Info (Approximate triggered entries)
             const wiContent = worldInfo.value
@@ -4635,6 +4587,9 @@ ${content}
                                             '如果模板根变量本身就是数组，可以直接返回JSON数组；如果只改数组里的一个小项，也可以返回 {"equipment.0.name":"短剑"} 这种路径对象。',
                                             '没有变化则返回 {"variables":{},"reason":"无变化"}。不要返回模板id，不要套updates数组，不要修改HTML。',
                                             '',
+                                            '用户信息如下（用于判断称呼、人称和用户相关变量；不要在JSON外复述）：',
+                                            buildUserInfoPrompt(),
+                                            '',
                                             '当前变量JSON如下：',
                                             currentVariableJson,
                                             variableSchemaText ? [
@@ -4755,7 +4710,6 @@ ${content}
                     recentGenerationTimes.value = recentGenerationTimes.value.filter(t => (t.id || t) !== msg.id);
                 }
                 const uiCleanup = pruneUiTemplateChangesFromTurn(affectedTurn);
-                const worldInfoRollback = rollbackWorldInfoMutationsFromMessages([msg]);
                 // 只删除与该楼层关联的记忆，而非全部清空
                 if (msg && msg.role === 'assistant') {
                     // 计算该 assistant 消息对应的轮次 (turn)
@@ -4763,19 +4717,15 @@ ${content}
                     const removed = await filterMemoriesAsync(m => (m.turn || 0) !== turnAtIndex);
                     chatHistory.value.splice(index, 1);
                     await saveConversationMutationNow({ saveTemplateRuntime: uiCleanup.logs > 0 || uiCleanup.blocks > 0 });
-                    if (worldInfoRollback.applied > 0) await saveWorldInfoStateNow();
                     const extras = [];
                     if (removed > 0) extras.push(`${removed} 个关联分片`);
                     if (uiCleanup.logs > 0 || uiCleanup.blocks > 0) extras.push('变量模板');
-                    if (worldInfoRollback.applied > 0) extras.push(`${worldInfoRollback.applied} 处世界书改动`);
                     showToast(extras.length ? `消息已删除，清除了 ${extras.join('、')}` : '消息已删除', 'success');
                 } else {
                     chatHistory.value.splice(index, 1);
                     await saveConversationMutationNow({ saveTemplateRuntime: uiCleanup.logs > 0 || uiCleanup.blocks > 0 });
-                    if (worldInfoRollback.applied > 0) await saveWorldInfoStateNow();
                     const extras = [];
                     if (uiCleanup.logs > 0 || uiCleanup.blocks > 0) extras.push('变量模板');
-                    if (worldInfoRollback.applied > 0) extras.push(`${worldInfoRollback.applied} 处世界书改动`);
                     showToast(extras.length ? `消息已删除，已回退 ${extras.join('、')}` : '消息已删除', 'success');
                 }
             });
@@ -4817,14 +4767,12 @@ ${content}
                     const uiTurnAtIndex = turnAtIndex;
                     await filterMemoriesAsync(m => (m.turn || 0) < turnAtIndex);
                     const uiCleanup = pruneUiTemplateChangesFromTurn(uiTurnAtIndex);
-                    const worldInfoRollback = rollbackWorldInfoMutationsFromMessages(chatHistory.value.slice(index));
                     // Remove timing record for the message being regenerated
                     if (msg && msg.id) {
                         recentGenerationTimes.value = recentGenerationTimes.value.filter(t => (t.id || t) !== msg.id);
                     }
                     chatHistory.value = chatHistory.value.slice(0, index);
                     await saveConversationMutationNow({ saveTemplateRuntime: uiCleanup.logs > 0 || uiCleanup.blocks > 0 });
-                    if (worldInfoRollback.applied > 0) await saveWorldInfoStateNow();
                     await generateResponse(startTime, { reuseGeneratingState: true });
                 });
             }
@@ -4872,21 +4820,7 @@ ${content}
             || ['tool_web', 'tool_web_add', 'tool_web_cover'].includes(tool?.id)
             || /tavily|联网搜索/i.test(String(tool?.name || ''));
 
-        const isWorldInfoActiveTool = (tool) => tool?.type === ACTIVE_TOOL_WORLD_TYPE
-            || ['tool_world', 'tool_world_list', 'tool_world_read', 'tool_world_edit'].includes(normalizeActiveToolBaseCallName(tool?.callName));
-
-        const getWorldInfoAccessMode = (tool) => normalizeWorldInfoAccessMode(tool?.worldInfoAccessMode || tool?.worldInfoMode || tool?.accessMode);
-
-        const canEditWorldInfoWithTool = (tool) => getWorldInfoAccessMode(tool) === ACTIVE_TOOL_WORLD_ACCESS_EDIT;
-
-        const getActiveToolDisplayDescription = (tool) => {
-            if (isWorldInfoActiveTool(tool)) {
-                return getWorldInfoToolDisplayDescription(getWorldInfoAccessMode(tool));
-            }
-            return tool?.displayDescription || '暂无说明';
-        };
-
-        const canConfigureActiveToolResultCount = (tool) => !isWorldInfoActiveTool(tool);
+        const getActiveToolDisplayDescription = (tool) => tool?.displayDescription || '暂无说明';
 
         const shouldSuppressStandardVectorMemoryRecall = () => false;
 
@@ -4947,25 +4881,6 @@ ${content}
                 const coverCallName = escapeXmlAttribute(labels.cover);
                 const keywordTool = isKeywordActiveTool(tool);
                 const webTool = isWebActiveTool(tool);
-                const worldTool = isWorldInfoActiveTool(tool);
-                if (worldTool) {
-                    const worldCanEdit = canEditWorldInfoWithTool(tool);
-                    const callPlaceholder = worldCanEdit ? 'list / read 世界书名字 / JSON编辑参数' : 'list / read 世界书名字';
-                    const returnLabel = worldCanEdit ? '已开启世界书列表、正文或编辑结果' : '已开启世界书列表或正文';
-                    const toolRules = [
-                        `用途：查看${worldCanEdit ? '或修改' : ''}当前已开启且非系统内置的世界书。`,
-                        `流程：先 <${addCallName}:list> 获取名字，再 <${addCallName}:read 世界书名字> 或 JSON read 阅读完整内容。`,
-                        worldCanEdit
-                            ? `编辑：仅在用户明确要求修改时使用 JSON edit；replace 覆盖全文，append/prepend 追加或前置，replace_text 需要 find/replace。内容里的 < 和 > 写成 \\u003c / \\u003e。`
-                            : '权限：当前只读，不要输出 edit。'
-                    ];
-                    return [
-                        formatToolOpenTag({ name: tool.name, addCallName, coverCallName, callPlaceholder, returnLabel }),
-                        `说明：${tool.description || getActiveToolDisplayDescription(tool)}`,
-                        ...toolRules,
-                        `</tool>`
-                    ].join('\n');
-                }
                 const callPlaceholder = webTool ? '联网搜索内容或网页链接' : (keywordTool ? '关键词' : '检索内容');
                 const returnLabel = webTool ? `${count}条联网搜索结果，或网页正文` : (keywordTool ? `${count}条对话片段` : `${count}条向量记忆`);
                 const descriptionFallback = webTool
@@ -5214,10 +5129,10 @@ ${content}
                 .join('\n\n');
             const otherPresets = systemPresets.filter(p => p.name !== '破限');
 
-            const charPrompt = `Name: ${currentCharacter.value.name}\nPersonality: ${currentCharacter.value.personality}\nScenario: ${currentCharacter.value.scenario}`;
+            const charPrompt = `Name: ${currentCharacter.value.name}\nPersonality: ${currentCharacter.value.personality}`;
             const mesExample = currentCharacter.value.mes_example;
 
-            let userPrompt = `[User Info]\nName: ${user.name}\nDescription: ${user.description || ''}`;
+            let userPrompt = buildUserInfoPrompt();
 
             // Helper to join content with comments
             const joinContent = (entries) => entries.map(e => `[${e.comment || 'Entry'}]\n${e.content}`).join('\n\n');
@@ -5265,9 +5180,6 @@ ${content}
 
             const uiTemplateContextPrompt = buildUiTemplateContextSystemPrompt();
             if (uiTemplateContextPrompt) systemPromptParts.push(uiTemplateContextPrompt);
-
-            const mainModelUiTemplatePrompt = buildMainModelUiTemplateUpdatePrompt();
-            if (mainModelUiTemplatePrompt) systemPromptParts.push(mainModelUiTemplatePrompt);
 
             const systemPrompt = systemPromptParts.join('\n\n');
             const systemWorldInfo = [
@@ -5410,6 +5322,30 @@ ${content}
             // Handle @D (At Depth) and other message-level injections
             const processMessageInjections = (msgArray) => {
                 let finalMessages = [...msgArray];
+                const insertUserMessageAtDepth = (content, depth = 1, extra = {}) => {
+                    const normalizedContent = String(content || '').trim();
+                    if (!normalizedContent) return;
+
+                    const reversedMessages = [...finalMessages].reverse();
+                    let countdown = Number.isFinite(Number(depth)) ? Number(depth) : 1;
+                    let targetIndex = -1;
+                    for (let i = 0; i < reversedMessages.length; i++) {
+                        if (reversedMessages[i].role === 'user' || reversedMessages[i].role === 'assistant') {
+                            countdown--;
+                        }
+                        if (countdown < 0) {
+                            targetIndex = reversedMessages.length - 1 - i;
+                            break;
+                        }
+                    }
+                    if (targetIndex < safeTargetLimit) targetIndex = safeTargetLimit;
+
+                    finalMessages.splice(targetIndex, 0, {
+                        role: 'user',
+                        content: normalizedContent,
+                        ...extra
+                    });
+                };
 
                 // At Depth
                 if (wiGroups.at_depth.length > 0) {
@@ -5496,6 +5432,11 @@ ${content}
                             content: fullContent
                         });
                     }
+                }
+
+                const mainModelUiTemplatePrompt = buildMainModelUiTemplateUpdatePrompt();
+                if (mainModelUiTemplatePrompt) {
+                    insertUserMessageAtDepth(mainModelUiTemplatePrompt, 1);
                 }
 
                 // User Top
@@ -7371,390 +7312,6 @@ ${content}
             return results;
         };
 
-        const getEnabledWorldInfoToolEntries = () => {
-            const entries = Array.isArray(worldInfo.value) ? worldInfo.value : [];
-            return entries
-                .map((entry, sourceIndex) => ({
-                    sourceIndex,
-                    entry: normalizeWorldInfoEntry(entry || {})
-                }))
-                .filter(item => item.entry.enabled !== false && !systemWorldInfoNames.includes(item.entry.comment))
-                .map((item, index) => ({
-                    ...item,
-                    index: index + 1
-                }));
-        };
-
-        const getWorldInfoEntrySearchText = (entry) => [
-            entry.comment,
-            ...(Array.isArray(entry.keys) ? entry.keys : []),
-            entry.content
-        ].filter(Boolean).join('\n').toLowerCase();
-
-        const isWorldInfoAllQuery = (query) => {
-            const text = String(query || '').trim().toLowerCase();
-            return !text || ['all', 'list', '全部', '所有', '列表', '已开启', '*'].includes(text);
-        };
-
-        const parseWorldInfoJsonPayload = (query) => {
-            const text = String(query || '').trim();
-            if (!text.startsWith('{') || !text.endsWith('}')) return null;
-            try {
-                return JSON.parse(text);
-            } catch (err) {
-                throw new Error(`世界书工具参数不是有效 JSON：${err.message}`);
-            }
-        };
-
-        const normalizeWorldInfoTarget = (value) => {
-            if (value === null || value === undefined) return '';
-            return String(value).trim();
-        };
-
-        const getWorldInfoTargetFromPayload = (payload, fallbackQuery = '') => {
-            if (!payload || typeof payload !== 'object') return normalizeWorldInfoTarget(fallbackQuery);
-            return normalizeWorldInfoTarget(
-                payload.id
-                ?? payload.index
-                ?? payload.name
-                ?? payload.comment
-                ?? payload.key
-                ?? payload.target
-                ?? payload.query
-                ?? fallbackQuery
-            );
-        };
-
-        const resolveWorldInfoToolEntries = (query, options = {}) => {
-            const { includeContentMatch = true, limit = Infinity } = options;
-            const takeLimit = (items) => Number.isFinite(limit)
-                ? items.slice(0, Math.max(1, limit))
-                : items;
-            const entries = getEnabledWorldInfoToolEntries();
-            const rawTarget = normalizeWorldInfoTarget(query);
-            if (isWorldInfoAllQuery(rawTarget)) {
-                return takeLimit(entries);
-            }
-
-            const numericMatch = rawTarget.match(/(?:^|[#=\s])(\d+)(?:\s*$)/);
-            if (numericMatch) {
-                const targetIndex = Number(numericMatch[1]);
-                const matchedByIndex = entries.filter(item => (
-                    item.index === targetIndex
-                    || item.sourceIndex + 1 === targetIndex
-                ));
-                if (matchedByIndex.length > 0) return takeLimit(matchedByIndex);
-            }
-
-            const target = rawTarget
-                .replace(/^(?:id|index|编号|序号)\s*[:=#：]?\s*/i, '')
-                .trim()
-                .toLowerCase();
-            if (!target) return [];
-
-            const exactMatches = entries.filter(item => (
-                String(item.entry.comment || '').trim().toLowerCase() === target
-                || (Array.isArray(item.entry.keys) && item.entry.keys.some(key => String(key || '').trim().toLowerCase() === target))
-            ));
-            if (exactMatches.length > 0) return takeLimit(exactMatches);
-
-            return takeLimit(entries
-                .filter(item => {
-                    const nameAndKeys = [
-                        item.entry.comment,
-                        ...(Array.isArray(item.entry.keys) ? item.entry.keys : [])
-                    ].filter(Boolean).join('\n').toLowerCase();
-                    if (nameAndKeys.includes(target)) return true;
-                    return includeContentMatch && getWorldInfoEntrySearchText(item.entry).includes(target);
-                }));
-        };
-
-        const formatWorldInfoEntryForTool = (item, options = {}) => {
-            const { includeContent = false } = options;
-            const content = String(item.entry.content || '');
-            return {
-                index: item.index,
-                sourceIndex: item.sourceIndex,
-                comment: item.entry.comment || `世界书 ${item.index}`,
-                scope: item.entry.scope || 'character',
-                keys: Array.isArray(item.entry.keys) ? item.entry.keys : [],
-                constant: !!item.entry.constant,
-                position: item.entry.position || 'at_depth',
-                order: Number(item.entry.order) || 0,
-                depth: Number(item.entry.depth) || 0,
-                contentLength: content.length,
-                preview: trimMemoryText(content, 180),
-                content: includeContent ? content : '',
-                truncated: false
-            };
-        };
-
-        const listEnabledWorldInfoForTool = () => {
-            const matches = getEnabledWorldInfoToolEntries();
-            const allCount = getEnabledWorldInfoToolEntries().length;
-            const results = matches.map(item => formatWorldInfoEntryForTool(item));
-            results.worldInfoMode = 'list';
-            results.totalEnabledCount = allCount;
-            results.limited = false;
-            return results;
-        };
-
-        const readEnabledWorldInfoForTool = (query) => {
-            const payload = parseWorldInfoJsonPayload(query);
-            const target = getWorldInfoTargetFromPayload(payload, query)
-                .replace(/^\s*read\s*[:：]?\s*/i, '')
-                .trim();
-            const matches = resolveWorldInfoToolEntries(target, {
-                includeContentMatch: true
-            });
-            const results = matches.map(item => formatWorldInfoEntryForTool(item, { includeContent: true }));
-            results.worldInfoMode = 'read';
-            results.totalEnabledCount = getEnabledWorldInfoToolEntries().length;
-            return results;
-        };
-
-        const normalizeWorldInfoEditOperation = (payload = {}) => {
-            const raw = String(payload.operation || payload.mode || payload.action || '').trim().toLowerCase();
-            if (payload.find !== undefined && (payload.replace !== undefined || payload.replacement !== undefined)) return 'replace_text';
-            if (['append', 'add', '追加', '添加', '末尾追加'].includes(raw)) return 'append';
-            if (['prepend', 'prefix', '前置', '开头插入'].includes(raw)) return 'prepend';
-            if (['replace_text', 'replace-text', 'patch', '局部替换'].includes(raw)) return 'replace_text';
-            return 'replace';
-        };
-
-        const parseWorldInfoEditPayload = (query) => {
-            const normalizedQuery = String(query || '').trim().replace(/^\s*edit\s*[:：]?\s*/i, '');
-            const jsonPayload = parseWorldInfoJsonPayload(normalizedQuery);
-            if (jsonPayload) return jsonPayload;
-
-            const text = normalizedQuery;
-            const quickMatch = text.match(/^#?(\d+)\s+(replace_text|replace|append|prepend|覆盖|追加|前置|局部替换)\s*[:：]\s*([\s\S]+)$/i);
-            if (quickMatch) {
-                return {
-                    id: Number(quickMatch[1]),
-                    operation: quickMatch[2],
-                    content: quickMatch[3]
-                };
-            }
-
-            const payload = {};
-            text.split(/\n+/).forEach(line => {
-                const match = line.match(/^\s*(id|index|name|comment|target|operation|mode|action|find|replace)\s*[:=：]\s*([\s\S]*?)\s*$/i);
-                if (match) payload[match[1].toLowerCase()] = match[2];
-            });
-            const contentMatch = text.match(/(?:^|\n)\s*(?:content|text|newContent|新内容)\s*[:=：]\s*([\s\S]+)$/i);
-            if (contentMatch) payload.content = contentMatch[1].trim();
-            return payload;
-        };
-
-        const getWorldInfoEditContentValue = (payload, keys) => {
-            for (const key of keys) {
-                if (Object.prototype.hasOwnProperty.call(payload, key)) {
-                    return payload[key];
-                }
-            }
-            return undefined;
-        };
-
-        const editEnabledWorldInfoForTool = async (query) => {
-            const payload = parseWorldInfoEditPayload(query);
-            const target = getWorldInfoTargetFromPayload(payload, '');
-            if (!target) {
-                throw new Error('编辑世界书需要指定 name、comment、target 或 id。建议先调用 list 看名字，再 read 确认完整内容。');
-            }
-
-            const matches = resolveWorldInfoToolEntries(target, {
-                includeContentMatch: false,
-                limit: ACTIVE_TOOL_MAX_RESULT_COUNT
-            });
-            if (matches.length === 0) {
-                throw new Error('没有找到匹配的已开启世界书条目，或目标是系统内置/未开启条目。请先调用 list 确认世界书名字。');
-            }
-            if (matches.length > 1) {
-                const names = matches.map(item => `#${item.index} ${item.entry.comment || '未命名'}`).join('；');
-                throw new Error(`匹配到多个世界书条目：${names}。请使用更完整的世界书名字，或先 read 确认目标。`);
-            }
-
-            const match = matches[0];
-            const originalEntry = normalizeWorldInfoEntry(worldInfo.value[match.sourceIndex] || {});
-            const oldContent = String(originalEntry.content || '');
-            const operation = normalizeWorldInfoEditOperation(payload);
-            let newContent = oldContent;
-
-            if (operation === 'replace_text') {
-                const findText = String(getWorldInfoEditContentValue(payload, ['find', 'old', 'oldText']) ?? '');
-                const replaceText = String(getWorldInfoEditContentValue(payload, ['replace', 'replacement', 'new', 'newText']) ?? '');
-                if (!findText) throw new Error('局部替换需要提供 find 旧文本。');
-                if (!oldContent.includes(findText)) throw new Error('世界书内容里没有找到 find 指定的旧文本，已取消编辑。');
-                newContent = oldContent.split(findText).join(replaceText);
-            } else {
-                const contentValue = getWorldInfoEditContentValue(payload, ['content', 'newContent', 'text', 'value']);
-                if (contentValue === undefined) {
-                    throw new Error('编辑世界书需要提供 content/newContent/text 字段。');
-                }
-                const editText = String(contentValue);
-                if (operation === 'append') {
-                    newContent = oldContent
-                        ? `${oldContent}${editText.startsWith('\n') ? '' : '\n'}${editText}`
-                        : editText;
-                } else if (operation === 'prepend') {
-                    newContent = oldContent
-                        ? `${editText}${editText.endsWith('\n') ? '' : '\n'}${oldContent}`
-                        : editText;
-                } else {
-                    newContent = editText;
-                }
-            }
-
-            const updatedEntry = normalizeWorldInfoEntry({
-                ...originalEntry,
-                content: newContent
-            });
-            worldInfo.value.splice(match.sourceIndex, 1, updatedEntry);
-            const normalizedWorldInfo = JSON.parse(JSON.stringify(worldInfo.value)).map(normalizeWorldInfoEntry);
-            globalWorldInfo.value = normalizedWorldInfo.filter(entry => entry.scope === 'global');
-            if (currentCharacterIndex.value !== -1 && characters.value[currentCharacterIndex.value]) {
-                characters.value[currentCharacterIndex.value].worldInfo = normalizedWorldInfo.filter(entry => entry.scope !== 'global');
-            }
-            await saveData({ saveMemories: false });
-
-            const results = [{
-                index: match.index,
-                sourceIndex: match.sourceIndex,
-                comment: updatedEntry.comment || `世界书 ${match.index}`,
-                scope: updatedEntry.scope || 'character',
-                operation,
-                changed: newContent !== oldContent,
-                oldLength: oldContent.length,
-                newLength: newContent.length,
-                preview: trimMemoryText(newContent, 240)
-            }];
-            results.worldInfoMode = 'edit';
-            results.worldInfoMutations = [{
-                sourceIndex: match.sourceIndex,
-                index: match.index,
-                comment: updatedEntry.comment || `世界书 ${match.index}`,
-                scope: updatedEntry.scope || 'character',
-                operation,
-                changed: newContent !== oldContent,
-                beforeEntry: cloneForStorage(originalEntry),
-                afterEntry: cloneForStorage(updatedEntry)
-            }];
-            return results;
-        };
-
-        const parseWorldInfoToolRequest = (query) => {
-            const text = String(query || '').trim();
-            const payload = parseWorldInfoJsonPayload(text);
-            if (payload) {
-                const actionText = String(payload.action || payload.tool || payload.mode || '').trim().toLowerCase();
-                const editOperation = String(payload.operation || '').trim().toLowerCase();
-                if (['list', '列表', 'all', '全部'].includes(actionText)) return { action: 'list', payload, query: text };
-                if (['read', '阅读', 'view', '查看'].includes(actionText)) return { action: 'read', payload, query: getWorldInfoTargetFromPayload(payload, '') };
-                if (['edit', '编辑', 'update', '修改'].includes(actionText)
-                    || payload.content !== undefined
-                    || payload.newContent !== undefined
-                    || payload.text !== undefined
-                    || payload.find !== undefined
-                    || ['replace', 'append', 'prepend', 'replace_text', 'replace-text'].includes(editOperation)) {
-                    return { action: 'edit', payload, query: text };
-                }
-                if (getWorldInfoTargetFromPayload(payload, '')) {
-                    return { action: 'read', payload, query: getWorldInfoTargetFromPayload(payload, '') };
-                }
-                return { action: 'list', payload, query: text };
-            }
-
-            const actionMatch = text.match(/^(list|列表|all|全部|read|阅读|view|查看|edit|编辑|update|修改)(?:\s+|[:：]|$)\s*([\s\S]*)$/i);
-            if (actionMatch) {
-                const action = actionMatch[1].toLowerCase();
-                const rest = String(actionMatch[2] || '').trim();
-                if (['list', '列表', 'all', '全部'].includes(action)) return { action: 'list', query: rest };
-                if (['read', '阅读', 'view', '查看'].includes(action)) return { action: 'read', query: rest };
-                return { action: 'edit', query: rest || text };
-            }
-
-            if (isWorldInfoAllQuery(text)) return { action: 'list', query: text };
-            if (/^(?:#?\d+|id\s*[:=#：]?\s*\d+|index\s*[:=#：]?\s*\d+|编号\s*[:=#：]?\s*\d+)$/i.test(text)) {
-                return { action: 'read', query: text };
-            }
-            return { action: 'read', query: text };
-        };
-
-        const runWorldInfoToolForActiveTool = async (toolCall) => {
-            const request = parseWorldInfoToolRequest(toolCall.query);
-            if (request.action === 'list') return listEnabledWorldInfoForTool();
-            if (request.action === 'edit') {
-                if (!canEditWorldInfoWithTool(toolCall.tool)) {
-                    throw new Error('当前世界书工具是阅读模式，不能编辑世界书。请在工具设置里切换到“编辑”后再试。');
-                }
-                return editEnabledWorldInfoForTool(request.query);
-            }
-            return readEnabledWorldInfoForTool(request.query);
-        };
-
-        const getWorldInfoRollbackSignature = (entry) => {
-            try {
-                return JSON.stringify(normalizeWorldInfoEntry(entry || {}));
-            } catch (err) {
-                return '';
-            }
-        };
-
-        const findWorldInfoRollbackTargetIndex = (mutation) => {
-            const entries = Array.isArray(worldInfo.value) ? worldInfo.value : [];
-            const afterSignature = getWorldInfoRollbackSignature(mutation?.afterEntry);
-            const sourceIndex = Number(mutation?.sourceIndex);
-            if (Number.isInteger(sourceIndex)
-                && sourceIndex >= 0
-                && sourceIndex < entries.length
-                && getWorldInfoRollbackSignature(entries[sourceIndex]) === afterSignature) {
-                return sourceIndex;
-            }
-            return entries.findIndex(entry => getWorldInfoRollbackSignature(entry) === afterSignature);
-        };
-
-        const syncWorldInfoScopesFromCurrentList = () => {
-            const normalizedWorldInfo = JSON.parse(JSON.stringify(worldInfo.value || [])).map(normalizeWorldInfoEntry);
-            globalWorldInfo.value = normalizedWorldInfo.filter(entry => entry.scope === 'global');
-            if (currentCharacterIndex.value !== -1 && characters.value[currentCharacterIndex.value]) {
-                characters.value[currentCharacterIndex.value].worldInfo = normalizedWorldInfo.filter(entry => entry.scope !== 'global');
-            }
-        };
-
-        const rollbackWorldInfoMutationsFromMessages = (messages = []) => {
-            const mutations = [];
-            (Array.isArray(messages) ? messages : [messages]).forEach(message => {
-                if (!message || !Array.isArray(message.toolCalls)) return;
-                message.toolCalls.forEach(toolCall => {
-                    if (Array.isArray(toolCall?.worldInfoMutations)) {
-                        toolCall.worldInfoMutations.forEach(mutation => {
-                            mutations.push(mutation);
-                        });
-                    }
-                });
-            });
-
-            let applied = 0;
-            let skipped = 0;
-            [...mutations].reverse().forEach(mutation => {
-                if (!mutation?.beforeEntry || !mutation?.afterEntry) return;
-                const targetIndex = findWorldInfoRollbackTargetIndex(mutation);
-                if (targetIndex < 0) {
-                    skipped += 1;
-                    return;
-                }
-                worldInfo.value.splice(targetIndex, 1, normalizeWorldInfoEntry(cloneForStorage(mutation.beforeEntry)));
-                applied += 1;
-            });
-
-            if (applied > 0) {
-                syncWorldInfoScopesFromCurrentList();
-            }
-
-            return { applied, skipped };
-        };
-
         const resetActiveToolResultContext = () => {
             activeToolResultContexts.value = [];
             pendingActiveToolContext.value = '';
@@ -7765,7 +7322,7 @@ ${content}
             if (blocks.length === 0) return '';
             return [
                 '<active_tool_results>',
-                '  <description>以下是本轮正文工具调用返回的记录，可能包含有效结果、空结果或错误。本段内容由系统插入最后一条用户消息结尾。追加调用会保留并追加旧记录，覆盖调用会替换旧记录；只有包含实际片段、网页、世界书内容等证据的记录才算检索成功。请把有效证据作为参考继续回答，不要复述工具调用标签。</description>',
+                '  <description>以下是本轮正文工具调用返回的记录，可能包含有效结果、空结果或错误。本段内容由系统插入最后一条用户消息结尾。追加调用会保留并追加旧记录，覆盖调用会替换旧记录；只有包含实际片段、网页等证据的记录才算检索成功。请把有效证据作为参考继续回答，不要复述工具调用标签。</description>',
                 blocks.join('\n\n'),
                 '</active_tool_results>'
             ].join('\n');
@@ -7804,7 +7361,7 @@ ${content}
 
         const normalizeActiveToolResultContext = (resultContext, tool, query, mode = 'add') => {
             const text = String(resultContext || '').trim();
-            const hasResultBody = /<(?:description|error|memory_fragment|dialogue_fragment|web_source|web_page|failed_page|world_info_[a-z_]+)\b/i.test(text);
+            const hasResultBody = /<(?:description|error|memory_fragment|dialogue_fragment|web_source|web_page|failed_page)\b/i.test(text);
             if (!text || text === '</active_tool_result>' || !text.includes('<active_tool_result') || !hasResultBody) {
                 return formatActiveToolNoticeContext(
                     tool,
@@ -7905,95 +7462,6 @@ ${content}
                     formattedResults,
                     '</active_tool_result>'
                 ].filter(Boolean).join('\n');
-            }
-            if (isWorldInfoActiveTool(tool)) {
-                const modeDescription = modeValue === 'cover'
-                    ? '本次调用模式为覆盖：系统会用本次结果替换本轮此前已检索的工具结果。'
-                    : '本次调用模式为追加：系统会把本次结果追加到本轮此前已检索的工具结果后。';
-                const worldInfoMode = results?.worldInfoMode || 'unknown';
-                const totalEnabledCount = Number(results?.totalEnabledCount) || 0;
-
-                if (!Array.isArray(results) || results.length === 0) {
-                    return [
-                        `<active_tool_result name="${title}" call="${callName}" mode="${modeValue}" query="${escapeXmlAttribute(cleanQuery)}" status="empty" world_info_mode="${escapeXmlAttribute(worldInfoMode)}">`,
-                        `  <description>本次世界书读取没有检索成功，没有找到匹配的已开启世界书条目，也没有提供可作为答案依据的新证据。${modeDescription}如果需要读取或编辑，请先调用 list 获取可用世界书名字。</description>`,
-                        '</active_tool_result>'
-                    ].join('\n');
-                }
-
-                if (worldInfoMode === 'edit') {
-                    const formattedEdits = results.map(item => {
-                        const attrs = [
-                            `index="${escapeXmlAttribute(item.index || '')}"`,
-                            `name="${escapeXmlAttribute(item.comment || '')}"`,
-                            `scope="${escapeXmlAttribute(item.scope || '')}"`,
-                            `operation="${escapeXmlAttribute(item.operation || '')}"`,
-                            `changed="${escapeXmlAttribute(item.changed ? 'true' : 'false')}"`,
-                            `old_length="${escapeXmlAttribute(item.oldLength || 0)}"`,
-                            `new_length="${escapeXmlAttribute(item.newLength || 0)}"`
-                        ];
-                        const previewText = indentXmlText(item.preview || '', 4);
-                        return [
-                            `  <world_info_edit ${attrs.join(' ')}>`,
-                            previewText ? `    <preview>\n${previewText}\n    </preview>` : '',
-                            '  </world_info_edit>'
-                        ].filter(Boolean).join('\n');
-                    }).join('\n\n');
-
-                    return [
-                        `<active_tool_result name="${title}" call="${callName}" mode="${modeValue}" query="${escapeXmlAttribute(cleanQuery)}" world_info_mode="edit">`,
-                        `  <description>以下是系统对已开启世界书内容的编辑结果。${modeDescription}请在继续回答时简短说明已修改哪一条；不要伪造未执行的修改。</description>`,
-                        formattedEdits,
-                        '</active_tool_result>'
-                    ].join('\n');
-                }
-
-                if (worldInfoMode === 'list') {
-                    const names = results
-                        .map(item => String(item.comment || '').trim())
-                        .filter(Boolean)
-                        .join('\n');
-                    return [
-                        `<active_tool_result name="${title}" call="${callName}" mode="${modeValue}" query="${escapeXmlAttribute(cleanQuery)}" world_info_mode="list" total_enabled="${escapeXmlAttribute(totalEnabledCount)}">`,
-                        `  <description>以下是当前已开启世界书名字列表，每行一个名字。${modeDescription}请先根据名字判断哪些可能相关；需要完整内容时，用同一个世界书工具继续调用 read 世界书名字。</description>`,
-                        '  <world_info_names>',
-                        indentXmlText(names, 4),
-                        '  </world_info_names>',
-                        '</active_tool_result>'
-                    ].join('\n');
-                }
-
-                const formattedEntries = results.map(item => {
-                    const attrs = [
-                        `index="${escapeXmlAttribute(item.index || '')}"`,
-                        `name="${escapeXmlAttribute(item.comment || '')}"`,
-                        `scope="${escapeXmlAttribute(item.scope || '')}"`,
-                        `keys="${escapeXmlAttribute((item.keys || []).join(', '))}"`,
-                        `constant="${escapeXmlAttribute(item.constant ? 'true' : 'false')}"`,
-                        `position="${escapeXmlAttribute(item.position || '')}"`,
-                        `order="${escapeXmlAttribute(item.order || 0)}"`,
-                        `depth="${escapeXmlAttribute(item.depth || 0)}"`,
-                        `content_length="${escapeXmlAttribute(item.contentLength || 0)}"`
-                    ];
-                    if (item.truncated) attrs.push('truncated="true"');
-                    const bodyText = item.content || item.preview || '';
-                    const bodyTag = item.content ? 'content' : 'preview';
-                    const body = indentXmlText(bodyText, 4);
-                    return [
-                        `  <world_info_entry ${attrs.join(' ')}>`,
-                        body ? `    <${bodyTag}>\n${body}\n    </${bodyTag}>` : '',
-                        '  </world_info_entry>'
-                    ].filter(Boolean).join('\n');
-                }).join('\n\n');
-
-                const description = `以下是系统读取到的已开启世界书内容。${modeDescription}请优先依据这些世界书内容继续回答；如果准备编辑，请使用列表里的准确名字，避免改错条目。`;
-
-                return [
-                    `<active_tool_result name="${title}" call="${callName}" mode="${modeValue}" query="${escapeXmlAttribute(cleanQuery)}" world_info_mode="${escapeXmlAttribute(worldInfoMode)}" total_enabled="${escapeXmlAttribute(totalEnabledCount)}">`,
-                    `  <description>${description}</description>`,
-                    formattedEntries,
-                    '</active_tool_result>'
-                ].join('\n');
             }
             if (isKeywordActiveTool(tool)) {
                 const modeDescription = modeValue === 'cover'
@@ -8201,9 +7669,6 @@ ${content}
         const getPendingToolCallQueryPreview = (toolCall) => {
             const query = String(toolCall?.query || '').trim();
             if (!query) return '正在接收工具参数...';
-            if (isWorldInfoActiveTool(toolCall?.tool) && /"action"\s*:\s*"edit"|^\s*\{[\s\S]*"content"\s*:/i.test(query)) {
-                return '正在接收世界书编辑内容...';
-            }
             return trimMemoryText(query, 160);
         };
 
@@ -8240,12 +7705,6 @@ ${content}
             if (toolCall?.toolType === ACTIVE_TOOL_WEB_TYPE || baseCallName === 'tool_web') {
                 return ACTIVE_TOOL_WEB_TYPE;
             }
-            if (
-                toolCall?.toolType === ACTIVE_TOOL_WORLD_TYPE
-                || ['tool_world', 'tool_world_list', 'tool_world_read', 'tool_world_edit'].includes(baseCallName)
-            ) {
-                return ACTIVE_TOOL_WORLD_TYPE;
-            }
             if (toolCall?.toolType === ACTIVE_TOOL_VECTOR_TYPE || baseCallName === 'tool_memory') {
                 return ACTIVE_TOOL_VECTOR_TYPE;
             }
@@ -8256,7 +7715,6 @@ ${content}
             const groupKey = getActiveToolUiGroupKey(toolCall);
             if (groupKey === ACTIVE_TOOL_KEYWORD_TYPE) return '关键词检索';
             if (groupKey === ACTIVE_TOOL_WEB_TYPE) return 'Tavily 联网搜索';
-            if (groupKey === ACTIVE_TOOL_WORLD_TYPE) return '世界书阅读/管理';
             if (groupKey === ACTIVE_TOOL_VECTOR_TYPE) return '向量记忆主动检索';
             return toolCall?.name || '向量记忆主动检索';
         };
@@ -8265,20 +7723,6 @@ ${content}
             const groupKey = getActiveToolUiGroupKey(toolCall);
             const mode = toolCall?.mode === 'cover' ? 'cover' : 'add';
             const query = String(toolCall?.query || '');
-
-            if (groupKey === ACTIVE_TOOL_WORLD_TYPE) {
-                if (toolCall?.status === 'receiving' && query.includes('编辑内容')) return '编辑世界书';
-                let request = null;
-                try {
-                    request = parseWorldInfoToolRequest(query);
-                } catch (err) {
-                    const looksLikeEdit = /"action"\s*:\s*"edit"|"operation"\s*:|"content"\s*:|"newContent"\s*:|"find"\s*:/i.test(query);
-                    return looksLikeEdit ? '编辑世界书' : '阅读世界书';
-                }
-                if (request?.action === 'list') return '列出世界书';
-                if (request?.action === 'edit') return '编辑世界书';
-                return '阅读世界书';
-            }
 
             if (groupKey === ACTIVE_TOOL_WEB_TYPE) {
                 const hasUrl = extractWebUrlsFromToolQuery(query).length > 0;
@@ -8712,8 +8156,6 @@ ${content}
                             toolCall.tool,
                             toolAbort.signal
                         )
-                        : isWorldInfoActiveTool(toolCall.tool)
-                        ? await runWorldInfoToolForActiveTool(toolCall)
                         : await searchVectorMemoriesForTool(
                             toolCall.query,
                             toolCall.tool.resultCount,
@@ -8730,11 +8172,6 @@ ${content}
                     toolUi.status = 'done';
                     toolUi.resultCount = Array.isArray(results) ? results.length : 0;
                     toolUi.resultText = resultContext;
-                    if (Array.isArray(results?.worldInfoMutations) && results.worldInfoMutations.length > 0) {
-                        toolUi.worldInfoMutations = cloneForStorage(results.worldInfoMutations);
-                    } else {
-                        delete toolUi.worldInfoMutations;
-                    }
                     await saveChatHistoryNow();
                     return {
                         ok: true,
@@ -8915,7 +8352,6 @@ ${content}
                 first_mes: 'Hello!',
                 avatar: defaultAvatar,
                 personality: '',
-                scenario: '',
                 mes_example: '',
                 uuid: generateUUID(),
                 createdAt: Date.now(),
@@ -8946,6 +8382,7 @@ ${content}
                 regexScripts: characterRegexScripts,
                 uiTemplates: (editingCharacter.data.uiTemplates || []).map(template => normalizeUiTemplate({ ...template, scope: 'character' }))
             };
+            delete normalizedCharacterData.scenario;
             if (editingCharacter.id !== undefined) {
                 characters.value[editingCharacter.id] = normalizedCharacterData;
             } else {
@@ -9756,7 +9193,6 @@ image###生成的提示词###
                     const name = charData.name || charData.char_name || 'Unknown';
                     const description = charData.description || charData.char_persona || '';
                     const personality = charData.personality || '';
-                    const scenario = charData.scenario || '';
                     const first_mes = charData.first_mes || '';
                     const creator_notes = charData.creator_notes || charData.creatorcomment || charData.creator_comment || '';
 
@@ -9800,7 +9236,6 @@ image###生成的提示词###
                         first_mes,
                         avatar: avatarUrl || defaultAvatar,
                         personality,
-                        scenario,
                         creator_notes,
                         worldInfo: [],
                         regexScripts: [],
@@ -10460,23 +9895,25 @@ image###生成的提示词###
             // 1.7.5 Enforce Default Preset (文风（抗八股）)
             const antiEightPartPresetName = '文风（抗八股）';
             const antiEightPartPresetContent = `<writing_style>
-开场白和历史消息只用于提取剧情事实、人物关系和场景状态，不要继承其中不合适的句式、节奏和描写习惯。正文使用现实向生活流白描文风：朴素、直白、顺畅，有代入感和情绪后劲。
+开场白和历史消息只用于提取剧情事实、人物关系和场景状态，不要继承其中不合适的句式、节奏和描写习惯。正文使用轻小说 Roleplay 文风：画面清楚，台词鲜活，互动强，读起来像角色正在现场和 {{user}} 发生来回，而不是旁白独自讲完剧情。
 
-情绪要从人物关系、现实处境、选择后果和未说出口的话里长出来。可以直给，但不要油腻煽情，不要靠华丽辞藻、文学意象、大段环境描写或模板化比喻制造“高级感”。
+每轮回复都要有明确的角色反应和互动落点。优先写角色看见了什么、误会了什么、忍住了什么、说出口了什么，以及这句话或动作怎样把选择递回给 {{user}}。不要替 {{user}} 回答、行动或决定。
 
-每个自然段都要承担明确作用：推进事件、制造选择、揭示关系、改变情绪或埋下冲突。动作承接要自然，避免机械断句，也不要把一个简单动作拆成多句反复描摹。
+段落节奏要像轻小说场景：短叙述交代画面，角色台词推动关系，少量内心或旁白补出反差、羞耻、逞强、迟疑、误解和自尊。不要整段都在解释心理，也不要整段都没有台词。
 
-优先写事件发展、人物关系、现实处境、对话和选择。低价值动作如整理衣服、拿包、换鞋、开门、脚步声、转头、发丝晃动等，除非会改变关系、制造冲突或暴露情绪，否则一句带过或省略。
+角色要有活人感。角色可以嘴硬、装镇定、反问、顶撞、试探、害羞、退缩、转移话题，也可以因为身份、能力、过去经历或当前处境产生反差。不要把角色写成只会顺从、解释或配合剧情的工具。
 
-人物出场和内心表现优先通过具体行动、对白、回避、试探、误判、回忆、选择和未说出口的话来完成。角色不能像剧情工具，应有自己的顾虑、自尊、边界、犹豫、误解和临场反应，也会随关系与处境变化。
+强互动优先于长篇独白。每次回复尽量包含可被 {{user}} 接住的东西：一句追问、一个挑衅、一次邀请、一个误会、一个请求、一个动作空位、一个等待回应的停顿或一个正在变化的局面。
 
-控制特写和形容词密度。不要连续描写头发、肩膀、手臂、腰肢、衣料、气味、触感、微痒、轻颤等细节；不要给每个名词都配形容词。外观、环境和感官只在影响行动、关系或情绪落点时才写。
+可以有轻小说式画面感和少量诗性句子，但必须服务人物和互动。不要堆华丽辞藻，不要连续铺大段环境，不要把每个动作都写成慢镜头。
 
-提高信息密度。每句话都应推进至少一件事：新的动作、关系变化、冲突、选择、信息揭示或情绪转折。删掉只是在重复气氛、重复状态、重复人物好看的废话。
+提高信息密度。每句话都应推进至少一件事：新动作、台词交锋、关系变化、冲突、选择、信息揭示、情绪转折或留给 {{user}} 的回应空间。删掉只是在重复气氛、重复状态、重复人物好看的废话。
 
-增加人物对白和互动。不要长时间只靠旁白解释心理，应让人物开口、试探、回避、顶撞、误会、追问或沉默。对白要带出关系和选择，而不是只重复情绪。
+对白要像角色本人会说的话。不同角色的用词、语气、别扭点和边界要不同；台词不要只表达情绪，还要推动关系、制造误会、暴露弱点或逼出下一步互动。
 
-避免机械的数据化描写，不要计算“第几次”、罗列“几个字”、测量多少厘米或角度。需要表达程度时，用人物反应、关系变化和现场后果呈现。
+低价值动作如整理衣服、拿包、换鞋、开门、脚步声、转头、发丝晃动等，除非会改变关系、制造冲突或暴露情绪，否则一句带过或省略。不要把微动作堆成清单。
+
+禁止套用刻板轻小说口癖和模板句。角色嘴硬时，要根据人物身份、关系和现场压力写出具体说法，不要使用通用二次元套话。
 
 禁止使用“不是……而是……”、“不是……是……”、“比起……更……”及类似总结性、说教式、AI味的对比句型。需要对比时，直接写选择、动作和结果。
 
@@ -10566,9 +10003,15 @@ image###生成的提示词###
 
             // 1.10 Enforce Default Preset (COT)
             const cotPresetName = 'COT';
-            const cotPresetContent = `<cot_protocol>
-每次正文前，先输出由 <cot> 和 </cot> 完整包裹的内部逻辑推演。<cot>内必须按以下顺序严密、详细地完成自我演练：
+            const buildCotPresetContent = () => {
+                const memoryFragmentSection = memorySettings.enabled ? `
+**[记忆分片整理]**
+先检查本轮注入的 <role_memory_vector_recall>、<memory_fragment> 和工具返回的记忆分片，按时间顺序整理与当前输入有关的事实、关系、物品状态、未解伏笔和冲突点；若本轮没有可用分片，标记为无可用记忆并继续下一节。只采纳有分片支持的信息，不要把记忆分片原文复述进正文。
+` : '';
 
+                return `<cot_protocol>
+每次正文前，先输出由 <cot> 和 </cot> 完整包裹的内部逻辑推演。<cot>内必须按以下顺序严密、详细地完成自我演练：
+${memoryFragmentSection}
 **[情景与意图解密]**
 整理时间线、历史对话和记忆片段，按正确顺序分析过往事件、关系延续、未解情绪，以及 {{user}} 最新输入里的潜台词、情绪和真实需求。
 
@@ -10597,7 +10040,7 @@ image###生成的提示词###
 答：（先指出可能越界的信息，再给出修正）。
 
 **[文风整理]**
-按<writing_style>做最终体检：检查破折号、“不是……是/而是……”、“声音很平，像在……”、“喉咙里塞了团棉花/被自己抓了个现行”类八股套话、低信息密度、形容词堆叠、对白不足和人物失真，并给出具体修正。
+按<writing_style>做最终体检：检查是否符合轻小说 Roleplay 文风，是否有足够台词、互动落点、角色主动反应、代入感和活人感；同时检查刻板轻小说口癖和模板句、破折号、“不是……是/而是……”、“声音很平，像在……”、“喉咙里塞了团棉花/被自己抓了个现行”类八股套话、低信息密度、形容词堆叠、对白不足和人物失真，并给出具体修正。
 
 **[最终执行锁定]**
 确认预演通过，将推演转化为正文。闭合</cot>标签后开始输出。
@@ -10606,19 +10049,25 @@ image###生成的提示词###
 - 禁止在思考与分析过程中输出正文内容。
 - 必须闭合 </cot> 标签后再输出正文，禁止在未闭合标签前输出正文。
 </cot_protocol>`;
-            const existingCotPreset = presets.value.find(p => p.name === cotPresetName);
+            };
 
-            if (!existingCotPreset) {
-                presets.value.push({
-                    name: cotPresetName,
-                    content: cotPresetContent,
-                    enabled: true
-                });
-            } else {
+            const syncCotPresetContent = () => {
+                const cotPresetContent = buildCotPresetContent();
+                const existingCotPreset = presets.value.find(p => p.name === cotPresetName);
+                if (!existingCotPreset) {
+                    presets.value.push({
+                        name: cotPresetName,
+                        content: cotPresetContent,
+                        enabled: true
+                    });
+                    return;
+                }
                 if (existingCotPreset.content !== cotPresetContent) {
                     existingCotPreset.content = cotPresetContent;
                 }
-            }
+            };
+            syncCotPresetContent();
+            watch(() => memorySettings.enabled, syncCotPresetContent);
             // 2. Enforce Default Regex (Auto Replace {{user
             const defaultRegexName = 'Auto Replace {{user}}';
             const existingRegex = regexScripts.value.find(r => r.name === defaultRegexName);
@@ -10883,7 +10332,7 @@ image###生成的提示词###
             showConfirmModal, confirmMessage, modelMode, showNoMemoryNeededModal, // Export for template
             isGenerating, isRemoteGenerating, remoteEstimatedTime, isReceiving, isThinking, hasActiveToolInlineWork, activeToolInlineStatusText, isConversationBusy, activeToolContinuationMessageId, activeToolContinuationToolCallId, activeToolContinuationHasResponse, activeNativeReasoning, userInput, modelSearchQuery, activeModelTag, modelTags, characterSearchQuery, availableModels, filteredModels, filteredCharacters,
             user, settings, apiProviderOptions, selectedApiProvider, isCustomApiProvider, customApiProviderOption, customApiProviderOptions, showApiProviderSelector, selectApiProvider, characters, currentCharacter, currentCharacterIndex, chatHistory, displayedChatMessages, handleChatScroll, presets, presetRoleOptions, fontFamilyOptions, imageStyleOptions, imageSizeOptions, imageGenCountOptions, scopeOptions, uiTemplatePlacementOptions, worldInfoPositionOptions, getPresetRoleLabel, getPresetRoleDisplayLabel, getPresetRoleBadgeClass, regexScripts, worldInfo,
-            activeTools, activeToolAggressivenessOptions: ACTIVE_TOOL_AGGRESSIVENESS_OPTIONS, getActiveToolAggressivenessLabel, editingActiveTool, normalizeActiveTools, isWebActiveTool, isWorldInfoActiveTool, getWorldInfoAccessMode, getActiveToolDisplayDescription, canConfigureActiveToolResultCount, getActiveToolResultCountMin, getActiveToolResultCountMax,
+            activeTools, activeToolAggressivenessOptions: ACTIVE_TOOL_AGGRESSIVENESS_OPTIONS, getActiveToolAggressivenessLabel, editingActiveTool, normalizeActiveTools, isWebActiveTool, getActiveToolDisplayDescription, getActiveToolResultCountMin, getActiveToolResultCountMax,
             getToolCallModeText, hasThinkingOrTools, isMessageThinkingOrRunning, isThinkingSummaryOpen, toggleThinkingSummary, markThinkingSummaryDetailOpened, getTimelineSteps,
             activeRegexCount, activeWorldInfoCount, activeUiTemplateCount, chatRoundStats, totalContextLength,
             editingCharacter, editingPreset, editingUiTemplate, toasts, chatContainer, isChatFullscreen, isMobileKeyboardOpen, inputBox, messageElements,
@@ -11300,9 +10749,7 @@ image###生成的提示词###
                     displayDescription: previous.displayDescription,
                     resultCount: editingActiveTool.data.resultCount,
                     resultCountVersion: ACTIVE_TOOL_RESULT_COUNT_VERSION,
-                    tavilyApiKey: editingActiveTool.data.tavilyApiKey,
-                    worldInfoAccessMode: editingActiveTool.data.worldInfoAccessMode,
-                    worldInfoAccessModeVersion: ACTIVE_TOOL_WORLD_ACCESS_VERSION
+                    tavilyApiKey: editingActiveTool.data.tavilyApiKey
                 });
                 activeTools.value[index] = data;
                 normalizeActiveTools();
