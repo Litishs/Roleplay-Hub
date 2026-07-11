@@ -370,7 +370,7 @@
                             <div class="border rounded-xl p-3 cursor-pointer transition-all duration-200 flex items-center justify-center gap-2 relative overflow-hidden select-none group"
                                 :class="options.avatarStyle === 'comicDoujin' ? 'border-primary bg-primary/10 text-primary ring-2 ring-primary/20 shadow-sm' : 'border-base-300 bg-base-100 hover:border-base-content/30 hover:bg-base-200/50'"
                                 @click="options.avatarStyle = 'comicDoujin'">
-                                <span class="font-bold text-sm">漫画同人风</span>
+                                <span class="font-bold text-sm">动漫同人风</span>
                                 <div v-if="options.avatarStyle === 'comicDoujin'"
                                     class="absolute -right-3 -top-3 w-8 h-8 bg-primary/20 rounded-full blur-xl"></div>
                             </div>
@@ -4466,7 +4466,7 @@ ${uiTemplatePrompt.value.trim() || '根据当前角色自动设计一个状态�
                     console.log('%c[Workshop Image Request]', 'color: #ec4899; font-weight: bold;', { style: options.avatarStyle, tag: tag });
                     const tokenParam = options.imageGenKey.trim();
                     const defaultArtists = 'masterpiece, best quality,[[[artist:dishwasher1910]]], {{yd_(orange_maru)}}, [artist:ciloranko], [artist:sho_(sho_lwlw)], [ningen mame], soft lighting,year 2024';
-                    const comicDoujinArtists = 'masterpiece,best quality,ultra detailed,by 小田武士,by 内尾和正,by あずーる,TV anime screencap,clean cel shading,soft lineart,subtle bloom glow';
+                    const comicDoujinArtists = 'masterpiece, best quality, very aesthetic, modern Japanese anime, official anime art, anime key visual, anime screencap, soft cel shading, soft anime coloring, smooth color transitions, natural skin tones, restrained color palette, slightly desaturated, muted colors, soft ambient lighting, gentle contrast, subtle gradients, subtle bloom, detailed anime background';
                     const r18Artists = `0.9::misaka_12003-gou ::, dino_(dinoartforame), wanke, liduke, year 2025, realistic, 4k, -2::green ::, textless version, The image is highly intricate finished drawn. Only the character's face is in anime style, but their body is in realistic style. 1.35::A highly finished photo-style artwork that has lively color, graphic texture, realistic skin surface, and lifelike flesh with little obliques::. 1.63::photorealistic::, 1.63::photo(medium)::,
 20::best quality, absurdres, very aesthetic, detailed, masterpiece::,, very aesthetic, masterpiece, no text,`;
                     const lolita25dArtists = `20::best quality, absurdres, very aesthetic, detailed, masterpiece::, 20::highly finished::, 10::ultra detailed::, 5::masterpiece::, 5::best quality::,

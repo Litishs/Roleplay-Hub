@@ -786,7 +786,7 @@ createApp({
         ];
         const imageStyleOptions = [
             { value: 'vertical', label: '韩漫小清新风' },
-            { value: 'comicDoujin', label: '漫画同人风' },
+            { value: 'comicDoujin', label: '动漫同人风' },
             { value: 'r18', label: '2.5D唯美风' },
             { value: 'lolita25d', label: '2.5D唯美风（萝）' },
             { value: 'anime', label: '本子里番风' },
@@ -2172,7 +2172,7 @@ createApp({
             }
 
             const defaultArtists = 'masterpiece, best quality,[[[artist:dishwasher1910]]], {{yd_(orange_maru)}}, [artist:ciloranko], [artist:sho_(sho_lwlw)], [ningen mame], soft lighting,year 2024';
-            const comicDoujinArtists = 'masterpiece,best quality,ultra detailed,by 小田武士,by 内尾和正,by あずーる,TV anime screencap,clean cel shading,soft lineart,subtle bloom glow';
+            const comicDoujinArtists = 'masterpiece, best quality, very aesthetic, modern Japanese anime, official anime art, anime key visual, anime screencap, soft cel shading, soft anime coloring, smooth color transitions, natural skin tones, restrained color palette, slightly desaturated, muted colors, soft ambient lighting, gentle contrast, subtle gradients, subtle bloom, detailed anime background';
             const r18Artists = `0.9::misaka_12003-gou ::, dino_(dinoartforame), wanke, liduke, year 2025, realistic, 4k, -2::green ::, textless version, The image is highly intricate finished drawn. Only the character's face is in anime style, but their body is in realistic style. 1.35::A highly finished photo-style artwork that has lively color, graphic texture, realistic skin surface, and lifelike flesh with little obliques::. 1.63::photorealistic::, 1.63::photo(medium)::,
 20::best quality, absurdres, very aesthetic, detailed, masterpiece::,, very aesthetic, masterpiece, no text,`;
             const lolita25dArtists = `20::best quality, absurdres, very aesthetic, detailed, masterpiece::, 20::highly finished::, 10::ultra detailed::, 5::masterpiece::, 5::best quality::,
@@ -2193,7 +2193,7 @@ year 2025, textless version, {{petite,loli}}, Petite figure, no text, The image 
             let styleName = '韩漫小清新风';
             if (settings.imageStyle === 'comicDoujin') {
                 targetArtists = comicDoujinArtists;
-                styleName = '漫画同人风';
+                styleName = '动漫同人风';
             } else if (settings.imageStyle === 'r18') {
                 targetArtists = r18Artists;
                 styleName = '2.5D唯美风';
@@ -8621,7 +8621,7 @@ ${content}
             // 1. NAI画图正则 (统一版本)
             const imageGenRegexName = 'NAI画图正则';
             const defaultArtists = 'masterpiece, best quality,[[[artist:dishwasher1910]]], {{yd_(orange_maru)}}, [artist:ciloranko], [artist:sho_(sho_lwlw)], [ningen mame], soft lighting,year 2024';
-            const comicDoujinArtists = 'masterpiece,best quality,ultra detailed,by 小田武士,by 内尾和正,by あずーる,TV anime screencap,clean cel shading,soft lineart,subtle bloom glow';
+            const comicDoujinArtists = 'masterpiece, best quality, very aesthetic, modern Japanese anime, official anime art, anime key visual, anime screencap, soft cel shading, soft anime coloring, smooth color transitions, natural skin tones, restrained color palette, slightly desaturated, muted colors, soft ambient lighting, gentle contrast, subtle gradients, subtle bloom, detailed anime background';
             const r18Artists = `0.9::misaka_12003-gou ::, dino_(dinoartforame), wanke, liduke, year 2025, realistic, 4k, -2::green ::, textless version, The image is highly intricate finished drawn. Only the character's face is in anime style, but their body is in realistic style. 1.35::A highly finished photo-style artwork that has lively color, graphic texture, realistic skin surface, and lifelike flesh with little obliques::. 1.63::photorealistic::, 1.63::photo(medium)::,
 20::best quality, absurdres, very aesthetic, detailed, masterpiece::,, very aesthetic, masterpiece, no text,`;
             const lolita25dArtists = `20::best quality, absurdres, very aesthetic, detailed, masterpiece::, 20::highly finished::, 10::ultra detailed::, 5::masterpiece::, 5::best quality::,
