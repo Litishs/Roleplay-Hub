@@ -248,17 +248,6 @@
                     <span v-show="!isSidebarCollapsed" class="whitespace-nowrap overflow-hidden">万相广场</span>
                 </button>
 
-                <button @click="currentView = 'presets'; closeMobileMenu()"
-                    title="预设"
-                    :class="['sidebar-nav-button flex items-center rounded-xl transition-all duration-200 font-medium', currentView === 'presets' ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900', isSidebarCollapsed ? 'w-12 h-12 mx-auto justify-center p-0' : 'w-full px-3 py-2.5']">
-                    <svg class="w-5 h-5" :class="isSidebarCollapsed ? 'mr-0' : 'mr-3'" fill="none" stroke="currentColor"
-                        viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4">
-                        </path>
-                    </svg>
-                    <span v-show="!isSidebarCollapsed" class="whitespace-nowrap overflow-hidden">预设</span>
-                </button>
                 <button @click="currentView = 'uitemplates'; closeMobileMenu()"
                     title="UI模板"
                     :class="['sidebar-nav-button flex items-center rounded-xl transition-all duration-200 font-medium', currentView === 'uitemplates' ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900', isSidebarCollapsed ? 'w-12 h-12 mx-auto justify-center p-0' : 'w-full px-3 py-2.5']">
@@ -273,28 +262,69 @@
                         <span class="inline-block w-2 h-2 rounded-full bg-primary-500 memory-extracting"></span>
                     </span>
                 </button>
-                <button @click="currentView = 'worldinfo'; closeMobileMenu()"
-                    title="世界书"
-                    :class="['sidebar-nav-button flex items-center rounded-xl transition-all duration-200 font-medium', currentView === 'worldinfo' ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900', isSidebarCollapsed ? 'w-12 h-12 mx-auto justify-center p-0' : 'w-full px-3 py-2.5']">
-                    <svg class="w-5 h-5" :class="isSidebarCollapsed ? 'mr-0' : 'mr-3'" fill="none" stroke="currentColor"
-                        viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253">
-                        </path>
-                    </svg>
-                    <span v-show="!isSidebarCollapsed" class="whitespace-nowrap overflow-hidden">世界书</span>
-                </button>
+                <div class="advanced-nav"
+                    :class="{ 'is-open': isAdvancedNavOpen && !isSidebarCollapsed }">
+                    <button @click="toggleAdvancedNav"
+                        class="sidebar-nav-button advanced-nav-trigger flex items-center rounded-xl transition-all duration-200 font-medium"
+                        :class="[['presets', 'worldinfo', 'regex'].includes(currentView) ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900', isSidebarCollapsed ? 'w-12 h-12 mx-auto justify-center p-0' : 'w-full px-3 py-2.5']"
+                        title="高级"
+                        aria-controls="advanced-nav-panel"
+                        :aria-expanded="isAdvancedNavOpen && !isSidebarCollapsed">
+                        <svg class="w-5 h-5" :class="isSidebarCollapsed ? 'mr-0' : 'mr-3'" fill="none"
+                            stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M4 7.5h16M7.5 3v9m9 0v9M4 16.5h16"></path>
+                            <circle cx="7.5" cy="16.5" r="2" fill="white" stroke="currentColor" stroke-width="2"></circle>
+                            <circle cx="16.5" cy="7.5" r="2" fill="white" stroke="currentColor" stroke-width="2"></circle>
+                        </svg>
+                        <span v-show="!isSidebarCollapsed" class="whitespace-nowrap overflow-hidden">高级</span>
+                        <svg v-show="!isSidebarCollapsed" class="advanced-nav-chevron ml-auto w-4 h-4" fill="none"
+                            stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                        </svg>
+                    </button>
 
-                <button @click="currentView = 'regex'; closeMobileMenu()"
-                    title="正则脚本"
-                    :class="['sidebar-nav-button flex items-center rounded-xl transition-all duration-200 font-medium', currentView === 'regex' ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900', isSidebarCollapsed ? 'w-12 h-12 mx-auto justify-center p-0' : 'w-full px-3 py-2.5']">
-                    <svg class="w-5 h-5" :class="isSidebarCollapsed ? 'mr-0' : 'mr-3'" fill="none" stroke="currentColor"
-                        viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path>
-                    </svg>
-                    <span v-show="!isSidebarCollapsed" class="whitespace-nowrap overflow-hidden">正则脚本</span>
-                </button>
+                    <div id="advanced-nav-panel" class="advanced-nav-panel"
+                        :aria-hidden="!(isAdvancedNavOpen && !isSidebarCollapsed)"
+                        :inert="!(isAdvancedNavOpen && !isSidebarCollapsed)">
+                        <div class="advanced-nav-panel-inner">
+                            <div class="advanced-nav-list">
+                                <button @click="currentView = 'presets'; closeMobileMenu()"
+                                    class="sidebar-nav-button advanced-nav-item transition-all duration-200"
+                                    :class="currentView === 'presets' ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'"
+                                    title="预设">
+                                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"
+                                            d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4M6 18a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4">
+                                        </path>
+                                    </svg>
+                                    <span>预设</span>
+                                </button>
+                                <button @click="currentView = 'worldinfo'; closeMobileMenu()"
+                                    class="sidebar-nav-button advanced-nav-item transition-all duration-200"
+                                    :class="currentView === 'worldinfo' ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'"
+                                    title="世界书">
+                                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"
+                                            d="M12 6.25v13m0-13C10.83 5.48 9.25 5 7.5 5S4.17 5.48 3 6.25v13C4.17 18.48 5.75 18 7.5 18s3.33.48 4.5 1.25m0-13C13.17 5.48 14.75 5 16.5 5S19.83 5.48 21 6.25v13C19.83 18.48 18.25 18 16.5 18s-3.33.48-4.5 1.25">
+                                        </path>
+                                    </svg>
+                                    <span>世界书</span>
+                                </button>
+                                <button @click="currentView = 'regex'; closeMobileMenu()"
+                                    class="sidebar-nav-button advanced-nav-item transition-all duration-200"
+                                    :class="currentView === 'regex' ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'"
+                                    title="正则脚本">
+                                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"
+                                            d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path>
+                                    </svg>
+                                    <span>正则</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
                 <button @click="currentView = 'settings'; closeMobileMenu()"
                     title="设置"
                     :class="['sidebar-nav-button flex items-center rounded-xl transition-all duration-200 font-medium', currentView === 'settings' ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900', isSidebarCollapsed ? 'w-12 h-12 mx-auto justify-center p-0' : 'w-full px-3 py-2.5']">
@@ -2483,7 +2513,7 @@
 
                 <div
                     class="bg-white/70 backdrop-blur-sm p-1 rounded-2xl border border-gray-200 shadow-sm mb-4 overflow-hidden">
-                    <button @click="showUiTemplateSettings = !showUiTemplateSettings"
+                    <button @click="showUiTemplateSettings = !showUiTemplateSettings; settingsHelpTopic = ''"
                         :class="['w-full flex justify-between items-center px-4 py-3 rounded-xl transition-all font-bold',
                                      showUiTemplateSettings ? 'bg-primary-50 text-primary-700' : 'text-gray-700 hover:bg-gray-50']">
                         <span class="flex items-center min-w-0">
@@ -2578,7 +2608,23 @@
                             class="space-y-3 pt-3 border-t border-gray-100 animate-fade-in">
                             <div class="grid grid-cols-1 gap-3">
                                 <div>
-                                    <label class="text-xs font-medium text-gray-500 block mb-1.5">分析模型</label>
+                                    <div class="relative mb-1.5 flex items-center">
+                                        <label class="text-xs font-medium text-gray-500">分析模型</label>
+                                        <button type="button"
+                                            @click.stop="settingsHelpTopic = settingsHelpTopic === 'analysisModel' ? '' : 'analysisModel'"
+                                            class="settings-help-trigger"
+                                            :class="{ 'is-open': settingsHelpTopic === 'analysisModel' }"
+                                            :aria-expanded="settingsHelpTopic === 'analysisModel'"
+                                            aria-label="查看分析模型说明">
+                                            <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                    d="M9.1 9a3 3 0 115.8 1.1c-.6 1.1-1.9 1.3-2.5 2.2-.3.4-.4.8-.4 1.2M12 17h.01"></path>
+                                            </svg>
+                                        </button>
+                                        <div v-if="settingsHelpTopic === 'analysisModel'" class="settings-help-popover">
+                                            <span class="settings-help-popover-content">仅在使用副模型分析时生效。它负责阅读对话并更新 UI 模板变量，不参与正文回复。模型速度会影响分析等待时间，结构化输出能力会影响变量更新是否准确。</span>
+                                        </div>
+                                    </div>
                                     <div class="flex gap-2">
                                         <button @click="openModelSelector('uiTemplateModel')"
                                             class="flex-1 px-3 py-2 text-sm text-left bg-gray-50/60 border border-gray-200 rounded-xl hover:border-primary-300 hover:bg-white transition-all cursor-pointer truncate"
@@ -2590,9 +2636,25 @@
                                     </div>
                                 </div>
                             </div>
-                            <div class="bg-gray-50/60 p-3 rounded-xl border border-gray-100">
+                            <div class="relative bg-gray-50/60 p-3 rounded-xl border border-gray-100">
                                 <div class="flex justify-between items-center mb-2">
-                                    <label class="text-xs font-medium text-gray-500">分析对话层数</label>
+                                    <div class="relative flex items-center">
+                                        <label class="text-xs font-medium text-gray-500">分析对话层数</label>
+                                        <button type="button"
+                                            @click.stop="settingsHelpTopic = settingsHelpTopic === 'analysisDepth' ? '' : 'analysisDepth'"
+                                            class="settings-help-trigger"
+                                            :class="{ 'is-open': settingsHelpTopic === 'analysisDepth' }"
+                                            :aria-expanded="settingsHelpTopic === 'analysisDepth'"
+                                            aria-label="查看分析对话层数说明">
+                                            <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                    d="M9.1 9a3 3 0 115.8 1.1c-.6 1.1-1.9 1.3-2.5 2.2-.3.4-.4.8-.4 1.2M12 17h.01"></path>
+                                            </svg>
+                                        </button>
+                                        <div v-if="settingsHelpTopic === 'analysisDepth'" class="settings-help-popover is-above">
+                                            <span class="settings-help-popover-content">决定副模型分析时读取最近多少层对话。层数越多，能看到的剧情变化越完整，消耗越多；层数越少，消耗越少，但可能看不到较早发生的剧情</span>
+                                        </div>
+                                    </div>
                                     <span
                                         class="text-xs font-mono text-primary-600 bg-primary-50 px-1.5 py-0.5 rounded border border-primary-100">
                                         {{ uiTemplateAnalysisDepthSlider + ' 层' }}
@@ -2601,7 +2663,6 @@
                                 <input type="range" v-model.number="uiTemplateAnalysisDepthSlider" min="4" max="10"
                                     step="1"
                                     class="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary-500">
-                                <p class="text-[10px] text-gray-400 mt-1.5">变量分析使用的最近对话层数，最高 10 层</p>
                             </div>
                         </div>
                     </div>
@@ -2958,7 +3019,7 @@
                 <!-- Memory Settings (Collapsible like World Info) -->
                 <div
                     class="bg-white/70 backdrop-blur-sm p-1 rounded-2xl border border-gray-200 shadow-sm mb-4 overflow-hidden">
-                    <button @click="showMemorySettings = !showMemorySettings"
+                    <button @click="showMemorySettings = !showMemorySettings; settingsHelpTopic = ''"
                         :class="['w-full flex justify-between items-center px-4 py-3 rounded-xl transition-all font-bold',
                                      showMemorySettings ? 'bg-primary-50 text-primary-700' : 'text-gray-700 hover:bg-gray-50']">
                         <span class="flex items-center">
@@ -3027,7 +3088,23 @@
                             class="space-y-3 pt-3 border-t border-gray-100 animate-fade-in">
                             <div class="space-y-3">
                                 <div class="bg-gray-50/60 p-3 rounded-xl border border-gray-100">
-                                    <label class="text-xs font-medium text-gray-500 block mb-2">向量嵌入模型</label>
+                                    <div class="relative mb-2 flex items-center">
+                                        <label class="text-xs font-medium text-gray-500">向量嵌入模型</label>
+                                        <button type="button"
+                                            @click.stop="settingsHelpTopic = settingsHelpTopic === 'embeddingModel' ? '' : 'embeddingModel'"
+                                            class="settings-help-trigger"
+                                            :class="{ 'is-open': settingsHelpTopic === 'embeddingModel' }"
+                                            :aria-expanded="settingsHelpTopic === 'embeddingModel'"
+                                            aria-label="查看向量嵌入模型说明">
+                                            <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                    d="M9.1 9a3 3 0 115.8 1.1c-.6 1.1-1.9 1.3-2.5 2.2-.3.4-.4.8-.4 1.2M12 17h.01"></path>
+                                            </svg>
+                                        </button>
+                                        <div v-if="settingsHelpTopic === 'embeddingModel'" class="settings-help-popover">
+                                            <span class="settings-help-popover-content">用于把对话转换成可比较的向量坐标，它不是聊天模型。</span>
+                                        </div>
+                                    </div>
                                     <button @click="openModelSelector('memoryEmbeddingModel')"
                                         class="w-full px-3 py-2 text-sm text-left bg-white/80 border border-gray-200 rounded-xl hover:border-primary-300 hover:bg-white transition-all cursor-pointer truncate"
                                         :title="memorySettings.embeddingModel || '请选择向量嵌入模型'">
@@ -3038,7 +3115,23 @@
                                 </div>
                                 <div class="bg-gray-50/60 p-3 rounded-xl border border-gray-100">
                                     <div class="flex justify-between items-center mb-2">
-                                        <label class="text-xs font-medium text-gray-500">记忆召回分片数</label>
+                                        <div class="relative flex items-center">
+                                            <label class="text-xs font-medium text-gray-500">记忆召回分片数</label>
+                                            <button type="button"
+                                                @click.stop="settingsHelpTopic = settingsHelpTopic === 'vectorTopK' ? '' : 'vectorTopK'"
+                                                class="settings-help-trigger"
+                                                :class="{ 'is-open': settingsHelpTopic === 'vectorTopK' }"
+                                                :aria-expanded="settingsHelpTopic === 'vectorTopK'"
+                                                aria-label="查看记忆召回分片数说明">
+                                                <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                        d="M9.1 9a3 3 0 115.8 1.1c-.6 1.1-1.9 1.3-2.5 2.2-.3.4-.4.8-.4 1.2M12 17h.01"></path>
+                                                </svg>
+                                            </button>
+                                            <div v-if="settingsHelpTopic === 'vectorTopK'" class="settings-help-popover">
+                                                <span class="settings-help-popover-content">限制每次最多带入多少条相关记忆。数值越大，能带回的细节越多，也更容易混入关联较弱的内容；数值越小，内容更精简，但可能遗漏有用细节。</span>
+                                            </div>
+                                        </div>
                                         <span
                                             class="text-xs font-mono text-primary-600 bg-primary-50 px-1.5 py-0.5 rounded border border-primary-100">{{
                                             memorySettings.vectorTopK || 10 }} 个分片</span>
@@ -3046,13 +3139,56 @@
                                     <input type="range" v-model.number="memorySettings.vectorTopK" min="10" max="20" step="1"
                                         class="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary-500">
                                 </div>
+                                <div class="relative bg-gray-50/60 p-3 rounded-xl border border-gray-100">
+                                    <div class="flex justify-between items-center mb-2">
+                                        <div class="relative flex items-center">
+                                            <label class="text-xs font-medium text-gray-500">最低召回相关度</label>
+                                            <button type="button"
+                                                @click.stop="settingsHelpTopic = settingsHelpTopic === 'similarity' ? '' : 'similarity'"
+                                                class="settings-help-trigger"
+                                                :class="{ 'is-open': settingsHelpTopic === 'similarity' }"
+                                                :aria-expanded="settingsHelpTopic === 'similarity'"
+                                                aria-label="查看最低召回相关度说明">
+                                                <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                        d="M9.1 9a3 3 0 115.8 1.1c-.6 1.1-1.9 1.3-2.5 2.2-.3.4-.4.8-.4 1.2M12 17h.01"></path>
+                                                </svg>
+                                            </button>
+                                            <div v-if="settingsHelpTopic === 'similarity'" class="settings-help-popover">
+                                                <span class="settings-help-popover-content">控制记忆分片的最低匹配程度。数值越高，不相关内容越少，但可能漏掉间接相关的记忆；数值越低，召回的记忆分片越多，同时也会增加关联较弱的结果。</span>
+                                            </div>
+                                        </div>
+                                        <span
+                                            class="text-xs font-mono text-primary-600 bg-primary-50 px-1.5 py-0.5 rounded border border-primary-100">{{
+                                            memorySettings.similarityThreshold + '%'
+                                            }}</span>
+                                    </div>
+                                    <input type="range" v-model.number="memorySettings.similarityThreshold" min="50" max="100" step="5"
+                                        class="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary-500">
+                                </div>
                             </div>
 
                             <!-- Context Compression Settings -->
                             <div class="pt-3 border-t border-gray-100 mt-1">
-                                <div class="bg-gray-50/60 p-3 rounded-xl border border-gray-100">
+                                <div class="relative bg-gray-50/60 p-3 rounded-xl border border-gray-100">
                                     <div class="flex justify-between items-center mb-2">
-                                        <label class="text-xs font-medium text-gray-500">保留最近楼层</label>
+                                        <div class="relative flex items-center">
+                                            <label class="text-xs font-medium text-gray-500">保留最近楼层</label>
+                                            <button type="button"
+                                                @click.stop="settingsHelpTopic = settingsHelpTopic === 'keepFloors' ? '' : 'keepFloors'"
+                                                class="settings-help-trigger"
+                                                :class="{ 'is-open': settingsHelpTopic === 'keepFloors' }"
+                                                :aria-expanded="settingsHelpTopic === 'keepFloors'"
+                                                aria-label="查看保留最近楼层说明">
+                                                <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                        d="M9.1 9a3 3 0 115.8 1.1c-.6 1.1-1.9 1.3-2.5 2.2-.3.4-.4.8-.4 1.2M12 17h.01"></path>
+                                                </svg>
+                                            </button>
+                                            <div v-if="settingsHelpTopic === 'keepFloors'" class="settings-help-popover is-above">
+                                                <span class="settings-help-popover-content">决定最近多少层原始对话保留在上下文中，更早的内容会由记忆引擎替代。数值越大，保留的原文越多、上下文占用也越高；拖到最右侧会保留全部原始消息。</span>
+                                            </div>
+                                        </div>
                                         <span
                                             class="text-xs font-mono text-primary-600 bg-primary-50 px-1.5 py-0.5 rounded border border-primary-100">{{
                                             memorySettings.keepFloors === 0 ? '关闭' : memorySettings.keepFloors + ' 楼'
@@ -3060,8 +3196,6 @@
                                     </div>
                                     <input type="range" v-model.number="keepFloorsSlider" min="30" max="85" step="5"
                                         class="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary-500">
-                                    <p class="text-[10px] text-gray-400 mt-1.5">仅保留最近 N 楼原始消息，更早的楼层使用记忆引擎替代，拖到最右侧关闭
-                                    </p>
                                 </div>
                             </div>
                         </div>
@@ -3130,7 +3264,7 @@
                                     </button>
                                     <button type="button" @click="vectorMemorySearchSortMode = 'score'"
                                         :class="['px-2 py-1 rounded-md transition-all', vectorMemorySearchSortMode === 'score' ? 'bg-white text-primary-700 shadow-sm border border-primary-100' : 'text-gray-400 hover:text-gray-600']">
-                                        相似度
+                                        相关度
                                     </button>
                                 </div>
                             </div>
@@ -3142,7 +3276,7 @@
                                             第 {{ mem.turn || '?' }} 轮
                                         </span>
                                         <span class="text-[10px] font-mono text-gray-500 bg-gray-50 border border-gray-100 rounded-md px-2 py-0.5">
-                                            相似度 {{ (mem.vectorSearchScore * 100).toFixed(1) }}%
+                                            相关度 {{ (mem.vectorSearchScore * 100).toFixed(1) }}%
                                         </span>
                                     </div>
                                     <p class="text-xs text-gray-700 leading-relaxed whitespace-pre-line">{{ mem.paragraph || mem.summary }}</p>

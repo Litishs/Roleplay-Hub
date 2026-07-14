@@ -245,6 +245,7 @@
         const worldInfoMapper = options.worldInfoMapper || toWorldInfoExportEntry;
         const regexScriptMapper = options.regexScriptMapper || toRegexExportEntry;
         const uiTemplateMapper = options.uiTemplateMapper || toUiTemplateExportEntry;
+        const includeUiTemplates = options.includeUiTemplates !== false;
         const worldEntries = mapExportItems(
             character.worldInfo,
             worldInfoMapper
@@ -253,10 +254,9 @@
             character.regexScripts,
             regexScriptMapper
         );
-        const uiTemplates = mapExportItems(
-            character.uiTemplates,
-            uiTemplateMapper
-        );
+        const uiTemplates = includeUiTemplates
+            ? mapExportItems(character.uiTemplates, uiTemplateMapper)
+            : [];
 
         const data = {
             name: character.name,
@@ -264,11 +264,11 @@
             personality: character.personality,
             first_mes: character.first_mes,
             creator_notes: character.creator_notes || 'Exported from RolePlay Hub',
-            uiTemplates,
+            ...(includeUiTemplates ? { uiTemplates } : {}),
             extensions: {
                 rp_hub_watermark: 'rp-hub',
                 regex_scripts: regexScripts,
-                rp_hub_ui_templates: uiTemplates
+                ...(includeUiTemplates ? { rp_hub_ui_templates: uiTemplates } : {})
             },
             character_book: worldEntries.length > 0 ? { entries: worldEntries } : undefined
         };

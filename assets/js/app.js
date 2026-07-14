@@ -153,6 +153,15 @@ createApp({
         const currentView = ref('chat');
         let isMobileSidebarOpen = false;
         const isSidebarCollapsed = ref(false);
+        const isAdvancedNavOpen = ref(false);
+        const toggleAdvancedNav = () => {
+            if (isSidebarCollapsed.value) {
+                isSidebarCollapsed.value = false;
+                isAdvancedNavOpen.value = true;
+                return;
+            }
+            isAdvancedNavOpen.value = !isAdvancedNavOpen.value;
+        };
         const showDescriptionPanel = ref(false);
         const showModelSelector = ref(false);
         const modelSelectionTarget = ref('model');
@@ -228,21 +237,25 @@ createApp({
             isUpdateScrolledToBottom.value = (el.scrollHeight - el.scrollTop - el.clientHeight) < 10;
         };
         const latestUpdate = reactive({
-            id: 10151, // 确保这是一个五位数ID，每次更新内容时增加这个数字
+            id: 10153, // 确保这是一个五位数ID，每次更新内容时增加这个数字
             date: new Date().toISOString().split('T')[0],
             title: '网站公告',
             content: `
-### RP-Hub 1.7.3
+### RP-Hub 1.7.4
 
-- 大幅增强了主模型变量分析成功率
-- 优化了部分默认设置与预设
-- 修复世界书关键词标签字体异常问题
-- 修复了副模型变量分析时的用户信息识别
-- 去除了世界书工具
+- 记忆系统新增相关度筛选功能
+- 增强了角色卡生成的效果
+- 修复了启动时聊天记录读取失败的问题
+- 修复了角色卡切换时聊天记录读取失败的问题
+- 修复了角色因UUID发生变化导致的聊天记录读取问题
+- 新增聊天记录异步保存机制
+- 新增聊天记录读取临时错误保护
+- 新增聊天记录读取重试机制
+- 合并相关侧边栏子项为"高级"
 
 本项目为全开源公益项目，严禁倒卖源码，二改需经作者授权
 
-#### 更新时间：07/07/19:40
+#### 更新时间：07/14/22:27
                     `
         });
 
@@ -1075,6 +1088,7 @@ createApp({
         const MEMORY_VECTOR_MIN_TOP_K = 10;
         const MEMORY_VECTOR_MAX_TOP_K = 20;
         const MEMORY_VECTOR_DEFAULT_TOP_K = 10;
+        const MEMORY_VECTOR_MIN_SIMILARITY = 50;
         const MEMORY_VECTOR_DEFAULT_DEPTH = 1;
         const MEMORY_KEEP_FLOORS_MIN = 30;
         const MEMORY_KEEP_FLOORS_MAX = 80;
@@ -1085,6 +1099,7 @@ createApp({
             enabled: false,
             embeddingModel: '',
             vectorTopK: MEMORY_VECTOR_DEFAULT_TOP_K,
+            similarityThreshold: MEMORY_VECTOR_MIN_SIMILARITY,
             defaultDepth: MEMORY_VECTOR_DEFAULT_DEPTH,
             autoExtract: true,
             keepFloors: MEMORY_KEEP_FLOORS_DEFAULT // 0=关闭压缩，>0 则保留最近N楼，其余用记忆替代
@@ -1214,6 +1229,10 @@ createApp({
             memorySettings.vectorTopK = Number.isFinite(vectorTopK)
                 ? Math.max(MEMORY_VECTOR_MIN_TOP_K, Math.min(MEMORY_VECTOR_MAX_TOP_K, vectorTopK))
                 : MEMORY_VECTOR_DEFAULT_TOP_K;
+            const similarityThreshold = Number(memorySettings.similarityThreshold);
+            memorySettings.similarityThreshold = Number.isFinite(similarityThreshold)
+                ? Math.max(MEMORY_VECTOR_MIN_SIMILARITY, Math.min(100, Math.round(similarityThreshold)))
+                : MEMORY_VECTOR_MIN_SIMILARITY;
             memorySettings.defaultDepth = MEMORY_VECTOR_DEFAULT_DEPTH;
         };
 
@@ -1469,6 +1488,7 @@ createApp({
 
         const showWorldInfoSettings = ref(false);
         const showMemorySettings = ref(false);
+        const settingsHelpTopic = ref('');
         const showActiveToolSettings = ref(false);
         const showUiTemplateSettings = ref(false);
         const worldInfoSettings = reactive({
@@ -1545,6 +1565,7 @@ createApp({
 
         // Watch view change to refresh generator/plaza
         watch(currentView, (newView) => {
+            settingsHelpTopic.value = '';
             if (newView === 'generator') {
                 isGeneratorLoading.value = true;
                 // Add timestamp to force refresh
@@ -1780,19 +1801,58 @@ createApp({
         const setScopedStoredValue = (name, id, value, options = {}) => dbSet(scopedStorageKey(name, id), value, options);
         const getScopedStoredValue = (name, id) => dbGetWithLegacy(scopedStorageKey(name, id), legacyScopedStorageKey(name, id));
         let chatHistorySaveTimer = null;
+        let chatHistorySaveQueue = Promise.resolve(true);
+        let lastChatSaveErrorToastAt = 0;
 
-        const saveChatHistoryNow = async () => {
+        const isRetryableChatStorageError = (error) => {
+            const name = String(error?.name || '');
+            return isDatabaseClosingError(error)
+                || ['AbortError', 'UnknownError', 'InvalidStateError', 'TransactionInactiveError'].includes(name);
+        };
+
+        const notifyChatSaveFailure = (error) => {
+            console.error('Failed to save chat history after retries:', error);
+            const now = Date.now();
+            if (now - lastChatSaveErrorToastAt < 5000) return;
+            lastChatSaveErrorToastAt = now;
+            const message = error?.name === 'QuotaExceededError'
+                ? '存储空间不足，聊天记录未能保存，请先释放浏览器存储空间'
+                : '聊天记录保存失败，旧记录未被覆盖，请不要刷新并稍后重试';
+            showToast(message, 'error', 5000);
+        };
+
+        const saveChatHistoryNow = () => {
             if (chatHistorySaveTimer) {
                 clearTimeout(chatHistorySaveTimer);
                 chatHistorySaveTimer = null;
             }
-            if (currentCharacterIndex.value < 0 || !currentCharacter.value || !currentCharacter.value.uuid) return;
+            const characterId = currentCharacter.value?.uuid;
+            if (currentCharacterIndex.value < 0 || !characterId) return Promise.resolve(false);
 
             try {
                 const historyToSave = cloneForStorage(chatHistory.value);
-                await setScopedStoredValue('chat', currentCharacter.value.uuid, historyToSave, { clone: false });
-            } catch (e) {
-                console.error('Failed to save chat history:', e);
+                const saveTask = async () => {
+                    let lastError = null;
+                    for (let attempt = 1; attempt <= 3; attempt++) {
+                        try {
+                            if (!db) await initDB();
+                            await setScopedStoredValue('chat', characterId, historyToSave, { clone: false });
+                            return true;
+                        } catch (error) {
+                            lastError = error;
+                            if (attempt === 3 || !isRetryableChatStorageError(error)) break;
+                            await new Promise(resolve => setTimeout(resolve, attempt * 250));
+                        }
+                    }
+                    notifyChatSaveFailure(lastError);
+                    return false;
+                };
+
+                chatHistorySaveQueue = chatHistorySaveQueue.then(saveTask, saveTask);
+                return chatHistorySaveQueue;
+            } catch (error) {
+                notifyChatSaveFailure(error);
+                return Promise.resolve(false);
             }
         };
 
@@ -1806,8 +1866,11 @@ createApp({
         };
 
         const flushPendingChatHistorySave = async () => {
-            if (!chatHistorySaveTimer) return;
-            await saveChatHistoryNow();
+            if (chatHistorySaveTimer) {
+                await saveChatHistoryNow();
+                return;
+            }
+            await chatHistorySaveQueue;
         };
 
         const saveMemorySettingsNow = async () => {
@@ -6618,6 +6681,11 @@ ${content}
             Math.min(MEMORY_VECTOR_MAX_TOP_K, Number(memorySettings.vectorTopK) || MEMORY_VECTOR_DEFAULT_TOP_K)
         );
 
+        const passesMemorySimilarityThreshold = (score) => {
+            const threshold = Number(memorySettings.similarityThreshold) || MEMORY_VECTOR_MIN_SIMILARITY;
+            return score >= threshold / 100;
+        };
+
         const getRecentUserMemoryQueries = (limit = 3) => {
             return getPostprocessedChatMessages(chatHistory.value, { includeSystem: false })
                 .filter(message => message.role === 'user')
@@ -6888,7 +6956,7 @@ ${content}
                     if (signal?.aborted) return [];
                     const memory = vectorMemories[i];
                     const rawScore = cosineSimilarity(queryVector, memory.embedding);
-                    if (Number.isFinite(rawScore) && rawScore > -1) {
+                    if (Number.isFinite(rawScore) && rawScore > -1 && passesMemorySimilarityThreshold(rawScore)) {
                         const lexical = getVectorLexicalMatch(memory, queryTerms);
                         scoredMemories.push({
                             memory,
@@ -6969,7 +7037,7 @@ ${content}
                     }
                     const memory = vectorMemories[i];
                     const vectorSearchScore = cosineSimilarity(queryVector, memory.embedding);
-                    if (Number.isFinite(vectorSearchScore) && vectorSearchScore > -1) {
+                    if (Number.isFinite(vectorSearchScore) && vectorSearchScore > -1 && passesMemorySimilarityThreshold(vectorSearchScore)) {
                         scoredMemories.push({ memory, vectorSearchScore });
                     }
                     if (i > 0 && i % 512 === 0) await yieldToBrowser();
@@ -7039,7 +7107,7 @@ ${content}
                 if (signal?.aborted) return [];
                 const memory = vectorMemories[i];
                 const rawScore = cosineSimilarity(queryVector, memory.embedding);
-                if (Number.isFinite(rawScore) && rawScore > -1) {
+                if (Number.isFinite(rawScore) && rawScore > -1 && passesMemorySimilarityThreshold(rawScore)) {
                     const lexical = getVectorLexicalMatch(memory, queryTerms);
                     scoredMemories.push({
                         memory,
@@ -8802,6 +8870,43 @@ image###生成的提示词###
                 return msg;
             });
 
+        const createInitialChatHistory = (char) => char?.first_mes ? [{
+            role: 'assistant',
+            name: char.name,
+            content: char.first_mes
+        }] : [];
+
+        const getStoredChatHistoryWithRetry = async (id) => {
+            let lastError = null;
+            for (let attempt = 1; attempt <= 3; attempt++) {
+                try {
+                    return await getScopedStoredValue('chat', id);
+                } catch (error) {
+                    lastError = error;
+                    if (attempt === 3 || !isRetryableChatStorageError(error)) throw error;
+                    await new Promise(resolve => setTimeout(resolve, attempt * 250));
+                }
+            }
+            throw lastError;
+        };
+
+        const loadStoredChatHistory = async (char, fallbackIndex = null) => {
+            let savedChat = await getStoredChatHistoryWithRetry(char.uuid);
+            if (savedChat === undefined && Number.isInteger(fallbackIndex)) {
+                savedChat = await getStoredChatHistoryWithRetry(fallbackIndex);
+            }
+            if (savedChat === undefined) return createInitialChatHistory(char);
+            if (!Array.isArray(savedChat)) {
+                throw new TypeError('保存的聊天记录格式不是数组');
+            }
+            if (savedChat.some(message => message !== null && (typeof message !== 'object' || Array.isArray(message)))) {
+                throw new TypeError('保存的聊天记录包含无效消息');
+            }
+            return savedChat.length > 0
+                ? prepareLoadedChatHistoryForDisplay(savedChat)
+                : createInitialChatHistory(char);
+        };
+
         const selectCharacter = async (index, isNewImport = false) => {
             if (isConversationBusy.value) {
                 stopGeneration();
@@ -8814,45 +8919,39 @@ image###生成的提示词###
             }
             await flushPendingChatHistorySave();
             abortUiTemplateUpdate();
-            _isApplyingCharacterScopedData = true;
             const previousCharacterIndex = currentCharacterIndex.value;
             const previousCharacter = currentCharacter.value;
+            const char = characters.value[index];
+            if (!char) {
+                showToast('角色不存在，无法读取聊天记录', 'error');
+                return;
+            }
+
+            let loadedChatHistory;
+            try {
+                if (!char.uuid) {
+                    char.uuid = generateUUID();
+                    if (!db) await initDB();
+                    await setStoredValue('characters', characters.value);
+                }
+                loadedChatHistory = await loadStoredChatHistory(char, index);
+            } catch (error) {
+                console.error('Error loading chat history:', error);
+                showToast('聊天记录读取失败，已保留当前会话且不会覆盖原记录，请稍后重试', 'error', 5000);
+                return;
+            }
+
+            _isApplyingCharacterScopedData = true;
             if (previousCharacterIndex !== -1 && previousCharacterIndex !== index) {
                 saveGlobalUiTemplateRuntimeForCharacter(previousCharacter);
             }
             currentCharacterIndex.value = index;
             resetChatRenderWindow();
-            const char = characters.value[index];
             char.uiTemplates = Array.isArray(char.uiTemplates) ? char.uiTemplates.map(template => normalizeUiTemplate({ ...template, scope: 'character' })) : [];
             if (previousCharacterIndex !== index) {
                 loadGlobalUiTemplateRuntimeForCharacter(char);
             }
-
-            // Ensure UUID exists (double check)
-            if (!char.uuid) {
-                char.uuid = generateUUID();
-                saveData();
-            }
-
-            // Try to load saved chat history for this character
-            try {
-                const savedChat = await getScopedStoredValue('chat', char.uuid);
-                if (savedChat && savedChat.length > 0) {
-                    chatHistory.value = prepareLoadedChatHistoryForDisplay(savedChat);
-                } else {
-                    chatHistory.value = [];
-                    if (char.first_mes) {
-                        chatHistory.value.push({
-                            role: 'assistant',
-                            name: char.name,
-                            content: char.first_mes
-                        });
-                    }
-                }
-            } catch (e) {
-                console.error('Error loading chat history:', e);
-                chatHistory.value = [];
-            }
+            chatHistory.value = loadedChatHistory;
 
             // Load Character Specific Data
             const characterWorldInfo = Array.isArray(char.worldInfo)
@@ -10110,36 +10209,21 @@ ${memoryFragmentSection}
                 const char = characters.value[currentCharacterIndex.value];
                 char.uiTemplates = Array.isArray(char.uiTemplates) ? char.uiTemplates.map(template => normalizeUiTemplate({ ...template, scope: 'character' })) : [];
 
-                // Ensure UUID
-                if (!char.uuid) {
-                    char.uuid = generateUUID();
-                    saveData();
-                }
-                loadGlobalUiTemplateRuntimeForCharacter(char);
-
                 // Load Chat History for this character
                 try {
-                    // Try UUID first, fallback to index if migration failed or partial
-                    let savedChat = await getScopedStoredValue('chat', char.uuid);
-                    if (!savedChat) {
-                        savedChat = await getScopedStoredValue('chat', currentCharacterIndex.value);
+                    if (!char.uuid) {
+                        char.uuid = generateUUID();
+                        await setStoredValue('characters', characters.value);
                     }
-
-                    if (savedChat && Array.isArray(savedChat) && savedChat.length > 0) {
-                        chatHistory.value = prepareLoadedChatHistoryForDisplay(savedChat);
-                    } else if (char.first_mes) {
-                        chatHistory.value = [{
-                            role: 'assistant',
-                            name: char.name,
-                            content: char.first_mes
-                        }];
-                    } else {
-                        chatHistory.value = [];
-                    }
-                } catch (e) {
-                    console.error('Error loading chat history on restore:', e);
-                    chatHistory.value = [];
+                    chatHistory.value = await loadStoredChatHistory(char, currentCharacterIndex.value);
+                } catch (error) {
+                    console.error('Error loading chat history on restore:', error);
+                    currentCharacterIndex.value = -1;
+                    _isApplyingCharacterScopedData = false;
+                    showToast('聊天记录恢复失败，原记录未被覆盖，请重新选择角色重试', 'error', 5000);
+                    return;
                 }
+                loadGlobalUiTemplateRuntimeForCharacter(char);
 
                 // Load Char Specifics
                 const characterWorldInfo = Array.isArray(char.worldInfo)
@@ -10488,7 +10572,7 @@ ${memoryFragmentSection}
             editMessage, saveEditMessage, cancelEditMessage,
             createNewCharacter, editCharacter, saveCharacter, deleteCharacter, selectCharacter, toggleCharacterFavorite, isCharacterFavorite,
             currentUiTemplates, activeUiTemplates, uiTemplateUpdateStatus, createUiTemplate, editUiTemplate, saveUiTemplate, deleteUiTemplate, exportUiTemplates, importUiTemplates, updateUiTemplatesFromChat, renderUiTemplateHtml, renderEditingUiTemplatePreview, handleUiTemplateClick, formatUiTemplateChangeValue,
-            isBatchDeleteMode, isSidebarCollapsed, selectedCharacterIndices, toggleBatchDeleteMode, toggleCharacterSelection, batchDeleteCharacters,
+            isBatchDeleteMode, isSidebarCollapsed, isAdvancedNavOpen, toggleAdvancedNav, selectedCharacterIndices, toggleBatchDeleteMode, toggleCharacterSelection, batchDeleteCharacters,
             getCharacterWICount, getCharacterRegexCount,
             handleAvatarUpload, importCharacter, exportCharacter,
             createPreset, editPreset, savePreset, deletePreset, movePreset,
@@ -10867,7 +10951,7 @@ ${memoryFragmentSection}
 
             processRegex,
             showRegexEditor, showWorldInfoEditor, editingRegex, editingWorldInfo, worldInfoKeysText, updateEditingWorldInfoKeys,
-            worldInfoSettings, showWorldInfoSettings, showMemorySettings, showActiveToolSettings, showUiTemplateSettings, estimatedGenerationTime, currentWaitTime,
+            worldInfoSettings, showWorldInfoSettings, showMemorySettings, settingsHelpTopic, showActiveToolSettings, showUiTemplateSettings, estimatedGenerationTime, currentWaitTime,
             globalConfirmModal, showVueConfirmModal,
             togglePlacement: (val) => {
                 if (!editingRegex.data.placement) editingRegex.data.placement = [];
