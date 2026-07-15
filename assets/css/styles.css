@@ -684,6 +684,16 @@
             bottom: 1.5rem;
         }
 
+        .memory-mode-help-popover {
+            top: 2.25rem;
+            text-align: left;
+        }
+
+        .memory-mode-help-popover.is-right {
+            right: 0;
+            left: auto;
+        }
+
         .settings-help-popover-content {
             display: block;
             padding-left: 0.5rem;
