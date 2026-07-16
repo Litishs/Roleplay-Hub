@@ -2956,7 +2956,7 @@
                             <svg class="w-6 h-6 md:w-7 md:h-7 mr-2 text-primary-600" fill="none"
                                 stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M20 6c0 1.66-3.58 3-8 3S4 7.66 4 6s3.58-3 8-3 8 1.34 8 3zM4 6v6c0 1.66 3.58 3 8 3s8-1.34 8-3V6M4 12v6c0 1.66 3.58 3 8 3s8-1.34 8-3v-6"></path>
+                                    d="M4 19V9m5 10V5m5 14v-7m5 7V3M3 21h18"></path>
                             </svg>
                             Token 统计
                         </h2>
@@ -2993,18 +2993,12 @@
                 </div>
 
                 <div class="mb-6 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
-                    <div class="grid grid-cols-2 lg:grid-cols-4">
-                        <div class="border-b border-r border-gray-100 p-4 md:p-5 lg:border-b-0">
+                    <div class="grid grid-cols-3">
+                        <div class="border-r border-gray-100 p-4 md:p-5">
                             <div class="flex items-center gap-2 text-[11px] font-medium text-gray-400">
-                                <span class="h-1.5 w-1.5 rounded-full bg-primary-500"></span>输入 Token
+                                <span class="h-1.5 w-1.5 rounded-full bg-primary-500"></span>输入
                             </div>
                             <div class="mt-2 text-lg font-bold text-gray-800 font-mono">{{ formatTokenAggregate(tokenUsageStats.inputTokens, tokenUsageStats.inputTokensReports) }}</div>
-                        </div>
-                        <div class="border-b border-gray-100 p-4 md:p-5 lg:border-b-0 lg:border-r">
-                            <div class="flex items-center gap-2 text-[11px] font-medium text-gray-400">
-                                <span class="h-1.5 w-1.5 rounded-full bg-gray-500"></span>输出 Token
-                            </div>
-                            <div class="mt-2 text-lg font-bold text-gray-800 font-mono">{{ formatTokenAggregate(tokenUsageStats.outputTokens, tokenUsageStats.outputTokensReports) }}</div>
                         </div>
                         <div class="border-r border-gray-100 p-4 md:p-5">
                             <div class="flex items-center gap-2 text-[11px] font-medium text-gray-400">
@@ -3014,9 +3008,9 @@
                         </div>
                         <div class="p-4 md:p-5">
                             <div class="flex items-center gap-2 text-[11px] font-medium text-gray-400">
-                                <span class="h-1.5 w-1.5 rounded-full bg-amber-400"></span>缓存写入
+                                <span class="h-1.5 w-1.5 rounded-full bg-yellow-400"></span>输出
                             </div>
-                            <div class="mt-2 text-lg font-bold text-gray-800 font-mono">{{ formatTokenAggregate(tokenUsageStats.cacheWriteTokens, tokenUsageStats.cacheWriteTokensReports) }}</div>
+                            <div class="mt-2 text-lg font-bold text-gray-800 font-mono">{{ formatTokenAggregate(tokenUsageStats.outputTokens, tokenUsageStats.outputTokensReports) }}</div>
                         </div>
                     </div>
                 </div>
@@ -3028,38 +3022,39 @@
                 <div v-if="displayedTokenUsageHistory.length > 0" class="space-y-3">
                     <article v-for="record in displayedTokenUsageHistory" :key="record.id"
                         class="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm transition-colors hover:border-gray-300">
-                        <div class="mb-3">
-                            <div class="flex min-w-0 items-center gap-2">
-                                <span class="flex flex-shrink-0 items-center gap-1.5 text-xs font-semibold text-gray-600">
-                                    <span class="h-1.5 w-1.5 rounded-full bg-primary-400"></span>
-                                    {{ getTokenUsageTypeLabel(record.type) }}
-                                </span>
-                                <span class="min-w-0 flex-1 truncate text-xs text-gray-600" :title="record.model">{{ record.model || '未知模型' }}</span>
-                                <time class="flex-shrink-0 text-[10px] text-gray-400">{{ formatTokenUsageTime(record.timestamp) }}</time>
-                            </div>
-                            <div v-if="!record.reported || record.characterName || record.detail" class="mt-1.5 flex min-w-0 items-center gap-2">
-                                <span v-if="!record.reported" class="flex-shrink-0 rounded-md border border-amber-100 bg-amber-50 px-2 py-1 text-[10px] font-medium text-amber-700">API 未返回用量</span>
-                                <span v-if="record.characterName || record.detail" class="min-w-0 truncate text-[10px] text-gray-400">
+                        <div class="mb-3 flex items-start gap-3">
+                            <div class="min-w-0 flex-1">
+                                <div class="flex min-w-0 items-center gap-2">
+                                    <span class="flex flex-shrink-0 items-center gap-1.5 text-sm font-semibold text-gray-600">
+                                        <span class="h-1.5 w-1.5 rounded-full bg-primary-400"></span>
+                                        {{ getTokenUsageTypeLabel(record.type) }}
+                                    </span>
+                                    <span class="min-w-0 flex-1 truncate text-sm text-gray-600" :title="record.model">{{ record.model || '未知模型' }}</span>
+                                </div>
+                                <div v-if="record.characterName || record.detail" class="mt-1.5 min-w-0 truncate text-xs text-gray-400">
                                     {{ [record.characterName, record.detail].filter(Boolean).join(' · ') }}
-                                </span>
+                                </div>
                             </div>
+                            <time class="flex-shrink-0 text-xs text-gray-400">{{ formatTokenUsageTime(record.timestamp) }}</time>
                         </div>
-                        <div class="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-gray-200 bg-gray-200 sm:grid-cols-4">
-                            <div class="bg-gray-50 px-3 py-2.5">
-                                <div class="text-[10px] text-gray-400">输入</div>
-                                <div class="mt-0.5 text-xs font-bold text-gray-700 font-mono">{{ formatTokenCount(record.inputTokens) }}</div>
+                        <div class="grid grid-cols-3 gap-2">
+                            <div class="rounded-xl border border-gray-100 bg-gray-50/70 px-3 py-3">
+                                <div class="flex items-center gap-1.5 text-xs font-medium text-gray-500">
+                                    <span class="h-1.5 w-1.5 rounded-full bg-primary-500"></span>输入
+                                </div>
+                                <div class="mt-1.5 text-base font-bold text-gray-800 font-mono">{{ formatTokenCount(record.inputTokens) }}</div>
                             </div>
-                            <div class="bg-gray-50 px-3 py-2.5">
-                                <div class="text-[10px] text-gray-400">输出</div>
-                                <div class="mt-0.5 text-xs font-bold text-gray-700 font-mono">{{ formatTokenCount(record.outputTokens) }}</div>
+                            <div class="rounded-xl border border-gray-100 bg-gray-50/70 px-3 py-3">
+                                <div class="flex items-center gap-1.5 text-xs font-medium text-gray-500">
+                                    <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>缓存读取
+                                </div>
+                                <div class="mt-1.5 text-base font-bold text-gray-800 font-mono">{{ formatTokenCount(record.cacheReadTokens) }}</div>
                             </div>
-                            <div class="bg-gray-50 px-3 py-2.5">
-                                <div class="text-[10px] text-gray-400">缓存读取</div>
-                                <div class="mt-0.5 text-xs font-bold text-gray-700 font-mono">{{ formatTokenCount(record.cacheReadTokens) }}</div>
-                            </div>
-                            <div class="bg-gray-50 px-3 py-2.5">
-                                <div class="text-[10px] text-gray-400">缓存写入</div>
-                                <div class="mt-0.5 text-xs font-bold text-gray-700 font-mono">{{ formatTokenCount(record.cacheWriteTokens) }}</div>
+                            <div class="rounded-xl border border-gray-100 bg-gray-50/70 px-3 py-3">
+                                <div class="flex items-center gap-1.5 text-xs font-medium text-gray-500">
+                                    <span class="h-1.5 w-1.5 rounded-full bg-yellow-400"></span>输出
+                                </div>
+                                <div class="mt-1.5 text-base font-bold text-gray-800 font-mono">{{ formatTokenCount(record.outputTokens) }}</div>
                             </div>
                         </div>
                     </article>
