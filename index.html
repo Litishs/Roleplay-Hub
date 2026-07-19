@@ -86,6 +86,30 @@
     </script>
 </head>
 <body class="bg-gray-50 text-gray-900 font-sans selection:bg-primary-200 selection:text-primary-900">
+    <svg aria-hidden="true" style="display: none">
+        <symbol id="icon-menu" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7"></path>
+        </symbol>
+        <symbol id="icon-export" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
+        </symbol>
+        <symbol id="icon-edit" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+        </symbol>
+        <symbol id="icon-delete" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+        </symbol>
+        <symbol id="icon-settings" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+        </symbol>
+        <symbol id="icon-star" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.196-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118L2.63 10.1c-.783-.57-.38-1.81.588-1.81h4.915a1 1 0 00.95-.69l1.519-4.674z"></path>
+        </symbol>
+        <symbol id="icon-import" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+        </symbol>
+    </svg>
     <div class="entry-transition" aria-hidden="true">
         <div class="entry-transition-brand">
             <div class="entry-transition-logo">
@@ -338,14 +362,7 @@
                 <button @click="currentView = 'settings'; closeMobileMenu()"
                     title="设置"
                     :class="['sidebar-nav-button flex items-center rounded-xl transition-all duration-200 font-medium', currentView === 'settings' ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900', isSidebarCollapsed ? 'w-12 h-12 mx-auto justify-center p-0' : 'w-full px-3 py-2.5']">
-                    <svg class="w-5 h-5" :class="isSidebarCollapsed ? 'mr-0' : 'mr-3'" fill="none" stroke="currentColor"
-                        viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z">
-                        </path>
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                    </svg>
+                    <svg class="w-5 h-5" :class="isSidebarCollapsed ? 'mr-0' : 'mr-3'" fill="none" stroke="currentColor" viewBox="0 0 24 24"><use href="#icon-settings"></use></svg>
                     <span v-show="!isSidebarCollapsed" class="whitespace-nowrap overflow-hidden">设置</span>
                 </button>
 
@@ -481,10 +498,7 @@
                         <div class="flex items-center min-w-0">
                             <button v-if="!isChatFullscreen" @click="toggleMobileMenu"
                                 class="md:hidden mr-3 text-white/80 hover:text-white transition-colors flex-shrink-0">
-                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                        d="M4 6h16M4 12h16m-7 6h7"></path>
-                                </svg>
+                                <svg class="w-6 h-6" fill="none" stroke="currentColor"><use href="#icon-menu"></use></svg>
                             </button>
                             <div v-if="currentCharacter" class="flex items-center min-w-0 cursor-pointer"
                                 @click="showDescriptionPanel = !showDescriptionPanel">
@@ -521,11 +535,7 @@
                             <button @click="clearChat"
                                 class="p-1.5 text-white/70 hover:text-red-400 rounded-full hover:bg-white/10 transition-colors"
                                 title="清空聊天">
-                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16">
-                                    </path>
-                                </svg>
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor"><use href="#icon-delete"></use></svg>
                             </button>
                         </div>
                     </div>
@@ -744,21 +754,10 @@
                                                 <div class="typing-indicator scale-125">
                                                     <span></span><span></span><span></span>
                                                 </div>
-                                                <div v-if="isGenerating"
-                                                    class="flex items-center gap-1.5 text-[11px] text-gray-500 font-mono bg-white/50 backdrop-blur-sm px-2.5 py-1 rounded-full border border-white/50 animate-fade-in mt-1 shadow-sm typing-timer-badge">
-                                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                                            d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                                                    </svg>
-                                                    <span class="whitespace-nowrap">
-                                                        {{ currentWaitTime }}s
-                                                        <span v-if="estimatedGenerationTime || remoteEstimatedTime"
-                                                            class="text-gray-300 mx-0.5">/</span>
-                                                        <span v-if="estimatedGenerationTime && !isRemoteGenerating">{{
-                                                            estimatedGenerationTime }}s</span>
-                                                        <span v-else-if="remoteEstimatedTime">{{ remoteEstimatedTime }}s</span>
-                                                    </span>
-                                                </div>
+                                                <generation-timer v-if="isGenerating" :wait-time="currentWaitTime"
+                                                    :estimated-time="estimatedGenerationTime"
+                                                    :remote-estimated-time="remoteEstimatedTime"
+                                                    :remote="isRemoteGenerating"></generation-timer>
                                             </div>
                                             <div v-if="msg.role === 'assistant' && msg.uiTemplateBlocks && msg.uiTemplateBlocks.top && msg.uiTemplateBlocks.top.length"
                                                 class="ui-template-message-block ui-template-message-block-top">
@@ -769,24 +768,7 @@
                                             </div>
                                             <div v-if="msg.role === 'assistant' && uiTemplateUpdateStatus.state === 'running' && uiTemplateUpdateStatus.targetMessageId === msg.id && activeUiTemplates.some(t => t.placement === 'top')"
                                                 class="ui-template-message-block ui-template-message-block-top">
-                                                <div class="ui-template-pending-card" role="status" aria-live="polite">
-                                                    <div class="ui-template-pending-icon" aria-hidden="true">
-                                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                                                d="M4 5a2 2 0 012-2h12a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm4 3h8M8 12h8M8 16h5">
-                                                            </path>
-                                                        </svg>
-                                                        <span class="live-dots"><i></i><i></i><i></i></span>
-                                                    </div>
-                                                    <div class="ui-template-pending-content">
-                                                        <div class="ui-template-pending-row">
-                                                            <span class="ui-template-pending-title">分析中</span>
-                                                        </div>
-                                                        <div class="ui-template-pending-bars" aria-hidden="true">
-                                                            <i></i><i></i><i></i>
-                                                        </div>
-                                                    </div>
-                                                </div>
+                                                <ui-template-pending></ui-template-pending>
                                             </div>
                                             <!-- CoT Part -->
                                             <!-- Main Part -->
@@ -843,24 +825,7 @@
                                             </div>
                                             <div v-if="msg.role === 'assistant' && uiTemplateUpdateStatus.state === 'running' && uiTemplateUpdateStatus.targetMessageId === msg.id && activeUiTemplates.some(t => t.placement === 'bottom')"
                                                 class="ui-template-message-block ui-template-message-block-bottom">
-                                                <div class="ui-template-pending-card" role="status" aria-live="polite">
-                                                    <div class="ui-template-pending-icon" aria-hidden="true">
-                                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                                                d="M4 5a2 2 0 012-2h12a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm4 3h8M8 12h8M8 16h5">
-                                                            </path>
-                                                        </svg>
-                                                        <span class="live-dots"><i></i><i></i><i></i></span>
-                                                    </div>
-                                                    <div class="ui-template-pending-content">
-                                                        <div class="ui-template-pending-row">
-                                                            <span class="ui-template-pending-title">分析中</span>
-                                                        </div>
-                                                        <div class="ui-template-pending-bars" aria-hidden="true">
-                                                            <i></i><i></i><i></i>
-                                                        </div>
-                                                    </div>
-                                                </div>
+                                                <ui-template-pending></ui-template-pending>
                                             </div>
                                         </div>
                                     </div>
@@ -870,7 +835,7 @@
                                         :class="['absolute bottom-0 -mb-8 md:-mb-10 flex items-center space-x-1 md:space-x-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-200', msg.isSelf ? 'right-0' : 'left-0']">
                                         <button v-if="index === chatHistory.length - 1"
                                             @click="regenerateMessage(index)"
-                                            class="p-1 md:p-1.5 text-gray-500 hover:text-primary-600 bg-white/90 backdrop-blur-sm rounded-full border border-gray-200/60 shadow-sm hover:bg-white hover:scale-105 hover:shadow transition-all msg-action-btn"
+                                            class="message-action-button msg-action-btn"
                                             title="重新生成">
                                             <svg class="w-3.5 h-3.5 md:w-4 md:h-4" fill="none" stroke="currentColor"
                                                 viewBox="0 0 24 24">
@@ -880,7 +845,7 @@
                                             </svg>
                                         </button>
                                         <button @click="editMessage(index)"
-                                            class="p-1 md:p-1.5 text-gray-500 hover:text-primary-600 bg-white/90 backdrop-blur-sm rounded-full border border-gray-200/60 shadow-sm hover:bg-white hover:scale-105 hover:shadow transition-all msg-action-btn"
+                                            class="message-action-button msg-action-btn"
                                             title="编辑">
                                             <svg class="w-3.5 h-3.5 md:w-4 md:h-4" fill="none" stroke="currentColor"
                                                 viewBox="0 0 24 24">
@@ -890,7 +855,7 @@
                                             </svg>
                                         </button>
                                         <button @click="copyMessage(msg.content)"
-                                            class="p-1 md:p-1.5 text-gray-500 hover:text-primary-600 bg-white/90 backdrop-blur-sm rounded-full border border-gray-200/60 shadow-sm hover:bg-white hover:scale-105 hover:shadow transition-all msg-action-btn"
+                                            class="message-action-button msg-action-btn"
                                             title="复制">
                                             <svg class="w-3.5 h-3.5 md:w-4 md:h-4" fill="none" stroke="currentColor"
                                                 viewBox="0 0 24 24">
@@ -900,7 +865,7 @@
                                             </svg>
                                         </button>
                                         <button @click="deleteMessage(index)"
-                                            class="p-1 md:p-1.5 text-gray-500 hover:text-red-600 bg-white/90 backdrop-blur-sm rounded-full border border-gray-200/60 shadow-sm hover:bg-white hover:scale-105 hover:shadow transition-all msg-action-btn"
+                                            class="message-action-button message-action-button--danger msg-action-btn"
                                             title="删除">
                                             <svg class="w-3.5 h-3.5 md:w-4 md:h-4" fill="none" stroke="currentColor"
                                                 viewBox="0 0 24 24">
@@ -938,21 +903,10 @@
                                     <div class="typing-indicator scale-125">
                                         <span></span><span></span><span></span>
                                     </div>
-                                    <div v-if="isGenerating"
-                                        class="flex items-center gap-1.5 text-[11px] text-gray-500 font-mono bg-white/50 backdrop-blur-sm px-2.5 py-1 rounded-full border border-white/50 animate-fade-in mt-1 shadow-sm typing-timer-badge">
-                                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                                d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                                        </svg>
-                                        <span class="whitespace-nowrap">
-                                            {{ currentWaitTime }}s
-                                            <span v-if="estimatedGenerationTime || remoteEstimatedTime"
-                                                class="text-gray-300 mx-0.5">/</span>
-                                            <span v-if="estimatedGenerationTime && !isRemoteGenerating">{{
-                                                estimatedGenerationTime }}s</span>
-                                            <span v-else-if="remoteEstimatedTime">{{ remoteEstimatedTime }}s</span>
-                                        </span>
-                                    </div>
+                                    <generation-timer v-if="isGenerating" :wait-time="currentWaitTime"
+                                        :estimated-time="estimatedGenerationTime"
+                                        :remote-estimated-time="remoteEstimatedTime"
+                                        :remote="isRemoteGenerating"></generation-timer>
                                 </div>
                             </div>
                         </div>
@@ -1196,16 +1150,13 @@
             </div>
 
             <!-- Characters Management -->
-            <div v-if="currentView === 'characters'" class="p-4 md:p-6 h-full overflow-y-auto animate-fade-in">
+            <div v-if="currentView === 'characters'" class="management-view">
                 <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 md:mb-6 gap-3">
                     <div class="flex items-center justify-between w-full md:w-auto">
                         <div class="flex items-center">
                             <button @click="toggleMobileMenu"
                                 class="md:hidden mr-3 p-2 bg-white border border-gray-200 rounded-xl text-gray-500 shadow-sm active:scale-95 transition-all flex-shrink-0">
-                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                        d="M4 6h16M4 12h16m-7 6h7"></path>
-                                </svg>
+                                <svg class="w-6 h-6" fill="none" stroke="currentColor"><use href="#icon-menu"></use></svg>
                             </button>
                             <h2 class="text-xl md:text-2xl font-bold text-gray-900 flex items-center">
                                 <svg class="w-6 h-6 md:w-7 md:h-7 mr-2 text-primary-600" fill="none"
@@ -1223,11 +1174,7 @@
                             <button @click="toggleBatchDeleteMode"
                                 class="p-2.5 bg-white text-red-500 rounded-xl border border-gray-200 shadow-sm active:scale-95 transition-all"
                                 title="批量删除">
-                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16">
-                                    </path>
-                                </svg>
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor"><use href="#icon-delete"></use></svg>
                             </button>
                             <button @click="showAddCharacterMenu = true"
                                 class="p-2.5 bg-primary-600 text-white rounded-xl shadow-sm active:scale-95 transition-all"
@@ -1252,11 +1199,7 @@
                             <button @click="batchDeleteCharacters" :disabled="selectedCharacterIndices.size === 0"
                                 class="relative p-2.5 bg-red-600 text-white rounded-xl shadow-sm active:scale-95 transition-all disabled:opacity-50"
                                 title="确认删除">
-                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16">
-                                    </path>
-                                </svg>
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor"><use href="#icon-delete"></use></svg>
                                 <span
                                     class="absolute -top-1 -right-1 bg-white text-red-600 text-[10px] font-bold px-1.5 py-0.5 rounded-full border border-red-200 shadow-sm leading-none"
                                     v-if="selectedCharacterIndices.size > 0">{{ selectedCharacterIndices.size }}</span>
@@ -1400,12 +1343,7 @@
                                 :class="isCharacterFavorite(char) ? 'text-amber-300' : 'text-white'"
                                 :title="isCharacterFavorite(char) ? '取消收藏' : '收藏角色'"
                                 :aria-label="isCharacterFavorite(char) ? '取消收藏' : '收藏角色'">
-                                <svg class="w-4 h-4" :fill="isCharacterFavorite(char) ? 'currentColor' : 'none'"
-                                    stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                        d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.196-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118L2.63 10.1c-.783-.57-.38-1.81.588-1.81h4.915a1 1 0 00.95-.69l1.519-4.674z">
-                                    </path>
-                                </svg>
+                                <svg class="w-4 h-4" :fill="isCharacterFavorite(char) ? 'currentColor' : 'none'" stroke="currentColor" viewBox="0 0 24 24"><use href="#icon-star"></use></svg>
                             </button>
 
                         </div>
@@ -1483,12 +1421,7 @@
                                     :class="isCharacterFavorite(char) ? 'text-amber-500 hover:text-amber-600' : 'text-gray-700 hover:text-amber-500'"
                                     :title="isCharacterFavorite(char) ? '取消收藏' : '收藏角色'"
                                     :aria-label="isCharacterFavorite(char) ? '取消收藏' : '收藏角色'">
-                                    <svg class="w-4 h-4" :fill="isCharacterFavorite(char) ? 'currentColor' : 'none'"
-                                        stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                            d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.196-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118L2.63 10.1c-.783-.57-.38-1.81.588-1.81h4.915a1 1 0 00.95-.69l1.519-4.674z">
-                                        </path>
-                                    </svg>
+                                    <svg class="w-4 h-4" :fill="isCharacterFavorite(char) ? 'currentColor' : 'none'" stroke="currentColor" viewBox="0 0 24 24"><use href="#icon-star"></use></svg>
                                 </button>
 
                                 <button @click.stop="deleteCharacter(char.originalIndex)"
@@ -1553,93 +1486,27 @@
 
             <!-- Generator View -->
             <div v-if="currentView === 'generator'" class="h-full overflow-hidden flex flex-col bg-gray-50 relative">
-                <!-- Mobile Floating Menu Button -->
-                <button @click="toggleMobileMenu"
-                    class="md:hidden absolute left-0 top-1/2 transform -translate-y-1/2 z-20 pl-2 pr-1.5 py-3 bg-white/90 backdrop-blur-md text-gray-600 text-xs font-medium rounded-r-xl shadow-lg border border-l-0 border-gray-200 active:scale-95 transition-all flex flex-col items-center gap-1">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
-                    </svg>
-                    <span class="leading-none">返</span>
-                    <span class="leading-none">回</span>
-                </button>
-
-                <div class="flex-1 w-full relative bg-white h-full">
-                    <!-- Loading Overlay -->
-                    <div v-if="isGeneratorLoading"
-                        class="absolute inset-0 z-10 flex items-center justify-center bg-gray-50">
-                        <div class="flex flex-col items-center">
-                            <svg class="animate-spin h-10 w-10 text-primary-600 mb-4" xmlns="http://www.w3.org/2000/svg"
-                                fill="none" viewBox="0 0 24 24">
-                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor"
-                                    stroke-width="4"></circle>
-                                <path class="opacity-75" fill="currentColor"
-                                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z">
-                                </path>
-                            </svg>
-                            <div class="text-gray-500 font-medium">加载角色卡工坊中...</div>
-                        </div>
-                    </div>
-                    <iframe :src="generatorUrl" @load="onGeneratorLoad" class="absolute inset-0 w-full h-full border-0"
-                        allow="clipboard-write"
-                        sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-downloads"></iframe>
-                </div>
+                <embedded-view-content :src="generatorUrl" :loading="isGeneratorLoading"
+                    loading-text="加载角色卡工坊中..." @menu="toggleMobileMenu" @load="onGeneratorLoad">
+                </embedded-view-content>
             </div>
 
             <!-- Square View -->
             <div v-if="currentView === 'square'" class="h-full overflow-hidden flex flex-col bg-gray-50 relative">
-                <!-- Mobile Floating Menu Button -->
-                <button @click="toggleMobileMenu"
-                    class="md:hidden absolute left-0 top-1/2 transform -translate-y-1/2 z-20 pl-2 pr-1.5 py-3 bg-white/90 backdrop-blur-md text-gray-600 text-xs font-medium rounded-r-xl shadow-lg border border-l-0 border-gray-200 active:scale-95 transition-all flex flex-col items-center gap-1">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
-                    </svg>
-                    <span class="leading-none">返</span>
-                    <span class="leading-none">回</span>
-                </button>
-
-                <div class="flex-1 w-full relative bg-white h-full">
-                    <!-- Loading Overlay -->
-                    <div v-if="isSquareLoading"
-                        class="absolute inset-0 z-10 flex items-center justify-center bg-gray-50">
-                        <div class="flex flex-col items-center">
-                            <svg class="animate-spin h-10 w-10 text-primary-600 mb-4" xmlns="http://www.w3.org/2000/svg"
-                                fill="none" viewBox="0 0 24 24">
-                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor"
-                                    stroke-width="4"></circle>
-                                <path class="opacity-75" fill="currentColor"
-                                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z">
-                                </path>
-                            </svg>
-                            <div class="text-gray-500 font-medium">加载万相广场中...</div>
-                        </div>
-                    </div>
-                    <iframe :src="squareUrl" @load="onSquareLoad" class="absolute inset-0 w-full h-full border-0"
-                        allow="clipboard-write"
-                        sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-downloads"></iframe>
-                </div>
+                <embedded-view-content :src="squareUrl" :loading="isSquareLoading"
+                    loading-text="加载万相广场中..." @menu="toggleMobileMenu" @load="onSquareLoad">
+                </embedded-view-content>
             </div>
 
             <!-- Settings View -->
-            <div v-if="currentView === 'settings'" class="p-4 md:p-6 h-full overflow-y-auto animate-fade-in">
+            <div v-if="currentView === 'settings'" class="management-view">
                 <div class="max-w-3xl mx-auto flex items-center mb-4 md:mb-6">
                     <button @click="toggleMobileMenu"
-                        class="md:hidden mr-3 text-gray-500 md:hover:text-gray-700 active:text-gray-700 transition-colors">
-                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M4 6h16M4 12h16m-7 6h7"></path>
-                        </svg>
+                            class="mobile-menu-button">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor"><use href="#icon-menu"></use></svg>
                     </button>
                     <h2 class="text-xl md:text-2xl font-bold text-gray-800 flex items-center">
-                        <svg class="w-6 h-6 md:w-7 md:h-7 mr-2 text-primary-600" fill="none" stroke="currentColor"
-                            viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z">
-                            </path>
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                        </svg>
+                        <svg class="w-6 h-6 md:w-7 md:h-7 mr-2 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><use href="#icon-settings"></use></svg>
                         设置
                     </h2>
                 </div>
@@ -1831,18 +1698,19 @@
                                         <div>
                                             <label
                                                 class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 ml-1">叙事视角</label>
-                                            <div class="bg-gray-50/60 p-1 rounded-xl flex shadow-inner relative">
-                                                <!-- Sliding Indicator -->
-                                                <div class="absolute inset-y-1 w-[calc(50%-4px)] bg-white rounded-lg shadow-sm ring-1 ring-black/5 transition-all duration-300 ease-out z-0"
-                                                    :class="isSecondPerson ? 'left-1' : 'left-[calc(50%+2px)]'"></div>
+                                            <div class="segmented-switch">
+                                                <div class="segmented-switch__indicator"
+                                                    :class="{ 'is-right': !isSecondPerson }"></div>
 
                                                 <button @click="togglePerson('second')"
-                                                    :class="['relative z-10 flex-1 py-2 text-sm font-bold rounded-lg transition-colors duration-200 flex items-center justify-center gap-2', isSecondPerson ? 'text-primary-600' : 'text-gray-500 hover:text-gray-700']">
+                                                    class="segmented-switch__option"
+                                                    :class="{ 'is-active': isSecondPerson }">
                                                     <span>第二人称</span>
                                                     <span class="text-xs font-normal opacity-80">(你)</span>
                                                 </button>
                                                 <button @click="togglePerson('third')"
-                                                    :class="['relative z-10 flex-1 py-2 text-sm font-bold rounded-lg transition-colors duration-200 flex items-center justify-center gap-2', !isSecondPerson ? 'text-primary-600' : 'text-gray-500 hover:text-gray-700']">
+                                                    class="segmented-switch__option"
+                                                    :class="{ 'is-active': !isSecondPerson }">
                                                     <span>第三人称</span>
                                                     <span class="text-xs font-normal opacity-80">({{ user.name || '他/她'
                                                         }})</span>
@@ -1917,7 +1785,7 @@
                                 <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                                     <!-- General API Status -->
                                     <div
-                                        class="flex items-center p-3 bg-white rounded-xl border border-gray-100/80 shadow-sm shadow-gray-100/60 hover:border-gray-200 hover:shadow-md hover:shadow-gray-100/70 transition-all duration-200">
+                                        class="model-setting-row">
                                         <div
                                             :class="['w-2.5 h-2.5 rounded-full mr-3 shadow-sm flex-shrink-0', apiStatus === 'connected' ? 'bg-green-500 shadow-green-200' : (apiStatus === 'checking' ? 'bg-yellow-400 animate-pulse shadow-yellow-200' : (apiStatus === 'error' ? 'bg-red-500 shadow-red-200' : 'bg-gray-300'))]">
                                         </div>
@@ -1932,7 +1800,7 @@
                                     </div>
                                     <!-- Image API Status -->
                                     <div
-                                        class="flex items-center p-3 bg-white rounded-xl border border-gray-100/80 shadow-sm shadow-gray-100/60 hover:border-gray-200 hover:shadow-md hover:shadow-gray-100/70 transition-all duration-200">
+                                        class="model-setting-row">
                                         <div
                                             :class="['w-2.5 h-2.5 rounded-full mr-3 shadow-sm flex-shrink-0', imageGenStatus === 'connected' ? 'bg-green-500 shadow-green-200' : (imageGenStatus === 'checking' ? 'bg-yellow-400 animate-pulse shadow-yellow-200' : (imageGenStatus === 'error' ? 'bg-red-500 shadow-red-200' : 'bg-gray-300'))]">
                                         </div>
@@ -2171,8 +2039,7 @@
 
                                 <!-- Generation Settings (Integrated) -->
                                 <div class="pt-6 border-t border-gray-100 mt-6">
-                                    <h4
-                                        class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4 flex items-center">
+                                    <h4 class="settings-section-heading">
                                         <svg class="w-4 h-4 mr-2 text-gray-400" fill="none" stroke="currentColor"
                                             viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -2199,7 +2066,7 @@
 
                                         <!-- Image Key -->
                                         <div
-                                            class="bg-gray-50/60 p-4 rounded-xl border border-gray-100 hover:bg-white hover:border-gray-200 hover:shadow-sm transition-all duration-200 flex flex-col justify-center">
+                                            class="generation-setting-card">
                                             <label
                                                 class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">自动生图密钥</label>
                                             <input v-model="settings.imageGenKey" type="password"
@@ -2209,7 +2076,7 @@
 
                                         <!-- Image Style -->
                                         <div
-                                            class="bg-gray-50/60 p-4 rounded-xl border border-gray-100 hover:bg-white hover:border-gray-200 hover:shadow-sm transition-all duration-200 flex flex-col justify-center">
+                                            class="generation-setting-card">
                                             <label
                                                 class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">生图风格</label>
                                             <custom-select v-model="settings.imageStyle" :options="imageStyleOptions"
@@ -2224,7 +2091,7 @@
 
                                         <!-- Image Size -->
                                         <div
-                                            class="bg-gray-50/60 p-4 rounded-xl border border-gray-100 hover:bg-white hover:border-gray-200 hover:shadow-sm transition-all duration-200 flex flex-col justify-center">
+                                            class="generation-setting-card">
                                             <label
                                                 class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">生图比例</label>
                                             <custom-select v-model="settings.imageSize" :options="imageSizeOptions"
@@ -2235,7 +2102,7 @@
 
                                         <!-- Image Count -->
                                         <div
-                                            class="bg-gray-50/60 p-4 rounded-xl border border-gray-100 hover:bg-white hover:border-gray-200 hover:shadow-sm transition-all duration-200 flex flex-col justify-center">
+                                            class="generation-setting-card">
                                             <label
                                                 class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">期望生图数量</label>
                                             <custom-select v-model="settings.imageGenCount" :options="imageGenCountOptions"
@@ -2262,13 +2129,7 @@
                                 </svg>
                             </div>
                             <div class="text-white font-semibold flex items-center text-lg relative z-10">
-                                <svg class="w-6 h-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                        d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z">
-                                    </path>
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                        d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                                </svg>
+                                <svg class="w-6 h-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><use href="#icon-settings"></use></svg>
                                 高级设置
                             </div>
                         </div>
@@ -2279,10 +2140,8 @@
                                 <label
                                     class="flex items-center p-3 rounded-xl border-2 border-transparent hover:border-gray-100 hover:bg-gray-50 transition-all cursor-pointer group">
                                     <div class="relative inline-flex items-center mr-2.5">
-                                        <input type="checkbox" v-model="settings.autoFetchModels" class="sr-only peer">
-                                        <div
-                                            class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-500">
-                                        </div>
+                                        <input type="checkbox" v-model="settings.autoFetchModels" class="settings-toggle-input sr-only">
+                                        <div class="settings-toggle settings-toggle--indigo"></div>
                                     </div>
                                     <span
                                         class="text-sm font-medium text-gray-600 group-hover:text-gray-900 transition-colors">自动获取模型</span>
@@ -2290,10 +2149,8 @@
                                 <label
                                     class="flex items-center p-3 rounded-xl border-2 border-transparent hover:border-gray-100 hover:bg-gray-50 transition-all cursor-pointer group">
                                     <div class="relative inline-flex items-center mr-2.5">
-                                        <input type="checkbox" v-model="settings.stream" class="sr-only peer">
-                                        <div
-                                            class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-500">
-                                        </div>
+                                        <input type="checkbox" v-model="settings.stream" class="settings-toggle-input sr-only">
+                                        <div class="settings-toggle settings-toggle--indigo"></div>
                                     </div>
                                     <span
                                         class="text-sm font-medium text-gray-600 group-hover:text-gray-900 transition-colors">流式输出
@@ -2303,10 +2160,8 @@
                                     class="flex items-center p-3 rounded-xl border-2 border-transparent hover:border-gray-100 hover:bg-gray-50 transition-all cursor-pointer group">
                                     <div class="relative inline-flex items-center mr-2.5">
                                         <input type="checkbox" v-model="settings.useCharacterBackground"
-                                            class="sr-only peer">
-                                        <div
-                                            class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-500">
-                                        </div>
+                                            class="settings-toggle-input sr-only">
+                                        <div class="settings-toggle settings-toggle--indigo"></div>
                                     </div>
                                     <span
                                         class="text-sm font-medium text-gray-600 group-hover:text-gray-900 transition-colors">使用封面背景</span>
@@ -2314,10 +2169,8 @@
                                 <label
                                     class="flex items-center p-3 rounded-xl border-2 border-transparent hover:border-gray-100 hover:bg-gray-50 transition-all cursor-pointer group">
                                     <div class="relative inline-flex items-center mr-2.5">
-                                        <input type="checkbox" v-model="settings.immersiveMode" class="sr-only peer">
-                                        <div
-                                            class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-500">
-                                        </div>
+                                        <input type="checkbox" v-model="settings.immersiveMode" class="settings-toggle-input sr-only">
+                                        <div class="settings-toggle settings-toggle--indigo"></div>
                                     </div>
                                     <span
                                         class="text-sm font-medium text-gray-600 group-hover:text-gray-900 transition-colors">沉浸模式</span>
@@ -2326,8 +2179,7 @@
 
                             <!-- Render Layer Limit Setting -->
                             <div class="pt-6 border-t border-gray-100 mt-6">
-                                <h4
-                                    class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4 flex items-center">
+                                <h4 class="settings-section-heading">
                                     <svg class="w-4 h-4 mr-2 text-gray-400" fill="none" stroke="currentColor"
                                         viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -2371,54 +2223,26 @@
             </div>
 
             <!-- Presets View -->
-            <div v-if="currentView === 'presets'" class="p-4 md:p-6 h-full overflow-y-auto animate-fade-in">
-                <div class="flex justify-between items-center mb-4 md:mb-6">
-                    <div class="flex items-center">
-                        <button @click="toggleMobileMenu"
-                            class="md:hidden mr-3 text-gray-500 md:hover:text-gray-700 active:text-gray-700 transition-colors">
-                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M4 6h16M4 12h16m-7 6h7"></path>
-                            </svg>
-                        </button>
-                        <h2 class="text-xl md:text-2xl font-bold text-gray-800 flex items-center">
-                            <svg class="w-6 h-6 md:w-7 md:h-7 mr-2 text-primary-600" fill="none" stroke="currentColor"
-                                viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4">
-                                </path>
-                            </svg>
-                            预设管理
-                        </h2>
-                    </div>
-                    <div class="flex space-x-2 md:space-x-3">
-                        <button @click="openExportModal('presets')"
-                            class="p-2.5 bg-white hover:bg-gray-50 text-gray-600 rounded-xl border border-gray-200 transition-all shadow-sm hover:shadow-md active:scale-95"
-                            title="导出">
-                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
-                            </svg>
-                        </button>
-                        <label
-                            class="cursor-pointer p-2.5 bg-white hover:bg-gray-50 text-gray-600 rounded-xl border border-gray-200 transition-all shadow-sm hover:shadow-md active:scale-95"
-                            title="导入预设">
-                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
-                            </svg>
-                            <input type="file" accept=".json" @change="importPresets" class="hidden">
-                        </label>
-                        <button @click="createPreset"
-                            class="p-2.5 bg-primary-600 hover:bg-primary-700 text-white rounded-xl transition-all shadow-sm hover:shadow-md active:scale-95"
-                            title="新建预设">
-                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M12 4v16m8-8H4"></path>
-                            </svg>
-                        </button>
-                    </div>
-                </div>
+            <div v-if="currentView === 'presets'" class="management-view">
+                <settings-page-header title="预设管理" @menu="toggleMobileMenu">
+                    <template #icon>
+                        <svg class="w-6 h-6 md:w-7 md:h-7 mr-2 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"></path>
+                        </svg>
+                    </template>
+                    <button @click="openExportModal('presets')" class="settings-icon-button" title="导出">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor"><use href="#icon-export"></use></svg>
+                    </button>
+                    <label class="settings-icon-button cursor-pointer" title="导入预设">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><use href="#icon-import"></use></svg>
+                        <input type="file" accept=".json" @change="importPresets" class="hidden">
+                    </label>
+                    <button @click="createPreset" class="settings-create-button" title="新建预设">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                        </svg>
+                    </button>
+                </settings-page-header>
 
                 <div id="presets-list" class="space-y-4">
                     <div v-for="(preset, index) in presets" :key="preset.name + index"
@@ -2441,29 +2265,19 @@
                         </div>
                         <div class="flex items-center space-x-4 flex-shrink-0">
                             <label class="relative inline-flex items-center cursor-pointer">
-                                <input type="checkbox" v-model="preset.enabled" class="sr-only peer">
-                                <div
-                                    class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600">
-                                </div>
+                                <input type="checkbox" v-model="preset.enabled" class="settings-toggle-input sr-only">
+                                <div class="settings-toggle"></div>
                             </label>
                             <div class="flex space-x-1 border-l border-gray-200 pl-4">
                                 <button @click="editPreset(index)"
-                                    class="p-2 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
+                                    class="item-action-button item-action-button--edit"
                                     title="编辑">
-                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                            d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z">
-                                        </path>
-                                    </svg>
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor"><use href="#icon-edit"></use></svg>
                                 </button>
                                 <button @click="deletePreset(index)"
-                                    class="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                    class="item-action-button item-action-button--delete"
                                     title="删除">
-                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16">
-                                        </path>
-                                    </svg>
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor"><use href="#icon-delete"></use></svg>
                                 </button>
                             </div>
                         </div>
@@ -2472,54 +2286,27 @@
             </div>
 
             <!-- UI Templates View -->
-            <div v-if="currentView === 'uitemplates'" class="p-4 md:p-6 h-full overflow-y-auto animate-fade-in">
-                <div class="flex justify-between items-center mb-4 md:mb-6">
-                    <div class="flex items-center">
-                        <button @click="toggleMobileMenu"
-                            class="md:hidden mr-3 text-gray-500 md:hover:text-gray-700 active:text-gray-700 transition-colors">
-                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M4 6h16M4 12h16m-7 6h7"></path>
-                            </svg>
-                        </button>
-                        <h2 class="text-xl md:text-2xl font-bold text-gray-800 flex items-center">
-                            <svg class="w-6 h-6 md:w-7 md:h-7 mr-2 text-primary-600" fill="none" stroke="currentColor"
-                                viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M4 5a2 2 0 012-2h12a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm4 3h8M8 12h8M8 16h5">
-                                </path>
-                            </svg>
-                            UI模板
-                        </h2>
-                    </div>
-                    <div class="flex space-x-2 md:space-x-3">
-                        <button @click="openExportModal('uitemplates')" :disabled="currentUiTemplates.length === 0"
-                            class="p-2.5 bg-white hover:bg-gray-50 text-gray-600 rounded-xl border border-gray-200 transition-all shadow-sm hover:shadow-md active:scale-95 disabled:opacity-40"
-                            title="导出">
-                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
-                            </svg>
-                        </button>
-                        <label
-                            class="cursor-pointer p-2.5 bg-white hover:bg-gray-50 text-gray-600 rounded-xl border border-gray-200 transition-all shadow-sm hover:shadow-md active:scale-95"
-                            title="导入">
-                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
-                            </svg>
-                            <input type="file" accept=".json" @change="importUiTemplates" class="hidden">
-                        </label>
-                        <button @click="createUiTemplate"
-                            class="p-2.5 bg-primary-600 hover:bg-primary-700 text-white rounded-xl transition-all shadow-sm hover:shadow-md active:scale-95"
-                            title="新建模板">
-                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M12 4v16m8-8H4"></path>
-                            </svg>
-                        </button>
-                    </div>
-                </div>
+            <div v-if="currentView === 'uitemplates'" class="management-view">
+                <settings-page-header title="UI模板" @menu="toggleMobileMenu">
+                    <template #icon>
+                        <svg class="w-6 h-6 md:w-7 md:h-7 mr-2 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 5a2 2 0 012-2h12a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm4 3h8M8 12h8M8 16h5"></path>
+                        </svg>
+                    </template>
+                    <button @click="openExportModal('uitemplates')" :disabled="currentUiTemplates.length === 0"
+                        class="settings-icon-button disabled:opacity-40" title="导出">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor"><use href="#icon-export"></use></svg>
+                    </button>
+                    <label class="settings-icon-button cursor-pointer" title="导入">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><use href="#icon-import"></use></svg>
+                        <input type="file" accept=".json" @change="importUiTemplates" class="hidden">
+                    </label>
+                    <button @click="createUiTemplate" class="settings-create-button" title="新建模板">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                        </svg>
+                    </button>
+                </settings-page-header>
 
                 <div
                     class="bg-white/70 backdrop-blur-sm p-1 rounded-2xl border border-gray-200 shadow-sm mb-4 overflow-hidden">
@@ -2566,10 +2353,8 @@
                             <div class="flex items-center space-x-3">
                                 <span class="text-sm font-bold text-gray-700">变量分析</span>
                                 <label class="relative inline-flex items-center cursor-pointer">
-                                    <input type="checkbox" v-model="settings.uiTemplateEnabled" class="sr-only peer">
-                                    <div
-                                        class="w-10 h-[22px] bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-[18px] peer-checked:after:border-white after:content-[''] after:absolute after:top-[3px] after:left-[3px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all after:shadow-sm peer-checked:bg-gradient-to-r peer-checked:from-primary-500 peer-checked:to-primary-600">
-                                    </div>
+                                    <input type="checkbox" v-model="settings.uiTemplateEnabled" class="settings-toggle-input sr-only">
+                                    <div class="settings-toggle settings-toggle--compact"></div>
                                 </label>
                             </div>
                             <div class="flex items-center justify-end gap-2 min-h-[30px]">
@@ -2587,17 +2372,17 @@
                         </div>
                         <div v-if="settings.uiTemplateEnabled"
                             class="mb-3 animate-fade-in">
-                            <div class="bg-gray-50/60 p-1 rounded-xl flex shadow-inner relative w-full">
-                                <div class="absolute inset-y-1 w-[calc(50%-4px)] bg-white rounded-lg shadow-sm ring-1 ring-black/5 transition-all duration-300 ease-out z-0"
-                                    :class="settings.uiTemplateMainModelAnalysis ? 'left-1' : 'left-[calc(50%+2px)]'"></div>
+                            <div class="segmented-switch segmented-switch--compact w-full">
+                                <div class="segmented-switch__indicator"
+                                    :class="{ 'is-right': !settings.uiTemplateMainModelAnalysis }"></div>
                                 <button type="button" @click="settings.uiTemplateMainModelAnalysis = true"
-                                    class="relative z-10 flex-1 py-2 text-xs font-bold rounded-lg transition-colors duration-200 flex items-center justify-center"
-                                    :class="settings.uiTemplateMainModelAnalysis ? 'text-primary-600' : 'text-gray-500 hover:text-gray-700'">
+                                    class="segmented-switch__option"
+                                    :class="{ 'is-active': settings.uiTemplateMainModelAnalysis }">
                                     主模型
                                 </button>
                                 <button type="button" @click="settings.uiTemplateMainModelAnalysis = false"
-                                    class="relative z-10 flex-1 py-2 text-xs font-bold rounded-lg transition-colors duration-200 flex items-center justify-center"
-                                    :class="!settings.uiTemplateMainModelAnalysis ? 'text-primary-600' : 'text-gray-500 hover:text-gray-700'">
+                                    class="segmented-switch__option"
+                                    :class="{ 'is-active': !settings.uiTemplateMainModelAnalysis }">
                                     副模型
                                 </button>
                             </div>
@@ -2607,10 +2392,8 @@
                             <div class="flex items-center space-x-3">
                                 <span class="text-sm font-bold text-gray-700">将变量注入上下文</span>
                                 <label class="relative inline-flex items-center cursor-pointer">
-                                    <input type="checkbox" v-model="settings.uiTemplateInjectContext" class="sr-only peer">
-                                    <div
-                                        class="w-10 h-[22px] bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-[18px] peer-checked:after:border-white after:content-[''] after:absolute after:top-[3px] after:left-[3px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all after:shadow-sm peer-checked:bg-gradient-to-r peer-checked:from-primary-500 peer-checked:to-primary-600">
-                                    </div>
+                                    <input type="checkbox" v-model="settings.uiTemplateInjectContext" class="settings-toggle-input sr-only">
+                                    <div class="settings-toggle settings-toggle--compact"></div>
                                 </label>
                             </div>
                         </div>
@@ -2698,17 +2481,13 @@
                             </div>
                             <div class="flex items-center gap-1">
                                 <label class="relative inline-flex items-center cursor-pointer mr-2">
-                                    <input type="checkbox" v-model="template.enabled" class="sr-only peer">
-                                    <div class="w-10 h-[22px] bg-gray-200 rounded-full peer peer-checked:after:translate-x-[18px] after:content-[''] after:absolute after:top-[3px] after:left-[3px] after:bg-white after:border after:border-gray-300 after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary-600"></div>
+                                    <input type="checkbox" v-model="template.enabled" class="settings-toggle-input sr-only">
+                                    <div class="settings-toggle settings-toggle--compact settings-toggle--solid"></div>
                                 </label>
-                                <button @click="editUiTemplate(index)" class="p-2 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors" title="编辑">
-                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                            d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z">
-                                        </path>
-                                    </svg>
+                                <button @click="editUiTemplate(index)" class="item-action-button item-action-button--edit" title="编辑">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor"><use href="#icon-edit"></use></svg>
                                 </button>
-                                <button @click="deleteUiTemplate(index)" class="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="删除">
+                                <button @click="deleteUiTemplate(index)" class="item-action-button item-action-button--delete" title="删除">
                                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                             d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16">
@@ -2722,53 +2501,26 @@
             </div>
 
             <!-- Regex View -->
-            <div v-if="currentView === 'regex'" class="p-4 md:p-6 h-full overflow-y-auto animate-fade-in">
-                <div class="flex justify-between items-center mb-4 md:mb-6">
-                    <div class="flex items-center">
-                        <button @click="toggleMobileMenu"
-                            class="md:hidden mr-3 text-gray-500 md:hover:text-gray-700 active:text-gray-700 transition-colors">
-                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M4 6h16M4 12h16m-7 6h7"></path>
-                            </svg>
-                        </button>
-                        <h2 class="text-xl md:text-2xl font-bold text-gray-800 flex items-center">
-                            <svg class="w-6 h-6 md:w-7 md:h-7 mr-2 text-primary-600" fill="none" stroke="currentColor"
-                                viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path>
-                            </svg>
-                            正则脚本
-                        </h2>
-                    </div>
-                    <div class="flex space-x-2 md:space-x-3">
-                        <button @click="openExportModal('regex')"
-                            class="p-2.5 bg-white hover:bg-gray-50 text-gray-600 rounded-xl border border-gray-200 transition-all shadow-sm hover:shadow-md active:scale-95"
-                            title="导出">
-                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
-                            </svg>
-                        </button>
-                        <label
-                            class="cursor-pointer p-2.5 bg-white hover:bg-gray-50 text-gray-600 rounded-xl border border-gray-200 transition-all shadow-sm hover:shadow-md active:scale-95"
-                            title="导入">
-                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
-                            </svg>
-                            <input type="file" accept=".json" @change="importRegex" class="hidden">
-                        </label>
-                        <button @click="createRegex"
-                            class="p-2.5 bg-primary-600 hover:bg-primary-700 text-white rounded-xl transition-all shadow-sm hover:shadow-md active:scale-95"
-                            title="新建脚本">
-                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M12 4v16m8-8H4"></path>
-                            </svg>
-                        </button>
-                    </div>
-                </div>
+            <div v-if="currentView === 'regex'" class="management-view">
+                <settings-page-header title="正则脚本" @menu="toggleMobileMenu">
+                    <template #icon>
+                        <svg class="w-6 h-6 md:w-7 md:h-7 mr-2 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path>
+                        </svg>
+                    </template>
+                    <button @click="openExportModal('regex')" class="settings-icon-button" title="导出">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor"><use href="#icon-export"></use></svg>
+                    </button>
+                    <label class="settings-icon-button cursor-pointer" title="导入">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><use href="#icon-import"></use></svg>
+                        <input type="file" accept=".json" @change="importRegex" class="hidden">
+                    </label>
+                    <button @click="createRegex" class="settings-create-button" title="新建脚本">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                        </svg>
+                    </button>
+                </settings-page-header>
                 <div id="regex-list" class="grid grid-cols-1 gap-4">
                     <div v-for="(script, index) in regexScripts" :key="script.name + index"
                         class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-all flex justify-between items-center group">
@@ -2791,24 +2543,18 @@
                         </div>
                         <div class="flex items-center space-x-4 flex-shrink-0">
                             <label class="relative inline-flex items-center cursor-pointer">
-                                <input type="checkbox" v-model="script.enabled" class="sr-only peer" :true-value="true"
+                                <input type="checkbox" v-model="script.enabled" class="settings-toggle-input sr-only" :true-value="true"
                                     :false-value="false">
-                                <div
-                                    class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600">
-                                </div>
+                                <div class="settings-toggle"></div>
                             </label>
                             <div class="flex space-x-1 border-l border-gray-200 pl-4">
                                 <button @click="editRegex(index)"
-                                    class="p-2 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
+                                    class="item-action-button item-action-button--edit"
                                     title="编辑">
-                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                            d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z">
-                                        </path>
-                                    </svg>
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor"><use href="#icon-edit"></use></svg>
                                 </button>
                                 <button @click="deleteRegex(index)"
-                                    class="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                    class="item-action-button item-action-button--delete"
                                     title="删除">
                                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -2822,30 +2568,15 @@
                 </div>
             </div>
 
-            <!-- Removed Friends View -->
-
             <!-- Tools View -->
-            <div v-if="currentView === 'tools'" class="p-4 md:p-6 h-full overflow-y-auto animate-fade-in">
-                <div class="flex justify-between items-center mb-4 md:mb-6">
-                    <div class="flex items-center">
-                        <button @click="toggleMobileMenu"
-                            class="md:hidden mr-3 text-gray-500 md:hover:text-gray-700 active:text-gray-700 transition-colors">
-                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M4 6h16M4 12h16m-7 6h7"></path>
-                            </svg>
-                        </button>
-                        <h2 class="text-xl md:text-2xl font-bold text-gray-800 flex items-center">
-                            <svg class="w-6 h-6 md:w-7 md:h-7 mr-2 text-primary-600" fill="none"
-                                stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94L14.7 6.3z">
-                                </path>
-                            </svg>
-                            工具
-                        </h2>
-                    </div>
-                </div>
+            <div v-if="currentView === 'tools'" class="management-view">
+                <settings-page-header title="工具" @menu="toggleMobileMenu">
+                    <template #icon>
+                        <svg class="w-6 h-6 md:w-7 md:h-7 mr-2 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94L14.7 6.3z"></path>
+                        </svg>
+                    </template>
+                </settings-page-header>
 
                 <div
                     class="bg-white/70 backdrop-blur-sm p-1 rounded-2xl border border-gray-200 shadow-sm mb-4 overflow-hidden">
@@ -2920,20 +2651,14 @@
                         <div class="flex items-center space-x-4 flex-shrink-0">
                             <label class="relative inline-flex items-center cursor-pointer" @click.stop>
                                 <input type="checkbox" v-model="tool.enabled" @change="normalizeActiveTools()"
-                                    class="sr-only peer">
-                                <div
-                                    class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600">
-                                </div>
+                                    class="settings-toggle-input sr-only">
+                                <div class="settings-toggle"></div>
                             </label>
                             <div class="flex space-x-1 border-l border-gray-200 pl-4">
                                 <button @click="editActiveTool(index)"
-                                    class="p-2 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
+                                    class="item-action-button item-action-button--edit"
                                     title="编辑">
-                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                            d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z">
-                                        </path>
-                                    </svg>
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor"><use href="#icon-edit"></use></svg>
                                 </button>
                             </div>
                         </div>
@@ -2942,25 +2667,13 @@
             </div>
 
             <!-- Token Usage View -->
-            <div v-if="currentView === 'usage'" class="p-4 md:p-6 h-full overflow-y-auto animate-fade-in">
-                <div class="flex justify-between items-center mb-4 md:mb-6">
-                    <div class="flex items-center">
-                        <button @click="toggleMobileMenu"
-                            class="md:hidden mr-3 text-gray-500 md:hover:text-gray-700 active:text-gray-700 transition-colors">
-                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M4 6h16M4 12h16m-7 6h7"></path>
-                            </svg>
-                        </button>
-                        <h2 class="text-xl md:text-2xl font-bold text-gray-800 flex items-center">
-                            <svg class="w-6 h-6 md:w-7 md:h-7 mr-2 text-primary-600" fill="none"
-                                stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M4 19V9m5 10V5m5 14v-7m5 7V3M3 21h18"></path>
-                            </svg>
-                            Token 统计
-                        </h2>
-                    </div>
+            <div v-if="currentView === 'usage'" class="management-view">
+                <settings-page-header title="Token 统计" @menu="toggleMobileMenu">
+                    <template #icon>
+                        <svg class="w-6 h-6 md:w-7 md:h-7 mr-2 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 19V9m5 10V5m5 14v-7m5 7V3M3 21h18"></path>
+                        </svg>
+                    </template>
                     <button v-if="tokenUsageHistory.length > 0" @click="clearTokenUsageHistory"
                         class="flex-shrink-0 rounded-xl border border-gray-200 bg-white p-2.5 text-red-600 shadow-sm transition-all hover:border-red-100 hover:bg-red-50 active:scale-95"
                         title="清空记录" aria-label="清空 Token 用量记录">
@@ -2969,7 +2682,7 @@
                                 d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
                         </svg>
                     </button>
-                </div>
+                </settings-page-header>
 
                 <div class="mb-4 overflow-x-auto pb-0.5">
                     <div class="inline-flex flex-shrink-0 rounded-xl border border-gray-200 bg-gray-100/70 p-1">
@@ -3060,7 +2773,7 @@
                     </article>
                     <nav v-if="tokenUsagePageCount > 1" class="flex items-center justify-center gap-2 pt-1" aria-label="Token 记录分页">
                         <button type="button" @click="tokenUsagePage--" :disabled="tokenUsagePage === 1"
-                            class="flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-500 transition-colors hover:border-primary-200 hover:text-primary-600 disabled:cursor-not-allowed disabled:opacity-40">
+                            class="pagination-button">
                             <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
                             </svg>
@@ -3068,7 +2781,7 @@
                         </button>
                         <span class="min-w-[58px] text-center text-xs font-mono text-gray-500">{{ tokenUsagePage }} / {{ tokenUsagePageCount }}</span>
                         <button type="button" @click="tokenUsagePage++" :disabled="tokenUsagePage === tokenUsagePageCount"
-                            class="flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-500 transition-colors hover:border-primary-200 hover:text-primary-600 disabled:cursor-not-allowed disabled:opacity-40">
+                            class="pagination-button">
                             下一页
                             <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
@@ -3083,25 +2796,15 @@
             </div>
 
             <!-- Memory View -->
-            <div v-if="currentView === 'memory'" class="p-4 md:p-6 h-full overflow-y-auto animate-fade-in">
-                <div class="flex justify-between items-center mb-4 md:mb-6">
-                    <div class="flex items-center">
-                        <button @click="toggleMobileMenu"
-                            class="md:hidden mr-3 text-gray-500 md:hover:text-gray-700 active:text-gray-700 transition-colors">
-                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M4 6h16M4 12h16m-7 6h7"></path>
-                            </svg>
-                        </button>
-                        <h2 class="text-xl md:text-2xl font-bold text-gray-800 flex items-center">
-                            <svg class="w-6 h-6 md:w-7 md:h-7 mr-2 text-primary-600" fill="none" stroke="currentColor"
-                                viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z">
-                                </path>
-                            </svg>
-                            记忆系统
-                            <span v-if="isAnyMemoryProcessing"
+            <div v-if="currentView === 'memory'" class="management-view">
+                <settings-page-header title="记忆系统" @menu="toggleMobileMenu">
+                    <template #icon>
+                        <svg class="w-6 h-6 md:w-7 md:h-7 mr-2 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path>
+                        </svg>
+                    </template>
+                    <template #title-extra>
+                        <span v-if="isAnyMemoryProcessing"
                                 class="ml-2 inline-flex items-center justify-center text-primary-600 bg-primary-50 w-6 h-6 rounded-full border border-primary-200"
                                 title="正在处理记忆">
                                 <svg class="w-3.5 h-3.5 animate-spin" fill="none" stroke="currentColor"
@@ -3113,37 +2816,20 @@
                                     </path>
                                 </svg>
                             </span>
-                        </h2>
-                    </div>
-                    <div class="flex space-x-2 md:space-x-3">
-                        <button @click="exportMemories()"
-                            class="p-2.5 bg-white hover:bg-gray-50 text-gray-600 rounded-xl border border-gray-200 transition-all shadow-sm hover:shadow-md active:scale-95"
-                            title="导出">
-                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
-                            </svg>
-                        </button>
-                        <label
-                            class="cursor-pointer p-2.5 bg-white hover:bg-gray-50 text-gray-600 rounded-xl border border-gray-200 transition-all shadow-sm hover:shadow-md active:scale-95"
-                            title="导入">
-                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
-                            </svg>
-                            <input type="file" accept=".json" @change="importMemories" class="hidden">
-                        </label>
+                    </template>
+                    <button @click="exportMemories()" class="settings-icon-button" title="导出">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor"><use href="#icon-export"></use></svg>
+                    </button>
+                    <label class="settings-icon-button cursor-pointer" title="导入">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><use href="#icon-import"></use></svg>
+                        <input type="file" accept=".json" @change="importMemories" class="hidden">
+                    </label>
                         <button @click="clearAllMemories()" v-if="memoryStats.activeTotal > 0"
                             class="p-2.5 bg-white text-red-600 rounded-xl border border-gray-200 shadow-sm active:scale-95 transition-all"
                             title="清空当前模式记忆">
-                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16">
-                                </path>
-                            </svg>
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor"><use href="#icon-delete"></use></svg>
                         </button>
-                    </div>
-                </div>
+                </settings-page-header>
 
                 <!-- Stats Bar -->
                 <div v-if="memoryStats.activeTotal > 0"
@@ -3203,10 +2889,8 @@
                             <div class="flex items-center space-x-3">
                                 <span class="text-sm font-bold text-gray-700">记忆引擎</span>
                                 <label class="relative inline-flex items-center cursor-pointer">
-                                    <input type="checkbox" v-model="memorySettings.enabled" class="sr-only peer">
-                                    <div
-                                        class="w-10 h-[22px] bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-[18px] peer-checked:after:border-white after:content-[''] after:absolute after:top-[3px] after:left-[3px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all after:shadow-sm peer-checked:bg-gradient-to-r peer-checked:from-primary-500 peer-checked:to-primary-600">
-                                    </div>
+                                    <input type="checkbox" v-model="memorySettings.enabled" class="settings-toggle-input sr-only">
+                                    <div class="settings-toggle settings-toggle--compact"></div>
                                 </label>
                             </div>
                             <div class="flex items-center gap-2">
@@ -3235,11 +2919,11 @@
                             </div>
                         </div>
                         <div v-if="memorySettings.enabled" class="mb-3 animate-fade-in">
-                            <div class="bg-gray-50/60 p-1 rounded-xl flex shadow-inner relative w-full">
-                                <div class="absolute inset-y-1 w-[calc(50%-4px)] bg-white rounded-lg shadow-sm ring-1 ring-black/5 transition-all duration-300 ease-out z-0"
-                                    :class="memorySettings.mode === 'classic' ? 'left-1' : 'left-[calc(50%+2px)]'"></div>
-                                <div class="relative z-10 flex-1 py-2 text-xs font-bold rounded-lg transition-colors duration-200 flex items-center justify-center"
-                                    :class="memorySettings.mode === 'classic' ? 'text-primary-600' : 'text-gray-500 hover:text-gray-700'">
+                            <div class="segmented-switch segmented-switch--compact w-full">
+                                <div class="segmented-switch__indicator"
+                                    :class="{ 'is-right': memorySettings.mode !== 'classic' }"></div>
+                                <div class="segmented-switch__option"
+                                    :class="{ 'is-active': memorySettings.mode === 'classic' }">
                                     <button type="button" @click="memorySettings.mode = 'classic'; settingsHelpTopic = ''"
                                         class="absolute inset-0 rounded-lg" aria-label="切换到总结模式"></button>
                                     <span class="relative z-10 pointer-events-none">总结模式</span>
@@ -3258,8 +2942,8 @@
                                         <span class="settings-help-popover-content">使用副模型为每轮对话生成第三人称的高密度记忆。超过保留楼层后，用户原文保持不变，AI 原文会由对应的本轮记忆替代，不依赖向量相关度进行召回。</span>
                                     </div>
                                 </div>
-                                <div class="relative z-10 flex-1 py-2 text-xs font-bold rounded-lg transition-colors duration-200 flex items-center justify-center"
-                                    :class="memorySettings.mode === 'vector' ? 'text-primary-600' : 'text-gray-500 hover:text-gray-700'">
+                                <div class="segmented-switch__option"
+                                    :class="{ 'is-active': memorySettings.mode === 'vector' }">
                                     <button type="button" @click="memorySettings.mode = 'vector'; settingsHelpTopic = ''"
                                         class="absolute inset-0 rounded-lg" aria-label="切换到向量模式"></button>
                                     <span class="relative z-10 pointer-events-none">向量模式</span>
@@ -3556,7 +3240,7 @@
                             </article>
                             <nav v-if="classicMemoryPageCount > 1" class="flex items-center justify-center gap-2 pt-1" aria-label="总结模式记忆分页">
                                 <button type="button" @click="classicMemoryPage--" :disabled="classicMemoryPage === 1"
-                                    class="flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-500 transition-colors hover:border-primary-200 hover:text-primary-600 disabled:cursor-not-allowed disabled:opacity-40">
+                            class="pagination-button">
                                     <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
                                     </svg>
@@ -3564,7 +3248,7 @@
                                 </button>
                                 <span class="min-w-[58px] text-center text-xs font-mono text-gray-500">{{ classicMemoryPage }} / {{ classicMemoryPageCount }}</span>
                                 <button type="button" @click="classicMemoryPage++" :disabled="classicMemoryPage === classicMemoryPageCount"
-                                    class="flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-500 transition-colors hover:border-primary-200 hover:text-primary-600 disabled:cursor-not-allowed disabled:opacity-40">
+                            class="pagination-button">
                                     下一页
                                     <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
@@ -3578,54 +3262,26 @@
             </div>
 
             <!-- World Info View -->
-            <div v-if="currentView === 'worldinfo'" class="p-4 md:p-6 h-full overflow-y-auto animate-fade-in">
-                <div class="flex justify-between items-center mb-4 md:mb-6">
-                    <div class="flex items-center">
-                        <button @click="toggleMobileMenu"
-                            class="md:hidden mr-3 text-gray-500 md:hover:text-gray-700 active:text-gray-700 transition-colors">
-                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M4 6h16M4 12h16m-7 6h7"></path>
-                            </svg>
-                        </button>
-                        <h2 class="text-xl md:text-2xl font-bold text-gray-800 flex items-center">
-                            <svg class="w-6 h-6 md:w-7 md:h-7 mr-2 text-primary-600" fill="none" stroke="currentColor"
-                                viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253">
-                                </path>
-                            </svg>
-                            世界书
-                        </h2>
-                    </div>
-                    <div class="flex space-x-2 md:space-x-3">
-                        <button @click="openExportModal('worldinfo')"
-                            class="p-2.5 bg-white hover:bg-gray-50 text-gray-600 rounded-xl border border-gray-200 transition-all shadow-sm hover:shadow-md active:scale-95"
-                            title="导出">
-                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
-                            </svg>
-                        </button>
-                        <label
-                            class="cursor-pointer p-2.5 bg-white hover:bg-gray-50 text-gray-600 rounded-xl border border-gray-200 transition-all shadow-sm hover:shadow-md active:scale-95"
-                            title="导入">
-                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
-                            </svg>
-                            <input type="file" accept=".json" @change="importWorldInfo" class="hidden">
-                        </label>
-                        <button @click="createWorldInfo"
-                            class="p-2.5 bg-primary-600 hover:bg-primary-700 text-white rounded-xl transition-all shadow-sm hover:shadow-md active:scale-95"
-                            title="新建条目">
-                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M12 4v16m8-8H4"></path>
-                            </svg>
-                        </button>
-                    </div>
-                </div>
+            <div v-if="currentView === 'worldinfo'" class="management-view">
+                <settings-page-header title="世界书" @menu="toggleMobileMenu">
+                    <template #icon>
+                        <svg class="w-6 h-6 md:w-7 md:h-7 mr-2 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>
+                        </svg>
+                    </template>
+                    <button @click="openExportModal('worldinfo')" class="settings-icon-button" title="导出">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor"><use href="#icon-export"></use></svg>
+                    </button>
+                    <label class="settings-icon-button cursor-pointer" title="导入">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><use href="#icon-import"></use></svg>
+                        <input type="file" accept=".json" @change="importWorldInfo" class="hidden">
+                    </label>
+                    <button @click="createWorldInfo" class="settings-create-button" title="新建条目">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                        </svg>
+                    </button>
+                </settings-page-header>
                 <!-- Activation Settings -->
                 <div
                     class="bg-white/70 backdrop-blur-sm p-1 rounded-2xl border border-gray-200 shadow-sm mb-4 overflow-hidden">
@@ -3699,23 +3355,17 @@
                         <div class="flex items-center space-x-4 flex-shrink-0">
                             <label class="relative inline-flex items-center cursor-pointer">
                                 <input type="checkbox" :checked="entry.enabled"
-                                    @change="setWorldInfoEnabled(entry, $event.target.checked, $event)" class="sr-only peer">
-                                <div
-                                    class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600">
-                                </div>
+                                    @change="setWorldInfoEnabled(entry, $event.target.checked, $event)" class="settings-toggle-input sr-only">
+                                <div class="settings-toggle"></div>
                             </label>
                             <div class="flex space-x-1 border-l border-gray-200 pl-4">
                                 <button @click="editWorldInfo(index)"
-                                    class="p-2 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
+                                    class="item-action-button item-action-button--edit"
                                     title="编辑">
-                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                            d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z">
-                                        </path>
-                                    </svg>
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor"><use href="#icon-edit"></use></svg>
                                 </button>
                                 <button @click="deleteWorldInfo(index)"
-                                    class="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                    class="item-action-button item-action-button--delete"
                                     title="删除">
                                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -3728,8 +3378,6 @@
                     </div>
                 </div>
             </div>
-
-            <!-- Removed Multiplayer Guest Lock Overlay -->
 
         </div>
 
@@ -3796,7 +3444,6 @@
         </div>
 
         <!-- User Setup Modal -->
-        <!-- User Setup Modal -->
         <div v-if="showUserSetupModal"
             class="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fade-in">
             <div
@@ -3822,13 +3469,17 @@
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-2">旁白叙事视角</label>
-                            <div class="flex p-1 bg-gray-50/60 rounded-xl gap-1">
+                            <div class="segmented-switch">
+                                <div class="segmented-switch__indicator"
+                                    :class="{ 'is-right': tempUserSetup.person === 'third' }"></div>
                                 <button @click="tempUserSetup.person = 'second'"
-                                    :class="['flex-1 py-2 text-sm font-bold transition-all rounded-lg', tempUserSetup.person === 'second' ? 'bg-white text-primary-600 shadow-sm' : 'text-gray-500 hover:text-gray-700']">
+                                    class="segmented-switch__option"
+                                    :class="{ 'is-active': tempUserSetup.person === 'second' }">
                                     第二人称 (你)
                                 </button>
                                 <button @click="tempUserSetup.person = 'third'"
-                                    :class="['flex-1 py-2 text-sm font-bold transition-all rounded-lg', tempUserSetup.person === 'third' ? 'bg-white text-primary-600 shadow-sm' : 'text-gray-500 hover:text-gray-700']">
+                                    class="segmented-switch__option"
+                                    :class="{ 'is-active': tempUserSetup.person === 'third' }">
                                     第三人称 ({{ tempUserSetup.name || '您的称呼' }})
                                 </button>
                             </div>
@@ -3907,8 +3558,8 @@
                         <div class="flex flex-wrap gap-2 max-h-[160px] overflow-y-auto custom-scrollbar items-center py-1">
                             <button v-for="tag in modelTags" :key="tag.name" @click="activeModelTag = tag.name" :class="[
                                     'flex items-center px-3.5 py-1.5 text-xs font-bold rounded-full transition-all border outline-none active:scale-95 whitespace-nowrap',
-                                    activeModelTag === tag.name 
-                                        ? 'bg-primary-50 text-primary-700 border-primary-300 shadow-sm' 
+                                    activeModelTag === tag.name
+                                        ? 'bg-primary-50 text-primary-700 border-primary-300 shadow-sm'
                                         : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50 hover:text-gray-700 hover:border-gray-300 shadow-sm'
                                 ]">
                                 <span class="leading-none">{{ tag.name === 'all' ? '全部' : (tag.name === 'other' ? '其他' :
@@ -3955,8 +3606,7 @@
         <div v-if="showAddCharacterMenu"
             class="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fade-in">
             <div class="fixed inset-0" @click="showAddCharacterMenu = false"></div>
-            <div
-                class="bg-white rounded-xl border border-gray-200 w-full max-w-sm flex flex-col shadow-2xl transform transition-all scale-100 relative z-10 overflow-hidden">
+            <div class="compact-modal-panel">
                 <div class="p-6">
                     <h3 class="text-xl font-bold text-gray-900 mb-6 flex items-center">
                         <svg class="w-6 h-6 mr-2 text-primary-600" fill="none" stroke="currentColor"
@@ -3969,9 +3619,8 @@
                     </h3>
                     <div class="grid grid-cols-1 gap-3">
                         <button @click="createNewCharacter(); showAddCharacterMenu = false"
-                            class="flex items-center p-4 bg-gray-50 hover:bg-primary-50 text-gray-700 hover:text-primary-700 rounded-xl transition-all group border border-gray-100 hover:border-primary-200">
-                            <div
-                                class="w-10 h-10 bg-white rounded-lg shadow-sm flex items-center justify-center mr-4 group-hover:scale-110 transition-transform">
+                            class="choice-card group">
+                            <div class="choice-card__icon">
                                 <svg class="w-6 h-6 text-primary-600" fill="none" stroke="currentColor"
                                     viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -3984,10 +3633,8 @@
                             </div>
                         </button>
 
-                        <label
-                            class="flex items-center p-4 bg-gray-50 hover:bg-primary-50 text-gray-700 hover:text-primary-700 rounded-xl transition-all group border border-gray-100 hover:border-primary-200 cursor-pointer">
-                            <div
-                                class="w-10 h-10 bg-white rounded-lg shadow-sm flex items-center justify-center mr-4 group-hover:scale-110 transition-transform">
+                        <label class="choice-card group">
+                            <div class="choice-card__icon">
                                 <svg class="w-6 h-6 text-primary-600" fill="none" stroke="currentColor"
                                     viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -4002,10 +3649,8 @@
                                 @change="importCharacter($event); showAddCharacterMenu = false" class="hidden">
                         </label>
 
-                        <label
-                            class="flex items-center p-4 bg-gray-50 hover:bg-primary-50 text-gray-700 hover:text-primary-700 rounded-xl transition-all group border border-gray-100 hover:border-primary-200 cursor-pointer">
-                            <div
-                                class="w-10 h-10 bg-white rounded-lg shadow-sm flex items-center justify-center mr-4 group-hover:scale-110 transition-transform">
+                        <label class="choice-card group">
+                            <div class="choice-card__icon">
                                 <svg class="w-6 h-6 text-primary-600" fill="none" stroke="currentColor"
                                     viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -4163,7 +3808,7 @@
                 class="bg-white rounded-2xl border border-gray-200 w-full max-w-2xl flex flex-col shadow-2xl max-h-[94vh] overflow-hidden">
                 <!-- Header -->
                 <div
-                    class="p-4 md:p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50/80 backdrop-blur-sm flex-shrink-0">
+                    class="editor-modal-header">
                     <div class="flex items-center gap-3">
                         <div class="p-2 bg-primary-50 text-primary-600 rounded-lg">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -4179,7 +3824,7 @@
                         </div>
                     </div>
                     <button @click="showPresetEditor = false"
-                        class="text-gray-400 hover:text-gray-600 hover:bg-gray-100 p-2 rounded-full transition-all">
+                        class="modal-close-button">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                 d="M6 18L18 6M6 6l12 12"></path>
@@ -4219,9 +3864,9 @@
                 <div
                     class="p-4 md:p-5 border-t border-gray-100 flex justify-end space-x-3 bg-gray-50/80 backdrop-blur-sm flex-shrink-0">
                     <button @click="showPresetEditor = false"
-                        class="px-5 py-2.5 bg-white hover:bg-gray-100 text-gray-700 border border-gray-200 rounded-xl transition-all shadow-sm font-medium text-sm active:scale-95">取消</button>
+                            class="modal-secondary-button">取消</button>
                     <button @click="savePreset"
-                        class="px-6 py-2.5 bg-primary-600 hover:bg-primary-700 text-white rounded-xl transition-all shadow-md hover:shadow-lg font-bold text-sm active:scale-95 flex items-center">
+                        class="modal-primary-button">
                         <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7">
                             </path>
@@ -4238,7 +3883,7 @@
             <div
                 class="bg-white rounded-2xl border border-gray-200 w-full max-w-4xl flex flex-col shadow-2xl max-h-[94vh] overflow-hidden">
                 <div
-                    class="p-4 md:p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50/80 backdrop-blur-sm flex-shrink-0">
+                    class="editor-modal-header">
                     <div class="flex items-center gap-3">
                         <div class="p-2 bg-primary-50 text-primary-600 rounded-lg">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -4254,7 +3899,7 @@
                         </div>
                     </div>
                     <button @click="showUiTemplateEditor = false"
-                        class="text-gray-400 hover:text-gray-600 hover:bg-gray-100 p-2 rounded-full transition-all">
+                        class="modal-close-button">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                 d="M6 18L18 6M6 6l12 12"></path>
@@ -4263,17 +3908,17 @@
                 </div>
 
                 <div class="flex-1 overflow-y-auto custom-scrollbar p-6 bg-gray-50/30 space-y-6">
-                    <div class="bg-gray-50/60 p-1 rounded-xl flex shadow-inner relative">
-                        <div class="absolute inset-y-1 w-[calc(50%-4px)] bg-white rounded-lg shadow-sm ring-1 ring-black/5 transition-all duration-300 ease-out z-0"
-                            :class="editingUiTemplate.tab === 'history' ? 'left-1' : 'left-[calc(50%+2px)]'"></div>
+                    <div class="segmented-switch segmented-switch--slim">
+                        <div class="segmented-switch__indicator"
+                            :class="{ 'is-right': editingUiTemplate.tab !== 'history' }"></div>
                         <button @click="editingUiTemplate.tab = 'history'"
-                            :class="['relative z-10 flex-1 py-1.5 text-sm font-bold rounded-lg transition-colors duration-200 flex items-center justify-center',
-                                     editingUiTemplate.tab === 'history' ? 'text-primary-600' : 'text-gray-500 hover:text-gray-700']">
+                            class="segmented-switch__option"
+                            :class="{ 'is-active': editingUiTemplate.tab === 'history' }">
                             <span>变更记录</span>
                         </button>
                         <button @click="editingUiTemplate.tab = 'edit'"
-                            :class="['relative z-10 flex-1 py-1.5 text-sm font-bold rounded-lg transition-colors duration-200 flex items-center justify-center',
-                                     editingUiTemplate.tab === 'edit' ? 'text-primary-600' : 'text-gray-500 hover:text-gray-700']">
+                            class="segmented-switch__option"
+                            :class="{ 'is-active': editingUiTemplate.tab === 'edit' }">
                             <span>编辑内容</span>
                         </button>
                     </div>
@@ -4392,9 +4037,9 @@
                 <div v-if="editingUiTemplate.tab === 'edit'"
                     class="p-4 md:p-5 border-t border-gray-100 flex justify-end space-x-3 bg-gray-50/80 backdrop-blur-sm flex-shrink-0">
                     <button @click="showUiTemplateEditor = false"
-                        class="px-5 py-2.5 bg-white hover:bg-gray-100 text-gray-700 border border-gray-200 rounded-xl transition-all shadow-sm font-medium text-sm active:scale-95">取消</button>
+                            class="modal-secondary-button">取消</button>
                     <button @click="saveUiTemplate"
-                        class="px-6 py-2.5 bg-primary-600 hover:bg-primary-700 text-white rounded-xl transition-all shadow-md hover:shadow-lg font-bold text-sm active:scale-95 flex items-center">
+                        class="modal-primary-button">
                         <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7">
                             </path>
@@ -4411,7 +4056,7 @@
             <div
                 class="bg-white rounded-2xl border border-gray-200 w-full max-w-lg flex flex-col shadow-2xl max-h-[94vh] overflow-hidden">
                 <div
-                    class="p-4 md:p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50/80 backdrop-blur-sm flex-shrink-0">
+                    class="editor-modal-header">
                     <div class="flex items-center gap-3">
                         <div class="p-2 bg-primary-50 text-primary-600 rounded-lg">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -4426,7 +4071,7 @@
                         </div>
                     </div>
                     <button @click="showRegexEditor = false"
-                        class="text-gray-400 hover:text-gray-600 hover:bg-gray-100 p-2 rounded-full transition-all">
+                        class="modal-close-button">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                 d="M6 18L18 6M6 6l12 12"></path>
@@ -4572,9 +4217,9 @@
                 <div
                     class="p-4 md:p-5 border-t border-gray-100 flex justify-end space-x-3 bg-gray-50/80 backdrop-blur-sm flex-shrink-0">
                     <button @click="showRegexEditor = false"
-                        class="px-5 py-2.5 bg-white hover:bg-gray-100 text-gray-700 border border-gray-200 rounded-xl transition-all shadow-sm font-medium text-sm active:scale-95">取消</button>
+                            class="modal-secondary-button">取消</button>
                     <button @click="saveRegex"
-                        class="px-6 py-2.5 bg-primary-600 hover:bg-primary-700 text-white rounded-xl transition-all shadow-md hover:shadow-lg font-bold text-sm active:scale-95 flex items-center">
+                        class="modal-primary-button">
                         <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7">
                             </path>
@@ -4591,7 +4236,7 @@
             <div
                 class="bg-white rounded-2xl border border-gray-200 w-full max-w-3xl flex flex-col shadow-2xl max-h-[90vh] overflow-hidden">
                 <div
-                    class="p-4 md:p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50/80 backdrop-blur-sm flex-shrink-0">
+                    class="editor-modal-header">
                     <div class="flex items-center gap-3">
                         <div class="p-2 bg-primary-50 text-primary-600 rounded-lg">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -4606,7 +4251,7 @@
                         </div>
                     </div>
                     <button @click="showActiveToolEditor = false"
-                        class="text-gray-400 hover:text-gray-600 hover:bg-gray-100 p-2 rounded-full transition-all">
+                        class="modal-close-button">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                 d="M6 18L18 6M6 6l12 12"></path>
@@ -4667,9 +4312,9 @@
                 <div
                     class="p-4 md:p-5 border-t border-gray-100 flex justify-end space-x-3 bg-gray-50/80 backdrop-blur-sm flex-shrink-0">
                     <button @click="showActiveToolEditor = false"
-                        class="px-5 py-2.5 bg-white hover:bg-gray-100 text-gray-700 border border-gray-200 rounded-xl transition-all shadow-sm font-medium text-sm active:scale-95">取消</button>
+                            class="modal-secondary-button">取消</button>
                     <button @click="saveActiveTool"
-                        class="px-6 py-2.5 bg-primary-600 hover:bg-primary-700 text-white rounded-xl transition-all shadow-md hover:shadow-lg font-bold text-sm active:scale-95 flex items-center">
+                        class="modal-primary-button">
                         <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7">
                             </path>
@@ -4786,7 +4431,7 @@
                 <div
                     class="p-4 border-t border-gray-100 flex justify-end space-x-3 bg-gray-50/80 backdrop-blur-sm flex-shrink-0">
                     <button @click="showExportModal = false"
-                        class="px-5 py-2.5 bg-white hover:bg-gray-100 text-gray-700 border border-gray-200 rounded-xl transition-all shadow-sm font-medium text-sm active:scale-95">取消</button>
+                            class="modal-secondary-button">取消</button>
                     <button @click="confirmExport" :disabled="selectedExportIndices.size === 0"
                         class="px-6 py-2.5 bg-primary-600 hover:bg-primary-700 text-white rounded-xl transition-all shadow-md hover:shadow-lg font-bold text-sm active:scale-95 flex items-center disabled:opacity-50 disabled:cursor-not-allowed">
                         <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -4803,8 +4448,7 @@
         <div v-if="showCharacterExportModal"
             class="fixed inset-0 z-[90] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fade-in">
             <div class="fixed inset-0" @click="showCharacterExportModal = false"></div>
-            <div
-                class="bg-white rounded-xl border border-gray-200 w-full max-w-sm flex flex-col shadow-2xl transform transition-all scale-100 relative z-10 overflow-hidden">
+            <div class="compact-modal-panel">
                 <div class="p-6">
                     <h3 class="text-xl font-bold text-gray-900 mb-6 flex items-center">
                         <svg class="w-6 h-6 mr-2 text-primary-600" fill="none" stroke="currentColor"
@@ -4817,9 +4461,9 @@
 
                     <div class="grid grid-cols-1 gap-3">
                         <button @click="confirmCharacterExport('json')"
-                            class="flex items-center p-4 bg-gray-50 hover:bg-primary-50 text-gray-700 hover:text-primary-700 rounded-xl transition-all group border border-gray-100 hover:border-primary-200 text-left">
+                            class="choice-card">
                             <div
-                                class="w-10 h-10 bg-white rounded-lg shadow-sm flex items-center justify-center mr-4 group-hover:scale-110 transition-transform flex-shrink-0">
+                                class="choice-card__icon">
                                 <svg class="w-6 h-6 text-primary-600" fill="none" stroke="currentColor"
                                     viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -4833,9 +4477,9 @@
                         </button>
 
                         <button @click="confirmCharacterExport('png')"
-                            class="flex items-center p-4 bg-gray-50 hover:bg-primary-50 text-gray-700 hover:text-primary-700 rounded-xl transition-all group border border-gray-100 hover:border-primary-200 text-left">
+                            class="choice-card">
                             <div
-                                class="w-10 h-10 bg-white rounded-lg shadow-sm flex items-center justify-center mr-4 group-hover:scale-110 transition-transform flex-shrink-0">
+                                class="choice-card__icon">
                                 <svg class="w-6 h-6 text-primary-600" fill="none" stroke="currentColor"
                                     viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -4849,9 +4493,9 @@
                         </button>
 
                         <button @click="confirmCharacterExport('chat')"
-                            class="flex items-center p-4 bg-gray-50 hover:bg-primary-50 text-gray-700 hover:text-primary-700 rounded-xl transition-all group border border-gray-100 hover:border-primary-200 text-left">
+                            class="choice-card">
                             <div
-                                class="w-10 h-10 bg-white rounded-lg shadow-sm flex items-center justify-center mr-4 group-hover:scale-110 transition-transform flex-shrink-0">
+                                class="choice-card__icon">
                                 <svg class="w-6 h-6 text-primary-600" fill="none" stroke="currentColor"
                                     viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -4881,7 +4525,7 @@
                 class="bg-white rounded-2xl border border-gray-200 w-full max-w-3xl flex flex-col shadow-2xl max-h-[94vh] overflow-hidden">
                 <!-- Header -->
                 <div
-                    class="p-4 md:p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50/80 backdrop-blur-sm flex-shrink-0">
+                    class="editor-modal-header">
                     <div class="flex items-center gap-3">
                         <div class="p-2 bg-primary-50 text-primary-600 rounded-lg">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -4897,7 +4541,7 @@
                         </div>
                     </div>
                     <button @click="showWorldInfoEditor = false"
-                        class="text-gray-400 hover:text-gray-600 hover:bg-gray-100 p-2 rounded-full transition-all">
+                        class="modal-close-button">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                 d="M6 18L18 6M6 6l12 12"></path>
@@ -5057,9 +4701,9 @@
                 <div
                     class="p-4 md:p-5 border-t border-gray-100 flex justify-end space-x-3 bg-gray-50/80 backdrop-blur-sm flex-shrink-0 wi-footer">
                     <button @click="showWorldInfoEditor = false"
-                        class="px-5 py-2.5 bg-white hover:bg-gray-100 text-gray-700 border border-gray-200 rounded-xl transition-all shadow-sm font-medium text-sm active:scale-95">取消</button>
+                            class="modal-secondary-button">取消</button>
                     <button @click="saveWorldInfo"
-                        class="px-6 py-2.5 bg-primary-600 hover:bg-primary-700 text-white rounded-xl transition-all shadow-md hover:shadow-lg font-bold text-sm active:scale-95 flex items-center">
+                        class="modal-primary-button">
                         <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7">
                             </path>

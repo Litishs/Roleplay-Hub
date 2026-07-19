@@ -5,22 +5,6 @@ const generateUUID = () => {
                     });
                 };
 
-const formatTimeAgo = (dateString) => {
-                    if (!dateString) return '从未在线';
-                    const date = new Date(dateString);
-                    const now = new Date();
-                    const seconds = Math.floor((now - date) / 1000);
-                    
-                    if (seconds < 60) return '刚刚';
-                    const minutes = Math.floor(seconds / 60);
-                    if (minutes < 60) return `${minutes}分钟前`;
-                    const hours = Math.floor(minutes / 60);
-                    if (hours < 24) return `${hours}小时前`;
-                    const days = Math.floor(hours / 24);
-                    if (days < 30) return `${days}天前`;
-                    return date.toLocaleDateString();
-                };
-
 const parseCotCache = new Map();
 const parseCot = (text) => {
     if (!text) return { cot: '', main: '', sys: '', isFinished: false };
@@ -33,7 +17,7 @@ const parseCot = (text) => {
     let cotContent = '';
     let mainContent = text;
     let isFinished = false;
-    
+
     // 提取 CoT 内容并从正文中移除
     mainContent = mainContent.replace(cotPattern, (match, tag, content) => {
         // 对 CoT 的内容中的 < 符号进行转义，防止 DOMPurify 吞掉类似 <动作> 或 <thinking> 的标签
@@ -58,7 +42,7 @@ const parseCot = (text) => {
         sys = sysMatch[1];
         mainContent = mainContent.slice(0, sysMatch.index).trim();
     }
-    
+
     const result = { cot: cotContent.trim(), main: mainContent.trim(), sys: sys, isFinished };
     parseCotCache.set(text, result);
     // Limit cache size to prevent memory leaks in extremely long sessions

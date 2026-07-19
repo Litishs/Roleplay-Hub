@@ -2,6 +2,89 @@
     const textDecoder = typeof TextDecoder !== 'undefined' ? new TextDecoder('utf-8') : null;
     const textEncoder = typeof TextEncoder !== 'undefined' ? new TextEncoder() : null;
 
+    const imageStyleArtists = Object.freeze({
+        vertical: 'masterpiece, best quality,[[[artist:dishwasher1910]]], {{yd_(orange_maru)}}, [artist:ciloranko], [artist:sho_(sho_lwlw)], [ningen mame], soft lighting,year 2024',
+        comicDoujin: 'masterpiece, best quality, very aesthetic, modern Japanese anime, official anime art, anime key visual, anime screencap, soft cel shading, soft anime coloring, smooth color transitions, natural skin tones, restrained color palette, slightly desaturated, muted colors, soft ambient lighting, gentle contrast, subtle gradients, subtle bloom, detailed anime background',
+        r18: `0.9::misaka_12003-gou ::, dino_(dinoartforame), wanke, liduke, year 2025, realistic, 4k, -2::green ::, textless version, The image is highly intricate finished drawn. Only the character's face is in anime style, but their body is in realistic style. 1.35::A highly finished photo-style artwork that has lively color, graphic texture, realistic skin surface, and lifelike flesh with little obliques::. 1.63::photorealistic::, 1.63::photo(medium)::,
+20::best quality, absurdres, very aesthetic, detailed, masterpiece::,, very aesthetic, masterpiece, no text,`,
+        lolita25d: `20::best quality, absurdres, very aesthetic, detailed, masterpiece::, 20::highly finished::, 10::ultra detailed::, 5::masterpiece::, 5::best quality::,
+
+2.4::kidmo::, 1.2::omone hokoma agm::, 1.1::dino, wanke, liduke::, 0.8::rurudo, mignon, artist:pottsness, artist:toosaka asagi::, 0.7::misaka_12003-gou::, 0.6::artist:chocoan, artist:ciloranko, artist:rhasta, artist:sho_sho_lwlw::, dino_(dinoartforame), agoto, akakura, 0.9::rurudo(Only body shape), mignon(Only body shape) ::
+
+year 2025, textless version, {{petite,loli}}, Petite figure, no text, The image is highly intricate finished drawn. Only the character's face is in anime style, but their body is in realistic style. 1.35::A highly finished photo-style artwork that has graphic texture, realistic skin surface, and lifelike flesh with little obliques::, smooth line, glossy skin, realistic, 4k,
+
+1.63::photorealistic::, 1.63::photo(medium)::, 3::simple background::, 2::depth of field::,
+
+1.5::vivid color, lively color::, desaturated, muted tones, cinematic desaturation, pale aesthetic, silver-toned,
+
+-2::green::, -1.5::vibrant, colorful, saturated::`,
+        anime: '1.4::asanagi::,{{{{{artist:asanagi}}}}},1.2::xiaoluo_xl::,1.3::Artist: misaka_12003-gou::,1.2::Artist:shexyo::,0.7::Artist:b.sa_(bbbs)::,1::Artist:qiandaiyiyu::,1.05::artist:natedecock::,1.05::artist:kunaboto::,0.75::artist:kandata_nijou::,1.05::artist:zer0.zer0 ::,1.05::artist:jasony::,0.75::misaka_12003-gou ::, dino_(dinoartforame), wanke, liduke, year 2025, realistic, 4k, -2::green ::, {textless version, The image is highly intricate finished drawn,write realistically,true to life}, 1.35::A highly finished photo-style artwork that has lively color, graphic texture, realistic skin surface, and lifelike flesh with little obliques::, 1.63::photorealistic::,3::age slider::,1.63::photo(medium)::, 2::best quality, absurdres, very aesthetic, detailed, masterpiece::,-4::Muscle definition, abs::',
+        galgame: 'artist:ningen_mame,, noyu_(noyu23386566),, toosaka asagi,, location,\\n20::best quality, absurdres, very aesthetic, detailed, masterpiece::,:,, very aesthetic, masterpiece, no text,'
+    });
+
+    const getImageStyleArtists = (style, customArtists = '') => {
+        if (style === 'custom') return customArtists || '';
+        const normalizedStyle = style === 'default' ? 'vertical' : style === 'hentai' ? 'r18' : style;
+        return imageStyleArtists[normalizedStyle] || imageStyleArtists.vertical;
+    };
+
+    const normalizeNativeReasoningPart = (value) => {
+        if (value === null || value === undefined) return '';
+        if (typeof value === 'string') return value;
+        if (Array.isArray(value)) return value.map(normalizeNativeReasoningPart).join('');
+        if (typeof value === 'object') {
+            const keys = ['text', 'content', 'summary', 'reasoning', 'reasoning_content', 'thinking', 'thought', 'value'];
+            for (const key of keys) {
+                const text = normalizeNativeReasoningPart(value[key]);
+                if (text) return text;
+            }
+            return '';
+        }
+        return String(value);
+    };
+
+    const extractNativeReasoning = (source = {}) => {
+        if (!source || typeof source !== 'object') return '';
+        const directKeys = ['reasoning_content', 'reasoning', 'thinking', 'thinking_content', 'thought', 'thoughts', 'reasoning_text'];
+        for (const key of directKeys) {
+            const text = normalizeNativeReasoningPart(source[key]);
+            if (text) return text;
+        }
+        if (Array.isArray(source.reasoning_details)) {
+            const text = normalizeNativeReasoningPart(source.reasoning_details);
+            if (text) return text;
+        }
+        if (Array.isArray(source.content)) {
+            return source.content.map(part => {
+                const type = String(part?.type || '').toLowerCase();
+                return type.includes('reason') || type.includes('thinking') || type.includes('thought')
+                    ? normalizeNativeReasoningPart(part)
+                    : '';
+            }).join('');
+        }
+        return '';
+    };
+
+    const normalizeRegexModifiers = (pattern, flags = 'g') => {
+        let normalizedPattern = pattern;
+        let normalizedFlags = flags;
+        for (const modifier of ['s', 'i', 'm']) {
+            const marker = `(?${modifier})`;
+            if (!normalizedPattern.includes(marker)) continue;
+            normalizedPattern = normalizedPattern.split(marker).join('');
+            if (!normalizedFlags.includes(modifier)) normalizedFlags += modifier;
+        }
+        return { pattern: normalizedPattern, flags: normalizedFlags };
+    };
+
+    const protectedContentPattern = /(<!DOCTYPE html>[\s\S]*?<\/html>|<html\b[^>]*>[\s\S]*?<\/html>|<script\b[^>]*>[\s\S]*?<\/script>|<style\b[^>]*>[\s\S]*?<\/style>|<(?:cot|think)>[\s\S]*?(?:<\/(?:cot|think)>|<(?:cot|think)>|$)|```[\s\S]*?```|`[^`]+`|<\/?[a-zA-Z][\w:-]*[^>]*>)/gi;
+    const exactProtectedContentPattern = /^(<!DOCTYPE html>[\s\S]*?<\/html>|<html\b[^>]*>[\s\S]*?<\/html>|<script\b[^>]*>[\s\S]*?<\/script>|<style\b[^>]*>[\s\S]*?<\/style>|<(?:cot|think)>[\s\S]*?(?:<\/(?:cot|think)>|<(?:cot|think)>|$)|```[\s\S]*?```|`[^`]+`|<\/?[a-zA-Z][\w:-]*[^>]*>)$/i;
+
+    const transformUnprotectedText = (text, transform) => String(text || '')
+        .split(protectedContentPattern)
+        .map(part => !part || exactProtectedContentPattern.test(part) ? part : transform(part))
+        .join('');
+
     const encodeUtf8 = (value) => {
         if (textEncoder) return textEncoder.encode(String(value ?? ''));
         const encoded = encodeURIComponent(String(value ?? ''));
@@ -166,7 +249,7 @@
         }
     };
 
-    const toNumber = (value, fallback) => {
+    const toNumber = (value, fallback = null) => {
         if (value === undefined || value === null || value === '') return fallback;
         const parsed = Number(value);
         return Number.isFinite(parsed) ? parsed : fallback;
@@ -410,14 +493,20 @@
         decodeBase64Utf8,
         downloadBlob,
         encodeBase64Utf8,
+        extractNativeReasoning,
         findPngCharacterPayload,
+        getImageStyleArtists,
         imageUrlToPngBytes,
         injectPngTextChunk,
+        normalizeRegexModifiers,
         parseCharacterPayload,
         parsePngCharacterData,
         readPngChunks,
+        toBoolean,
+        toNumber,
         toRegexExportEntry,
         toUiTemplateExportEntry,
-        toWorldInfoExportEntry
+        toWorldInfoExportEntry,
+        transformUnprotectedText
     };
 })();
