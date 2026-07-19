@@ -193,10 +193,56 @@
             -webkit-backdrop-filter: blur(4px) !important;
         }
 
-        @media (max-width: 768px) {
-            #app * {
-                backdrop-filter: none !important;
-                -webkit-backdrop-filter: none !important;
+        @supports (-webkit-touch-callout: none) {
+            @media (hover: none) and (pointer: coarse) {
+                html,
+                body.overflow-hidden {
+                    height: auto;
+                    min-height: 100%;
+                    overflow-x: hidden !important;
+                    overflow-y: auto !important;
+                }
+
+                body.overflow-hidden,
+                #app {
+                    min-height: 100dvh;
+                }
+
+                #app {
+                    height: auto;
+                    overflow: visible;
+                }
+
+                #app .workshop-layout,
+                #app .workshop-content,
+                #app .workshop-main {
+                    height: auto;
+                    overflow: visible;
+                }
+
+                #app .workshop-layout,
+                #app .workshop-main,
+                #app .workshop-scroll {
+                    flex: none;
+                }
+
+                #app .workshop-scroll {
+                    overflow: visible;
+                    padding-bottom: calc(7rem + env(safe-area-inset-bottom));
+                }
+
+                #app .workshop-input-panel {
+                    position: fixed;
+                    right: 0;
+                    bottom: 0;
+                    left: 0;
+                    padding-bottom: max(1rem, env(safe-area-inset-bottom));
+                }
+
+                #app * {
+                    backdrop-filter: none !important;
+                    -webkit-backdrop-filter: none !important;
+                }
             }
         }
 
@@ -1285,7 +1331,7 @@
 
                 <!-- Bottom Input Panel -->
                 <div
-                    class="bg-base-100/95 backdrop-blur-lg border-t border-base-200 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] md:pb-24 shadow-[0_-4px_20px_rgba(0,0,0,0.05)] z-30 shrink-0">
+                    class="workshop-input-panel bg-base-100/95 backdrop-blur-lg border-t border-base-200 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] md:pb-24 shadow-[0_-4px_20px_rgba(0,0,0,0.05)] z-30 shrink-0">
                     <div class="max-w-7xl mx-auto">
                         <!-- Progress Bar -->
                         <transition name="fade">
