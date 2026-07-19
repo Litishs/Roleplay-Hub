@@ -20,6 +20,41 @@
 
         [v-cloak] { display: none !important; }
 
+        .embedded-loading-spinner {
+            width: 2.8125rem;
+            height: 2.8125rem;
+            margin-bottom: 1rem;
+            color: #2563eb;
+            shape-rendering: geometricPrecision;
+            transform: translateZ(0) rotate(0deg);
+            transform-origin: center;
+            backface-visibility: hidden;
+            will-change: transform;
+            animation: embedded-loading-spin 1.05s linear infinite;
+        }
+
+        .embedded-loading-spinner circle {
+            fill: none;
+            stroke: currentColor;
+            stroke-width: 2.25;
+        }
+
+        .embedded-loading-spinner__track {
+            opacity: 0.14;
+        }
+
+        .embedded-loading-spinner__arc {
+            opacity: 0.92;
+            stroke-linecap: round;
+            stroke-dasharray: 42 15;
+        }
+
+        @keyframes embedded-loading-spin {
+            to {
+                transform: translateZ(0) rotate(360deg);
+            }
+        }
+
         .entry-transition {
             position: fixed;
             inset: 0;
@@ -597,6 +632,51 @@
             overflow: hidden;
         }
 
+        .settings-collapse {
+            display: grid;
+            grid-template-rows: 0fr;
+            opacity: 0;
+            pointer-events: none;
+            transition:
+                grid-template-rows 0.36s cubic-bezier(0.22, 1, 0.36, 1),
+                opacity 0.2s ease;
+        }
+
+        .settings-collapse.is-open {
+            grid-template-rows: 1fr;
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .settings-collapse__inner {
+            min-height: 0;
+            overflow: hidden;
+        }
+
+        .settings-collapse__content {
+            opacity: 0.72;
+            transform: translateY(-0.375rem);
+            transition:
+                transform 0.36s cubic-bezier(0.22, 1, 0.36, 1),
+                opacity 0.24s ease;
+        }
+
+        .settings-collapse.is-open .settings-collapse__content {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .settings-collapse-trigger {
+            transition:
+                color 0.22s ease,
+                background-color 0.22s ease,
+                box-shadow 0.22s ease;
+        }
+
+        .settings-collapse-chevron {
+            transition: transform 0.36s cubic-bezier(0.22, 1, 0.36, 1) !important;
+        }
+
         .advanced-nav-list {
             display: grid;
             gap: 0.125rem;
@@ -1125,6 +1205,9 @@
         @media (prefers-reduced-motion: reduce) {
             .advanced-nav-trigger .advanced-nav-chevron,
             .advanced-nav-panel,
+            .settings-collapse,
+            .settings-collapse__content,
+            .settings-collapse-chevron,
             .segmented-switch__indicator {
                 transition-duration: 0.01ms !important;
                 transition-delay: 0s !important;

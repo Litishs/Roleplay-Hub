@@ -439,8 +439,14 @@
                                     </span>
                                     <span class="h-3 w-px rounded-full bg-gray-200"></span>
                                     <span class="inline-flex items-baseline gap-1">
-                                        <span class="text-[13px] font-bold leading-none text-gray-700 desc-panel-stat-number">{{ Number(totalContextLength || 0).toLocaleString() }}</span>
+                                        <span class="text-[13px] font-bold leading-none text-gray-700 desc-panel-stat-number">{{ Number(conversationBodyLength || 0).toLocaleString() }}</span>
                                         <span class="desc-panel-stat-unit">字</span>
+                                        <span v-if="memorySettings.enabled && memorySettings.mode === 'classic'"
+                                            class="inline-flex items-baseline gap-1" title="按当前总结记忆与保留楼层预测">
+                                            <span class="text-gray-700" aria-hidden="true">→</span>
+                                            <span class="text-[13px] font-bold leading-none text-gray-700 desc-panel-stat-number">{{ Number(summaryCompressedBodyLength || 0).toLocaleString() }}</span>
+                                            <span class="desc-panel-stat-unit">字</span>
+                                        </span>
                                     </span>
                                 </div>
                             </div>
@@ -2311,7 +2317,9 @@
                 <div
                     class="bg-white/70 backdrop-blur-sm p-1 rounded-2xl border border-gray-200 shadow-sm mb-4 overflow-hidden">
                     <button @click="showUiTemplateSettings = !showUiTemplateSettings; settingsHelpTopic = ''"
-                        :class="['w-full flex justify-between items-center px-4 py-3 rounded-xl transition-all font-bold',
+                        class="settings-collapse-trigger" aria-controls="ui-template-settings-panel"
+                        :aria-expanded="showUiTemplateSettings"
+                        :class="['w-full flex justify-between items-center px-4 py-3 rounded-xl font-bold',
                                      showUiTemplateSettings ? 'bg-primary-50 text-primary-700' : 'text-gray-700 hover:bg-gray-50']">
                         <span class="flex items-center min-w-0">
                             <span
@@ -2341,14 +2349,18 @@
                                 {{ settings.uiTemplateEnabled ? '已开启' : '已关闭' }}
                             </span>
                             <svg :class="{'transform rotate-180': showUiTemplateSettings}"
-                                class="w-5 h-5 transition-transform duration-300" fill="none" stroke="currentColor"
+                                class="settings-collapse-chevron w-5 h-5" fill="none" stroke="currentColor"
                                 viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7">
                                 </path>
                             </svg>
                         </span>
                     </button>
-                    <div v-show="showUiTemplateSettings" class="px-4 pb-4 pt-3 border-t border-gray-100 animate-fade-in">
+                    <div id="ui-template-settings-panel" class="settings-collapse"
+                        :class="{ 'is-open': showUiTemplateSettings }"
+                        :aria-hidden="!showUiTemplateSettings" :inert="!showUiTemplateSettings">
+                        <div class="settings-collapse__inner">
+                            <div class="settings-collapse__content px-4 pb-4 pt-3 border-t border-gray-100">
                         <div class="flex items-center justify-between mb-3">
                             <div class="flex items-center space-x-3">
                                 <span class="text-sm font-bold text-gray-700">变量分析</span>
@@ -2458,6 +2470,8 @@
                                     class="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary-500">
                             </div>
                         </div>
+                    </div>
+                    </div>
                     </div>
                 </div>
 
@@ -2857,7 +2871,9 @@
                 <div
                     class="bg-white/70 backdrop-blur-sm p-1 rounded-2xl border border-gray-200 shadow-sm mb-4 overflow-hidden">
                     <button @click="showMemorySettings = !showMemorySettings; settingsHelpTopic = ''"
-                        :class="['w-full flex justify-between items-center px-4 py-3 rounded-xl transition-all font-bold',
+                        class="settings-collapse-trigger" aria-controls="memory-settings-panel"
+                        :aria-expanded="showMemorySettings"
+                        :class="['w-full flex justify-between items-center px-4 py-3 rounded-xl font-bold',
                                      showMemorySettings ? 'bg-primary-50 text-primary-700' : 'text-gray-700 hover:bg-gray-50']">
                         <span class="flex items-center">
                             <div
@@ -2876,14 +2892,18 @@
                                 {{ memorySettings.enabled ? '已开启' : '已关闭' }}
                             </span>
                             <svg :class="{'transform rotate-180': showMemorySettings}"
-                                class="w-5 h-5 transition-transform duration-300" fill="none" stroke="currentColor"
+                                class="settings-collapse-chevron w-5 h-5" fill="none" stroke="currentColor"
                                 viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7">
                                 </path>
                             </svg>
                         </span>
                     </button>
-                    <div v-show="showMemorySettings" class="px-4 pb-4 pt-3 border-t border-gray-100 animate-fade-in">
+                    <div id="memory-settings-panel" class="settings-collapse"
+                        :class="{ 'is-open': showMemorySettings }"
+                        :aria-hidden="!showMemorySettings" :inert="!showMemorySettings">
+                        <div class="settings-collapse__inner">
+                            <div class="settings-collapse__content px-4 pb-4 pt-3 border-t border-gray-100">
                         <!-- System Toggle & Extract -->
                         <div class="flex items-center justify-between mb-3">
                             <div class="flex items-center space-x-3">
@@ -3044,7 +3064,7 @@
                                             memorySettings.similarityThreshold + '%'
                                             }}</span>
                                     </div>
-                                    <input type="range" v-model.number="memorySettings.similarityThreshold" min="50" max="100" step="5"
+                                    <input type="range" v-model.number="memorySettings.similarityThreshold" min="40" max="70" step="5"
                                         class="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary-500">
                                 </div>
                             </div>
@@ -3073,6 +3093,33 @@
                                     <span :class="memorySettings.classicModel ? 'text-gray-800 font-mono' : 'text-gray-400'">{{
                                         memorySettings.classicModel || '请选择总结模式副模型' }}</span>
                                 </button>
+                            </div>
+
+                            <div v-if="memorySettings.mode === 'classic'" class="relative bg-gray-50/60 p-3 rounded-xl border border-gray-100">
+                                <div class="flex justify-between items-center mb-2">
+                                    <div class="relative flex items-center">
+                                        <label class="text-xs font-medium text-gray-500">补录并发数</label>
+                                        <button type="button"
+                                            @click.stop="settingsHelpTopic = settingsHelpTopic === 'classicConcurrency' ? '' : 'classicConcurrency'"
+                                            class="settings-help-trigger"
+                                            :class="{ 'is-open': settingsHelpTopic === 'classicConcurrency' }"
+                                            :aria-expanded="settingsHelpTopic === 'classicConcurrency'"
+                                            aria-label="查看补录并发数说明">
+                                            <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                    d="M9.1 9a3 3 0 115.8 1.1c-.6 1.1-1.9 1.3-2.5 2.2-.3.4-.4.8-.4 1.2M12 17h.01"></path>
+                                            </svg>
+                                        </button>
+                                        <div v-if="settingsHelpTopic === 'classicConcurrency'" class="settings-help-popover is-above">
+                                            <span class="settings-help-popover-content">控制总结模式同时处理多少个补录任务。数值越高补录越快，但会同时占用更多 API 并发额度，也更容易触发服务商限流；它只影响处理速度，不改变总结内容和记忆顺序。</span>
+                                        </div>
+                                    </div>
+                                    <span class="text-xs font-mono text-primary-600 bg-primary-50 px-1.5 py-0.5 rounded border border-primary-100">
+                                        {{ memorySettings.classicConcurrency }}并发
+                                    </span>
+                                </div>
+                                <input type="range" v-model.number="memorySettings.classicConcurrency" min="1" max="10" step="1"
+                                    class="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary-500">
                             </div>
 
                             <!-- Context Compression Settings -->
@@ -3107,7 +3154,9 @@
                             </div>
                         </div>
                     </div>
-                </div>
+                    </div>
+                    </div>
+                    </div>
 
                 <!-- Vector Memory View -->
                 <div v-if="memorySettings.enabled && memorySettings.mode === 'vector'"
