@@ -296,19 +296,27 @@ createApp({
             isUpdateScrolledToBottom.value = (el.scrollHeight - el.scrollTop - el.clientHeight) < 10;
         };
         const latestUpdate = reactive({
-            id: 10156, // 确保这是一个五位数ID，每次更新内容时增加这个数字
+            id: 10157, // 确保这是一个五位数ID，每次更新内容时增加这个数字
             date: new Date().toISOString().split('T')[0],
             title: '网站公告',
             content: `
-### RP-Hub 1.7.6
+### RP-Hub 1.7.7
 
-- 为总结模型提示词增加了处理前缀
-- 优化了总结模式记忆片段展示顺序
-- 优化了统计页面的UI
+- 新增总结模式单条/总压缩率查看
+- 新增记忆补录并发数调整选项
+- 新增统计页面筛选功能
+- 优化了总结模式的压缩率与信息密度
+- 优化了记忆系统与UI模板展开折叠的动效
+- 优化了聊天界面功能按钮的样式
+- 优化了统计页面的样式与帮助
+- 优化了进入二级页面时的过渡动效
+- 修复了IOS系统角色卡工坊界面无法滑动的问题
+- 修复了聊天内容编辑气泡宽度异常的问题
+- 修复了单行内容过长时的气泡边际问题
 
 本项目为全开源公益项目，严禁倒卖源码，二改需经作者授权
 
-#### 更新时间：07/16/23:09
+#### 更新时间：07/20/06:12
                     `
         });
 
@@ -1135,11 +1143,9 @@ createApp({
         const VECTOR_KEEP_FLOORS_MIN = 30;
         const VECTOR_KEEP_FLOORS_MAX = 80;
         const VECTOR_KEEP_FLOORS_DEFAULT = 50;
-        const VECTOR_KEEP_FLOORS_OFF = 82;
         const SUMMARY_KEEP_FLOORS_MIN = 10;
         const SUMMARY_KEEP_FLOORS_MAX = 40;
         const SUMMARY_KEEP_FLOORS_DEFAULT = 20;
-        const SUMMARY_KEEP_FLOORS_OFF = 42;
         const LIST_PAGE_SIZE = 10;
         const memories = ref([]);
         const classicMemories = ref([]);
@@ -1158,7 +1164,6 @@ createApp({
         });
         const isBatchExtracting = ref(false);
         const batchExtractProgress = ref({ current: 0, total: 0 });
-        const memoryExtractStatus = ref('waiting');
         const vectorMemorySearchQuery = ref('');
         const vectorMemorySearchResults = ref([]);
         const vectorMemorySearchError = ref('');
@@ -1166,7 +1171,6 @@ createApp({
         const isVectorMemorySearching = ref(false);
         const isClassicBatchExtracting = ref(false);
         const classicBatchExtractProgress = ref({ current: 0, total: 0 });
-        const classicMemoryExtractStatus = ref('waiting');
         let _vectorMemorySearchAbort = null;
         let _isApplyingCharacterScopedData = false;
         let _memoriesLoaded = false; // 标志：防止在记忆加载前 saveData 覆盖已存数据
@@ -1274,7 +1278,6 @@ createApp({
 
         const normalizeKeepFloors = (value, min, max, fallback) => {
             const floors = Number(value);
-            if (floors === 0) return 0;
             if (!Number.isFinite(floors)) return fallback;
             return Math.max(min, Math.min(max, Math.round(floors / 2) * 2));
         };
@@ -1620,6 +1623,17 @@ createApp({
         const tokenUsageHistory = ref([]);
         const tokenUsagePage = ref(1);
         const tokenUsageFilter = ref('all');
+        const tokenUsageTimeFilter = ref('all');
+        const showTokenUsageTimeFilter = ref(false);
+        const tokenUsageTimeFilterOptions = [
+            { value: 'all', label: '全部' },
+            { value: '24h', label: '24小时' },
+            { value: '7d', label: '7天' },
+            { value: '30d', label: '30天' }
+        ];
+        const tokenUsageTimeFilterLabel = computed(() => (
+            tokenUsageTimeFilterOptions.find(option => option.value === tokenUsageTimeFilter.value)?.label || '全部'
+        ));
 
         // Export Modal State
         const showExportModal = ref(false);
@@ -3529,7 +3543,6 @@ ${content}
             let predictedLength = conversationBodyLength.value;
             if (!memorySettings.enabled
                 || memorySettings.mode !== MEMORY_MODE_CLASSIC
-                || memorySettings.summaryKeepFloors <= 0
                 || classicMemories.value.length === 0) return predictedLength;
 
             const messages = getPostprocessedChatMessages(chatHistory.value, { includeSystem: false });
@@ -5300,7 +5313,6 @@ ${content}
 
             if (memorySettings.enabled
                 && memorySettings.mode === MEMORY_MODE_VECTOR
-                && memorySettings.vectorKeepFloors > 0
                 && memories.value.length > 0) {
                 const totalFloors = chatHistoryForContext.length;
                 const keepCount = memorySettings.vectorKeepFloors;
@@ -5345,7 +5357,6 @@ ${content}
                 }
             } else if (memorySettings.enabled
                 && memorySettings.mode === MEMORY_MODE_CLASSIC
-                && memorySettings.summaryKeepFloors > 0
                 && classicMemories.value.length > 0) {
                 const candidateCount = Math.max(0, chatHistoryForContext.length - memorySettings.summaryKeepFloors);
                 if (candidateCount > 0) {
@@ -6181,7 +6192,6 @@ ${content}
             }
             _vectorBatchRescanRequested = false;
             isBatchExtracting.value = false;
-            memoryExtractStatus.value = 'waiting';
         };
 
         const getMemoryEmbeddingModel = () => (memorySettings.embeddingModel || '').trim();
@@ -6394,6 +6404,7 @@ ${content}
                     '必须使用第三人称叙述。人物优先写明确姓名或身份，禁止用“我”“你”等第一、第二人称；多人同场时不要连续使用含义不清的“他”“她”“对方”。',
                     '按实际发生顺序和因果关系组织事实；相同主体、事件或状态的内容合并表达，避免来回复述。每个分句都必须承载明确事实、变化、原因、结果或后续约束。',
                     '完整保留剧情推进、人物行动与对象、他人反应、关键话语的说话人和核心含义，以及关系、立场、态度和情绪的变化与原因。只有原句措辞本身具有承诺、拒绝、威胁、暗号、身份确认等意义时才保留必要原话。',
+                    '完整保留最新对话中明确出现的人物心理活动，包括真实想法、欲望、动机、判断、犹豫、戒备、期待、恐惧、自我欺骗、未说出口的意图及其触发原因。严格区分角色的内心想法、外在表现和他人对此的猜测，不得把猜测写成事实。',
                     '完整保留时间、地点、场景转移、事件先后，以及会影响后续剧情的设定、身体与精神状态、物品状态与归属、能力、身份、秘密、决定、承诺、冲突、计划和未解决事项。',
                     '严格区分每个人知道、误解、隐瞒、猜测或尚未知晓的信息。发生变化的内容要写清变化前后、触发原因和结果；原文含糊或未确认的内容保持含糊，不得推测、补写或编造。',
                     '删除寒暄、修辞、气氛铺陈、重复动作、无新增信息的对白转述和总结过程说明。禁止使用“双方进行了交流”“关系有所发展”“气氛发生变化”“剧情继续推进”“可以看出”等没有具体事实的空话。',
@@ -7082,8 +7093,8 @@ ${content}
         };
 
         const getRetainedRecentMemoryTurns = (messages) => {
-            const keepFloors = Number(memorySettings.vectorKeepFloors) || 0;
-            if (keepFloors <= 0 || !Array.isArray(messages) || messages.length === 0) return new Set();
+            if (!Array.isArray(messages) || messages.length === 0) return new Set();
+            const keepFloors = memorySettings.vectorKeepFloors;
 
             const retainedStartIndex = Math.max(0, messages.length - keepFloors);
             const snapshot = buildConversationTurnSnapshot(messages, { alreadyPostprocessed: true });
@@ -8514,7 +8525,6 @@ ${content}
             let totalAdded = 0;
 
             try {
-                memoryExtractStatus.value = 'extracting';
                 if (!memorySettings.emptyTurns) memorySettings.emptyTurns = {};
                 const uuid = currentCharacter.value.uuid;
                 const emptyLogKey = getMemoryEmptyTurnsKey(uuid);
@@ -8550,26 +8560,15 @@ ${content}
 
                 if (_batchExtractAbort === batchController) {
                     if (totalAdded > 0) {
-                        memoryExtractStatus.value = 'success';
                         if (manual) showToast(`向量补录完成：新增 ${totalAdded} 个分片`, 'success');
-                        setTimeout(() => {
-                            if (memoryExtractStatus.value === 'success') memoryExtractStatus.value = 'waiting';
-                        }, 5000);
                     } else {
-                        memoryExtractStatus.value = 'waiting';
                         if (manual) showNoMemoryNeededModal.value = true;
                     }
                 }
             } catch (error) {
                 if (_batchExtractAbort !== batchController) return;
-                if (error.name === 'AbortError') {
-                    memoryExtractStatus.value = 'waiting';
-                } else {
+                if (error.name !== 'AbortError') {
                     console.error('Vector memory patrol failed:', error);
-                    memoryExtractStatus.value = 'error';
-                    setTimeout(() => {
-                        if (memoryExtractStatus.value === 'error') memoryExtractStatus.value = 'waiting';
-                    }, 5000);
                 }
             } finally {
                 if (_batchExtractAbort === batchController) {
@@ -8585,7 +8584,6 @@ ${content}
             _classicBatchExtractAbort = null;
             _classicBatchRescanRequested = false;
             isClassicBatchExtracting.value = false;
-            classicMemoryExtractStatus.value = 'waiting';
         };
 
         const startClassicBatchMemoryExtraction = async (options = {}) => {
@@ -8605,8 +8603,6 @@ ${content}
             let foundJobs = false;
 
             try {
-                classicMemoryExtractStatus.value = 'extracting';
-
                 while (_classicBatchExtractAbort === batchController && !batchController.signal.aborted) {
                     _classicBatchRescanRequested = false;
                     const snapshot = await ensureClassicMessageIds();
@@ -8675,27 +8671,16 @@ ${content}
 
                 if (_classicBatchExtractAbort === batchController) {
                     if (foundJobs) {
-                        classicMemoryExtractStatus.value = 'success';
                         if (manual) showToast(`总结模式补录完成：新增 ${totalAdded} 条记忆`, 'success');
-                        setTimeout(() => {
-                            if (classicMemoryExtractStatus.value === 'success') classicMemoryExtractStatus.value = 'waiting';
-                        }, 5000);
                     } else {
-                        classicMemoryExtractStatus.value = 'waiting';
                         if (manual) showNoMemoryNeededModal.value = true;
                     }
                 }
             } catch (error) {
                 if (_classicBatchExtractAbort !== batchController) {
                     return;
-                } else if (error.name === 'AbortError') {
-                    classicMemoryExtractStatus.value = 'waiting';
-                } else {
+                } else if (error.name !== 'AbortError') {
                     console.error('Classic memory batch extraction failed:', error);
-                    classicMemoryExtractStatus.value = 'error';
-                    setTimeout(() => {
-                        if (classicMemoryExtractStatus.value === 'error') classicMemoryExtractStatus.value = 'waiting';
-                    }, 5000);
                 }
             } finally {
                 if (_classicBatchExtractAbort === batchController) {
@@ -10556,6 +10541,9 @@ ${memoryFragmentSection}
                 if (showInstructionPanel.value && !e.target.closest('.instruction-panel-container')) {
                     showInstructionPanel.value = false;
                 }
+                if (showTokenUsageTimeFilter.value && !e.target.closest('.token-usage-time-filter-container')) {
+                    showTokenUsageTimeFilter.value = false;
+                }
                 if (showProfileDropdown.value && !e.target.closest('.profile-dropdown-container')) {
                     showProfileDropdown.value = false;
                 }
@@ -10655,21 +10643,27 @@ ${memoryFragmentSection}
         ));
         const keepFloorsSliderMax = computed(() => (
             memorySettings.mode === MEMORY_MODE_CLASSIC
-                ? SUMMARY_KEEP_FLOORS_OFF
-                : VECTOR_KEEP_FLOORS_OFF
+                ? SUMMARY_KEEP_FLOORS_MAX
+                : VECTOR_KEEP_FLOORS_MAX
         ));
         const keepFloorsSlider = computed({
-            get: () => activeKeepFloors.value === 0 ? keepFloorsSliderMax.value : activeKeepFloors.value,
+            get: () => activeKeepFloors.value,
             set: (value) => {
                 if (memorySettings.mode === MEMORY_MODE_CLASSIC) {
-                    memorySettings.summaryKeepFloors = value >= SUMMARY_KEEP_FLOORS_OFF
-                        ? 0
-                        : normalizeKeepFloors(value, SUMMARY_KEEP_FLOORS_MIN, SUMMARY_KEEP_FLOORS_MAX, SUMMARY_KEEP_FLOORS_DEFAULT);
+                    memorySettings.summaryKeepFloors = normalizeKeepFloors(
+                        value,
+                        SUMMARY_KEEP_FLOORS_MIN,
+                        SUMMARY_KEEP_FLOORS_MAX,
+                        SUMMARY_KEEP_FLOORS_DEFAULT
+                    );
                     return;
                 }
-                memorySettings.vectorKeepFloors = value >= VECTOR_KEEP_FLOORS_OFF
-                    ? 0
-                    : normalizeKeepFloors(value, VECTOR_KEEP_FLOORS_MIN, VECTOR_KEEP_FLOORS_MAX, VECTOR_KEEP_FLOORS_DEFAULT);
+                memorySettings.vectorKeepFloors = normalizeKeepFloors(
+                    value,
+                    VECTOR_KEEP_FLOORS_MIN,
+                    VECTOR_KEEP_FLOORS_MAX,
+                    VECTOR_KEEP_FLOORS_DEFAULT
+                );
             }
         });
         const getTokenUsageCategory = (type) => {
@@ -10677,9 +10671,22 @@ ${memoryFragmentSection}
             if (type === 'ui_template') return 'variables';
             return 'chat';
         };
-        const filteredTokenUsageHistory = computed(() => tokenUsageHistory.value.filter(record => (
-            tokenUsageFilter.value === 'all' || getTokenUsageCategory(record.type) === tokenUsageFilter.value
-        )));
+        const tokenUsageTimeRanges = {
+            '24h': 24 * 60 * 60 * 1000,
+            '7d': 7 * 24 * 60 * 60 * 1000,
+            '30d': 30 * 24 * 60 * 60 * 1000
+        };
+        const filteredTokenUsageHistory = computed(() => {
+            const timeRange = tokenUsageTimeRanges[tokenUsageTimeFilter.value];
+            const cutoff = timeRange ? Date.now() - timeRange : 0;
+            return tokenUsageHistory.value.filter(record => {
+                const matchesType = tokenUsageFilter.value === 'all'
+                    || getTokenUsageCategory(record.type) === tokenUsageFilter.value;
+                if (!matchesType || !timeRange) return matchesType;
+                const timestamp = Number(record.timestamp);
+                return Number.isFinite(timestamp) && timestamp >= cutoff;
+            });
+        });
         const tokenUsageStats = computed(() => filteredTokenUsageHistory.value.reduce((stats, record) => {
             ['inputTokens', 'outputTokens', 'cacheReadTokens'].forEach(key => {
                 if (!Number.isFinite(record[key])) return;
@@ -10701,7 +10708,7 @@ ${memoryFragmentSection}
             return filteredTokenUsageHistory.value.slice(start, start + LIST_PAGE_SIZE);
         });
         const classicMemoryPageCount = computed(() => Math.max(1, Math.ceil(classicMemories.value.length / LIST_PAGE_SIZE)));
-        watch(tokenUsageFilter, () => { tokenUsagePage.value = 1; });
+        watch([tokenUsageFilter, tokenUsageTimeFilter], () => { tokenUsagePage.value = 1; });
         watch(tokenUsagePageCount, pageCount => { tokenUsagePage.value = Math.min(tokenUsagePage.value, pageCount); });
         watch(classicMemoryPageCount, pageCount => { classicMemoryPage.value = Math.min(classicMemoryPage.value, pageCount); });
         watch(() => currentCharacter.value?.uuid, () => { classicMemoryPage.value = 1; });
@@ -10731,7 +10738,9 @@ ${memoryFragmentSection}
             showActiveToolEditor,
             showExportModal, sysInstruction, showInstructionPanel, exportItems, selectedExportIndices, // Export Modal
             showContextViewerModal, lastContextMessages, lastTriggeredWorldInfos, lastContextTotalLength, // Context Viewer
-            tokenUsageHistory, tokenUsagePage, tokenUsagePageCount, tokenUsageFilter, filteredTokenUsageHistory, tokenUsageStats, displayedTokenUsageHistory,
+            tokenUsageHistory, tokenUsagePage, tokenUsagePageCount, tokenUsageFilter, tokenUsageTimeFilter,
+            showTokenUsageTimeFilter, tokenUsageTimeFilterOptions, tokenUsageTimeFilterLabel,
+            filteredTokenUsageHistory, tokenUsageStats, displayedTokenUsageHistory,
             formatTokenCount, formatTokenAggregate, formatTokenUsageTime, getTokenUsageTypeLabel, clearTokenUsageHistory,
             showCharacterExportModal, openCharacterExportModal, confirmCharacterExport, // Character Export Modal
             showUpdateModal, updateCountdown, latestUpdate, closeUpdateModal, isUpdateScrolledToBottom, checkUpdateScroll, // Update Modal
@@ -10754,7 +10763,6 @@ ${memoryFragmentSection}
             isAnyMemoryProcessing: computed(() => isBatchExtracting.value || isClassicBatchExtracting.value),
             isActiveBatchExtracting: computed(() => memorySettings.mode === MEMORY_MODE_CLASSIC ? isClassicBatchExtracting.value : isBatchExtracting.value),
             activeBatchExtractProgress: computed(() => memorySettings.mode === MEMORY_MODE_CLASSIC ? classicBatchExtractProgress.value : batchExtractProgress.value),
-            activeMemoryExtractStatus: computed(() => memorySettings.mode === MEMORY_MODE_CLASSIC ? classicMemoryExtractStatus.value : memoryExtractStatus.value),
             vectorMemorySearchQuery, vectorMemorySearchResults, vectorMemorySearchError, vectorMemorySearchSortMode, isVectorMemorySearching,
             startBatchMemoryExtraction, abortBatchExtraction, searchVectorMemories, clearVectorMemorySearch,
             activeKeepFloors, keepFloorsSlider, keepFloorsSliderMin, keepFloorsSliderMax,
@@ -10789,80 +10797,43 @@ ${memoryFragmentSection}
                 snapshot.turns.forEach(turnInfo => {
                     getClassicTurnSourceIds(turnInfo, 'assistant').forEach(id => currentTurnsByAssistantId.set(id, turnInfo.turn));
                 });
-                const getLiveText = (ids, fallback) => {
-                    const text = (ids || [])
+                const getLiveLength = (ids, fallback) => {
+                    const texts = (ids || [])
                         .map(id => messagesById.get(id))
                         .filter(Boolean)
-                        .map(message => stripVectorMemoryCode(parseCot(message.content || '').main))
-                        .filter(Boolean)
-                        .join('\n\n');
-                    return text || fallback || '';
+                        .map(message => parseCot(message.content || '').main);
+                    if (texts.length > 0) {
+                        return texts.reduce((total, text) => total + text.length, 0);
+                    }
+                    return parseCot(fallback || '').main.length;
                 };
                 const sortedMemories = [...classicMemories.value]
-                    .map(memory => ({
-                        ...memory,
-                        displayTurn: (memory.sourceAssistantIds || []).map(id => currentTurnsByAssistantId.get(id)).find(Boolean) || memory.turn,
-                        sourceUserText: getLiveText(memory.sourceUserIds, memory.sourceUserText),
-                        sourceAssistantText: getLiveText(memory.sourceAssistantIds, memory.sourceAssistantText)
-                    }))
+                    .map(memory => {
+                        const userChars = getLiveLength(memory.sourceUserIds, memory.sourceUserText);
+                        const assistantChars = getLiveLength(memory.sourceAssistantIds, memory.sourceAssistantText);
+                        const summaryChars = parseCot(memory.summary || '').main.length;
+                        return {
+                            ...memory,
+                            displayTurn: (memory.sourceAssistantIds || []).map(id => currentTurnsByAssistantId.get(id)).find(Boolean) || memory.turn,
+                            originalChars: userChars + assistantChars,
+                            compressedChars: userChars + summaryChars
+                        };
+                    })
                     .sort((a, b) => (b.displayTurn || 0) - (a.displayTurn || 0));
                 const start = (classicMemoryPage.value - 1) * LIST_PAGE_SIZE;
                 return sortedMemories.slice(start, start + LIST_PAGE_SIZE);
             }),
             memoryStats: computed(() => {
-                const total = memories.value.length + classicMemories.value.length;
-                let enabled = 0;
-                let vector = 0;
-                let vectorEnabled = 0;
-                let vectorEmbeddable = 0;
-                let vectorTotalChars = 0;
-                const vectorTurns = new Set();
-
-                memories.value.forEach(m => {
-                    const isEnabled = m.enabled !== false;
-                    if (isEnabled) enabled++;
-
-                    if (isVectorMemory(m)) {
-                        vector++;
-                        if (isEnabled) {
-                            vectorEnabled++;
-                            vectorEmbeddable++;
-                        }
-                        if (m.turn) vectorTurns.add(m.turn);
-                        vectorTotalChars += (m.paragraph || m.summary || '').length;
-                    }
-                });
-                let classicEnabled = 0;
-                let classicTotalChars = 0;
-                const classicTurns = new Set();
-                classicMemories.value.forEach(memory => {
-                    if (memory.enabled !== false) classicEnabled++;
-                    if (memory.turn) classicTurns.add(memory.turn);
-                    classicTotalChars += String(memory.summary || '').length;
-                });
-                enabled += classicEnabled;
-                const isClassicMode = memorySettings.mode === MEMORY_MODE_CLASSIC;
+                const vectorMemories = memories.value.filter(isVectorMemory);
+                const vector = vectorMemories.length;
+                const classic = classicMemories.value.length;
+                const vectorTurns = new Set(vectorMemories.map(memory => memory.turn).filter(Boolean)).size;
 
                 return {
-                    total,
-                    enabled,
                     vector,
-                    vectorEnabled,
-                    vectorDisabled: vector - vectorEnabled,
-                    vectorEmbeddable,
-                    vectorTurns: vectorTurns.size,
-                    classic: classicMemories.value.length,
-                    classicEnabled,
-                    classicTurns: classicTurns.size,
-                    turnCount: vectorTurns.size,
-                    totalChars: vectorTotalChars + classicTotalChars,
-                    vectorTotalChars,
-                    classicTotalChars,
-                    activeMode: isClassicMode ? MEMORY_MODE_CLASSIC : MEMORY_MODE_VECTOR,
-                    activeTotal: isClassicMode ? classicMemories.value.length : vector,
-                    activeEnabled: isClassicMode ? classicEnabled : vectorEnabled,
-                    activeTurnCount: isClassicMode ? classicTurns.size : vectorTurns.size,
-                    activeTotalChars: isClassicMode ? classicTotalChars : vectorTotalChars
+                    vectorTurns,
+                    classic,
+                    activeTotal: memorySettings.mode === MEMORY_MODE_CLASSIC ? classic : vector
                 };
             }),
             clearAllMemories: () => {

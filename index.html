@@ -109,6 +109,9 @@
         <symbol id="icon-import" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
         </symbol>
+        <symbol id="icon-arrow-down" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v14m0 0l-5-5m5 5l5-5"></path>
+        </symbol>
     </svg>
     <div class="entry-transition" aria-hidden="true">
         <div class="entry-transition-brand">
@@ -214,6 +217,16 @@
                     </svg>
                     <span v-show="!isSidebarCollapsed" class="whitespace-nowrap overflow-hidden">聊天</span>
                 </button>
+                <button @click="currentView = 'usage'; closeMobileMenu()"
+                    title="用量统计"
+                    :class="['sidebar-nav-button flex items-center rounded-xl transition-all duration-200 font-medium', currentView === 'usage' ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900', isSidebarCollapsed ? 'w-12 h-12 mx-auto justify-center p-0' : 'w-full px-3 py-2.5']">
+                    <svg class="w-5 h-5" :class="isSidebarCollapsed ? 'mr-0' : 'mr-3'" fill="none" stroke="currentColor"
+                        viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M4 19V9m5 10V5m5 14v-7m5 7V3M3 21h18"></path>
+                    </svg>
+                    <span v-show="!isSidebarCollapsed" class="whitespace-nowrap overflow-hidden">用量统计</span>
+                </button>
                 <button @click="currentView = 'memory'; closeMobileMenu()"
                     title="记忆系统"
                     :class="['sidebar-nav-button flex items-center rounded-xl transition-all duration-200 font-medium', currentView === 'memory' ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900', isSidebarCollapsed ? 'w-12 h-12 mx-auto justify-center p-0' : 'w-full px-3 py-2.5']">
@@ -279,7 +292,7 @@
                     :class="{ 'is-open': isAdvancedNavOpen && !isSidebarCollapsed }">
                     <button @click="toggleAdvancedNav"
                         class="sidebar-nav-button advanced-nav-trigger flex items-center rounded-xl transition-all duration-200 font-medium"
-                        :class="[['presets', 'worldinfo', 'regex', 'tools', 'usage'].includes(currentView) ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900', isSidebarCollapsed ? 'w-12 h-12 mx-auto justify-center p-0' : 'w-full px-3 py-2.5']"
+                        :class="[['presets', 'worldinfo', 'regex', 'tools'].includes(currentView) ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900', isSidebarCollapsed ? 'w-12 h-12 mx-auto justify-center p-0' : 'w-full px-3 py-2.5']"
                         title="高级"
                         aria-controls="advanced-nav-panel"
                         :aria-expanded="isAdvancedNavOpen && !isSidebarCollapsed">
@@ -344,16 +357,6 @@
                                         </path>
                                     </svg>
                                     <span>工具</span>
-                                </button>
-                                <button @click="currentView = 'usage'; closeMobileMenu()"
-                                    class="sidebar-nav-button advanced-nav-item transition-all duration-200"
-                                    :class="currentView === 'usage' ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'"
-                                    title="统计">
-                                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"
-                                            d="M4 19V9m5 10V5m5 14v-7m5 7V3M3 21h18"></path>
-                                    </svg>
-                                    <span>统计</span>
                                 </button>
                             </div>
                         </div>
@@ -550,11 +553,8 @@
                 <!-- Chat Messages -->
                 <div ref="chatContainer" @click="showChatModelSelector = false"
                     @scroll="handleChatScroll"
-                    class="flex-1 overflow-y-auto overflow-x-hidden px-2 pt-14 md:pt-16 pb-40 md:pb-56 relative z-0 transition-all duration-500"
-                    :class="[
-                        settings.immersiveMode ? 'space-y-12 md:space-y-16' : 'space-y-10 md:space-y-14',
-                        !settings.useCharacterBackground || !currentCharacter || !currentCharacter?.avatar ? 'bg-gray-50' : ''
-                    ]">
+                    class="flex-1 overflow-y-auto overflow-x-hidden px-2 pt-14 md:pt-16 pb-44 md:pb-60 relative z-0 space-y-14 md:space-y-16 transition-all duration-500"
+                    :class="!settings.useCharacterBackground || !currentCharacter || !currentCharacter?.avatar ? 'bg-gray-50' : ''">
                     <div v-if="!currentCharacter"
                         class="flex flex-col items-center justify-center h-full text-gray-500">
                         <div class="w-24 h-24 bg-gray-200 rounded-full mb-4 flex items-center justify-center">
@@ -585,7 +585,7 @@
                         :class="['flex w-full scroll-reveal-container', settings.immersiveMode ? 'immersive-message-row' : '', msg.isSelf ? 'justify-end' : 'justify-start', msg.skipReveal ? 'reveal-active' : (settings.immersiveMode ? 'scroll-reveal-center' : (msg.isSelf ? 'scroll-reveal-right' : 'scroll-reveal-left'))]"
                         :style="{ transitionDelay: (displayIndex % 5) * 50 + 'ms' }">
                         <div
-                            :class="['flex', settings.immersiveMode ? 'immersive-message-shell' : '', msg.isEditing_Message ? 'w-full max-w-full' : ['md:max-w-[75%] lg:max-w-[70%]', settings.immersiveMode ? 'max-w-full' : 'max-w-[99%]'], messageUsesWideLayout(msg) ? 'w-full' : '', msg.isSelf ? 'flex-row-reverse' : 'flex-row']">
+                            :class="['flex md:max-w-[75%] lg:max-w-[70%]', settings.immersiveMode ? 'immersive-message-shell max-w-full' : 'max-w-[99%]', messageUsesWideLayout(msg) ? 'w-full' : '', msg.isSelf ? 'flex-row-reverse' : 'flex-row']">
                             <!-- Avatar -->
                             <div v-show="!settings.immersiveMode"
                                 :class="['flex-shrink-0 select-none', msg.shouldAnimate ? 'animate-message-fade-in' : '']">
@@ -838,10 +838,10 @@
 
                                     <!-- Message Actions -->
                                     <div v-if="!msg.isEditing_Message && !isMessageThinkingOrRunning(msg) && !(index === chatHistory.length - 1 && !msg.isSelf && (isGenerating || isRemoteGenerating)) && !(msg.isSelf && isConversationBusy && !chatHistory.slice(index + 1).some(m => m.isSelf))"
-                                        :class="['absolute bottom-0 -mb-8 md:-mb-10 flex items-center space-x-1 md:space-x-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-200', msg.isSelf ? 'right-0' : 'left-0']">
+                                        :class="['message-action-bar absolute bottom-0 -mb-11 md:-mb-12 flex items-center opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-200', msg.isSelf ? 'right-0' : 'left-0']">
                                         <button v-if="index === chatHistory.length - 1"
                                             @click="regenerateMessage(index)"
-                                            class="message-action-button msg-action-btn"
+                                            class="message-action-button"
                                             title="重新生成">
                                             <svg class="w-3.5 h-3.5 md:w-4 md:h-4" fill="none" stroke="currentColor"
                                                 viewBox="0 0 24 24">
@@ -851,7 +851,7 @@
                                             </svg>
                                         </button>
                                         <button @click="editMessage(index)"
-                                            class="message-action-button msg-action-btn"
+                                            class="message-action-button"
                                             title="编辑">
                                             <svg class="w-3.5 h-3.5 md:w-4 md:h-4" fill="none" stroke="currentColor"
                                                 viewBox="0 0 24 24">
@@ -861,7 +861,7 @@
                                             </svg>
                                         </button>
                                         <button @click="copyMessage(msg.content)"
-                                            class="message-action-button msg-action-btn"
+                                            class="message-action-button"
                                             title="复制">
                                             <svg class="w-3.5 h-3.5 md:w-4 md:h-4" fill="none" stroke="currentColor"
                                                 viewBox="0 0 24 24">
@@ -871,7 +871,7 @@
                                             </svg>
                                         </button>
                                         <button @click="deleteMessage(index)"
-                                            class="message-action-button message-action-button--danger msg-action-btn"
+                                            class="message-action-button message-action-button--danger"
                                             title="删除">
                                             <svg class="w-3.5 h-3.5 md:w-4 md:h-4" fill="none" stroke="currentColor"
                                                 viewBox="0 0 24 24">
@@ -1002,50 +1002,7 @@
                             </div>
 
                             <!-- Right controls: Model switcher -->
-                            <div class="flex items-center gap-2">
-                                <!-- Memory Engine State Display -->
-                                <transition enter-active-class="transition-all duration-300 ease-out"
-                                    enter-from-class="opacity-0 translate-x-4"
-                                    enter-to-class="opacity-100 translate-x-0"
-                                    leave-active-class="transition-all duration-200 ease-in"
-                                    leave-from-class="opacity-100 translate-x-0"
-                                    leave-to-class="opacity-0 translate-x-4">
-                                    <div v-if="memorySettings.enabled"
-                                        class="flex items-center justify-center h-7 min-w-[34px] md:min-w-[36px] px-2 rounded-full border shadow-sm transition-all duration-300 cursor-default"
-                                        :class="{
-                                             'bg-blue-50 text-blue-700 border-blue-200': hasActiveToolInlineWork,
-                                             'bg-white text-gray-500 border-gray-200': !hasActiveToolInlineWork && activeMemoryExtractStatus === 'waiting',
-                                             'bg-amber-50 text-amber-600 border-amber-200': !hasActiveToolInlineWork && activeMemoryExtractStatus === 'extracting',
-                                             'bg-[#ecfdf5] text-[#047857] border-[#a7f3d0]': !hasActiveToolInlineWork && activeMemoryExtractStatus === 'success',
-                                             'bg-red-50 text-red-600 border-red-200': !hasActiveToolInlineWork && activeMemoryExtractStatus === 'error',
-                                         }">
-
-                                        <!-- Spinner for generating -->
-                                        <svg v-if="hasActiveToolInlineWork || activeMemoryExtractStatus === 'extracting'"
-                                            :class="['w-3 h-3 animate-spin', hasActiveToolInlineWork ? 'text-blue-600' : 'text-amber-500']" fill="none"
-                                            stroke="currentColor" viewBox="0 0 24 24">
-                                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor"
-                                                stroke-width="4"></circle>
-                                            <path class="opacity-75" fill="currentColor"
-                                                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z">
-                                            </path>
-                                        </svg>
-
-                                        <!-- Dot for success -->
-                                        <div v-else-if="activeMemoryExtractStatus === 'success'"
-                                            class="w-1.5 h-1.5 rounded-full bg-[#10b981] shadow-[0_0_4px_rgba(16,185,129,0.5)]">
-                                        </div>
-
-                                        <!-- Dot for error -->
-                                        <div v-else-if="activeMemoryExtractStatus === 'error'"
-                                            class="w-1.5 h-1.5 rounded-full bg-red-500 shadow-[0_0_4px_rgba(239,68,68,0.5)] animate-pulse">
-                                        </div>
-
-                                        <!-- Dot for waiting -->
-                                        <div v-else class="w-1.5 h-1.5 rounded-full bg-gray-400"></div>
-
-                                    </div>
-                                </transition>
+                            <div class="flex items-center">
                                 <div class="relative">
                                     <!-- Model Selector Popup -->
                                     <transition enter-active-class="transition-all duration-150 ease-out"
@@ -2682,7 +2639,7 @@
 
             <!-- Token Usage View -->
             <div v-if="currentView === 'usage'" class="management-view">
-                <settings-page-header title="Token 统计" @menu="toggleMobileMenu">
+                <settings-page-header title="用量统计" @menu="toggleMobileMenu">
                     <template #icon>
                         <svg class="w-6 h-6 md:w-7 md:h-7 mr-2 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 19V9m5 10V5m5 14v-7m5 7V3M3 21h18"></path>
@@ -2698,46 +2655,119 @@
                     </button>
                 </settings-page-header>
 
-                <div class="mb-4 overflow-x-auto pb-0.5">
-                    <div class="inline-flex flex-shrink-0 rounded-xl border border-gray-200 bg-gray-100/70 p-1">
-                        <button @click="tokenUsageFilter = 'all'"
-                            :class="['rounded-lg px-3 py-1.5 text-xs font-medium transition-colors', tokenUsageFilter === 'all' ? 'bg-white text-primary-700 shadow-sm' : 'text-gray-500 hover:text-gray-700']">
+                <div class="mb-4 flex items-center gap-2">
+                    <div class="segmented-switch segmented-switch--compact segmented-switch--four min-w-0 flex-1">
+                        <div class="segmented-switch__indicator" :class="{
+                            'is-position-2': tokenUsageFilter === 'chat',
+                            'is-position-3': tokenUsageFilter === 'memory',
+                            'is-position-4': tokenUsageFilter === 'variables'
+                        }"></div>
+                        <button type="button" @click="tokenUsageFilter = 'all'"
+                            class="segmented-switch__option" :class="{ 'is-active': tokenUsageFilter === 'all' }">
                             全部
                         </button>
-                        <button @click="tokenUsageFilter = 'chat'"
-                            :class="['rounded-lg px-3 py-1.5 text-xs font-medium transition-colors', tokenUsageFilter === 'chat' ? 'bg-white text-primary-700 shadow-sm' : 'text-gray-500 hover:text-gray-700']">
+                        <button type="button" @click="tokenUsageFilter = 'chat'"
+                            class="segmented-switch__option" :class="{ 'is-active': tokenUsageFilter === 'chat' }">
                             主对话
                         </button>
-                        <button @click="tokenUsageFilter = 'memory'"
-                            :class="['rounded-lg px-3 py-1.5 text-xs font-medium transition-colors', tokenUsageFilter === 'memory' ? 'bg-white text-primary-700 shadow-sm' : 'text-gray-500 hover:text-gray-700']">
+                        <button type="button" @click="tokenUsageFilter = 'memory'"
+                            class="segmented-switch__option" :class="{ 'is-active': tokenUsageFilter === 'memory' }">
                             记忆系统
                         </button>
-                        <button @click="tokenUsageFilter = 'variables'"
-                            :class="['rounded-lg px-3 py-1.5 text-xs font-medium transition-colors', tokenUsageFilter === 'variables' ? 'bg-white text-primary-700 shadow-sm' : 'text-gray-500 hover:text-gray-700']">
+                        <button type="button" @click="tokenUsageFilter = 'variables'"
+                            class="segmented-switch__option" :class="{ 'is-active': tokenUsageFilter === 'variables' }">
                             变量分析
                         </button>
                     </div>
+                    <div class="token-usage-time-filter-container relative flex-none">
+                        <button type="button" @click="showTokenUsageTimeFilter = !showTokenUsageTimeFilter"
+                            class="flex h-10 w-10 items-center justify-center rounded-xl border shadow-sm transition-all active:scale-95"
+                            :class="tokenUsageTimeFilter === 'all' ? 'border-gray-200 bg-white text-gray-500 hover:bg-gray-50 hover:text-gray-700' : 'border-primary-200 bg-primary-50 text-primary-600'"
+                            :title="'时间范围：' + tokenUsageTimeFilterLabel" aria-label="筛选 Token 记录时间范围"
+                            :aria-expanded="showTokenUsageTimeFilter">
+                            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M4 5h16l-6 7v5l-4 2v-7L4 5z"></path>
+                            </svg>
+                        </button>
+                        <transition enter-active-class="transition duration-150 ease-out"
+                            enter-from-class="opacity-0 translate-y-1 scale-95"
+                            enter-to-class="opacity-100 translate-y-0 scale-100"
+                            leave-active-class="transition duration-100 ease-in"
+                            leave-from-class="opacity-100 translate-y-0 scale-100"
+                            leave-to-class="opacity-0 translate-y-1 scale-95">
+                            <div v-if="showTokenUsageTimeFilter"
+                                class="absolute right-0 top-full z-30 mt-2 w-36 origin-top-right rounded-xl border border-gray-200 bg-white p-1.5 shadow-xl ring-1 ring-black/5">
+                                <button v-for="option in tokenUsageTimeFilterOptions" :key="option.value" type="button"
+                                    @click="tokenUsageTimeFilter = option.value; showTokenUsageTimeFilter = false"
+                                    class="flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm font-medium transition-colors"
+                                    :class="tokenUsageTimeFilter === option.value ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-800'">
+                                    <span>{{ option.label }}</span>
+                                    <svg v-if="tokenUsageTimeFilter === option.value" class="h-4 w-4" fill="none"
+                                        stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                                    </svg>
+                                </button>
+                            </div>
+                        </transition>
+                    </div>
                 </div>
 
-                <div class="mb-6 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
-                    <div class="grid grid-cols-3">
-                        <div class="border-r border-gray-100 p-4 md:p-5">
+                <div class="mb-6 rounded-2xl border border-gray-200 bg-white shadow-sm">
+                    <div class="grid grid-cols-2">
+                        <div class="relative border-r border-gray-100 p-4 md:p-5">
                             <div class="flex items-center gap-2 text-[11px] font-medium text-gray-400">
-                                <span class="h-1.5 w-1.5 rounded-full bg-primary-500"></span>输入
+                                <span class="h-1.5 w-1.5 rounded-full bg-primary-500"></span>
+                                <div class="flex items-center">
+                                    <span>输入</span>
+                                    <button type="button"
+                                        @click.stop="settingsHelpTopic = settingsHelpTopic === 'totalInputTokens' ? '' : 'totalInputTokens'"
+                                        class="settings-help-trigger"
+                                        :class="{ 'is-open': settingsHelpTopic === 'totalInputTokens' }"
+                                        :aria-expanded="settingsHelpTopic === 'totalInputTokens'"
+                                        aria-label="查看总输入 Token 说明">
+                                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                d="M9.1 9a3 3 0 115.8 1.1c-.6 1.1-1.9 1.3-2.5 2.2-.3.4-.4.8-.4 1.2M12 17h.01"></path>
+                                        </svg>
+                                    </button>
+                                </div>
                             </div>
-                            <div class="mt-2 text-lg font-bold text-gray-800 font-mono">{{ formatTokenAggregate(tokenUsageStats.inputTokens, tokenUsageStats.inputTokensReports) }}</div>
+                            <div class="mt-2 flex items-end gap-1 font-mono leading-none">
+                                <span class="text-lg font-bold text-gray-800">{{ formatTokenAggregate(tokenUsageStats.inputTokens, tokenUsageStats.inputTokensReports) }}</span>
+                                <span class="inline-flex items-center gap-0.5 text-base font-normal text-gray-400">
+                                    <svg class="h-4 w-4 flex-none" fill="none" stroke="currentColor" aria-hidden="true"><use href="#icon-arrow-down"></use></svg>
+                                    {{ formatTokenAggregate(tokenUsageStats.cacheReadTokens, tokenUsageStats.cacheReadTokensReports) }}
+                                </span>
+                            </div>
+                            <div v-if="settingsHelpTopic === 'totalInputTokens'" class="settings-help-popover token-usage-help-popover">
+                                <span class="settings-help-popover-content">汇总当前类型和时间筛选范围内，API 实际返回的输入 Token。右侧灰色数字表示其中的缓存读取 Token，已经包含在输入总量内；接口未提供时按 0 统计。</span>
+                            </div>
                         </div>
-                        <div class="border-r border-gray-100 p-4 md:p-5">
+                        <div class="relative p-4 md:p-5">
                             <div class="flex items-center gap-2 text-[11px] font-medium text-gray-400">
-                                <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>缓存读取
+                                <span class="h-1.5 w-1.5 rounded-full bg-yellow-400"></span>
+                                <div class="flex items-center">
+                                    <span>输出</span>
+                                    <button type="button"
+                                        @click.stop="settingsHelpTopic = settingsHelpTopic === 'totalOutputTokens' ? '' : 'totalOutputTokens'"
+                                        class="settings-help-trigger"
+                                        :class="{ 'is-open': settingsHelpTopic === 'totalOutputTokens' }"
+                                        :aria-expanded="settingsHelpTopic === 'totalOutputTokens'"
+                                        aria-label="查看总输出 Token 说明">
+                                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                d="M9.1 9a3 3 0 115.8 1.1c-.6 1.1-1.9 1.3-2.5 2.2-.3.4-.4.8-.4 1.2M12 17h.01"></path>
+                                        </svg>
+                                    </button>
+                                </div>
                             </div>
-                            <div class="mt-2 text-lg font-bold text-gray-800 font-mono">{{ formatTokenAggregate(tokenUsageStats.cacheReadTokens, tokenUsageStats.cacheReadTokensReports) }}</div>
-                        </div>
-                        <div class="p-4 md:p-5">
-                            <div class="flex items-center gap-2 text-[11px] font-medium text-gray-400">
-                                <span class="h-1.5 w-1.5 rounded-full bg-yellow-400"></span>输出
+                            <div class="mt-2 flex items-end gap-1 font-mono leading-none">
+                                <span class="text-lg font-bold text-gray-800">{{ formatTokenAggregate(tokenUsageStats.outputTokens, tokenUsageStats.outputTokensReports) }}</span>
                             </div>
-                            <div class="mt-2 text-lg font-bold text-gray-800 font-mono">{{ formatTokenAggregate(tokenUsageStats.outputTokens, tokenUsageStats.outputTokensReports) }}</div>
+                            <div v-if="settingsHelpTopic === 'totalOutputTokens'" class="settings-help-popover token-usage-help-popover is-right">
+                                <span class="settings-help-popover-content">汇总当前类型和时间筛选范围内，API 实际返回的输出 Token。没有返回用量的字段按 0 统计。</span>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -2764,24 +2794,26 @@
                             </div>
                             <time class="flex-shrink-0 text-xs text-gray-400">{{ formatTokenUsageTime(record.timestamp) }}</time>
                         </div>
-                        <div class="grid grid-cols-3 gap-2">
+                        <div class="grid grid-cols-2 gap-2">
                             <div class="rounded-xl border border-gray-100 bg-gray-50/70 px-3 py-3">
                                 <div class="flex items-center gap-1.5 text-xs font-medium text-gray-500">
                                     <span class="h-1.5 w-1.5 rounded-full bg-primary-500"></span>输入
                                 </div>
-                                <div class="mt-1.5 text-base font-bold text-gray-800 font-mono">{{ formatTokenCount(record.inputTokens) }}</div>
-                            </div>
-                            <div class="rounded-xl border border-gray-100 bg-gray-50/70 px-3 py-3">
-                                <div class="flex items-center gap-1.5 text-xs font-medium text-gray-500">
-                                    <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>缓存读取
+                                <div class="mt-1.5 flex items-end gap-1 font-mono leading-none">
+                                    <span class="text-base font-bold text-gray-800">{{ formatTokenCount(record.inputTokens) }}</span>
+                                    <span class="inline-flex items-center gap-0.5 text-sm font-normal text-gray-400">
+                                        <svg class="h-3.5 w-3.5 flex-none" fill="none" stroke="currentColor" aria-hidden="true"><use href="#icon-arrow-down"></use></svg>
+                                        {{ formatTokenCount(record.cacheReadTokens) }}
+                                    </span>
                                 </div>
-                                <div class="mt-1.5 text-base font-bold text-gray-800 font-mono">{{ formatTokenCount(record.cacheReadTokens) }}</div>
                             </div>
                             <div class="rounded-xl border border-gray-100 bg-gray-50/70 px-3 py-3">
                                 <div class="flex items-center gap-1.5 text-xs font-medium text-gray-500">
                                     <span class="h-1.5 w-1.5 rounded-full bg-yellow-400"></span>输出
                                 </div>
-                                <div class="mt-1.5 text-base font-bold text-gray-800 font-mono">{{ formatTokenCount(record.outputTokens) }}</div>
+                                <div class="mt-1.5 flex items-end gap-1 font-mono leading-none">
+                                    <span class="text-base font-bold text-gray-800">{{ formatTokenCount(record.outputTokens) }}</span>
+                                </div>
                             </div>
                         </div>
                     </article>
@@ -2844,28 +2876,6 @@
                             <svg class="w-5 h-5" fill="none" stroke="currentColor"><use href="#icon-delete"></use></svg>
                         </button>
                 </settings-page-header>
-
-                <!-- Stats Bar -->
-                <div v-if="memoryStats.activeTotal > 0"
-                    class="flex items-center flex-wrap gap-3 mb-4 text-xs font-medium text-gray-500">
-                    <div class="flex items-center gap-1.5 bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-100">
-                        <svg class="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10">
-                            </path>
-                        </svg>
-                        {{ memoryStats.activeTotal }} 个分片
-                    </div>
-                    <div v-if="memoryStats.activeTurnCount > 0"
-                        class="flex items-center gap-1.5 bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-100">
-                        <svg class="w-3.5 h-3.5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15">
-                            </path>
-                        </svg>
-                        {{ memoryStats.activeTurnCount }} 次对话
-                    </div>
-                </div>
 
                 <!-- Memory Settings (Collapsible like World Info) -->
                 <div
@@ -3115,7 +3125,7 @@
                                         </div>
                                     </div>
                                     <span class="text-xs font-mono text-primary-600 bg-primary-50 px-1.5 py-0.5 rounded border border-primary-100">
-                                        {{ memorySettings.classicConcurrency }}并发
+                                        {{ memorySettings.classicConcurrency }} 并发
                                     </span>
                                 </div>
                                 <input type="range" v-model.number="memorySettings.classicConcurrency" min="1" max="10" step="1"
@@ -3140,12 +3150,12 @@
                                                 </svg>
                                             </button>
                                             <div v-if="settingsHelpTopic === 'keepFloors'" class="settings-help-popover is-above">
-                                                <span class="settings-help-popover-content">决定最近多少楼原始对话保留在上下文中，更早的内容会由记忆引擎替代。总结模式可选 10–40 楼，向量模式可选 30–80 楼；滑块每次调整 2 楼，始终保持双数。数值越大，保留的原文越多、上下文占用也越高，拖到最右侧会保留全部原始消息。</span>
+                                                <span class="settings-help-popover-content">决定最近多少楼原始对话保留在上下文中，更早的内容会由记忆引擎替代。总结模式可选 10–40 楼，向量模式可选 30–80 楼；滑块每次调整 2 楼，始终保持双数。数值越大，保留的原文越多、上下文占用也越高。</span>
                                             </div>
                                         </div>
                                         <span
                                             class="text-xs font-mono text-primary-600 bg-primary-50 px-1.5 py-0.5 rounded border border-primary-100">{{
-                                            activeKeepFloors === 0 ? '关闭' : activeKeepFloors + ' 楼'
+                                            activeKeepFloors + ' 楼'
                                             }}</span>
                                     </div>
                                     <input :key="memorySettings.mode" type="range" v-model.number="keepFloorsSlider" :min="keepFloorsSliderMin" :max="keepFloorsSliderMax" step="2"
@@ -3268,23 +3278,20 @@
                         <div v-else class="space-y-3">
                             <article v-for="memory in displayedClassicMemories" :key="memory.id"
                                 class="rounded-xl border border-gray-100 bg-white px-3.5 py-3 shadow-sm">
-                                <div class="flex items-center justify-between gap-3 mb-3">
-                                    <span class="text-[10px] font-mono text-primary-700 bg-primary-50 border border-primary-100 rounded-md px-2 py-0.5">
-                                        第 {{ memory.displayTurn || '?' }} 轮
-                                    </span>
-                                </div>
-                                <div class="space-y-2.5">
-                                    <details class="group rounded-lg border border-gray-100 bg-gray-50/60 px-3 py-2">
-                                        <summary class="cursor-pointer text-[10px] font-bold text-gray-500 select-none">查看用户原文</summary>
-                                        <p class="mt-2 text-xs text-gray-600 leading-relaxed whitespace-pre-line">{{ memory.sourceUserText || '原消息不可用' }}</p>
-                                    </details>
-                                    <details class="group rounded-lg border border-gray-100 bg-gray-50/60 px-3 py-2">
-                                        <summary class="cursor-pointer text-[10px] font-bold text-gray-500 select-none">查看 AI 原文</summary>
-                                        <p class="mt-2 text-xs text-gray-600 leading-relaxed whitespace-pre-line">{{ memory.sourceAssistantText || '原消息不可用' }}</p>
-                                    </details>
-                                    <div class="rounded-lg border border-primary-100 bg-primary-50/50 px-3 py-2.5">
-                                        <p class="text-xs text-gray-700 leading-relaxed whitespace-pre-line">{{ memory.summary }}</p>
+                                <div class="mb-3 flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 pb-2.5">
+                                    <div class="flex items-center gap-2">
+                                        <span class="h-1.5 w-1.5 rounded-full bg-primary-500"></span>
+                                        <span class="text-sm font-medium text-gray-800">第 {{ memory.displayTurn || '?' }} 轮</span>
                                     </div>
+                                    <div class="flex items-baseline gap-1 text-[13px] font-medium text-gray-400"
+                                        title="本轮原始正文 → 使用总结后的正文">
+                                        <span>{{ Number(memory.originalChars || 0).toLocaleString() }}字</span>
+                                        <span class="text-gray-300" aria-hidden="true">→</span>
+                                        <span class="font-medium leading-none text-gray-700">{{ Number(memory.compressedChars || 0).toLocaleString() }}字</span>
+                                    </div>
+                                </div>
+                                <div class="rounded-lg border border-primary-100 bg-primary-50/50 px-3 py-2.5">
+                                    <p class="text-xs text-gray-700 leading-relaxed whitespace-pre-line">{{ memory.summary }}</p>
                                 </div>
                             </article>
                             <nav v-if="classicMemoryPageCount > 1" class="flex items-center justify-center gap-2 pt-1" aria-label="总结模式记忆分页">
