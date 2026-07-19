@@ -4078,11 +4078,16 @@ ${content}
             : `${settings.apiUrl}/v1/${path}`;
 
         const fetchModels = async (isManual = false) => {
+            const apiKey = String(settings.apiKey || '').trim();
+            if (!apiKey) {
+                if (isManual) showToast('请先填写当前 API 预设的 Key', 'info');
+                return;
+            }
             try {
                 if (isManual) showToast('正在获取模型列表...', 'info');
                 const url = getApiEndpoint('models');
                 const response = await fetch(url, {
-                    headers: { 'Authorization': `Bearer ${settings.apiKey}` }
+                    headers: { 'Authorization': `Bearer ${apiKey}` }
                 });
                 if (!response.ok) throw new Error('Failed to fetch models');
                 const data = await response.json();

@@ -16,32 +16,26 @@
     <script src="../assets/js/card-utils.js"></script>
     <script src="../assets/js/ui-select.js"></script>
     <style>
-        html,
-        body {
-            width: 100%;
-            height: 100%;
-            overflow: hidden;
-        }
-
-        @supports (height: 100dvh) {
-            html,
-            body {
-                height: 100dvh;
-            }
-        }
-
-        html {
-            -webkit-text-size-adjust: 100% !important;
-            -moz-text-size-adjust: 100% !important;
-            -ms-text-size-adjust: 100% !important;
-            text-size-adjust: 100% !important;
-        }
-
         :root {
+            --app-visual-height: 100vh;
             --app-font-modern: "Inter", "HarmonyOS Sans SC", "MiSans", "OPPO Sans", "Alibaba PuHuiTi 3.0", "Alibaba PuHuiTi", "Noto Sans SC", "Source Han Sans SC", "Microsoft YaHei UI", "Segoe UI", Arial, sans-serif;
             --app-font-system: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", Arial, sans-serif;
             --app-font-serif: "Lora", "Noto Serif SC", "Source Han Serif SC", "Source Han Serif CN", STSong, SimSun, Georgia, Cambria, "Times New Roman", Times, serif;
             --app-font-family: var(--app-font-modern);
+        }
+
+        @supports (height: 100dvh) {
+            :root {
+                --app-visual-height: 100dvh;
+            }
+        }
+
+        html {
+            height: 100%;
+            -webkit-text-size-adjust: 100% !important;
+            -moz-text-size-adjust: 100% !important;
+            -ms-text-size-adjust: 100% !important;
+            text-size-adjust: 100% !important;
         }
 
         :root[data-app-font="serif"] {
@@ -57,6 +51,9 @@
         }
 
         body {
+            width: 100%;
+            height: var(--app-visual-height, 100%);
+            overflow: hidden;
             font-family: var(--app-font-family) !important;
             font-weight: 500 !important;
             background-color: #f3f4f6;
@@ -66,38 +63,20 @@
 
         #app {
             font-family: var(--app-font-family) !important;
-            height: 100%;
-            min-height: 0;
-            overflow: hidden;
-        }
-
-        .workshop-layout {
-            flex: 1 1 0%;
-            height: 0;
+            height: var(--app-visual-height, 100%);
             min-height: 0;
         }
 
+        .workshop-layout,
         .workshop-content,
         .workshop-main {
-            height: 100%;
             min-height: 0;
-            overflow: hidden;
-        }
-
-        .workshop-scroll,
-        .workshop-sidebar-scroll,
-        .overflow-y-auto {
-            -webkit-overflow-scrolling: touch;
         }
 
         .workshop-scroll,
         .workshop-sidebar-scroll {
-            flex: 1 1 0%;
-            height: 0;
+            -webkit-overflow-scrolling: touch;
             min-height: 0;
-            overflow-y: scroll;
-            touch-action: pan-y;
-            overscroll-behavior-y: contain;
         }
 
         .font-normal {
@@ -321,7 +300,7 @@
                             class="relative bg-base-200/50 hover:bg-base-200 py-1 px-4 rounded-xl flex items-center justify-between w-64 md:w-[24rem] h-[2.35rem] border border-base-200/60 backdrop-blur-md shadow-inner transition-colors list-none cursor-pointer focus:outline-none">
                             <span
                                 class="text-xs md:text-sm font-mono font-semibold truncate text-base-content w-full text-left">{{
-                                options.customModels[activeModelType] || 'Unknown Model' }}</span>
+                                options.customModels[activeModelType] || '未设置模型' }}</span>
                             <svg class="w-4 h-4 ml-2 opacity-50 shrink-0" fill="none" stroke="currentColor"
                                 viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -336,8 +315,7 @@
                                     @click="setActiveModel('quality')"
                                     :class="{'bg-base-200/80 font-bold': activeModelType === 'quality'}"
                                     class="py-3 px-4">
-                                    <span class="font-mono text-xs w-full truncate">{{ options.customModels.quality
-                                        }}</span>
+                                    <span class="font-mono text-xs w-full truncate">{{ options.customModels.quality || '未设置' }}</span>
                                 </a>
                             </li>
                             <li>
@@ -345,16 +323,14 @@
                                     @click="setActiveModel('balanced')"
                                     :class="{'bg-base-200/80 font-bold': activeModelType === 'balanced'}"
                                     class="py-3 px-4">
-                                    <span class="font-mono text-xs w-full truncate">{{ options.customModels.balanced
-                                        }}</span>
+                                    <span class="font-mono text-xs w-full truncate">{{ options.customModels.balanced || '未设置' }}</span>
                                 </a>
                             </li>
                             <li>
                                 <a onclick="this.closest('details').removeAttribute('open')"
                                     @click="setActiveModel('fast')"
                                     :class="{'bg-base-200/80 font-bold': activeModelType === 'fast'}" class="py-3 px-4">
-                                    <span class="font-mono text-xs w-full truncate">{{ options.customModels.fast
-                                        }}</span>
+                                    <span class="font-mono text-xs w-full truncate">{{ options.customModels.fast || '未设置' }}</span>
                                 </a>
                             </li>
                         </ul>
@@ -1510,7 +1486,7 @@
     </div>
 
     <script>
-        const { createApp, ref, reactive, computed, watch, onMounted, nextTick } = Vue;
+        const { createApp, ref, reactive, computed, watch, onMounted, onBeforeUnmount, nextTick } = Vue;
         const AddItemButton = {
             emits: ['add'],
             template: `
@@ -1592,14 +1568,6 @@
 - 环境和场景描写不要包裹在圆括号内。
 `.slice(1, -1);
 
-                onMounted(() => {
-                    // 模拟主站的 triggerSlash 功能，用于预览调试
-                    window.triggerSlash = (text) => {
-                        console.log('[Preview] triggerSlash called:', text);
-                        showToast(`触发：发送消息 "${text}"`, 'info');
-                    };
-                });
-
                 // State
                 const showSettings = ref(false);
                 const showPreview = ref(false);
@@ -1645,15 +1613,7 @@
                 };
 
                 watch(activeTab, () => {
-                    Vue.nextTick(updateGlider);
-                });
-
-                // Initial and Resize
-                onMounted(() => {
-                    Vue.nextTick(() => {
-                        updateGlider();
-                        window.addEventListener('resize', updateGlider);
-                    });
+                    nextTick(updateGlider);
                 });
 
                 // Persist active index
@@ -1747,8 +1707,8 @@
                             applyFontFamily(mainSettings.fontFamily);
 
                             // Sync API
-                            if (mainSettings.apiUrl) api.url = mainSettings.apiUrl;
-                            if (mainSettings.apiKey) api.key = mainSettings.apiKey;
+                            api.url = mainSettings.apiUrl || '';
+                            api.key = mainSettings.apiKey || '';
 
                             // Sync Image Gen
                             // Always sync key even if empty to ensure reset
@@ -1764,14 +1724,14 @@
                             }
 
                             // Sync Models
-                            if (mainSettings.qualityModel) options.customModels.quality = mainSettings.qualityModel;
-                            if (mainSettings.balancedModel) options.customModels.balanced = mainSettings.balancedModel;
-                            if (mainSettings.fastModel) options.customModels.fast = mainSettings.fastModel;
+                            options.customModels.quality = mainSettings.qualityModel || '';
+                            options.customModels.balanced = mainSettings.balancedModel || '';
+                            options.customModels.fast = mainSettings.fastModel || '';
                             const syncedModelType = getActiveModelTypeFromMainSettings(mainSettings);
                             if (syncedModelType) activeModelType.value = syncedModelType;
 
                             // Update current active api.model
-                            api.model = options.customModels[activeModelType.value] || mainSettings.model || api.model;
+                            api.model = options.customModels[activeModelType.value] || mainSettings.model || '';
                         }
                     });
 
@@ -1791,20 +1751,17 @@
                     avatarStyle: 'default',
                     imageGenKey: '',
                     customModels: {
-                        quality: 'gemini-3.1-pro-preview-high',
-                        balanced: 'gemini-3-flash-preview-high',
-                        fast: 'gemini-3.1-flash-lite-preview-thinking'
+                        quality: '',
+                        balanced: '',
+                        fast: ''
                     }
                 };
-                const options = reactive(savedOptions ? { ...defaultOptions, ...JSON.parse(savedOptions) } : defaultOptions);
-
-                // Validate backward compatibility for customModels
-                if (!options.customModels || typeof options.customModels !== 'object') {
-                    options.customModels = { ...defaultOptions.customModels };
-                }
-                if (!options.customModels.quality) options.customModels.quality = defaultOptions.customModels.quality;
-                if (!options.customModels.balanced) options.customModels.balanced = defaultOptions.customModels.balanced;
-                if (!options.customModels.fast) options.customModels.fast = defaultOptions.customModels.fast;
+                const savedOptionValues = savedOptions ? JSON.parse(savedOptions) : {};
+                const options = reactive({
+                    ...defaultOptions,
+                    ...savedOptionValues,
+                    customModels: { ...defaultOptions.customModels }
+                });
                 if (typeof options.resetOnLoad === 'undefined') options.resetOnLoad = false;
 
 
@@ -1813,27 +1770,25 @@
                 options.generateExtra = true;
 
                 watch(options, (newVal) => {
-                    localStorage.setItem('ai_chargen_options', JSON.stringify(newVal));
+                    const { customModels, ...persistentOptions } = newVal;
+                    localStorage.setItem('ai_chargen_options', JSON.stringify(persistentOptions));
                 }, { deep: true });
 
-                // Check if we also need to persist api config... API keys are not in `options` natively here.
-                // Assuming api url and key are static or initialized here.
-                const defaultApi = {
-                    url: 'https://sta1n.zeabur.app/v1',
-                    key: 'sk-Vk78S1r6mjBc2YpzFkzcTRMLohBf5jlam4YYeK8WSl4hTszN',
-                    model: 'gemini-3.1-pro-preview-high',
+                localStorage.removeItem('ai_chargen_api');
+                const api = reactive({
+                    url: '',
+                    key: '',
+                    model: '',
                     stream: true
-                };
-
-                const savedApi = localStorage.getItem('ai_chargen_api');
-                const parsedSavedApi = savedApi ? JSON.parse(savedApi) : {};
-
-                const api = reactive({ ...defaultApi, ...parsedSavedApi });
+                });
                 const getApiBaseUrl = () => {
                     const baseUrl = api.url.replace(/\/+$/, '');
                     return baseUrl.endsWith('/v1') ? baseUrl : `${baseUrl}/v1`;
                 };
                 const requestWorkshopCompletion = (messages, { stream, temperature }) => {
+                    if (!String(api.url || '').trim()) throw new Error('请先填写当前 API 预设的地址');
+                    if (!String(api.key || '').trim()) throw new Error('请先填写当前 API 预设的 Key');
+                    if (!String(api.model || '').trim()) throw new Error('请先在主界面选择模型');
                     const apiUrl = getApiBaseUrl();
                     console.log('%c[Workshop AI Request]', 'color: #3b82f6; font-weight: bold;', { url: apiUrl, model: api.model });
                     return fetch(`${apiUrl}/chat/completions`, {
@@ -1846,13 +1801,6 @@
                         signal: abortController.value.signal
                     });
                 };
-
-                // Make sure activeModelType mapping updates correctly
-                api.model = options.customModels[activeModelType.value] || api.model;
-
-                watch(api, (newVal) => {
-                    localStorage.setItem('ai_chargen_api', JSON.stringify(newVal));
-                }, { deep: true });
 
                 const targetFields = ['name', 'description', 'personality', 'first_mes', 'creator_notes', 'system_prompt', 'post_history_instructions'];
 
@@ -3449,12 +3397,61 @@ ${FIRST_MESSAGE_FINAL_CHECKS}
                 };
 
                 watch(prompt, () => {
-                    Vue.nextTick(autoResize);
+                    nextTick(autoResize);
                 });
 
-                // Initialize resize on mount just in case
+                let viewportFrame = null;
+                let lastViewportHeight = 0;
+                const syncVisualViewportHeight = () => {
+                    if (window.innerWidth > 768) {
+                        lastViewportHeight = 0;
+                        document.documentElement.style.removeProperty('--app-visual-height');
+                        return;
+                    }
+                    const viewport = window.visualViewport;
+                    const height = (viewport?.height || window.innerHeight || document.documentElement.clientHeight)
+                        + (viewport?.offsetTop || 0);
+                    const safeHeight = Math.max(320, Math.round(height));
+                    if (Math.abs(safeHeight - lastViewportHeight) < 2) return;
+                    lastViewportHeight = safeHeight;
+                    document.documentElement.style.setProperty('--app-visual-height', `${safeHeight}px`);
+                };
+                const scheduleViewportSync = () => {
+                    if (viewportFrame) cancelAnimationFrame(viewportFrame);
+                    viewportFrame = requestAnimationFrame(() => {
+                        viewportFrame = null;
+                        syncVisualViewportHeight();
+                    });
+                };
+                const handleViewportResize = () => {
+                    updateGlider();
+                    scheduleViewportSync();
+                };
+
                 onMounted(() => {
-                    Vue.nextTick(autoResize);
+                    window.triggerSlash = (text) => {
+                        console.log('[Preview] triggerSlash called:', text);
+                        showToast(`触发：发送消息 "${text}"`, 'info');
+                    };
+                    nextTick(() => {
+                        updateGlider();
+                        autoResize();
+                    });
+                    window.addEventListener('resize', handleViewportResize, { passive: true });
+                    window.addEventListener('orientationchange', handleViewportResize, { passive: true });
+                    window.visualViewport?.addEventListener('resize', scheduleViewportSync, { passive: true });
+                    window.visualViewport?.addEventListener('scroll', scheduleViewportSync, { passive: true });
+                    scheduleViewportSync();
+                });
+
+                onBeforeUnmount(() => {
+                    window.removeEventListener('resize', handleViewportResize);
+                    window.removeEventListener('orientationchange', handleViewportResize);
+                    window.visualViewport?.removeEventListener('resize', scheduleViewportSync);
+                    window.visualViewport?.removeEventListener('scroll', scheduleViewportSync);
+                    if (viewportFrame) cancelAnimationFrame(viewportFrame);
+                    document.documentElement.style.removeProperty('--app-visual-height');
+                    delete window.triggerSlash;
                 });
 
                 // Avatar Caching Logic
@@ -3575,7 +3572,7 @@ ${FIRST_MESSAGE_FINAL_CHECKS}
                     }
 
                     // 强制 UI 更新后再开始生成
-                    await Vue.nextTick();
+                    await nextTick();
 
                     showToast('开始生成...', 'info');
                     isGenerating.value = true;
