@@ -79,6 +79,25 @@
             min-height: 0;
         }
 
+        @media (max-width: 768px) {
+            .workshop-layout {
+                display: flex;
+                flex-direction: column;
+            }
+
+            .workshop-layout > .workshop-content,
+            .workshop-content > .workshop-main,
+            .workshop-main > .workshop-scroll {
+                flex: 1 1 0%;
+                height: auto;
+                min-height: 0;
+            }
+
+            .workshop-main > .workshop-scroll {
+                overflow-y: auto;
+            }
+        }
+
         .font-normal {
             font-weight: 500 !important;
         }
