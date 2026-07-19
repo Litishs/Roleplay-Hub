@@ -79,25 +79,6 @@
             min-height: 0;
         }
 
-        @media (max-width: 768px) {
-            .workshop-layout {
-                display: flex;
-                flex-direction: column;
-            }
-
-            .workshop-layout > .workshop-content,
-            .workshop-content > .workshop-main,
-            .workshop-main > .workshop-scroll {
-                flex: 1 1 0%;
-                height: auto;
-                min-height: 0;
-            }
-
-            .workshop-main > .workshop-scroll {
-                overflow-y: auto;
-            }
-        }
-
         .font-normal {
             font-weight: 500 !important;
         }
@@ -210,6 +191,13 @@
         #my-drawer:checked~.drawer-side>.drawer-overlay {
             backdrop-filter: blur(4px) !important;
             -webkit-backdrop-filter: blur(4px) !important;
+        }
+
+        @media (max-width: 768px) {
+            #app * {
+                backdrop-filter: none !important;
+                -webkit-backdrop-filter: none !important;
+            }
         }
 
         /* Custom Spring Animation for Avatar */
@@ -3419,34 +3407,6 @@ ${FIRST_MESSAGE_FINAL_CHECKS}
                     nextTick(autoResize);
                 });
 
-                let viewportFrame = null;
-                let lastViewportHeight = 0;
-                const syncVisualViewportHeight = () => {
-                    if (window.innerWidth > 768) {
-                        lastViewportHeight = 0;
-                        document.documentElement.style.removeProperty('--app-visual-height');
-                        return;
-                    }
-                    const viewport = window.visualViewport;
-                    const height = (viewport?.height || window.innerHeight || document.documentElement.clientHeight)
-                        + (viewport?.offsetTop || 0);
-                    const safeHeight = Math.max(320, Math.round(height));
-                    if (Math.abs(safeHeight - lastViewportHeight) < 2) return;
-                    lastViewportHeight = safeHeight;
-                    document.documentElement.style.setProperty('--app-visual-height', `${safeHeight}px`);
-                };
-                const scheduleViewportSync = () => {
-                    if (viewportFrame) cancelAnimationFrame(viewportFrame);
-                    viewportFrame = requestAnimationFrame(() => {
-                        viewportFrame = null;
-                        syncVisualViewportHeight();
-                    });
-                };
-                const handleViewportResize = () => {
-                    updateGlider();
-                    scheduleViewportSync();
-                };
-
                 onMounted(() => {
                     window.triggerSlash = (text) => {
                         console.log('[Preview] triggerSlash called:', text);
@@ -3456,20 +3416,11 @@ ${FIRST_MESSAGE_FINAL_CHECKS}
                         updateGlider();
                         autoResize();
                     });
-                    window.addEventListener('resize', handleViewportResize, { passive: true });
-                    window.addEventListener('orientationchange', handleViewportResize, { passive: true });
-                    window.visualViewport?.addEventListener('resize', scheduleViewportSync, { passive: true });
-                    window.visualViewport?.addEventListener('scroll', scheduleViewportSync, { passive: true });
-                    scheduleViewportSync();
+                    window.addEventListener('resize', updateGlider, { passive: true });
                 });
 
                 onBeforeUnmount(() => {
-                    window.removeEventListener('resize', handleViewportResize);
-                    window.removeEventListener('orientationchange', handleViewportResize);
-                    window.visualViewport?.removeEventListener('resize', scheduleViewportSync);
-                    window.visualViewport?.removeEventListener('scroll', scheduleViewportSync);
-                    if (viewportFrame) cancelAnimationFrame(viewportFrame);
-                    document.documentElement.style.removeProperty('--app-visual-height');
+                    window.removeEventListener('resize', updateGlider);
                     delete window.triggerSlash;
                 });
 
