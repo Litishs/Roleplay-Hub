@@ -66,13 +66,22 @@
 
         #app {
             font-family: var(--app-font-family) !important;
+            height: 100%;
+            min-height: 0;
+            overflow: hidden;
+        }
+
+        .workshop-layout {
+            flex: 1 1 0%;
+            height: 0;
             min-height: 0;
         }
 
-        .workshop-layout,
         .workshop-content,
         .workshop-main {
+            height: 100%;
             min-height: 0;
+            overflow: hidden;
         }
 
         .workshop-scroll,
@@ -83,7 +92,10 @@
 
         .workshop-scroll,
         .workshop-sidebar-scroll {
+            flex: 1 1 0%;
+            height: 0;
             min-height: 0;
+            overflow-y: scroll;
             touch-action: pan-y;
             overscroll-behavior-y: contain;
         }

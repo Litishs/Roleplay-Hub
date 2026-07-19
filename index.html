@@ -228,26 +228,19 @@
                         <span class="inline-block w-2 h-2 rounded-full bg-primary-500 memory-extracting"></span>
                     </span>
                 </button>
-                <button @click="currentView = 'tools'; closeMobileMenu()"
-                    title="工具"
-                    :class="['sidebar-nav-button flex items-center rounded-xl transition-all duration-200 font-medium', currentView === 'tools' ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900', isSidebarCollapsed ? 'w-12 h-12 mx-auto justify-center p-0' : 'w-full px-3 py-2.5']">
+                <button @click="currentView = 'uitemplates'; closeMobileMenu()"
+                    title="UI模板"
+                    :class="['sidebar-nav-button flex items-center rounded-xl transition-all duration-200 font-medium', currentView === 'uitemplates' ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900', isSidebarCollapsed ? 'w-12 h-12 mx-auto justify-center p-0' : 'w-full px-3 py-2.5']">
                     <svg class="w-5 h-5" :class="isSidebarCollapsed ? 'mr-0' : 'mr-3'" fill="none" stroke="currentColor"
                         viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94L14.7 6.3z">
+                            d="M4 5a2 2 0 012-2h12a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm4 3h8M8 12h8M8 16h5">
                         </path>
                     </svg>
-                    <span v-show="!isSidebarCollapsed" class="whitespace-nowrap overflow-hidden">工具</span>
-                </button>
-                <button @click="currentView = 'usage'; closeMobileMenu()"
-                    title="统计"
-                    :class="['sidebar-nav-button flex items-center rounded-xl transition-all duration-200 font-medium', currentView === 'usage' ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900', isSidebarCollapsed ? 'w-12 h-12 mx-auto justify-center p-0' : 'w-full px-3 py-2.5']">
-                    <svg class="w-5 h-5" :class="isSidebarCollapsed ? 'mr-0' : 'mr-3'" fill="none" stroke="currentColor"
-                        viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M4 19V9m5 10V5m5 14v-7m5 7V3M3 21h18"></path>
-                    </svg>
-                    <span v-show="!isSidebarCollapsed" class="whitespace-nowrap overflow-hidden">统计</span>
+                    <span v-show="!isSidebarCollapsed" class="whitespace-nowrap overflow-hidden">UI模板</span>
+                    <span v-if="!isSidebarCollapsed && uiTemplateUpdateStatus.state === 'running'" class="ml-auto">
+                        <span class="inline-block w-2 h-2 rounded-full bg-primary-500 memory-extracting"></span>
+                    </span>
                 </button>
                 <button @click="currentView = 'characters'; closeMobileMenu()"
                     title="角色卡管理"
@@ -282,25 +275,11 @@
                     <span v-show="!isSidebarCollapsed" class="whitespace-nowrap overflow-hidden">万相广场</span>
                 </button>
 
-                <button @click="currentView = 'uitemplates'; closeMobileMenu()"
-                    title="UI模板"
-                    :class="['sidebar-nav-button flex items-center rounded-xl transition-all duration-200 font-medium', currentView === 'uitemplates' ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900', isSidebarCollapsed ? 'w-12 h-12 mx-auto justify-center p-0' : 'w-full px-3 py-2.5']">
-                    <svg class="w-5 h-5" :class="isSidebarCollapsed ? 'mr-0' : 'mr-3'" fill="none" stroke="currentColor"
-                        viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M4 5a2 2 0 012-2h12a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm4 3h8M8 12h8M8 16h5">
-                        </path>
-                    </svg>
-                    <span v-show="!isSidebarCollapsed" class="whitespace-nowrap overflow-hidden">UI模板</span>
-                    <span v-if="!isSidebarCollapsed && uiTemplateUpdateStatus.state === 'running'" class="ml-auto">
-                        <span class="inline-block w-2 h-2 rounded-full bg-primary-500 memory-extracting"></span>
-                    </span>
-                </button>
                 <div class="advanced-nav"
                     :class="{ 'is-open': isAdvancedNavOpen && !isSidebarCollapsed }">
                     <button @click="toggleAdvancedNav"
                         class="sidebar-nav-button advanced-nav-trigger flex items-center rounded-xl transition-all duration-200 font-medium"
-                        :class="[['presets', 'worldinfo', 'regex'].includes(currentView) ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900', isSidebarCollapsed ? 'w-12 h-12 mx-auto justify-center p-0' : 'w-full px-3 py-2.5']"
+                        :class="[['presets', 'worldinfo', 'regex', 'tools', 'usage'].includes(currentView) ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900', isSidebarCollapsed ? 'w-12 h-12 mx-auto justify-center p-0' : 'w-full px-3 py-2.5']"
                         title="高级"
                         aria-controls="advanced-nav-panel"
                         :aria-expanded="isAdvancedNavOpen && !isSidebarCollapsed">
@@ -354,6 +333,27 @@
                                             d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path>
                                     </svg>
                                     <span>正则</span>
+                                </button>
+                                <button @click="currentView = 'tools'; closeMobileMenu()"
+                                    class="sidebar-nav-button advanced-nav-item transition-all duration-200"
+                                    :class="currentView === 'tools' ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'"
+                                    title="工具">
+                                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"
+                                            d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94L14.7 6.3z">
+                                        </path>
+                                    </svg>
+                                    <span>工具</span>
+                                </button>
+                                <button @click="currentView = 'usage'; closeMobileMenu()"
+                                    class="sidebar-nav-button advanced-nav-item transition-all duration-200"
+                                    :class="currentView === 'usage' ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'"
+                                    title="统计">
+                                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"
+                                            d="M4 19V9m5 10V5m5 14v-7m5 7V3M3 21h18"></path>
+                                    </svg>
+                                    <span>统计</span>
                                 </button>
                             </div>
                         </div>
