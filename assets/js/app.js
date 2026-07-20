@@ -1290,10 +1290,11 @@ createApp({
             return Math.max(CLASSIC_MEMORY_MIN_CONCURRENCY, Math.min(CLASSIC_MEMORY_MAX_CONCURRENCY, Math.round(concurrency)));
         };
 
-        const normalizeMemorySettings = () => {
+        const normalizeMemorySettings = (savedSettings = {}) => {
             if (!memorySettings.classicModel && memorySettings.model) {
                 memorySettings.classicModel = String(memorySettings.model).trim();
             }
+            const legacyKeepFloors = savedSettings?.keepFloors;
             ['model', 'autoExtract', 'keepFloors', `re${'rankEnabled'}`, `re${'rankModel'}`].forEach(key => {
                 delete memorySettings[key];
             });
@@ -1304,13 +1305,13 @@ createApp({
                     : MEMORY_MODE_CLASSIC;
             memorySettings.classicModel = String(memorySettings.classicModel || '').trim();
             memorySettings.vectorKeepFloors = normalizeKeepFloors(
-                memorySettings.vectorKeepFloors,
+                savedSettings?.vectorKeepFloors ?? legacyKeepFloors ?? memorySettings.vectorKeepFloors,
                 VECTOR_KEEP_FLOORS_MIN,
                 VECTOR_KEEP_FLOORS_MAX,
                 VECTOR_KEEP_FLOORS_DEFAULT
             );
             memorySettings.summaryKeepFloors = normalizeKeepFloors(
-                memorySettings.summaryKeepFloors,
+                savedSettings?.summaryKeepFloors ?? legacyKeepFloors ?? memorySettings.summaryKeepFloors,
                 SUMMARY_KEEP_FLOORS_MIN,
                 SUMMARY_KEEP_FLOORS_MAX,
                 SUMMARY_KEEP_FLOORS_DEFAULT
@@ -2306,7 +2307,7 @@ createApp({
                 // Load Memory Settings
                 const savedMemorySettings = await getStoredValue('memory_settings');
                 if (savedMemorySettings) Object.assign(memorySettings, savedMemorySettings);
-                normalizeMemorySettings();
+                normalizeMemorySettings(savedMemorySettings);
 
                 const savedTokenUsageHistory = await getStoredValue('token_usage_history');
                 if (Array.isArray(savedTokenUsageHistory)) {
@@ -9155,6 +9156,7 @@ image###生成的提示词###
         const prepareLoadedChatHistoryForDisplay = (messages = []) => messages
             .filter(msg => msg !== null && msg !== undefined)
             .map(msg => {
+                if (!['user', 'assistant', 'system'].includes(msg.role)) msg.role = msg.isSelf ? 'user' : 'assistant';
                 if (msg.isSelf === undefined) {
                     msg.isSelf = msg.role === 'user';
                 }
@@ -10641,11 +10643,9 @@ ${memoryFragmentSection}
             showConfirmModal.value = true;
         };
 
-        const activeKeepFloors = computed(() => (
-            memorySettings.mode === MEMORY_MODE_CLASSIC
-                ? memorySettings.summaryKeepFloors
-                : memorySettings.vectorKeepFloors
-        ));
+        const activeKeepFloors = computed(() => memorySettings.mode === MEMORY_MODE_CLASSIC
+            ? normalizeKeepFloors(memorySettings.summaryKeepFloors, SUMMARY_KEEP_FLOORS_MIN, SUMMARY_KEEP_FLOORS_MAX, SUMMARY_KEEP_FLOORS_DEFAULT)
+            : normalizeKeepFloors(memorySettings.vectorKeepFloors, VECTOR_KEEP_FLOORS_MIN, VECTOR_KEEP_FLOORS_MAX, VECTOR_KEEP_FLOORS_DEFAULT));
         const keepFloorsSliderMin = computed(() => (
             memorySettings.mode === MEMORY_MODE_CLASSIC
                 ? SUMMARY_KEEP_FLOORS_MIN
