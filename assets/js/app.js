@@ -966,7 +966,9 @@ createApp({
 
         const toPlainContextMessage = (message, index, trackSources = false) => {
             const nextMessage = {
-                role: message.role,
+                role: ['user', 'assistant', 'system'].includes(message?.role)
+                    ? message.role
+                    : (message?.isSelf ? 'user' : 'assistant'),
                 name: message.name,
                 content: String(message.content || '')
             };
@@ -3514,12 +3516,24 @@ ${content}
             floors: getPostprocessedChatMessages(chatHistory.value, { includeSystem: false }).length
         }));
 
-        const conversationBodyLength = computed(() => (
-            chatHistory.value.reduce((total, message) => {
-                if (!['user', 'assistant'].includes(message?.role)) return total;
-                return total + parseCot(message.content || '').main.length;
-            }, 0)
-        ));
+        const getBodyContentLength = content => parseCot(String(content || '')).main.length;
+        const getMessagesBodyLength = messages => (Array.isArray(messages) ? messages : [])
+            .reduce((total, message) => total + getBodyContentLength(message?.content), 0);
+        const getSourceMessagesBodyLength = (sourceIndexes, fallbackMessage) => {
+            const sourceMessages = (Array.isArray(sourceIndexes) ? sourceIndexes : [])
+                .map(index => chatHistory.value[index])
+                .filter(Boolean);
+            return sourceMessages.length > 0
+                ? getMessagesBodyLength(sourceMessages)
+                : getMessagesBodyLength(fallbackMessage ? [fallbackMessage] : []);
+        };
+
+        const conversationBodyLength = computed(() => getPostprocessedChatMessages(
+            chatHistory.value,
+            { includeSystem: false }
+        ).reduce((total, message) => (
+            total + getSourceMessagesBodyLength(message._sourceIndexes, message)
+        ), 0));
 
         const buildClassicMemoryLookup = () => {
             const byAssistantId = new Map();
@@ -3557,15 +3571,11 @@ ${content}
                 const memory = findClassicMemoryForTurn(turnInfo, lookup);
                 if (!memory?.summary) return;
 
-                const sourceMessages = (turnInfo.assistant?._sourceIndexes || [])
-                    .map(index => chatHistory.value[index])
-                    .filter(message => message?.role === 'assistant');
-                const originalMessages = sourceMessages.length > 0 ? sourceMessages : [turnInfo.assistant];
-                const originalLength = originalMessages.reduce(
-                    (total, message) => total + parseCot(message.content || '').main.length,
-                    0
+                const originalLength = getSourceMessagesBodyLength(
+                    turnInfo.assistant?._sourceIndexes,
+                    turnInfo.assistant
                 );
-                predictedLength += parseCot(memory.summary).main.length - originalLength;
+                predictedLength += getBodyContentLength(memory.summary) - originalLength;
             });
             return Math.max(0, predictedLength);
         });
