@@ -1,0 +1,16 @@
+{
+  "appId": "com.roleplayhub.app",
+  "appName": "Roleplay Hub",
+  "webDir": "dist",
+  "android": {
+    "minWebViewVersion": 83,
+    "allowMixedContent": false,
+    "captureInput": true,
+    "webContentsDebuggingEnabled": true
+  },
+  "server": {
+    "allowNavigation": [
+      "rphforum.zeabur.app"
+    ]
+  }
+}

@@ -2433,3 +2433,7 @@ opacity: 0;
         display: none;
     }
 }
+        .html-frame-suspended {
+            background: rgba(249, 250, 251, 0.85);
+            contain: strict;
+        }
