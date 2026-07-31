@@ -6,13 +6,9 @@
     <meta name="viewport"
         content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>角色卡工坊</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400..700;1,400..700&display=swap" rel="stylesheet">
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://cdn.jsdelivr.net/npm/daisyui@4.7.2/dist/full.min.css" rel="stylesheet" type="text/css" />
-    <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/localforage@1.10.0/dist/localforage.min.js"></script>
+    <link href="../assets/css/fonts.css" rel="stylesheet">
+    <link href="../assets/generated/character.css" rel="stylesheet">
+    <script src="../assets/vendor/vue.global.prod.js"></script>
     <script src="../assets/js/card-utils.js"></script>
     <script src="../assets/js/ui-select.js"></script>
     <style>
@@ -294,26 +290,6 @@
             }
         }
     </style>
-    <script>
-        tailwind.config = {
-            future: {
-                hoverOnlyWhenSupported: true,
-            },
-            theme: {
-                extend: {
-                    fontFamily: {
-                        sans: ['var(--app-font-family)', 'ui-sans-serif', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Microsoft YaHei', 'Noto Sans SC', 'Arial', 'sans-serif'],
-                        serif: ['var(--app-font-serif)', 'Lora', 'Noto Serif SC', 'Source Han Serif SC', 'Source Han Serif CN', 'STSong', 'SimSun', 'Georgia', 'Cambria', 'Times New Roman', 'Times', 'serif']
-                    },
-                    colors: {
-                        primary: '#65c3c8',
-                        secondary: '#ef9fbc',
-                        accent: '#eeaf3a',
-                    }
-                }
-            }
-        }
-    </script>
 </head>
 
 <body class="flex flex-col overflow-hidden bg-base-200/30">
@@ -1646,6 +1622,7 @@
                 const currentCharacterIndex = ref(0);
                 const storageQuotaExceeded = ref(false);
                 const isAvatarLoading = ref(false);
+                const workshopStorage = window.parent?.RPHStorage || window.RPHStorage;
 
                 // Tab Animation State
                 const tabElements = ref([]);
@@ -1671,7 +1648,7 @@
 
                 // Persist active index
                 watch(currentCharacterIndex, (newVal) => {
-                    localStorage.setItem('ai_chargen_active_index', newVal);
+                    workshopStorage?.set('rp_hub_workshop_active_index', newVal).catch(error => console.error('Active character save failed:', error));
                 });
 
                 // Virtual List State
@@ -1798,7 +1775,6 @@
                 setupSyncListener();
 
                 // Options with persistence
-                const savedOptions = localStorage.getItem('ai_chargen_options');
                 const defaultOptions = {
                     generateExtra: true, // Default to true as requested
                     avatarStyle: 'default',
@@ -1809,10 +1785,8 @@
                         fast: ''
                     }
                 };
-                const savedOptionValues = savedOptions ? JSON.parse(savedOptions) : {};
                 const options = reactive({
                     ...defaultOptions,
-                    ...savedOptionValues,
                     customModels: { ...defaultOptions.customModels }
                 });
                 if (typeof options.resetOnLoad === 'undefined') options.resetOnLoad = false;
@@ -1823,11 +1797,9 @@
                 options.generateExtra = true;
 
                 watch(options, (newVal) => {
-                    const { customModels, ...persistentOptions } = newVal;
-                    localStorage.setItem('ai_chargen_options', JSON.stringify(persistentOptions));
+                    const { customModels, imageGenKey, ...persistentOptions } = newVal;
+                    workshopStorage?.set('rp_hub_workshop_options', persistentOptions).catch(error => console.error('Workshop options save failed:', error));
                 }, { deep: true });
-
-                localStorage.removeItem('ai_chargen_api');
                 const api = reactive({
                     url: '',
                     key: '',
@@ -2131,20 +2103,17 @@
                 };
 
 
-                // Storage Logic (IndexedDB via localforage)
+                // Storage Logic (native SQLite through the parent app)
                 const characters = ref([createEmptyCharacter()]);
                 const isLoaded = ref(false);
-
-                // Initialize localforage
-                localforage.config({ name: 'AICharGen', storeName: 'characters' });
 
                 // Load Data
                 const loadData = async () => {
                     try {
-                        // Load from IndexedDB
-                        const saved = await localforage.getItem('ai_chargen_characters');
+                        if (!workshopStorage) throw new Error('Native storage is unavailable');
+                        const saved = await workshopStorage.get('rp_hub_workshop_characters');
                         if (saved) {
-                            const parsed = JSON.parse(saved);
+                            const parsed = Array.isArray(saved) ? saved : JSON.parse(saved);
                             // Ensure every character has an ID for virtualization keys
                             parsed.forEach(c => {
                                 if (!c.id) c.id = generateUUID();
@@ -2154,8 +2123,11 @@
                         }
 
                         // Restore active index
-                        const savedIndex = localStorage.getItem('ai_chargen_active_index');
-                        if (savedIndex !== null) {
+                        const savedOptions = await workshopStorage.get('rp_hub_workshop_options');
+                        if (savedOptions && typeof savedOptions === 'object') Object.assign(options, savedOptions);
+
+                        const savedIndex = await workshopStorage.get('rp_hub_workshop_active_index');
+                        if (savedIndex != null) {
                             const idx = parseInt(savedIndex);
                             if (!isNaN(idx) && idx >= 0 && idx < characters.value.length) {
                                 currentCharacterIndex.value = idx;
@@ -2175,12 +2147,11 @@
                 // Trigger load
                 loadData();
 
-                // Save to localforage whenever characters change (Debounced)
+                // Save to native storage whenever characters change (debounced)
                 const debouncedSave = debounce(async (newVal) => {
                     try {
                         const start = performance.now();
-                        const json = JSON.stringify(newVal);
-                        await localforage.setItem('ai_chargen_characters', json);
+                        await workshopStorage.set('rp_hub_workshop_characters', newVal);
                         const end = performance.now();
                         if (end - start > 100) {
                             console.log(`%c[Performance] Data save took ${Math.round(end - start)}ms`, 'color: #f59e0b');
@@ -2329,7 +2300,7 @@
                         textContent = fullText.replace(htmlMatch[0], '').trim();
                     } else {
                         // 如果没有检测到 HTML 块，则提供一个基础的 HTML 结构，以便注入样式和脚本并显示正文
-                        uiHTML = `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"><script src="https://cdn.tailwindcss.com"></` + `script></head><body class="bg-base-100 p-4"></body></html>`;
+                        uiHTML = `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"><link rel="stylesheet" href="/assets/generated/character.css"></head><body class="bg-base-100 p-4"></body></html>`;
                         textContent = fullText;
                     }
 
@@ -2462,7 +2433,7 @@
                     createNewCharacter();
                     currentCharacterIndex.value = 0;
                     // Force update storage
-                    await localforage.setItem('ai_chargen_characters', JSON.stringify(characters.value));
+                    await workshopStorage.set('rp_hub_workshop_characters', characters.value);
                     showToast('所有角色已清空', 'success');
                 };
 

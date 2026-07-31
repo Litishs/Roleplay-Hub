@@ -465,7 +465,7 @@ year 2025, textless version, {{petite,loli}}, Petite figure, no text, The image 
         img.src = src;
     });
 
-    const downloadBlob = (blob, filename, options = {}) => {
+    const downloadBlobInBrowser = (blob, filename, options = {}) => {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
@@ -484,6 +484,41 @@ year 2025, textless version, {{petite,loli}}, Petite figure, no text, The image 
             setTimeout(cleanup, delay);
         } else {
             cleanup();
+        }
+    };
+
+    const downloadBlob = async (blob, filename, options = {}) => {
+        let capacitor = window.Capacitor;
+        try {
+            if (!capacitor && window.parent !== window) capacitor = window.parent.Capacitor;
+        } catch (_) { }
+        const filesystem = capacitor?.Plugins?.Filesystem;
+        const share = capacitor?.Plugins?.Share;
+        if (!filesystem || !share) {
+            downloadBlobInBrowser(blob, filename, options);
+            return;
+        }
+
+        try {
+            const dataUrl = await blobToDataUrl(blob);
+            const base64 = dataUrl.slice(dataUrl.indexOf(',') + 1);
+            const safeName = String(filename || 'roleplay-hub-export')
+                .replace(/[\\/:*?"<>|]/g, '_')
+                .slice(0, 160);
+            const result = await filesystem.writeFile({
+                path: `exports/${Date.now()}-${safeName}`,
+                data: base64,
+                directory: 'CACHE',
+                recursive: true
+            });
+            await share.share({
+                title: safeName,
+                dialogTitle: '保存或分享导出文件',
+                files: [result.uri]
+            });
+        } catch (error) {
+            console.error('Native export failed, using WebView download fallback:', error);
+            downloadBlobInBrowser(blob, filename, options);
         }
     };
 

@@ -219,6 +219,8 @@ createApp({
 
         const currentView = ref('chat');
         let isMobileSidebarOpen = false;
+        let nativeAppStateListener = null;
+        let nativeBackButtonListener = null;
         const isSidebarCollapsed = ref(false);
         const isAdvancedNavOpen = ref(false);
         const toggleAdvancedNav = () => {
@@ -247,12 +249,19 @@ createApp({
         const pendingActiveToolContext = ref('');
         const activeToolResultContexts = ref([]);
         const tempUserSetup = reactive({ name: '', description: '', person: 'second' });
+        const userSetupNameInput = ref(null);
+        const syncUserSetupName = event => {
+            const eventTarget = event?.target;
+            const input = eventTarget?.tagName === 'INPUT' ? eventTarget : userSetupNameInput.value;
+            if (input) tempUserSetup.name = input.value;
+        };
         const characterDisplayLimit = ref(8);
 
         // Quota State
         const quotaValue = ref(0);
         const quotaLoading = ref(false);
         const quotaError = ref(false);
+        const backupInProgress = ref(false);
 
         const fetchQuota = async () => {
             quotaLoading.value = true;
@@ -327,8 +336,7 @@ createApp({
                 clearInterval(updateCountdownTimer);
                 updateCountdownTimer = null;
             }
-            // 记录已读版本ID
-            localStorage.setItem('roleplay_hub_update_id', latestUpdate.id.toString());
+            setStoredValue('update_id', latestUpdate.id).catch(error => console.error('Update marker save failed:', error));
         };
 
         const startUpdateCountdown = () => {
@@ -344,8 +352,8 @@ createApp({
             }, 1000);
         };
 
-        const checkUpdate = () => {
-            const lastId = localStorage.getItem('roleplay_hub_update_id');
+        const checkUpdate = async () => {
+            const lastId = await getStoredValue('update_id');
             // 如果没有记录，或者记录的ID小于当前ID，则显示弹窗
             if (!lastId || parseInt(lastId) < latestUpdate.id) {
                 showUpdateModal.value = true;
@@ -635,6 +643,13 @@ createApp({
             balancedModel: DEFAULT_API_CONFIG.balancedModel,
             fastModel: DEFAULT_API_CONFIG.fastModel
         });
+        const apiKeyInput = ref(null);
+        const syncApiKeyInput = event => {
+            const eventTarget = event?.target;
+            const input = eventTarget?.tagName === 'INPUT' ? eventTarget : apiKeyInput.value;
+            if (input && settings.apiKey !== input.value) settings.apiKey = input.value;
+            return String(settings.apiKey || '').trim();
+        };
 
         const normalizeFontFamily = (value) => ['modern', 'serif', 'system'].includes(value) ? value : 'modern';
         const applyFontFamily = (value) => {
@@ -717,6 +732,7 @@ createApp({
         });
         const isCustomApiProvider = computed(() => isCustomApiProviderId(selectedApiProvider.value.id));
         const selectApiProvider = (provider) => {
+            syncApiKeyInput();
             syncCurrentApiKeyToProvider();
             selectedApiProviderId.value = provider.id;
             settings.apiProviderId = provider.id;
@@ -745,6 +761,7 @@ createApp({
         });
 
         const syncSettingsToGenerator = () => {
+            syncApiKeyInput();
             const iframe = document.querySelector('iframe[src*="character"]');
             if (iframe && iframe.contentWindow) {
                 try {
@@ -815,10 +832,14 @@ createApp({
         const currentCharacterIndex = ref(-1);
 
         const chatHistory = ref([]);
-        const CHAT_RENDER_INITIAL_LIMIT = 20;
-        const CHAT_RENDER_BATCH_SIZE = 10;
+        const CHAT_RENDER_INITIAL_LIMIT = window.RPHRuntimePolicy?.limits?.chatInitial || 20;
+        const CHAT_RENDER_BATCH_SIZE = window.RPHRuntimePolicy?.limits?.chatBatch || 10;
+        const CHAT_RENDER_MAX_LIMIT = window.RPHRuntimePolicy?.limits?.chatMaximum || 40;
+        const CHAT_ESTIMATED_MESSAGE_HEIGHT = 180;
         const chatRenderLimit = ref(CHAT_RENDER_INITIAL_LIMIT);
+        const chatRenderStart = ref(0);
         let isLoadingEarlierChatMessages = false;
+        let isLoadingLaterChatMessages = false;
         let isChatTopUnlockArmed = true;
         const lastActiveCharacterId = ref(null); // For persistence
         function hasActiveToolContinuationWork() {
@@ -1683,6 +1704,13 @@ createApp({
             console.log('%c[Square] Character Square Iframe Loaded', 'color: #3b82f6; font-weight: bold;');
         };
 
+        const openSquareExternally = async () => {
+            const url = 'https://rphforum.zeabur.app/';
+            const browser = window.Capacitor?.Plugins?.Browser;
+            if (browser) await browser.open({ url });
+            else window.open(url, '_blank', 'noopener,noreferrer');
+        };
+
         const initializeSortableList = (elementId, items) => {
             nextTick(() => {
                 const element = document.getElementById(elementId);
@@ -1724,54 +1752,22 @@ createApp({
         });
 
 
-        // --- Persistence (IndexedDB) ---
-        const dbName = 'RPHubDB';
-        const legacyDbName = String.fromCharCode(83, 105, 108, 108, 121, 84, 97, 118, 101, 114, 110, 68, 66);
+        // --- Persistence (native SQLite through StorageRepository) ---
         const storagePrefix = 'rp_hub_';
-        const legacyStoragePrefix = String.fromCharCode(115, 105, 108, 108, 121, 95, 116, 97, 118, 101, 114, 110, 95);
-        const dbVersion = 1;
         let db = null;
-        let legacyDb = null;
-
-        const openAppDB = (name) => {
-            return new Promise((resolve, reject) => {
-                const request = indexedDB.open(name, dbVersion);
-                request.onerror = (event) => reject('DB Error: ' + event.target.error);
-                request.onsuccess = (event) => {
-                    resolve(event.target.result);
-                };
-                request.onupgradeneeded = (event) => {
-                    const db = event.target.result;
-                    if (!db.objectStoreNames.contains('store')) {
-                        db.createObjectStore('store');
-                    }
-                };
-            });
-        };
 
         const initDB = async () => {
-            db = await openAppDB(dbName);
-            try {
-                const dbList = typeof indexedDB.databases === 'function' ? await indexedDB.databases() : null;
-                const shouldOpenLegacy = !dbList || dbList.some(item => item && item.name === legacyDbName);
-                if (shouldOpenLegacy) {
-                    legacyDb = await openAppDB(legacyDbName);
-                }
-            } catch (e) {
-                console.warn('Legacy DB check failed:', e);
-            }
+            if (!window.RPHStorage) throw new Error('StorageRepository is unavailable');
+            await window.RPHStorage.init();
+            db = window.RPHStorage;
             return db;
         };
 
-        const isDatabaseClosingError = (error) => {
-            const message = String(error?.message || error || '');
-            return /connection is closing|database is closing|close pending/i.test(message);
-        };
+        const isDatabaseClosingError = () => false;
 
         const reopenMainDB = async () => {
-            try { if (db) db.close(); } catch (_) { }
-            db = await openAppDB(dbName);
-            return db;
+            db = null;
+            return initDB();
         };
 
         const unwrapForStorage = (value, seen = new WeakMap()) => {
@@ -1816,68 +1812,31 @@ createApp({
         };
 
         const storageKey = (name) => `${storagePrefix}${name}`;
-        const legacyStorageKey = (name) => `${legacyStoragePrefix}${name}`;
         const scopedStorageKey = (name, id) => `${storageKey(name)}_${id}`;
-        const legacyScopedStorageKey = (name, id) => `${legacyStorageKey(name)}_${id}`;
-
-        const dbSetTo = (targetDb, key, value, options = {}) => {
-            return new Promise((resolve, reject) => {
-                if (!targetDb) return reject('DB not initialized');
-                const transaction = targetDb.transaction(['store'], 'readwrite');
-                const store = transaction.objectStore('store');
-                // Clone to plain object to avoid Proxy issues unless the caller already did it.
-                const request = store.put(options.clone === false ? value : cloneForStorage(value), key);
-                request.onsuccess = () => resolve();
-                request.onerror = (event) => reject(event.target.error);
-            });
-        };
 
         const dbSet = async (key, value, options = {}) => {
-            try {
-                return await dbSetTo(db, key, value, options);
-            } catch (error) {
-                if (!isDatabaseClosingError(error)) throw error;
-                await reopenMainDB();
-                return dbSetTo(db, key, value, options);
-            }
-        };
-
-        const dbGetFrom = (targetDb, key) => {
-            return new Promise((resolve, reject) => {
-                if (!targetDb) return resolve(undefined);
-                const transaction = targetDb.transaction(['store'], 'readonly');
-                const store = transaction.objectStore('store');
-                const request = store.get(key);
-                request.onsuccess = () => resolve(request.result);
-                request.onerror = (event) => reject(event.target.error);
-            });
+            if (!db) await initDB();
+            const plainValue = options.clone === false ? unwrapForStorage(value) : cloneForStorage(value);
+            return db.set(key, plainValue);
         };
 
         const dbGet = async (key) => {
-            try {
-                return await dbGetFrom(db, key);
-            } catch (error) {
-                if (!isDatabaseClosingError(error)) throw error;
-                await reopenMainDB();
-                return dbGetFrom(db, key);
-            }
-        };
-
-        const dbGetWithLegacy = async (key, oldKey = null) => {
-            const value = await dbGet(key);
-            if (value !== undefined) return value;
-            if (!oldKey || !legacyDb) return undefined;
-            const legacyValue = await dbGetFrom(legacyDb, oldKey);
-            if (legacyValue !== undefined) {
-                await dbSet(key, legacyValue);
-            }
-            return legacyValue;
+            if (!db) await initDB();
+            return db.get(key);
         };
 
         const setStoredValue = (name, value, options = {}) => dbSet(storageKey(name), value, options);
-        const getStoredValue = (name) => dbGetWithLegacy(storageKey(name), legacyStorageKey(name));
-        const setScopedStoredValue = (name, id, value, options = {}) => dbSet(scopedStorageKey(name, id), value, options);
-        const getScopedStoredValue = (name, id) => dbGetWithLegacy(scopedStorageKey(name, id), legacyScopedStorageKey(name, id));
+        const getStoredValue = (name) => dbGet(storageKey(name));
+        const setScopedStoredValue = async (name, id, value, options = {}) => {
+            if (!db) await initDB();
+            if (name === 'chat') return db.replaceChat(id, unwrapForStorage(value));
+            return dbSet(scopedStorageKey(name, id), value, options);
+        };
+        const getScopedStoredValue = async (name, id) => {
+            if (!db) await initDB();
+            if (name === 'chat') return db.loadChat(id);
+            return dbGet(scopedStorageKey(name, id));
+        };
         const readUsageNumber = (...values) => {
             for (const value of values) {
                 const number = Number(value);
@@ -1981,6 +1940,59 @@ createApp({
         let chatHistorySaveTimer = null;
         let chatHistorySaveQueue = Promise.resolve(true);
         let lastChatSaveErrorToastAt = 0;
+        let persistedChatCharacterId = null;
+        let persistedChatSignatures = new Map();
+        let draftPersistenceTimer = null;
+
+        const CHAT_RUNTIME_ONLY_FIELDS = new Set([
+            'shouldAnimate', 'skipReveal', 'isEditing_Message', 'editContent',
+            'isCotOpen', 'isReasoningOpen', 'isReasoningUserToggled', 'isReasoningAutoCollapsed'
+        ]);
+
+        const serializeChatMessage = (message, statusOverride = null) => {
+            const plain = unwrapForStorage(message || {});
+            if (!plain.id) {
+                plain.id = generateUUID();
+                if (message && typeof message === 'object') message.id = plain.id;
+            }
+            CHAT_RUNTIME_ONLY_FIELDS.forEach(field => delete plain[field]);
+            Object.keys(plain).filter(key => key.startsWith('_')).forEach(key => delete plain[key]);
+            plain.storageStatus = statusOverride || plain.storageStatus || 'final';
+            return plain;
+        };
+
+        const getChatMessageSignature = (message, position) => window.RPHChatPersistence.signature(message, position);
+
+        const resetPersistedChatBaseline = (characterId, messages) => {
+            persistedChatCharacterId = characterId ? String(characterId) : null;
+            persistedChatSignatures = window.RPHChatPersistence.createBaseline(messages, serializeChatMessage);
+        };
+
+        const stopDraftPersistence = () => {
+            if (draftPersistenceTimer) clearInterval(draftPersistenceTimer);
+            draftPersistenceTimer = null;
+        };
+
+        const persistSingleDraft = async message => {
+            const characterId = currentCharacter.value?.uuid;
+            if (!message || !characterId) return;
+            if (!db) await initDB();
+            const position = chatHistory.value.indexOf(message);
+            if (position < 0) return;
+            const serialized = serializeChatMessage(message, 'draft');
+            await db.applyChatChanges(characterId, [{ position, message: serialized }], []);
+            if (persistedChatCharacterId === String(characterId)) {
+                persistedChatSignatures.set(serialized.id, getChatMessageSignature(serialized, position));
+            }
+        };
+
+        const startDraftPersistence = message => {
+            stopDraftPersistence();
+            persistSingleDraft(message).catch(error => console.error('Initial draft save failed:', error));
+            draftPersistenceTimer = setInterval(() => {
+                persistSingleDraft(message).catch(error => console.error('Draft save failed:', error));
+            }, window.RPHRuntimePolicy?.limits?.draftSaveMs || 2000);
+        };
 
         const isRetryableChatStorageError = (error) => {
             const name = String(error?.name || '');
@@ -2008,13 +2020,31 @@ createApp({
             if (currentCharacterIndex.value < 0 || !characterId) return Promise.resolve(false);
 
             try {
-                const historyToSave = cloneForStorage(chatHistory.value);
+                const snapshot = chatHistory.value.map(message => serializeChatMessage(message));
                 const saveTask = async () => {
+                    const baseline = persistedChatCharacterId === String(characterId)
+                        ? persistedChatSignatures
+                        : new Map();
+                    const { upserts, deletes } = window.RPHChatPersistence.createChanges(
+                        snapshot,
+                        baseline,
+                        message => message
+                    );
+                    if (upserts.length === 0 && deletes.length === 0) return true;
                     let lastError = null;
                     for (let attempt = 1; attempt <= 3; attempt++) {
                         try {
                             if (!db) await initDB();
-                            await setScopedStoredValue('chat', characterId, historyToSave, { clone: false });
+                            await db.applyChatChanges(
+                                characterId,
+                                upserts.map(({ position, message }) => ({ position, message })),
+                                deletes
+                            );
+                            if (currentCharacter.value?.uuid === characterId) {
+                                persistedChatCharacterId = String(characterId);
+                                upserts.forEach(({ message, signature }) => persistedChatSignatures.set(message.id, signature));
+                                deletes.forEach(id => persistedChatSignatures.delete(id));
+                            }
                             return true;
                         } catch (error) {
                             lastError = error;
@@ -2069,12 +2099,30 @@ createApp({
             await setScopedStoredValue('classic_memories', currentCharacter.value.uuid, cloneForStorage(classicMemories.value), { clone: false });
         };
 
+        const persistAvatarMedia = async (target, field, preferredName) => {
+            const value = target?.[field];
+            if (!window.RPHStorage?.isNative || typeof value !== 'string' || !value.startsWith('data:image/')) return;
+            target[field] = await window.RPHStorage.writeMediaDataUrl(value, preferredName);
+        };
+
+        const persistNativeMediaAssets = async () => {
+            if (!window.RPHStorage?.isNative) return;
+            await Promise.all(characters.value.map((character, index) => (
+                persistAvatarMedia(character, 'avatar', `character-${character.uuid || index}`)
+            )));
+            await persistAvatarMedia(user, 'avatar', `user-${user.uuid || 'active'}`);
+            await Promise.all(userProfiles.value.map((profile, index) => (
+                persistAvatarMedia(profile, 'avatar', `profile-${profile.uuid || index}`)
+            )));
+        };
+
         const saveData = async (options = {}) => {
             const { saveMemories = true } = options;
             try {
                 if (!db) await initDB();
                 settings.contextSize = MAX_CONTEXT_SIZE;
                 normalizeActiveToolAggressivenessSettings();
+                await persistNativeMediaAssets();
                 await setStoredValue('characters', characters.value);
                 await setStoredValue('settings', settings);
                 await setStoredValue('presets', presets.value);
@@ -2129,25 +2177,52 @@ createApp({
             }
         };
 
-        const dbDeleteFrom = (targetDb, key) => {
-            return new Promise((resolve, reject) => {
-                if (!targetDb) return resolve();
-                const transaction = targetDb.transaction(['store'], 'readwrite');
-                const store = transaction.objectStore('store');
-                const request = store.delete(key);
-                request.onsuccess = () => resolve();
-                request.onerror = (event) => reject(event.target.error);
-            });
+        const dbDelete = async (key) => {
+            if (!db) await initDB();
+            return db.remove(key);
         };
 
-        const dbDelete = (key) => dbDeleteFrom(db, key);
-
-        const dbDeleteWithLegacy = async (key, oldKey = null) => {
-            await dbDelete(key);
-            if (oldKey && legacyDb) await dbDeleteFrom(legacyDb, oldKey);
+        const exportNativeBackup = async () => {
+            if (backupInProgress.value) return;
+            backupInProgress.value = true;
+            try {
+                await saveData();
+                await flushPendingChatHistorySave();
+                await window.RPHStorage.exportBackup();
+                showToast('完整备份已保存', 'success');
+            } catch (error) {
+                if (!/cancel/i.test(String(error?.message || error || ''))) {
+                    console.error('Backup export failed:', error);
+                    showToast('完整备份失败：' + (error?.message || error), 'error', 5000);
+                }
+            } finally {
+                backupInProgress.value = false;
+            }
         };
 
-        const deleteScopedStoredValue = (name, id) => dbDeleteWithLegacy(scopedStorageKey(name, id), legacyScopedStorageKey(name, id));
+        const restoreNativeBackup = async () => {
+            if (backupInProgress.value) return;
+            const confirmed = await showVueConfirmModal('恢复完整备份', '恢复将替换当前角色、聊天、记忆、设置和本地图片。API Key 不会从备份恢复。');
+            if (!confirmed) return;
+            backupInProgress.value = true;
+            try {
+                await window.RPHStorage.restoreBackup();
+                window.location.reload();
+            } catch (error) {
+                if (!/cancel/i.test(String(error?.message || error || ''))) {
+                    console.error('Backup restore failed:', error);
+                    showToast('完整恢复失败，当前数据未被替换：' + (error?.message || error), 'error', 6000);
+                }
+            } finally {
+                backupInProgress.value = false;
+            }
+        };
+
+        const deleteScopedStoredValue = async (name, id) => {
+            if (!db) await initDB();
+            if (name === 'chat') return db.deleteChat(id);
+            return dbDelete(scopedStorageKey(name, id));
+        };
 
         /* extracted generateUUID */
 
@@ -2846,7 +2921,7 @@ createApp({
             const metaViewport = '<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">';
             const hudCSS = '.sinan-hud{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;padding:12px;background:linear-gradient(to bottom right,rgba(255,255,255,0.9),rgba(255,255,255,0.6));border-radius:12px;border:1px solid rgba(0,0,0,0.08);backdrop-filter:blur(4px)}.char-card{flex:1 1 140px;background:#fff;padding:10px;border-radius:8px;border-left:4px solid #ddd;box-shadow:0 2px 6px rgba(0,0,0,0.04);display:flex;flex-direction:column;gap:4px;font-size:12px;position:relative;overflow:hidden;transition:transform 0.2s}.char-card:hover{transform:translateY(-2px);box-shadow:0 4px 8px rgba(0,0,0,0.1)}.char-name{font-weight:700;font-size:14px;color:#374151;display:flex;justify-content:space-between;align-items:center}.char-mood{color:#6b7280;font-size:12px}.char-loc{color:#9ca3af;font-size:11px;margin-top:auto;padding-top:4px}.bar-bg{height:4px;background:#f3f4f6;border-radius:2px;overflow:hidden;margin-top:6px}.bar-fill{height:100%;background:#10b981;border-radius:2px}.c-tongqiu{border-left-color:#f59e0b}.c-tongqiu .bar-fill{background:#f59e0b}.c-yufan{border-left-color:#3b82f6}.c-yufan .bar-fill{background:#3b82f6}.c-linghu{border-left-color:#8b5cf6}.c-linghu .bar-fill{background:#8b5cf6}.c-chongtian{border-left-color:#ef4444}.c-chongtian .bar-fill{background:#ef4444}';
             const resetStyle = '<style>html,body{margin:0!important;padding:0!important;width:100%!important;height:auto!important;min-height:auto!important;word-wrap:break-word!important;box-sizing:border-box!important;overflow:hidden!important;}::-webkit-scrollbar{display:none;}*,*::before,*::after{box-sizing:inherit!important;}img,video,canvas,svg{max-width:100%!important;height:auto!important;}table{display:block!important;overflow-x:auto!important;max-width:100%!important;}pre{white-space:pre-wrap!important;word-wrap:break-word!important;max-width:100%!important;}.container,.reality-panel,.app-container{max-width:100%!important;width:100%!important;margin:0!important;border-radius:0!important;box-shadow:none!important;border:none!important;height:auto!important;min-height:0!important;}body>div:first-child{margin:0!important;max-width:100%!important;height:auto!important;min-height:0!important;}#app{height:auto!important;min-height:auto!important;}.bottom-safe{display:none!important;height:0!important;min-height:0!important;margin:0!important;padding:0!important;}' + hudCSS + '</style>';
-            const jqueryScript = '<script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js" defer><\/script>';
+            const jqueryScript = '<script src="/assets/vendor/jquery.min.js" defer><\/script>';
             const scriptShim = `
                 <script>
                     window.triggerSlash = function(text) {
@@ -3406,15 +3481,28 @@ ${content}
         };
 
         const resetChatRenderWindow = () => {
-            chatRenderLimit.value = CHAT_RENDER_INITIAL_LIMIT;
+            chatRenderLimit.value = Math.min(CHAT_RENDER_INITIAL_LIMIT, chatHistory.value.length);
+            chatRenderStart.value = Math.max(0, chatHistory.value.length - chatRenderLimit.value);
             isChatTopUnlockArmed = true;
         };
 
-        const hiddenChatMessageCount = computed(() => Math.max(0, chatHistory.value.length - chatRenderLimit.value));
+        const hiddenChatMessageCount = computed(() => chatRenderStart.value);
+        const hiddenChatMessageCountAfter = computed(() => Math.max(
+            0,
+            chatHistory.value.length - (chatRenderStart.value + chatRenderLimit.value)
+        ));
+        const chatTopSpacerHeight = computed(() => hiddenChatMessageCount.value * CHAT_ESTIMATED_MESSAGE_HEIGHT);
+        const chatBottomSpacerHeight = computed(() => hiddenChatMessageCountAfter.value * CHAT_ESTIMATED_MESSAGE_HEIGHT);
 
         const displayedChatMessages = computed(() => {
-            const startIndex = Math.max(0, chatHistory.value.length - chatRenderLimit.value);
-            return chatHistory.value.slice(startIndex).map((msg, offset) => ({
+            const windowRange = window.RPHRuntimePolicy.getChatWindow(
+                chatHistory.value.length,
+                chatRenderStart.value,
+                chatRenderLimit.value
+            );
+            const startIndex = windowRange.start;
+            const endIndex = windowRange.end;
+            return chatHistory.value.slice(startIndex, endIndex).map((msg, offset) => ({
                 msg,
                 index: startIndex + offset
             }));
@@ -3472,12 +3560,10 @@ ${content}
                 scrollTop: container.scrollTop,
                 scrollHeight: container.scrollHeight
             } : null;
-            const previousStartIndex = Math.max(0, chatHistory.value.length - chatRenderLimit.value);
-            const nextRenderLimit = Math.min(
-                chatHistory.value.length,
-                chatRenderLimit.value + batchSize
-            );
-            const nextStartIndex = Math.max(0, chatHistory.value.length - nextRenderLimit);
+            const previousStartIndex = chatRenderStart.value;
+            const nextStartIndex = Math.max(0, previousStartIndex - batchSize);
+            const addedCount = previousStartIndex - nextStartIndex;
+            const nextRenderLimit = Math.min(CHAT_RENDER_MAX_LIMIT, chatRenderLimit.value + addedCount);
 
             for (let i = nextStartIndex; i < previousStartIndex; i++) {
                 const message = chatHistory.value[i];
@@ -3486,40 +3572,71 @@ ${content}
                 message.shouldAnimate = false;
             }
 
-            chatRenderLimit.value = nextRenderLimit;
+            chatRenderStart.value = nextStartIndex;
+            chatRenderLimit.value = Math.min(nextRenderLimit, chatHistory.value.length - nextStartIndex);
 
             await restoreChatScrollAnchor(anchor, scrollSnapshot);
             isLoadingEarlierChatMessages = false;
         };
 
+        const loadLaterChatMessages = async (batchSize = CHAT_RENDER_BATCH_SIZE) => {
+            if (hiddenChatMessageCountAfter.value <= 0 || isLoadingLaterChatMessages) return;
+            isLoadingLaterChatMessages = true;
+            const anchor = getChatScrollAnchor();
+            const nextStartIndex = Math.min(
+                Math.max(0, chatHistory.value.length - chatRenderLimit.value),
+                chatRenderStart.value + batchSize
+            );
+            chatRenderStart.value = nextStartIndex;
+            await restoreChatScrollAnchor(anchor);
+            isLoadingLaterChatMessages = false;
+        };
+
         const handleChatScroll = () => {
             const container = chatContainer.value;
-            if (!container || hiddenChatMessageCount.value <= 0) return;
-            if (container.scrollTop > 160) {
+            if (!container) return;
+            const topBoundary = chatTopSpacerHeight.value;
+            const renderedBottomDistance = container.scrollHeight - chatBottomSpacerHeight.value - container.scrollTop - container.clientHeight;
+            if (container.scrollTop > topBoundary + 160 && renderedBottomDistance > 160) {
                 isChatTopUnlockArmed = true;
                 return;
             }
-            if (isChatTopUnlockArmed && container.scrollTop <= 80) {
+            if (isChatTopUnlockArmed && hiddenChatMessageCount.value > 0 && container.scrollTop <= topBoundary + 80) {
                 isChatTopUnlockArmed = false;
                 loadEarlierChatMessages();
+                return;
+            }
+            if (hiddenChatMessageCountAfter.value > 0 && renderedBottomDistance <= 80) {
+                isChatTopUnlockArmed = true;
+                loadLaterChatMessages();
             }
         };
+
+        watch(() => chatHistory.value.length, (newLength, oldLength) => {
+            const previousLength = Number(oldLength || 0);
+            const wasAtTail = chatRenderStart.value + chatRenderLimit.value >= previousLength;
+            if (wasAtTail) {
+                chatRenderLimit.value = Math.min(CHAT_RENDER_MAX_LIMIT, Math.max(CHAT_RENDER_INITIAL_LIMIT, chatRenderLimit.value), newLength);
+                chatRenderStart.value = Math.max(0, newLength - chatRenderLimit.value);
+            }
+        });
 
         // Reset limit when search query changes
         watch(characterSearchQuery, () => {
             characterDisplayLimit.value = 8;
         });
 
-        const chatRoundStats = computed(() => ({
-            floors: getPostprocessedChatMessages(chatHistory.value, { includeSystem: false }).length
-        }));
+        const chatRoundStats = ref({ floors: 0 });
+        const conversationBodyLength = ref(0);
+        const summaryCompressedBodyLength = ref(0);
+        let chatStatsTimer = null;
 
-        const conversationBodyLength = computed(() => (
+        const calculateConversationBodyLength = () => (
             chatHistory.value.reduce((total, message) => {
                 if (!['user', 'assistant'].includes(message?.role)) return total;
                 return total + parseCot(message.content || '').main.length;
             }, 0)
-        ));
+        );
 
         const buildClassicMemoryLookup = () => {
             const byAssistantId = new Map();
@@ -3539,7 +3656,7 @@ ${content}
                 || lookup.byTurn.get(turnInfo.turn);
         };
 
-        const summaryCompressedBodyLength = computed(() => {
+        const calculateSummaryCompressedBodyLength = () => {
             let predictedLength = conversationBodyLength.value;
             if (!memorySettings.enabled
                 || memorySettings.mode !== MEMORY_MODE_CLASSIC
@@ -3568,7 +3685,23 @@ ${content}
                 predictedLength += parseCot(memory.summary).main.length - originalLength;
             });
             return Math.max(0, predictedLength);
-        });
+        };
+
+        const recomputeChatStats = () => {
+            chatStatsTimer = null;
+            const postprocessed = getPostprocessedChatMessages(chatHistory.value, { includeSystem: false });
+            chatRoundStats.value = { floors: postprocessed.length };
+            conversationBodyLength.value = calculateConversationBodyLength();
+            summaryCompressedBodyLength.value = calculateSummaryCompressedBodyLength();
+        };
+
+        const scheduleChatStatsRecompute = (delay = 0) => {
+            if (chatStatsTimer) clearTimeout(chatStatsTimer);
+            chatStatsTimer = setTimeout(recomputeChatStats, delay);
+        };
+
+        watch(() => chatHistory.value.length, () => scheduleChatStatsRecompute(0));
+        watch(() => [classicMemories.value.length, memorySettings.enabled, memorySettings.mode, memorySettings.summaryKeepFloors], () => scheduleChatStatsRecompute(50));
 
         const modelTags = computed(() => {
             const counts = { all: availableModels.value.length, other: 0 };
@@ -3772,24 +3905,26 @@ ${content}
         // Markdown Rendering
         /* extracted parseCot */
 
-        const renderMarkdownCache = new Map();
-        const cacheRenderedMarkdown = (key, value) => {
+        const renderMarkdownCache = new window.RPHRuntimePolicy.LruCache(
+            window.RPHRuntimePolicy.limits.renderCache
+        );
+        const cacheRenderedMarkdown = (key, value, cacheable = true) => {
+            if (!cacheable) return value;
             renderMarkdownCache.set(key, value);
-            if (renderMarkdownCache.size > 2000) {
-                renderMarkdownCache.delete(renderMarkdownCache.keys().next().value);
-            }
             return value;
         };
-        const htmlFrameDetectionCache = new Map();
+        const htmlFrameDetectionCache = new window.RPHRuntimePolicy.LruCache(
+            window.RPHRuntimePolicy.limits.renderCache
+        );
         watch(() => [settings.disableImages, regexScripts.value], () => {
             renderMarkdownCache.clear();
             htmlFrameDetectionCache.clear();
         }, { deep: true });
 
-        const contentUsesHtmlFrame = (text, role = 'assistant', skipRegex = false) => {
+        const contentUsesHtmlFrame = (text, role = 'assistant', skipRegex = false, cacheable = true) => {
             if (!text) return false;
             const cacheKey = `${role}_${skipRegex}_${text}`;
-            if (htmlFrameDetectionCache.has(cacheKey)) return htmlFrameDetectionCache.get(cacheKey);
+            if (cacheable && htmlFrameDetectionCache.has(cacheKey)) return htmlFrameDetectionCache.get(cacheKey);
 
             let processed = text;
             processed = skipRegex ? processed : processRegex(processed, { isDisplay: true, role: role });
@@ -3811,16 +3946,16 @@ ${content}
                 usesFrame = /(<!doctype html>|<html\b[^>]*>)/i.test(trimmed);
             }
 
-            htmlFrameDetectionCache.set(cacheKey, usesFrame);
-            if (htmlFrameDetectionCache.size > 2000) htmlFrameDetectionCache.delete(htmlFrameDetectionCache.keys().next().value);
+            if (cacheable) htmlFrameDetectionCache.set(cacheKey, usesFrame);
             return usesFrame;
         };
 
         const messageUsesHtmlFrame = (msg) => {
             if (!msg || !msg.content) return false;
-            if (msg.isTriggered) return msg.showRaw && contentUsesHtmlFrame(msg.content, msg.role);
+            const cacheable = !isMessageThinkingOrRunning(msg);
+            if (msg.isTriggered) return msg.showRaw && contentUsesHtmlFrame(msg.content, msg.role, false, cacheable);
             const parsed = parseCot(msg.content);
-            return contentUsesHtmlFrame(parsed.main || msg.content, msg.role);
+            return contentUsesHtmlFrame(parsed.main || msg.content, msg.role, false, cacheable);
         };
 
         const messageHasUiTemplateBlocks = (msg) => {
@@ -3940,10 +4075,10 @@ ${content}
             collapseNativeReasoning(chatHistory.value[chatHistory.value.length - 1]);
         };
 
-        const renderMarkdown = (text, role = 'assistant', skipRegex = false) => {
+        const renderMarkdown = (text, role = 'assistant', skipRegex = false, cacheable = true) => {
             if (!text) return '';
             const cacheKey = `${role}_${skipRegex}_${text}`;
-            if (renderMarkdownCache.has(cacheKey)) return renderMarkdownCache.get(cacheKey);
+            if (cacheable && renderMarkdownCache.has(cacheKey)) return renderMarkdownCache.get(cacheKey);
 
             let processed = text;
 
@@ -4014,7 +4149,7 @@ ${content}
                     resultHtml += DOMPurify.sanitize(marked.parse(postText), cleanConfig);
                 }
 
-                return cacheRenderedMarkdown(cacheKey, resultHtml);
+                return cacheRenderedMarkdown(cacheKey, resultHtml, cacheable);
             }
 
             const lowerTrimmed = trimmed.toLowerCase();
@@ -4025,7 +4160,7 @@ ${content}
             if (startsWithBlockHtml && !trimmed.includes('```')) {
                 // Directly sanitize and return, skipping Markdown parsing
                 const result = DOMPurify.sanitize(processed, cleanConfig);
-                return cacheRenderedMarkdown(cacheKey, result);
+                return cacheRenderedMarkdown(cacheKey, result, cacheable);
             }
 
             // For mixed content (Text + HTML widgets like HUDs/Status Bars),
@@ -4118,13 +4253,13 @@ ${content}
 
                 if (modified) {
                     const result = doc.body.innerHTML;
-                    return cacheRenderedMarkdown(cacheKey, result);
+                    return cacheRenderedMarkdown(cacheKey, result, cacheable);
                 }
             } catch (e) {
                 console.error('Error rendering HTML preview:', e);
             }
 
-            return cacheRenderedMarkdown(cacheKey, html);
+            return cacheRenderedMarkdown(cacheKey, html, cacheable);
         };
 
         // API & Models
@@ -4133,7 +4268,7 @@ ${content}
             : `${settings.apiUrl}/v1/${path}`;
 
         const fetchModels = async (isManual = false) => {
-            const apiKey = String(settings.apiKey || '').trim();
+            const apiKey = syncApiKeyInput();
             if (!apiKey) {
                 if (isManual) showToast('请先填写当前 API 预设的 Key', 'info');
                 return;
@@ -4212,6 +4347,7 @@ ${content}
         };
 
         const checkApiStatus = async () => {
+            syncApiKeyInput();
             if (!settings.apiUrl || !settings.apiKey) {
                 apiStatus.value = 'error';
                 return;
@@ -4311,13 +4447,15 @@ ${content}
 
             // Add user message locally with NAME
             chatHistory.value.push({
+                id: generateUUID(),
                 role: 'user',
                 name: user.name,
                 content: finalContent,
                 shouldAnimate: true,
                 skipReveal: true,
                 isSelf: true,
-                avatar: user.avatar
+                avatar: user.avatar,
+                storageStatus: 'final'
             });
             await nextTick();
 
@@ -4341,14 +4479,17 @@ ${content}
                 chatHistory.value = [];
                 if (currentCharacter.value && currentCharacter.value.first_mes) {
                     chatHistory.value.push({
+                        id: generateUUID(),
                         role: 'assistant',
                         name: currentCharacter.value.name,
-                        content: currentCharacter.value.first_mes
+                        content: currentCharacter.value.first_mes,
+                        storageStatus: 'final'
                     });
                 }
                 memories.value = [];
                 classicMemories.value = [];
                 resetUiTemplateRuntimeState();
+                scheduleChatStatsRecompute(0);
                 saveData();
                 showToast('聊天记录、记忆和变量记录已清空', 'success');
             });
@@ -4431,6 +4572,7 @@ ${content}
                 delete msg.editMessageHeight;
                 delete msg.originalCot;
                 delete msg.originalSys;
+                scheduleChatStatsRecompute(0);
                 saveData();
                 showToast('消息已保存', 'success');
             }
@@ -4789,6 +4931,7 @@ ${content}
                     ? await removeMemoriesForConversationTurn(snapshot, affectedTurn)
                     : 0;
                 chatHistory.value.splice(index, 1);
+                scheduleChatStatsRecompute(0);
                 await saveConversationMutationNow({ saveTemplateRuntime: uiCleanup.logs > 0 || uiCleanup.blocks > 0 });
                 const extras = [];
                 if (removed > 0) extras.push(`${removed} 个关联分片`);
@@ -5759,7 +5902,10 @@ ${content}
                 return message;
             };
 
-            const appendAssistantText = (message, field, text) => {
+            const pendingStreamAppends = new Map();
+            let streamAppendTimer = null;
+
+            const commitAssistantText = (message, field, text) => {
                 if (!message || !text) return;
                 const isContinuation = continuingAssistantMessage && message.id === continuingAssistantMessage.id;
                 const startedKey = field === 'reasoning' ? 'continuationReasoningStarted' : 'continuationContentStarted';
@@ -5793,6 +5939,30 @@ ${content}
                 if (isContinuation) activeToolContinuationHasResponse.value = true;
             };
 
+            const flushStreamAppends = () => {
+                if (streamAppendTimer) clearTimeout(streamAppendTimer);
+                streamAppendTimer = null;
+                const pending = [...pendingStreamAppends.values()];
+                pendingStreamAppends.clear();
+                pending.forEach(({ message, field, text }) => commitAssistantText(message, field, text));
+            };
+
+            const appendAssistantText = (message, field, text) => {
+                if (!message || !text) return;
+                if (!settings.stream || !isReceiving.value) {
+                    commitAssistantText(message, field, text);
+                    return;
+                }
+                const key = `${message.id || 'pending'}:${field}`;
+                const pending = pendingStreamAppends.get(key);
+                if (pending) pending.text += text;
+                else pendingStreamAppends.set(key, { message, field, text });
+                if (!streamAppendTimer) streamAppendTimer = setTimeout(
+                    flushStreamAppends,
+                    window.RPHRuntimePolicy?.limits?.streamFlushMs || 50
+                );
+            };
+
             const appendAssistantReasoning = (message, text) => {
                 if (!message || !text) return;
                 if (continuationToolCall && continuingAssistantMessage && message.id === continuingAssistantMessage.id) {
@@ -5812,16 +5982,19 @@ ${content}
                 isCotOpen: false,
                 isReasoningOpen: true,
                 isReasoningUserToggled: false,
-                isReasoningAutoCollapsed: false
+                isReasoningAutoCollapsed: false,
+                storageStatus: 'draft'
             });
 
             const ensureAssistantMessage = (content = '', reasoning = '') => {
                 if (assistantMessage) return assistantMessage;
                 if (continuingAssistantMessage) {
                     assistantMessage = prepareAssistantMessageForAppend(continuingAssistantMessage);
+                    assistantMessage.storageStatus = 'draft';
                     if (reasoning) appendAssistantReasoning(assistantMessage, reasoning);
                     if (content) appendAssistantText(assistantMessage, 'content', content);
                     isReceiving.value = true;
+                    startDraftPersistence(assistantMessage);
                     return assistantMessage;
                 }
 
@@ -5829,6 +6002,7 @@ ${content}
                 promoteActiveToolCallsFromAssistant(assistantMessage);
                 chatHistory.value.push(assistantMessage);
                 isReceiving.value = true;
+                startDraftPersistence(assistantMessage);
                 return assistantMessage;
             };
 
@@ -6063,6 +6237,7 @@ ${content}
                             }
                         }
 
+                        flushStreamAppends();
                         recordApiUsage(responseUsage, {
                             type: activeToolDepth > 0 ? 'tool_continuation' : 'chat',
                             model: requestModel,
@@ -6130,6 +6305,10 @@ ${content}
                     chatHistory.value.push({ role: 'system', name: currentCharacter.value.name, content: error.message });
                 }
             } finally {
+                flushStreamAppends();
+                scheduleChatStatsRecompute(0);
+                stopDraftPersistence();
+                if (assistantMessage) assistantMessage.storageStatus = 'final';
                 if (continuationToolCall && continuationToolCall.status === 'continuing') {
                     continuationToolCall.status = 'done';
                 }
@@ -9145,8 +9324,13 @@ image###生成的提示词###
         const prepareLoadedChatHistoryForDisplay = (messages = []) => messages
             .filter(msg => msg !== null && msg !== undefined)
             .map(msg => {
+                if (!msg.id) msg.id = generateUUID();
                 if (msg.isSelf === undefined) {
                     msg.isSelf = msg.role === 'user';
+                }
+                if (msg.storageStatus === 'draft') {
+                    const marker = '*-- App 异常退出，生成已中断 --*';
+                    window.RPHChatPersistence.recoverInterruptedDraft(msg, marker);
                 }
                 if (msg.role === 'user' || msg.role === 'assistant') {
                     delete msg.skipReveal;
@@ -9159,9 +9343,11 @@ image###生成的提示词###
             });
 
         const createInitialChatHistory = (char) => char?.first_mes ? [{
+            id: generateUUID(),
             role: 'assistant',
             name: char.name,
-            content: char.first_mes
+            content: char.first_mes,
+            storageStatus: 'final'
         }] : [];
 
         const getStoredChatHistoryWithRetry = async (id) => {
@@ -9183,16 +9369,28 @@ image###生成的提示词###
             if (savedChat === undefined && Number.isInteger(fallbackIndex)) {
                 savedChat = await getStoredChatHistoryWithRetry(fallbackIndex);
             }
-            if (savedChat === undefined) return createInitialChatHistory(char);
+            if (savedChat === undefined) {
+                const initial = createInitialChatHistory(char);
+                resetPersistedChatBaseline(char.uuid, []);
+                return initial;
+            }
             if (!Array.isArray(savedChat)) {
                 throw new TypeError('保存的聊天记录格式不是数组');
             }
             if (savedChat.some(message => message !== null && (typeof message !== 'object' || Array.isArray(message)))) {
                 throw new TypeError('保存的聊天记录包含无效消息');
             }
-            return savedChat.length > 0
+            const recoveredDrafts = savedChat.some(message => message?.storageStatus === 'draft');
+            const loaded = savedChat.length > 0
                 ? prepareLoadedChatHistoryForDisplay(savedChat)
                 : createInitialChatHistory(char);
+            resetPersistedChatBaseline(char.uuid, recoveredDrafts ? savedChat : loaded);
+            if (recoveredDrafts) {
+                const upserts = loaded.map((message, position) => ({ position, message: serializeChatMessage(message, 'final') }));
+                await db.applyChatChanges(char.uuid, upserts, []);
+                resetPersistedChatBaseline(char.uuid, loaded);
+            }
+            return loaded;
         };
 
         const DEFAULT_USER_REGEX_NAME = 'Auto Replace {{user}}';
@@ -9295,6 +9493,7 @@ image###生成的提示词###
                 loadGlobalUiTemplateRuntimeForCharacter(char);
             }
             chatHistory.value = loadedChatHistory;
+            resetChatRenderWindow();
 
             // Load Character Specific Data
             worldInfo.value = getCombinedWorldInfo(char);
@@ -9956,6 +10155,36 @@ image###生成的提示词###
             document.addEventListener('fullscreenchange', syncChatFullscreenState);
             document.addEventListener('webkitfullscreenchange', syncChatFullscreenState);
 
+            const nativeApp = window.Capacitor?.Plugins?.App;
+            if (nativeApp?.addListener) {
+                nativeAppStateListener = await nativeApp.addListener('appStateChange', ({ isActive }) => {
+                    if (isActive) {
+                        nextTick(() => syncMobileVisualViewport({ force: true }));
+                        return;
+                    }
+                    const activeDraft = [...chatHistory.value]
+                        .reverse()
+                        .find(message => message?.storageStatus === 'draft');
+                    if (activeDraft) {
+                        persistSingleDraft(activeDraft).catch(error => console.error('Background draft save failed:', error));
+                    }
+                    flushPendingChatHistorySave().catch(error => console.error('Background chat save failed:', error));
+                });
+                nativeBackButtonListener = await nativeApp.addListener('backButton', async () => {
+                    if (globalConfirmModal.value.show) {
+                        globalConfirmModal.value.onCancel?.();
+                    } else if (isMobileSidebarOpen) {
+                        closeMobileMenu();
+                    } else if (isChatFullscreen.value) {
+                        await toggleChatFullscreen();
+                    } else if (currentView.value !== 'chat') {
+                        currentView.value = 'chat';
+                    } else {
+                        await nativeApp.minimizeApp();
+                    }
+                });
+            }
+
             await loadData();
             fetchQuota(); // Fetch quota after saved settings are loaded
 
@@ -10478,6 +10707,7 @@ ${memoryFragmentSection}
                         await setStoredValue('characters', characters.value);
                     }
                     chatHistory.value = await loadStoredChatHistory(char, currentCharacterIndex.value);
+                    resetChatRenderWindow();
                 } catch (error) {
                     console.error('Error loading chat history on restore:', error);
                     currentCharacterIndex.value = -1;
@@ -10551,6 +10781,8 @@ ${memoryFragmentSection}
 
         onBeforeUnmount(() => {
             closeMobileMenu();
+            nativeAppStateListener?.remove();
+            nativeBackButtonListener?.remove();
             document.removeEventListener('fullscreenchange', syncChatFullscreenState);
             document.removeEventListener('webkitfullscreenchange', syncChatFullscreenState);
             if (window.visualViewport) {
@@ -10729,6 +10961,7 @@ ${memoryFragmentSection}
 
         return {
             switchProfile, createNewProfile, deleteProfile, userProfiles, activeProfileId, showProfileDropdown,
+            backupInProgress, exportNativeBackup, restoreNativeBackup,
             processMainContent,
             currentView, showDescriptionPanel, showModelSelector, modelSelectionTarget, openModelSelector, showChatModelSelector, showCharacterEditor, showAddCharacterMenu, showPresetEditor, showUiTemplateEditor,
             showActiveToolEditor,
@@ -10742,16 +10975,16 @@ ${memoryFragmentSection}
             showUpdateModal, updateCountdown, latestUpdate, closeUpdateModal, isUpdateScrolledToBottom, checkUpdateScroll, // Update Modal
             showConfirmModal, confirmMessage, modelMode, showNoMemoryNeededModal, // Export for template
             isGenerating, isRemoteGenerating, remoteEstimatedTime, isReceiving, isThinking, hasActiveToolInlineWork, isConversationBusy, activeToolContinuationMessageId, activeToolContinuationHasResponse, userInput, modelSearchQuery, activeModelTag, modelTags, characterSearchQuery, filteredModels, filteredCharacters,
-            user, settings, apiProviderOptions, selectedApiProvider, isCustomApiProvider, customApiProviderOptions, showApiProviderSelector, selectApiProvider, characters, currentCharacter, currentCharacterIndex, chatHistory, displayedChatMessages, handleChatScroll, presets, presetRoleOptions, fontFamilyOptions, imageStyleOptions, imageSizeOptions, imageGenCountOptions, scopeOptions, uiTemplatePlacementOptions, worldInfoPositionOptions, getPresetRoleLabel, getPresetRoleDisplayLabel, getPresetRoleBadgeClass, regexScripts, worldInfo,
+            user, settings, apiProviderOptions, selectedApiProvider, isCustomApiProvider, customApiProviderOptions, showApiProviderSelector, selectApiProvider, characters, currentCharacter, currentCharacterIndex, chatHistory, displayedChatMessages, chatTopSpacerHeight, chatBottomSpacerHeight, handleChatScroll, presets, presetRoleOptions, fontFamilyOptions, imageStyleOptions, imageSizeOptions, imageGenCountOptions, scopeOptions, uiTemplatePlacementOptions, worldInfoPositionOptions, getPresetRoleLabel, getPresetRoleDisplayLabel, getPresetRoleBadgeClass, regexScripts, worldInfo,
             activeTools, activeToolAggressivenessOptions: ACTIVE_TOOL_AGGRESSIVENESS_OPTIONS, editingActiveTool, normalizeActiveTools, isWebActiveTool, getActiveToolDisplayDescription, getActiveToolResultCountMin, getActiveToolResultCountMax,
             getToolCallModeText, hasThinkingOrTools, isMessageThinkingOrRunning, isThinkingSummaryOpen, toggleThinkingSummary, markThinkingSummaryDetailOpened, getTimelineSteps,
             chatRoundStats, conversationBodyLength, summaryCompressedBodyLength,
             editingCharacter, editingPreset, editingUiTemplate, toasts, chatContainer, isChatFullscreen, isMobileKeyboardOpen, inputBox, messageElements,
             isGeneratorLoading, generatorUrl, onGeneratorLoad, // Generator exports
-            isSquareLoading, squareUrl, onSquareLoad, // Square exports
+            isSquareLoading, squareUrl, onSquareLoad, openSquareExternally, // Square exports
             editorTab, characterDisplayLimit, displayedCharacters, loadMoreCharacters,
             isAutoImageGenEnabled,
-            apiStatus, apiLatency, imageGenStatus, imageGenLatency, checkAllStatuses, // Status Exports
+            apiStatus, apiLatency, imageGenStatus, imageGenLatency, checkAllStatuses, apiKeyInput, syncApiKeyInput, // Status Exports
             toggleAutoImageGen, setWorldInfoEnabled,
             quotaValue, quotaLoading, quotaError,
             // Memory System Exports
@@ -11237,7 +11470,7 @@ ${memoryFragmentSection}
             },
 
             // User Setup Method
-            showUserSetupModal, tempUserSetup,
+            showUserSetupModal, tempUserSetup, userSetupNameInput, syncUserSetupName,
             handleUserAvatarUpload: (event) => {
                 const file = event.target.files[0];
                 if (file) {
@@ -11254,11 +11487,15 @@ ${memoryFragmentSection}
                 }
             },
             saveUserSetup: () => {
-                if (!tempUserSetup.name || tempUserSetup.name === '请前往设置自定义你的名称') {
+                syncUserSetupName();
+                const name = String(tempUserSetup.name || '').trim();
+                if (!name || name === '请前往设置自定义你的名称') {
                     showToast('请输入有效的名称', 'error');
                     return;
                 }
-                user.name = tempUserSetup.name;
+                tempUserSetup.name = name;
+                user.name = name;
+                user.description = tempUserSetup.description;
                 user.person = tempUserSetup.person; // 保存偏好
 
                 // 应用人称选择到预设

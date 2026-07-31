@@ -1,0 +1,11 @@
+node_modules/
+.toolchains/
+dist/
+assets/vendor/
+assets/generated/
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+*.log
+*.apk
