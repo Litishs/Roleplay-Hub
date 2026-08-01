@@ -111,7 +111,8 @@ createApp({
         EmbeddedViewContent,
         GenerationTimer,
         SettingsPageHeader,
-        UiTemplatePending
+        UiTemplatePending,
+        UiTemplateFrame: window.RPHUiTemplateFrame
     },
     setup() {
         const cardUtils = window.RPHubCardUtils;
@@ -3167,12 +3168,12 @@ ${content}
         const renderUiTemplateHtml = (template) => {
             if (!template || !template.htmlTemplate) return '';
             const variables = template.variableState || {};
-            const html = renderUiTemplateString(stripUiTemplateCodeFence(template.htmlTemplate), variables);
-            return renderExecutableHtmlFrame(html, 'ui-template-iframe');
+            return renderUiTemplateString(stripUiTemplateCodeFence(template.htmlTemplate), variables);
         };
 
         const handleUiTemplateClick = (event) => {
-            const trigger = event.target?.closest?.('[data-slash]');
+            const path = event.composedPath ? event.composedPath() : [event.target];
+            const trigger = path.find(node => node?.getAttribute?.('data-slash')) || event.target?.closest?.('[data-slash]');
             if (!trigger) return;
             const command = trigger.getAttribute('data-slash');
             if (!command) return;

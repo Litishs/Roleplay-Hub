@@ -699,8 +699,9 @@
                                                 class="ui-template-message-block ui-template-message-block-top">
                                                 <div v-for="(html, tIndex) in msg.uiTemplateBlocks.top"
                                                     :key="'msg-ui-top-' + index + '-' + tIndex"
-                                                    class="w-full ui-template-render" @click="handleUiTemplateClick"
-                                                    v-html="html"></div>
+                                                    class="w-full ui-template-render" @click="handleUiTemplateClick">
+                                                    <ui-template-frame :html="html"></ui-template-frame>
+                                                </div>
                                             </div>
                                             <div v-if="msg.role === 'assistant' && uiTemplateUpdateStatus.state === 'running' && uiTemplateUpdateStatus.targetMessageId === msg.id && activeUiTemplates.some(t => t.placement === 'top')"
                                                 class="ui-template-message-block ui-template-message-block-top">
@@ -756,8 +757,9 @@
                                                 class="ui-template-message-block ui-template-message-block-bottom">
                                                 <div v-for="(html, tIndex) in msg.uiTemplateBlocks.bottom"
                                                     :key="'msg-ui-bottom-' + index + '-' + tIndex"
-                                                    class="w-full ui-template-render" @click="handleUiTemplateClick"
-                                                    v-html="html"></div>
+                                                    class="w-full ui-template-render" @click="handleUiTemplateClick">
+                                                    <ui-template-frame :html="html"></ui-template-frame>
+                                                </div>
                                             </div>
                                             <div v-if="msg.role === 'assistant' && uiTemplateUpdateStatus.state === 'running' && uiTemplateUpdateStatus.targetMessageId === msg.id && activeUiTemplates.some(t => t.placement === 'bottom')"
                                                 class="ui-template-message-block ui-template-message-block-bottom">
@@ -4048,8 +4050,9 @@
                     </div>
                     <div>
                         <label class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">原始状态预览</label>
-                        <div class="ui-template-preview w-full bg-white p-0 overflow-visible min-h-[460px]"
-                            v-html="renderEditingUiTemplatePreview()"></div>
+                        <div class="ui-template-preview w-full bg-white p-0 overflow-visible min-h-[460px]">
+                            <ui-template-frame :html="renderEditingUiTemplatePreview()"></ui-template-frame>
+                        </div>
                     </div>
                     </div>
                 </div>
@@ -4916,6 +4919,7 @@
     <script src="assets/js/utils.js"></script>
     <script src="assets/js/card-utils.js"></script>
     <script src="assets/js/ui-select.js"></script>
+    <script src="assets/js/ui-template-frame.js"></script>
     <script src="assets/js/app.js"></script>
 </body>
 
