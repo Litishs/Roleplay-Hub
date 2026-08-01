@@ -106,18 +106,112 @@
 
     /* 逐个执行模板脚本。多个脚本合并进同一函数体，var/函数声明跨块共享；
      * 每段独立 try/catch，模板异常不打断主应用。
+     * 执行后收集脚本顶层绑定（函数/var/const/let）到实例作用域，
+     * 供 shadowRoot 上的内联事件委托（onclick 等）调用。
      */
-    const runUiTemplateScripts = (docShim, scripts) => {
+    const instanceScopes = new WeakMap();
+
+    const extractTopLevelNames = (code) => {
+        const names = new Set();
+        const patterns = [
+            /^\s*function\s+([A-Za-z_$][\w$]*)\s*\(/gm,
+            /^\s*(?:var|const|let)\s+([A-Za-z_$][\w$]*)\s*(?:=|;)/gm
+        ];
+        for (const re of patterns) {
+            let match;
+            while ((match = re.exec(code))) names.add(match[1]);
+        }
+        return [...names];
+    };
+
+    const runUiTemplateScripts = (docShim, scripts, shadowRoot) => {
         const executable = (scripts || []).map(code => {
             const text = String(code || '');
             return text.trim() ? 'try{\n' + text + '\n}catch(e){console.warn(\'[UI模板] 模板脚本执行失败\', e)}' : '';
         }).filter(Boolean).join('\n');
-        if (!executable.trim()) return;
+        if (!executable.trim()) return null;
+
+        const names = extractTopLevelNames(executable);
+        const collect = names.length
+            ? '\n;return [' + names.map(n => 'typeof ' + n + '!=="undefined"?' + n + ':undefined').join(',') + '];'
+            : '';
+
+        /* 模板脚本里的 window 是 new Function 的形参（这里注入的 shimWindow）。
+         * 关键：屏蔽 window.parent / window.top ——
+         *   1) 模板的 startAutoRefresh() 会 observeDocForRefresh(window.parent.document)，
+         *      用 MutationObserver 观察主文档整个 body，任何消息渲染/滚动都会触发
+         *      180ms 防抖重建，面板按钮被反复替换 → 「点了没反应」；
+         *   2) collectContext() 每次 interval tick 都会读主文档 querySelectorAll + 文本，
+         *      长对话时阻塞主线程 → 「卡片显示了但要等一会才能点」。
+         * 屏蔽后模板只读自身 shadowRoot（快），行为其余保持不变（triggerSlash 桥接宿主）。
+         */
+        const shimWindow = new Proxy(window, {
+            get(target, prop, receiver) {
+                if (prop === 'parent' || prop === 'top') return null;
+                if (prop === 'triggerSlash') {
+                    return typeof target.triggerSlash === 'function' ? target.triggerSlash.bind(target) : null;
+                }
+                const value = Reflect.get(target, prop, receiver);
+                return typeof value === 'function' ? value.bind(target) : value;
+            }
+        });
+
         try {
-            const fn = new Function('document', 'window', executable);
-            fn.call(window, docShim, window);
+            const fn = new Function('document', 'window', executable + collect);
+            const values = fn.call(window, docShim, shimWindow);
+            const scope = {};
+            names.forEach((name, index) => {
+                const value = values && values[index];
+                if (value !== undefined) scope[name] = value;
+            });
+            // 模板内联事件（onclick 等）里的 document 需指向模板的 document shim，
+            // 否则 document.getElementById 会在主文档中查找，找不到 shadowRoot 内元素。
+            scope.document = docShim;
+            if (shadowRoot) instanceScopes.set(shadowRoot, scope);
+            return scope;
         } catch (e) {
             console.warn('[UI模板] 模板脚本执行失败', e);
+            return null;
+        }
+    };
+
+    /* 在实例作用域中执行内联事件代码（如 onclick="suggestAction(...)"）。
+     * 模板脚本运行在 new Function 局部作用域，内联 handler 无法直接访问，
+     * 需经 with + Proxy 把标识符解析到实例作用域，缺失时回退全局。
+     */
+    const runInlineHandler = (scope, element, code) => {
+        const scopeProxy = new Proxy(scope, {
+            get(target, key) {
+                if (key in target) return target[key];
+                const global = window[key];
+                return typeof global === 'function' ? global.bind(window) : global;
+            },
+            has() { return true; }
+        });
+        const fn = new Function('with(arguments[0]){ return (' + code + '); }');
+        fn.call(element, scopeProxy);
+    };
+
+    /* shadowRoot 捕获阶段事件委托：带内联事件属性（onclick/onchange/oninput）
+     * 的元素在实例作用域执行，模拟 iframe 模式下内联 handler 的全局可访问性。
+     */
+    const INLINE_EVENTS = ['click', 'change', 'input'];
+
+    const createInlineDelegate = (shadowRoot) => (event) => {
+        // 真实触摸的 event.target 通常是按钮的子元素（如 <span>/<small>），
+        // 需沿 composedPath 向上找到真正带内联 handler 的元素。
+        const path = event.composedPath ? event.composedPath() : [event.target];
+        const target = path.find(node => node && typeof node.getAttribute === 'function' && node.getAttribute('on' + event.type));
+        if (!target) return;
+        const code = target.getAttribute('on' + event.type);
+        const scope = instanceScopes.get(shadowRoot);
+        if (!scope) return;
+        event.preventDefault();
+        event.stopPropagation();
+        try {
+            runInlineHandler(scope, target, code);
+        } catch (e) {
+            console.warn('[UI模板] 内联事件执行失败', e);
         }
     };
 
@@ -127,13 +221,19 @@
         props: { html: { type: String, default: '' } },
         template: '<div class="ui-template-frame-host" style="width:100%;max-width:100%"></div>',
         mounted() { this.renderShadow(); },
-        updated() { this.renderShadow(); },
+        updated() {
+            // 只在 html 真正变化时重建 shadowRoot，避免无关更新导致
+            // 面板反复重建（每次重建都会重跑模板脚本、新增 setInterval）。
+            if (this._lastRenderedHtml === this.html) return;
+            this.renderShadow();
+        },
         beforeUnmount() { this._shadowRendered = false; },
         methods: {
             renderShadow() {
                 const el = this.$el;
                 if (!el) return;
                 const html = this.html || '';
+                this._lastRenderedHtml = html;
 
                 if (/<iframe[\s>]/i.test(html)) {
                     el.innerHTML = html;
@@ -167,7 +267,14 @@
                 }
                 root.appendChild(wrap);
 
-                runUiTemplateScripts(createUiTemplateDocShim(root, wrap), split.scripts);
+                runUiTemplateScripts(createUiTemplateDocShim(root, wrap), split.scripts, root);
+
+                if (!this._inlineDelegate) {
+                    this._inlineDelegate = createInlineDelegate(root);
+                    for (const eventType of INLINE_EVENTS) {
+                        root.addEventListener(eventType, this._inlineDelegate, true);
+                    }
+                }
             }
         }
     };
@@ -177,6 +284,9 @@
         splitUiTemplateHtml,
         createUiTemplateDocShim,
         runUiTemplateScripts,
-        rewriteRootSelectors
+        rewriteRootSelectors,
+        runInlineHandler,
+        extractTopLevelNames,
+        instanceScopes
     };
 })();
