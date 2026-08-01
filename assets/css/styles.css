@@ -2324,6 +2324,24 @@ opacity: 0;
     max-width: 100%;
     height: auto;
 }
+.ui-template-render .template-root,
+.ui-template-preview .template-root {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    word-wrap: break-word;
+}
+.ui-template-render .template-root img,
+.ui-template-render .template-root video,
+.ui-template-render .template-root canvas,
+.ui-template-render .template-root svg,
+.ui-template-preview .template-root img,
+.ui-template-preview .template-root video,
+.ui-template-preview .template-root canvas,
+.ui-template-preview .template-root svg {
+    max-width: 100% !important;
+    height: auto;
+}
 .ui-template-message-block {
     display: flex;
     flex-direction: column;
