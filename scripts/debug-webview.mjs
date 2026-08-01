@@ -119,6 +119,144 @@ const expression = requestedExpression === 'setup'
                 originalLength: String(originalSettings?.apiKey || '').length,
             });
         })()`
+    : requestedExpression === 'rich-message-state'
+        ? `JSON.stringify({
+            lifecycleActive: window.RPHFrameLifecycle?.getActiveCount?.() ?? null,
+            lifecycleLimit: window.RPHFrameLifecycle?.maxActiveFrames ?? null,
+            frames: [...document.querySelectorAll('iframe')].map((frame, index) => {
+                const doc = frame.contentDocument;
+                const body = doc?.body;
+                const elements = body ? [...body.querySelectorAll('*')] : [];
+                const visibleElements = elements.filter(element => {
+                    const style = frame.contentWindow.getComputedStyle(element);
+                    const rect = element.getBoundingClientRect();
+                    return style.display !== 'none' && style.visibility !== 'hidden'
+                        && Number(style.opacity || 1) > 0 && rect.width > 0 && rect.height > 0;
+                });
+                const images = body ? [...body.querySelectorAll('img')] : [];
+                const rect = frame.getBoundingClientRect();
+                const markdown = frame.closest('.markdown-body');
+                return {
+                    index,
+                    className: frame.className,
+                    sourceKind: frame.srcdoc ? 'srcdoc' : (frame.getAttribute('src') || 'none'),
+                    attributeNames: frame.getAttributeNames(),
+                    styleLength: String(frame.getAttribute('style') || '').length,
+                    sandboxPresent: frame.hasAttribute('sandbox'),
+                    parentTag: frame.parentElement?.tagName || null,
+                    parentClass: frame.parentElement?.className || '',
+                    markdownHtmlLength: String(markdown?.innerHTML || '').length,
+                    markdownTextLength: String(markdown?.innerText || '').trim().length,
+                    markdownScriptCount: markdown?.querySelectorAll('script').length ?? null,
+                    markdownButtonCount: markdown?.querySelectorAll('button,[role="button"],input[type="button"]').length ?? null,
+                    suspended: frame.classList.contains('html-frame-suspended'),
+                    intersectingViewport: rect.bottom > 0 && rect.top < window.innerHeight,
+                    frameHeight: Math.round(rect.height),
+                    srcdocLength: String(frame.srcdoc || '').length,
+                    readyState: doc?.readyState || null,
+                    bodyChildren: body?.children?.length ?? null,
+                    bodyTextLength: String(body?.innerText || '').trim().length,
+                    bodyHtmlLength: String(body?.innerHTML || '').length,
+                    bodyScrollHeight: body?.scrollHeight ?? null,
+                    elementCount: elements.length,
+                    visibleElementCount: visibleElements.length,
+                    scriptCount: body?.querySelectorAll('script').length ?? null,
+                    styleCount: doc?.querySelectorAll('style,link[rel="stylesheet"]').length ?? null,
+                    buttonCount: body?.querySelectorAll('button,[role="button"],input[type="button"]').length ?? null,
+                    imageCount: images.length,
+                    loadedImageCount: images.filter(image => image.complete && image.naturalWidth > 0).length,
+                    bodyBackground: body ? frame.contentWindow.getComputedStyle(body).backgroundColor : null,
+                    bodyColor: body ? frame.contentWindow.getComputedStyle(body).color : null,
+                };
+            }),
+        })`
+    : requestedExpression === 'rich-source-state'
+        ? `(async () => {
+            const characters = await window.RPHStorage.get('rp_hub_characters') || [];
+            const reports = [];
+            for (let characterIndex = 0; characterIndex < characters.length; characterIndex += 1) {
+                const character = characters[characterIndex];
+                const messages = await window.RPHStorage.loadChat(character.uuid);
+                messages.forEach((message, messageIndex) => {
+                    const content = String(message?.content || '');
+                    if (!/<iframe\\b/i.test(content)) return;
+                    reports.push({
+                        characterIndex,
+                        messageIndex,
+                        contentLength: content.length,
+                        iframeCount: (content.match(/<iframe\\b/gi) || []).length,
+                        hasSrcdoc: /\\bsrcdoc\\s*=/i.test(content),
+                        hasSrc: /\\bsrc\\s*=/i.test(content),
+                        hasScript: /<script\\b/i.test(content),
+                        hasFullDocument: /<!doctype html>|<html\\b/i.test(content),
+                        hasCodeFence: content.includes(String.fromCharCode(96).repeat(3)),
+                    });
+                });
+            }
+            return JSON.stringify({ characterCount: characters.length, reports });
+        })()`
+    : requestedExpression === 'rich-layout-state'
+        ? `JSON.stringify([...document.querySelectorAll('iframe.executable-html-frame')].map((frame, frameIndex) => {
+            const doc = frame.contentDocument;
+            const win = frame.contentWindow;
+            const body = doc?.body;
+            const summarize = element => {
+                const rect = element.getBoundingClientRect();
+                const style = win.getComputedStyle(element);
+                return {
+                    tag: element.tagName,
+                    classLength: String(element.className || '').length,
+                    top: Math.round(rect.top),
+                    bottom: Math.round(rect.bottom),
+                    left: Math.round(rect.left),
+                    right: Math.round(rect.right),
+                    width: Math.round(rect.width),
+                    height: Math.round(rect.height),
+                    display: style.display,
+                    visibility: style.visibility,
+                    opacity: style.opacity,
+                    position: style.position,
+                    zIndex: style.zIndex,
+                    background: style.backgroundColor,
+                };
+            };
+            const elements = body ? [...body.querySelectorAll('*')] : [];
+            const rendered = elements.filter(element => {
+                const rect = element.getBoundingClientRect();
+                const style = win.getComputedStyle(element);
+                return style.display !== 'none' && style.visibility !== 'hidden'
+                    && Number(style.opacity || 1) > 0 && rect.width > 0 && rect.height > 0;
+            });
+            const bounds = rendered.reduce((result, element) => {
+                const rect = element.getBoundingClientRect();
+                result.minTop = Math.min(result.minTop, rect.top);
+                result.maxBottom = Math.max(result.maxBottom, rect.bottom);
+                return result;
+            }, { minTop: Number.POSITIVE_INFINITY, maxBottom: Number.NEGATIVE_INFINITY });
+            return {
+                frameIndex,
+                frameRect: frame.getBoundingClientRect().toJSON(),
+                innerWidth: win?.innerWidth ?? null,
+                innerHeight: win?.innerHeight ?? null,
+                bodyScrollHeight: body?.scrollHeight ?? null,
+                documentScrollHeight: doc?.documentElement?.scrollHeight ?? null,
+                renderedBounds: bounds,
+                bodyChildren: body ? [...body.children].slice(0, 24).map(summarize) : [],
+                images: body ? [...body.querySelectorAll('img')].slice(0, 8).map(summarize) : [],
+                buttons: body ? [...body.querySelectorAll('button,[role="button"],input[type="button"]')].slice(0, 12).map(summarize) : [],
+            };
+        }))`
+    : requestedExpression === 'request-diagnostic-state'
+        ? `JSON.stringify({
+            latest: window.RPHRequestDiagnostics?.getLatest?.() || null,
+            recordCount: window.RPHRequestDiagnostics?.getAll?.().length || 0,
+            maxRecords: window.RPHRequestDiagnostics?.maxRecords || null,
+        })`
+    : requestedExpression === 'request-diagnostics-clear'
+        ? `(() => {
+            window.RPHRequestDiagnostics?.clear?.();
+            return JSON.stringify({ recordCount: window.RPHRequestDiagnostics?.getAll?.().length || 0 });
+        })()`
     : requestedExpression;
 
 if (!endpoint || !expression) {

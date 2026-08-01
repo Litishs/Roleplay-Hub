@@ -1010,15 +1010,17 @@
                             </div>
                         </div>
                         <div class="relative w-full flex items-end gap-2 px-1">
-                            <textarea v-model="userInput" @input="autoResizeInput" @focus="handleChatInputFocus"
-                                @blur="handleChatInputBlur" @keydown.enter.prevent="sendMessage"
-                                :placeholder="'输入消息...'"
-                                class="flex-1 bg-gray-100/70 text-gray-800 rounded-2xl px-4 py-2.5 md:px-4 md:py-2.5 focus:outline-none focus:ring-2 focus:ring-primary-500/30 focus:border-primary-400 resize-none border border-transparent shadow-inner transition-all focus:bg-white chat-input-scrollbar min-h-[44px] md:min-h-[46px] max-h-[140px] md:max-h-[160px]"
-                                rows="1" ref="inputBox"></textarea>
+                            <textarea role="textbox" aria-multiline="true"
+                                @input="handleChatInput" @compositionstart="handleChatCompositionStart"
+                                @compositionend="handleChatCompositionEnd" @focus="handleChatInputFocus"
+                                @blur="handleChatInputBlur" @keydown="handleChatInputKeydown"
+                                @paste="handleChatInputPaste" placeholder="输入消息..."
+                                class="chat-input-box flex-1 bg-gray-100/70 text-gray-800 rounded-2xl px-4 py-2.5 md:px-4 md:py-2.5 focus:outline-none focus:ring-2 focus:ring-primary-500/30 focus:border-primary-400 border border-transparent shadow-inner transition-colors focus:bg-white chat-input-scrollbar resize-none overflow-y-auto whitespace-pre-wrap break-words min-h-[44px] md:min-h-[46px] max-h-[260px] md:max-h-[320px]"
+                                ref="inputBox"></textarea>
 
                             <!-- Send/Stop Button -->
                             <div class="flex-shrink-0 flex items-center gap-1">
-                                <button v-if="!isConversationBusy" @click="sendMessage" :disabled="!userInput.trim()"
+                                <button v-if="!isConversationBusy" @pointerdown="prepareChatInputSend" @click="sendMessage"
                                     class="p-2 md:p-2.5 bg-primary-600 text-white rounded-2xl md:hover:bg-primary-700 md:hover:shadow-lg md:hover:-translate-y-0.5 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:translate-y-0 transition-all shadow-md flex items-center justify-center w-[44px] h-[44px] md:w-[46px] md:h-[46px]"
                                     title="发送">
                                     <svg class="w-5 h-5 transform rotate-90" fill="none"
@@ -4907,6 +4909,7 @@
     </div>
 
     <script src="assets/js/runtime-policy.js"></script>
+    <script src="assets/js/request-diagnostics.js"></script>
     <script src="assets/js/chat-persistence.js"></script>
     <script src="assets/js/storage-repository.js"></script>
     <script src="assets/js/html-frame-lifecycle.js"></script>
