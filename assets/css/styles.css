@@ -425,6 +425,16 @@
                 background-clip: content-box;
             }
 
+            .chat-input-box {
+                user-select: text;
+                -webkit-user-select: text;
+                caret-color: #1f2937;
+            }
+
+            .chat-input-box::placeholder {
+                color: #9ca3af;
+            }
+
             .markdown-body pre,
             .markdown-body table {
                 scrollbar-width: none;

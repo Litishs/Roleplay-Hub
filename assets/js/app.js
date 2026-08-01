@@ -401,6 +401,9 @@ createApp({
         const messageElements = ref([]);
         let mobileViewportRaf = null;
         let mobileKeyboardBlurTimer = null;
+        let chatInputComposing = false;
+        let chatInputSyncRaf = null;
+        let chatInputResizeRaf = null;
         let lastAppliedMobileViewportHeight = 0;
         let lastAppliedMobileKeyboardInset = 0;
         let lastAppliedMobileBackgroundHeight = 0;
@@ -435,20 +438,105 @@ createApp({
         }, { deep: true, flush: 'post' });
 
 
-        const autoResizeInput = () => {
-            if (inputBox.value) {
-                inputBox.value.style.height = 'auto';
-                if (userInput.value === '') {
-                    inputBox.value.style.height = '';
-                } else {
-                    inputBox.value.style.height = Math.min(inputBox.value.scrollHeight, 180) + 'px';
-                }
+        const resizeChatInputElement = (element = inputBox.value) => {
+            if (!element) return;
+            if (element.tagName === 'TEXTAREA') {
+                const computed = getComputedStyle(element);
+                const maxHeight = parseInt(computed.maxHeight, 10) || 260;
+                element.style.height = 'auto';
+                const nextHeight = Math.min(Math.max(element.scrollHeight, 44), maxHeight);
+                element.style.height = `${nextHeight}px`;
+                element.style.overflowY = element.scrollHeight > maxHeight ? 'auto' : 'hidden';
+            } else if (element.style.height) {
+                element.style.height = '';
             }
         };
 
-        watch(userInput, () => {
-            nextTick(autoResizeInput);
-        });
+        const autoResizeInput = (element = inputBox.value) => {
+            if (chatInputResizeRaf) cancelAnimationFrame(chatInputResizeRaf);
+            const target = element?.currentTarget || element?.target || element || inputBox.value;
+            chatInputResizeRaf = requestAnimationFrame(() => {
+                chatInputResizeRaf = null;
+                resizeChatInputElement(target?.isConnected === false ? inputBox.value : target);
+            });
+        };
+
+        const syncChatInputFromElement = (element = inputBox.value) => {
+            let value = '';
+            if (element) {
+                value = typeof element.value === 'string' ? element.value
+                    : (typeof element.innerText === 'string' ? element.innerText : element.textContent);
+                value = String(value || '')
+                    .replace(/\u00a0/g, ' ')
+                    .replace(/\r\n?/g, '\n')
+                    .trimEnd();
+            }
+            if (userInput.value !== value) userInput.value = value;
+            return value;
+        };
+
+        const handleChatInputPaste = (event) => {
+            const element = event?.currentTarget || inputBox.value;
+            if (!element) return;
+            const text = String(event?.clipboardData?.getData('text/plain') || '')
+                .replace(/\r\n?/g, '\n')
+                .replace(/\u00a0/g, ' ');
+            if (!text) return;
+            event.preventDefault();
+            document.execCommand('insertText', false, text);
+            syncChatInputFromElement(element);
+            autoResizeInput(element);
+        };
+
+        const handleChatInput = (event) => {
+            if (event?.isComposing || chatInputComposing) return;
+            const element = event?.currentTarget || inputBox.value;
+            if (chatInputSyncRaf) cancelAnimationFrame(chatInputSyncRaf);
+            chatInputSyncRaf = requestAnimationFrame(() => {
+                chatInputSyncRaf = null;
+                if (!chatInputComposing) {
+                    syncChatInputFromElement(element);
+                    autoResizeInput(element);
+                }
+            });
+        };
+
+        const handleChatCompositionStart = () => {
+            chatInputComposing = true;
+            if (chatInputSyncRaf) {
+                cancelAnimationFrame(chatInputSyncRaf);
+                chatInputSyncRaf = null;
+            }
+            if (chatInputResizeRaf) {
+                cancelAnimationFrame(chatInputResizeRaf);
+                chatInputResizeRaf = null;
+            }
+        };
+
+        const handleChatCompositionEnd = (event) => {
+            chatInputComposing = false;
+            const element = event?.currentTarget || inputBox.value;
+            syncChatInputFromElement(element);
+            autoResizeInput(element);
+        };
+
+        const prepareChatInputSend = (event) => {
+            chatInputComposing = false;
+            if (chatInputSyncRaf) {
+                cancelAnimationFrame(chatInputSyncRaf);
+                chatInputSyncRaf = null;
+            }
+            syncChatInputFromElement(inputBox.value || event?.currentTarget);
+        };
+
+        const handleChatInputKeydown = (event) => {
+            if (event?.key !== 'Enter') return;
+            if (event.isComposing || chatInputComposing || event.keyCode === 229) return;
+            if (event.shiftKey) return;
+            event.preventDefault();
+            syncChatInputFromElement(event.currentTarget || inputBox.value);
+            sendMessage();
+        };
 
         const isMobileViewport = () => (
             (window.matchMedia && window.matchMedia('(max-width: 768px)').matches)
@@ -552,7 +640,8 @@ createApp({
             scheduleMobileVisualViewportSync({ force: true });
         };
 
-        const handleChatInputBlur = () => {
+        const handleChatInputBlur = (event) => {
+            prepareChatInputSend(event);
             clearTimeout(mobileKeyboardBlurTimer);
             mobileKeyboardBlurTimer = setTimeout(() => {
                 isMobileKeyboardOpen.value = false;
@@ -2934,6 +3023,7 @@ createApp({
                     let isUpdating = false;
                     function updateHeight() {
                         if (!window.frameElement || isUpdating) return;
+                        if (window.frameElement.hasAttribute('data-rph-fixed-height')) return;
                         isUpdating = true;
                         requestAnimationFrame(function() {
                             var body = document.body;
@@ -3028,10 +3118,17 @@ ${content}
 </html>`;
         };
 
-        const createExecutableHtmlIframe = (rawHtml, extraClass = '') => {
+        const createExecutableHtmlIframe = (rawHtml, extraClass = '', options = {}) => {
             const iframe = document.createElement('iframe');
+            const hasFixedHeight = options.fixedHeight !== null
+                && options.fixedHeight !== undefined
+                && options.fixedHeight !== '';
+            const requestedHeight = Number(options.fixedHeight);
+            const fixedHeight = hasFixedHeight && Number.isFinite(requestedHeight)
+                ? Math.min(1200, Math.max(240, requestedHeight))
+                : null;
             iframe.className = `w-full bg-white block executable-html-frame ${extraClass}`.trim();
-            iframe.style.height = 'auto';
+            iframe.style.height = fixedHeight ? `${fixedHeight}px` : 'auto';
             iframe.style.overflow = 'hidden';
             iframe.style.transition = 'height 0.2s ease-out';
             iframe.style.margin = '0';
@@ -3039,7 +3136,9 @@ ${content}
             iframe.setAttribute('scrolling', 'no');
             iframe.setAttribute('sandbox', htmlIframeSandbox);
             iframe.setAttribute('allow', 'clipboard-read; clipboard-write; fullscreen; autoplay; encrypted-media; picture-in-picture');
+            if (fixedHeight) iframe.setAttribute('data-rph-fixed-height', String(fixedHeight));
             iframe.onload = function () {
+                if (this.hasAttribute('data-rph-fixed-height')) return;
                 try {
                     setTimeout(() => {
                         if (this.contentWindow && this.contentWindow.document) {
@@ -3921,6 +4020,9 @@ ${content}
             htmlFrameDetectionCache.clear();
         }, { deep: true });
 
+        const htmlBlockStartPattern = /^\s*<(!doctype|html|head|body|div|span|section|article|aside|header|footer|nav|main|form|fieldset|ul|ol|li|table|style|script|template|button|input|select|textarea|canvas|video|audio|figure|dialog|details|summary|img|svg|p|h[1-6]|hr|blockquote|pre|a)\b/i;
+        const matchesHtmlBlockStart = (text) => htmlBlockStartPattern.test(String(text || ''));
+
         const contentUsesHtmlFrame = (text, role = 'assistant', skipRegex = false, cacheable = true) => {
             if (!text) return false;
             const cacheKey = `${role}_${skipRegex}_${text}`;
@@ -3936,7 +4038,7 @@ ${content}
             while ((codeMatch = codeFencePattern.exec(trimmed)) !== null) {
                 const lang = codeMatch[1] || '';
                 const blockContent = codeMatch[2] || '';
-                if (/\b(html|xml)\b/i.test(lang) || /^\s*<(!doctype|html|head|body|div|span|style|script|table|img)/i.test(blockContent)) {
+                if (/\b(html|xml)\b/i.test(lang) || matchesHtmlBlockStart(blockContent)) {
                     usesFrame = true;
                     break;
                 }
@@ -4084,7 +4186,11 @@ ${content}
 
             // Apply regex for display (real-time)
             processed = skipRegex ? processed : processRegex(processed, { isDisplay: true, role: role });
-            const createIframe = (rawHtml) => createExecutableHtmlIframe(rawHtml, 'border-t border-gray-200 shadow-sm');
+            const createIframe = (rawHtml, options = {}) => createExecutableHtmlIframe(
+                rawHtml,
+                'border-t border-gray-200 shadow-sm',
+                options
+            );
 
             // Configure DOMPurify
             const cleanConfig = {
@@ -4092,6 +4198,43 @@ ${content}
                 ADD_ATTR: ['style', 'open', 'srcdoc', 'sandbox', 'frameborder', 'allow', 'allowfullscreen', 'class', 'id', 'viewBox', 'fill', 'stroke', 'stroke-width', 'd', 'stroke-linecap', 'stroke-linejoin', 'x1', 'y1', 'x2', 'y2', 'offset', 'stop-color', 'stop-opacity', 'width', 'height', 'onclick', 'type', 'value', 'checked', 'data-slash'],
                 FORBID_ATTR: ['onmouseover', 'onload'], // Removed onclick to allow interactive UI
                 FORCE_BODY: true
+            };
+
+            const sanitizeWithControlledSrcdocFrames = (rawMarkup) => {
+                const parser = new DOMParser();
+                const sourceDoc = parser.parseFromString(String(rawMarkup || ''), 'text/html');
+                const frameSources = [];
+
+                sourceDoc.querySelectorAll('iframe[srcdoc]').forEach(sourceFrame => {
+                    const declaredHeight = Number.parseFloat(sourceFrame.getAttribute('height') || '');
+                    const frameIndex = frameSources.push({
+                        html: sourceFrame.getAttribute('srcdoc') || '',
+                        fixedHeight: Number.isFinite(declaredHeight) ? declaredHeight : null
+                    }) - 1;
+                    const placeholder = sourceDoc.createElement('div');
+                    placeholder.setAttribute('data-rph-srcdoc-frame', String(frameIndex));
+                    sourceFrame.replaceWith(placeholder);
+                });
+
+                const sanitized = DOMPurify.sanitize(sourceDoc.body.innerHTML, {
+                    ...cleanConfig,
+                    FORBID_TAGS: [...(cleanConfig.FORBID_TAGS || []), 'iframe']
+                });
+                if (!frameSources.length) return sanitized;
+
+                const sanitizedDoc = parser.parseFromString(sanitized, 'text/html');
+                sanitizedDoc.querySelectorAll('[data-rph-srcdoc-frame]').forEach(placeholder => {
+                    const frameIndex = Number.parseInt(placeholder.getAttribute('data-rph-srcdoc-frame'), 10);
+                    if (!Number.isInteger(frameIndex) || frameIndex < 0 || frameIndex >= frameSources.length) {
+                        placeholder.remove();
+                        return;
+                    }
+                    const frameSource = frameSources[frameIndex];
+                    placeholder.replaceWith(createIframe(frameSource.html, {
+                        fixedHeight: frameSource.fixedHeight
+                    }));
+                });
+                return sanitizedDoc.body.innerHTML;
             };
 
             const trimmed = processed.trim();
@@ -4130,7 +4273,7 @@ ${content}
 
                 // 1. Render Pre-text (Markdown)
                 if (preText.trim()) {
-                    resultHtml += DOMPurify.sanitize(marked.parse(preText), cleanConfig);
+                    resultHtml += sanitizeWithControlledSrcdocFrames(marked.parse(preText));
                 }
 
                 // 2. Render Iframe (HTML Card)
@@ -4146,7 +4289,7 @@ ${content}
 
                 // 3. Render Post-text (Markdown)
                 if (postText.trim()) {
-                    resultHtml += DOMPurify.sanitize(marked.parse(postText), cleanConfig);
+                    resultHtml += sanitizeWithControlledSrcdocFrames(marked.parse(postText));
                 }
 
                 return cacheRenderedMarkdown(cacheKey, resultHtml, cacheable);
@@ -4156,10 +4299,10 @@ ${content}
 
             // Smart detection: If content starts with block-level HTML and contains no Markdown Code Blocks,
             // assume it is raw HTML and skip marked parsing to prevent breaking layout/styles.
-            const startsWithBlockHtml = /^\s*<(div|table|section|article|aside|header|footer|style|script)/i.test(trimmed);
+            const startsWithBlockHtml = matchesHtmlBlockStart(trimmed);
             if (startsWithBlockHtml && !trimmed.includes('```')) {
                 // Directly sanitize and return, skipping Markdown parsing
-                const result = DOMPurify.sanitize(processed, cleanConfig);
+                const result = sanitizeWithControlledSrcdocFrames(processed);
                 return cacheRenderedMarkdown(cacheKey, result, cacheable);
             }
 
@@ -4172,7 +4315,7 @@ ${content}
                     .replace(/<\/?body[^>]*>/gi, '');
             }
 
-            let html = DOMPurify.sanitize(marked.parse(processed), cleanConfig);
+            let html = sanitizeWithControlledSrcdocFrames(marked.parse(processed));
 
             // Auto-render HTML code blocks AND escaped HTML texts
             try {
@@ -4206,7 +4349,7 @@ ${content}
                         const rawHtml = block.textContent;
                         // Check if it's HTML: has language class OR looks like HTML
                         const isHtmlClass = block.classList.contains('language-html') || block.classList.contains('language-xml');
-                        const looksLikeHtml = /^\s*<(!doctype|html|head|body|div|span|style|script|table|img)/i.test(rawHtml);
+                        const looksLikeHtml = matchesHtmlBlockStart(rawHtml);
 
                         if (isHtmlClass || looksLikeHtml) {
                             const iframe = createIframe(rawHtml);
@@ -4223,14 +4366,12 @@ ${content}
                 const paragraphs = doc.querySelectorAll('p');
                 if (paragraphs.length > 0) {
                     paragraphs.forEach(p => {
-                        if (/^\s*</.test(p.innerHTML)) {
-                            const rawHtml = p.textContent;
-                            if (/^\s*<(!doctype|html|head|body|div|span|style|script|table|img)/i.test(rawHtml)) {
-                                const iframe = createIframe(rawHtml);
-                                if (p.parentNode) {
-                                    p.parentNode.replaceChild(iframe, p);
-                                    modified = true;
-                                }
+                        const rawHtml = p.textContent || '';
+                        if (matchesHtmlBlockStart(rawHtml)) {
+                            const iframe = createIframe(rawHtml);
+                            if (p.parentNode) {
+                                p.parentNode.replaceChild(iframe, p);
+                                modified = true;
                             }
                         }
                     });
@@ -4433,11 +4574,18 @@ ${content}
         };
 
         const sendMessage = async () => {
-            if (!userInput.value.trim() || isConversationBusy.value) return;
+            if (isConversationBusy.value) return;
 
-            const content = userInput.value.trim();
+            chatInputComposing = false;
+            const content = syncChatInputFromElement().trim();
+            if (!content) return;
             const startTime = Date.now(); // Record click time
             userInput.value = '';
+            if (inputBox.value) {
+                if (typeof inputBox.value.value === 'string') inputBox.value.value = '';
+                else inputBox.value.innerText = '';
+            }
+            autoResizeInput();
 
             let finalContent = content;
             if (sysInstruction.value.trim()) {
@@ -4673,7 +4821,12 @@ ${content}
                 }));
             const recentMessages = sourceMessages.slice(-normalizedUiTemplateAnalysisDepth);
 
-            const fallbackModel = (settings.uiTemplateModel || '').trim();
+            const apiKey = syncApiKeyInput();
+            if (!apiKey) {
+                markUiTemplateStatus('skipped', '未填 API Key');
+                return false;
+            }
+            const fallbackModel = (settings.uiTemplateModel || '').trim() || (settings.model || '').trim();
             if (!fallbackModel) {
                 markUiTemplateStatus('skipped', '未选模型');
                 return false;
@@ -4689,6 +4842,7 @@ ${content}
                 let changedFieldCount = 0;
                 let changedTemplateCount = 0;
                 let failedTemplateCount = 0;
+                let firstFailureMessage = '';
                 const failedTemplateIds = new Set();
                 const pendingTemplateUpdates = [];
 
@@ -4740,11 +4894,11 @@ ${content}
                             method: 'POST',
                             headers: {
                                 'Content-Type': 'application/json',
-                                'Authorization': `Bearer ${settings.apiKey}`
+                                'Authorization': `Bearer ${apiKey}`
                             },
                             body: JSON.stringify({
                                 model,
-                                temperature: 1,
+                                temperature: 0.7,
                                 stream: false,
                                 messages: [
                                     {
@@ -4798,6 +4952,9 @@ ${content}
                         if (updateRun.signal.aborted || !isCurrentRun()) return;
                         failedTemplateCount++;
                         failedTemplateIds.add(template.id);
+                        if (!firstFailureMessage) {
+                            firstFailureMessage = String(e?.message || e || '未知错误');
+                        }
                         console.warn(`[UI模板] ${template.name || template.id} 未成功:`, e.message);
                     } finally {
                         if (isCurrentRun()) {
@@ -4827,7 +4984,8 @@ ${content}
                     await saveChatHistoryNow();
                 }
                 if (failedTemplateCount) {
-                    failUiTemplateAnalysis(`${failedTemplateCount} 个失败`, lockedTargetMessageId);
+                    const detail = firstFailureMessage ? `：${firstFailureMessage.slice(0, 80)}` : '';
+                    failUiTemplateAnalysis(`${failedTemplateCount} 个失败${detail}`, lockedTargetMessageId);
                 } else if (hasChanges) {
                     markUiTemplateStatus('success', `更新 ${changedFieldCount} 项`, 0, lockedTargetMessageId);
                 } else {
@@ -5883,6 +6041,7 @@ ${content}
             let rawAssistantContentForLog = '';
             let nativeReasoningForLog = '';
             let responseUsage = null;
+            let requestDiagnostic = null;
 
             if (continuingAssistantMessage && continuationToolCallId && Array.isArray(continuingAssistantMessage.toolCalls)) {
                 continuationToolCall = continuingAssistantMessage.toolCalls.find(call => call && call.id === continuationToolCallId) || null;
@@ -6008,21 +6167,29 @@ ${content}
 
             try {
                         const url = getApiEndpoint('chat/completions');
+                        const requestPayload = {
+                            model: requestModel,
+                            messages: apiMessages,
+                            temperature: settings.temperature,
+                            stream: settings.stream,
+                            ...(settings.stream ? { stream_options: { include_usage: true } } : {})
+                        };
+                        requestDiagnostic = window.RPHRequestDiagnostics?.start({
+                            url,
+                            payload: requestPayload,
+                            promptBuildMs: Date.now() - generationStartTime,
+                            requestType: activeToolDepth > 0 ? 'tool_continuation' : 'chat'
+                        }) || null;
                         const response = await fetch(url, {
                             method: 'POST',
                             headers: {
                                 'Content-Type': 'application/json',
                                 'Authorization': `Bearer ${settings.apiKey}`
                             },
-                            body: JSON.stringify({
-                                model: requestModel,
-                                messages: apiMessages,
-                                temperature: settings.temperature,
-                                stream: settings.stream,
-                                ...(settings.stream ? { stream_options: { include_usage: true } } : {})
-                            }),
+                            body: JSON.stringify(requestPayload),
                             signal: abortController.value.signal
                         });
+                        requestDiagnostic?.responseHeaders(response.status, response.headers.get('content-type') || '');
 
                         if (!response.ok) {
                             let errorDetail = '';
@@ -6079,6 +6246,7 @@ ${content}
                             while (true) {
                                 const { done, value } = await reader.read();
                                 if (done) break;
+                                requestDiagnostic?.networkChunk(value?.byteLength || 0);
 
                                 buffer += decoder.decode(value, { stream: true });
                                 const lines = buffer.split('\n');
@@ -6107,6 +6275,8 @@ ${content}
                                             const content = (!assistantMessage && !String(rawContent).trim()) ? '' : rawContent;
                                             const reasoning = extractNativeReasoning(delta) || extractNativeReasoning(choice);
                                             if (reasoning) nativeReasoningForLog += reasoning;
+                                            requestDiagnostic?.reasoning(reasoning);
+                                            requestDiagnostic?.content(rawContent);
 
                                             if (content || reasoning) {
                                                 let seededContent = false;
@@ -6153,6 +6323,7 @@ ${content}
                             // Compatibility Fix: Some APIs force return SSE format even if stream=false
                             // We read as text first to handle both valid JSON and "forced stream" text
                             const rawText = await response.text();
+                            requestDiagnostic?.networkChunk(new TextEncoder().encode(rawText).byteLength);
                             let content = '';
 
                             try {
@@ -6167,6 +6338,8 @@ ${content}
                                 const reasoning = extractNativeReasoning(msg) || extractNativeReasoning(data.choices?.[0]);
                                 if (content) rawAssistantContentForLog += content;
                                 if (reasoning) nativeReasoningForLog += reasoning;
+                                requestDiagnostic?.reasoning(reasoning);
+                                requestDiagnostic?.content(content);
 
                                 if (reasoning && !content) {
                                     isThinking.value = true;
@@ -6216,6 +6389,8 @@ ${content}
                                                 finalReasoning += chunkReasoning;
                                                 nativeReasoningForLog += chunkReasoning;
                                             }
+                                            requestDiagnostic?.reasoning(chunkReasoning);
+                                            requestDiagnostic?.content(chunkContent);
                                         } catch (err) {
                                             if (err.isApiError) throw err;
                                             if (/error/i.test(dataStr)) throw new Error(formatApiErrorMessage(response.status, dataStr));
@@ -6238,6 +6413,7 @@ ${content}
                         }
 
                         flushStreamAppends();
+                        requestDiagnostic?.complete(normalizeApiUsage(responseUsage));
                         recordApiUsage(responseUsage, {
                             type: activeToolDepth > 0 ? 'tool_continuation' : 'chat',
                             model: requestModel,
@@ -6271,6 +6447,7 @@ ${content}
                         }
 
             } catch (error) {
+                requestDiagnostic?.fail(error);
                 if (error.name === 'AbortError') {
                     _wasCancelled = true;
                     showToast('生成已中止', 'info');
@@ -10792,6 +10969,8 @@ ${memoryFragmentSection}
             window.removeEventListener('orientationchange', handleMobileOrientationChange);
             window.removeEventListener('resize', handleMobileViewportResize);
             if (mobileViewportRaf) cancelAnimationFrame(mobileViewportRaf);
+            if (chatInputSyncRaf) cancelAnimationFrame(chatInputSyncRaf);
+            if (chatInputResizeRaf) cancelAnimationFrame(chatInputResizeRaf);
             clearTimeout(mobileKeyboardBlurTimer);
         });
         // 解析并截断生成的包含 HTML UI 的正文，避免闪屏问题
@@ -11175,7 +11354,7 @@ ${memoryFragmentSection}
                 showToast(`成功导入 ${normalized.length} 个分片`, 'success');
             }, error => showToast(`导入失败: ${error.message || 'JSON 格式错误'}`, 'error')),
             toggleMobileMenu, closeMobileMenu,
-            fetchModels, selectModel, sendMessage, autoResizeInput, handleChatInputFocus, handleChatInputBlur, stopGeneration, clearChat, toggleChatFullscreen,
+            fetchModels, selectModel, sendMessage, autoResizeInput, handleChatInput, handleChatCompositionStart, handleChatCompositionEnd, handleChatInputPaste, prepareChatInputSend, handleChatInputKeydown, handleChatInputFocus, handleChatInputBlur, stopGeneration, clearChat, toggleChatFullscreen,
             handleConfirm, handleCancel, // Export handlers
             copyMessage, deleteMessage, regenerateMessage,
             editMessage, saveEditMessage, cancelEditMessage,
