@@ -74,4 +74,7 @@ test('ui-template-frame.js wires inline event delegation to instance scope', asy
   assert.match(source, /const INLINE_EVENTS = \['click', 'change', 'input'\];/);
   assert.match(source, /root\.addEventListener\(eventType, this\._inlineDelegate, true\);/);
   assert.match(source, /runInlineHandler,\s*\n\s*extractTopLevelNames,\s*\n\s*instanceScopes/);
+  assert.match(source, /setupImeBridge/);
+  assert.match(source, /Android WebView 无法向 Shadow DOM 内输入框合成 IME 文本/);
+  assert.match(source, /this\._imeCleanup = setupImeBridge\(root\);/);
 });

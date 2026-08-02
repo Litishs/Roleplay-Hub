@@ -215,6 +215,165 @@
         }
     };
 
+    /* IME 代理桥：Android WebView 的真实软键盘无法向 Shadow DOM 内的
+     * input/textarea 合成文本（键盘能弹出但字打不进去）。
+     * 点击 shadow 内输入框时，在主文档原位置放置一个透明代理输入框，
+     * 用户经真实 IME 在代理框输入，实时同步回 shadow 内原输入框。
+     * 滚动/视口变化时重新对齐代理位置，而非直接删除 —— 聚焦或键盘
+     * 弹出的瞬间会触发 scroll/resize，若立即删代理则键盘输入全部丢失。
+     * 纯宿主侧适配，不修改模板。
+     */
+    const setupImeBridge = (shadowRoot) => {
+        const isEditable = (el) => {
+            if (!el || !el.tagName) return false;
+            const tag = el.tagName.toLowerCase();
+            if (tag === 'input') {
+                const t = String(el.type || 'text').toLowerCase();
+                if (['hidden', 'radio', 'checkbox', 'button', 'submit', 'reset', 'file', 'image', 'color', 'range', 'password'].includes(t)) return false;
+                return true;
+            }
+            return tag === 'textarea';
+        };
+
+        let proxy = null;
+        let hostEl = null;
+        let boundScrollers = [];
+        let proxyBornAt = 0;
+
+        /* 滚动/视口变化时重新对齐代理覆盖位置（fixed 不受滚动影响，
+         * 但 shadow 内原输入框会随宿主滚动，需同步 rect）。
+         * 原输入框滚出视口或不可见时才删除代理。
+         */
+        const syncProxyPosition = () => {
+            if (!proxy || !hostEl) return;
+            try {
+                const rect = hostEl.getBoundingClientRect();
+                if (rect.width < 4 || rect.height < 4 || rect.bottom < 0 || rect.top > window.innerHeight) {
+                    removeProxy();
+                    return;
+                }
+                proxy.style.left = rect.left + 'px';
+                proxy.style.top = rect.top + 'px';
+                proxy.style.width = rect.width + 'px';
+                proxy.style.height = rect.height + 'px';
+            } catch (e) { console.warn('[UI模板] IME 代理对齐失败', e); }
+        };
+
+        /* 代理刚创建/聚焦时（键盘弹出、视口缩放）会连续触发 scroll/resize，
+         * 600ms 内忽略，避免误删。之后滚动才真正重排代理。
+         */
+        const onInnerScroll = () => {
+            if (Date.now() - proxyBornAt < 600) return;
+            syncProxyPosition();
+        };
+        const onScroll = () => {
+            if (Date.now() - proxyBornAt < 600) return;
+            syncProxyPosition();
+        };
+        const onResize = () => {
+            if (Date.now() - proxyBornAt < 600) return;
+            syncProxyPosition();
+        };
+
+        const removeProxy = () => {
+            if (proxy) { try { proxy.remove(); } catch (_) {} proxy = null; }
+            hostEl = null;
+            for (const el of boundScrollers) {
+                try { el.removeEventListener('scroll', onInnerScroll, true); } catch (_) {}
+            }
+            boundScrollers = [];
+        };
+
+        const syncBack = (el, type) => {
+            if (!proxy || !hostEl) return;
+            try {
+                hostEl.value = proxy.value;
+                hostEl.dispatchEvent(new window.Event(type, { bubbles: true, composed: true }));
+            } catch (e) { console.warn('[UI模板] IME 代理同步失败', e); }
+        };
+
+        const createProxy = (el) => {
+            const rect = el.getBoundingClientRect();
+            if (!rect || rect.width < 4 || rect.height < 4) return;
+            const cs = window.getComputedStyle(el);
+            const tag = el.tagName.toLowerCase();
+            const p = realDocument.createElement(tag === 'textarea' ? 'textarea' : 'input');
+            if (tag === 'input') p.type = String(el.type || 'text');
+            p.value = el.value;
+            if (el.maxLength >= 0) p.maxLength = el.maxLength;
+            p.placeholder = el.placeholder || '';
+            const styleParts = [
+                'position:fixed',
+                'left:' + rect.left + 'px',
+                'top:' + rect.top + 'px',
+                'width:' + rect.width + 'px',
+                'height:' + rect.height + 'px',
+                'padding:0',
+                'margin:0',
+                'border:0',
+                'outline:none',
+                'background:transparent',
+                'color:' + (cs.color || '#000'),
+                'font-size:' + (cs.fontSize || '16px'),
+                'font-family:' + (cs.fontFamily || 'sans-serif'),
+                'text-align:' + (cs.textAlign || 'left'),
+                'line-height:' + (cs.lineHeight || 'normal'),
+                'z-index:2147483647',
+                'box-shadow:none',
+                '-webkit-tap-highlight-color:transparent'
+            ];
+            if (tag === 'textarea') styleParts.push('resize:none', 'overflow:hidden');
+            p.style.cssText = styleParts.join(';');
+            p.addEventListener('input', () => syncBack(el, 'input'));
+            p.addEventListener('change', () => syncBack(el, 'change'));
+            p.addEventListener('blur', () => { syncBack(el, 'change'); removeProxy(); });
+            p.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && tag !== 'textarea') { try { p.blur(); } catch (_) {} }
+                e.stopPropagation();
+            });
+            realDocument.body.appendChild(p);
+            proxy = p;
+            hostEl = el;
+            proxyBornAt = Date.now();
+            // 内部可滚动容器滚动时重新对齐代理，不删除
+            try {
+                shadowRoot.querySelectorAll('*').forEach(node => {
+                    if (node.scrollHeight > node.clientHeight + 4) {
+                        node.addEventListener('scroll', onInnerScroll, true);
+                        boundScrollers.push(node);
+                    }
+                });
+            } catch (_) {}
+            setTimeout(() => {
+                try {
+                    p.focus({ preventScroll: true });
+                    const len = p.value.length;
+                    p.setSelectionRange(len, len);
+                } catch (_) {}
+            }, 0);
+        };
+
+        const onFocusIn = (event) => {
+            const path = event.composedPath ? event.composedPath() : [event.target];
+            const el = path[0];
+            if (!isEditable(el)) return;
+            if (hostEl === el) return;
+            removeProxy();
+            createProxy(el);
+        };
+
+        shadowRoot.addEventListener('focusin', onFocusIn, true);
+        realDocument.addEventListener('scroll', onScroll, true);
+        window.addEventListener('resize', onResize);
+
+        return () => {
+            removeProxy();
+            shadowRoot.removeEventListener('focusin', onFocusIn, true);
+            realDocument.removeEventListener('scroll', onScroll, true);
+            window.removeEventListener('resize', onResize);
+        };
+    };
+
     /* Vue 组件：历史 iframe 数据走 innerHTML 旧路径，否则 Shadow DOM 渲染 */
     const UiTemplateFrame = {
         name: 'UiTemplateFrame',
@@ -227,8 +386,14 @@
             if (this._lastRenderedHtml === this.html) return;
             this.renderShadow();
         },
-        beforeUnmount() { this._shadowRendered = false; },
+        beforeUnmount() { this._shadowRendered = false; this.teardownImeBridge(); },
         methods: {
+            teardownImeBridge() {
+                if (this._imeCleanup) {
+                    try { this._imeCleanup(); } catch (e) { console.warn('[UI模板] IME 桥清理失败', e); }
+                    this._imeCleanup = null;
+                }
+            },
             renderShadow() {
                 const el = this.$el;
                 if (!el) return;
@@ -241,6 +406,7 @@
                     return;
                 }
 
+                this.teardownImeBridge();
                 let root = el.shadowRoot;
                 if (!root) root = el.attachShadow({ mode: 'open' });
                 this._shadowRendered = true;
@@ -275,6 +441,10 @@
                         root.addEventListener(eventType, this._inlineDelegate, true);
                     }
                 }
+
+                // Android WebView 无法向 Shadow DOM 内输入框合成 IME 文本，
+                // 用主文档代理输入框桥接真实键盘输入。
+                this._imeCleanup = setupImeBridge(root);
             }
         }
     };
@@ -287,6 +457,7 @@
         rewriteRootSelectors,
         runInlineHandler,
         extractTopLevelNames,
-        instanceScopes
+        instanceScopes,
+        setupImeBridge
     };
 })();
