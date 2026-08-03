@@ -398,6 +398,9 @@ createApp({
         const chatContainer = ref(null);
         const isChatFullscreen = ref(false);
         const isMobileKeyboardOpen = ref(false);
+        // 焦点进入角色卡（executable-html iframe）内输入框时为 true，
+        // 用于隐藏底部聊天输入栏，避免它遮挡卡片内容/输入框。
+        const isExternalInputFocused = ref(false);
         const inputBox = ref(null);
         const messageElements = ref([]);
         let mobileViewportRaf = null;
@@ -445,9 +448,21 @@ createApp({
                 const computed = getComputedStyle(element);
                 const maxHeight = parseInt(computed.maxHeight, 10) || 260;
                 element.style.height = 'auto';
-                const nextHeight = Math.min(Math.max(element.scrollHeight, 44), maxHeight);
+                // 不再强制 44px 下限：单行高度交给内容 + CSS min-h 决定，
+                // 让输入框只比一行文字略高，避免视觉上偏高。
+                const nextHeight = Math.min(element.scrollHeight, maxHeight);
                 element.style.height = `${nextHeight}px`;
-                element.style.overflowY = element.scrollHeight > maxHeight ? 'auto' : 'hidden';
+                const overflow = element.scrollHeight > maxHeight;
+                element.style.overflowY = overflow ? 'auto' : 'hidden';
+                // 内容超出最大高度时把视图滚到底部，让光标行（在末尾）保持可见，
+                // 否则 textarea 进入滚动模式但视图停顶部，新输入的字被遮挡。
+                // 部分 Android WebView 在 overflow 切换当帧不可滚动，补一次 rAF 确保生效。
+                if (overflow) {
+                    element.scrollTop = element.scrollHeight;
+                    requestAnimationFrame(() => {
+                        element.scrollTop = element.scrollHeight;
+                    });
+                }
             } else if (element.style.height) {
                 element.style.height = '';
             }
@@ -724,6 +739,7 @@ createApp({
             fontFamily: 'modern',
             fontFamilyVersion: 4,
             fontSize: window.innerWidth > 768 ? 16 : 14,
+            themeMode: 'system',
             imageGenKey: '',
             imageStyle: 'vertical',
             customImageArtists: '',
@@ -746,6 +762,29 @@ createApp({
             document.documentElement.dataset.appFont = normalizeFontFamily(value);
         };
         watch(() => settings.fontFamily, applyFontFamily, { immediate: true });
+
+        // 深色模式：三选一（跟随系统 / 浅色 / 深色），默认跟随系统。
+        // applyTheme 写 documentElement.dataset.theme 驱动 styles.css 里的
+        // [data-theme='dark'] 覆盖规则；同时双写 localStorage 供 head 内联
+        // 防闪脚本首屏同步读取，并经 ThemeBridge 联动 Android 状态栏/导航栏。
+        const THEME_MODES = ['system', 'light', 'dark'];
+        const normalizeThemeMode = (value) => THEME_MODES.includes(value) ? value : 'system';
+        const themeMedia = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)');
+        const resolveTheme = () => {
+            const mode = normalizeThemeMode(settings.themeMode);
+            return mode === 'system' ? (themeMedia && themeMedia.matches ? 'dark' : 'light') : mode;
+        };
+        const applyTheme = () => {
+            const theme = resolveTheme();
+            document.documentElement.dataset.theme = theme;
+            document.documentElement.style.colorScheme = theme;
+            try { localStorage.setItem('rph_theme_mode', settings.themeMode); } catch (_) {}
+            if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.ThemeBridge && window.Capacitor.Plugins.ThemeBridge.setDark) {
+                window.Capacitor.Plugins.ThemeBridge.setDark({ dark: theme === 'dark' }).catch(() => {});
+            }
+        };
+        watch(() => settings.themeMode, applyTheme, { immediate: true });
+        if (themeMedia) themeMedia.addEventListener('change', () => { if (settings.themeMode === 'system') applyTheme(); });
 
         const showApiProviderSelector = ref(false);
         const selectedApiProviderId = ref(DEFAULT_API_PROVIDER_ID);
@@ -970,6 +1009,11 @@ createApp({
             { value: 'modern', label: '现代通用字体' },
             { value: 'serif', label: '衬线字体' },
             { value: 'system', label: '系统字体' }
+        ];
+        const themeModeOptions = [
+            { value: 'system', label: '跟随系统' },
+            { value: 'light', label: '浅色' },
+            { value: 'dark', label: '深色' }
         ];
         const imageStyleOptions = [
             { value: 'vertical', label: '韩漫小清新风' },
@@ -1287,6 +1331,7 @@ createApp({
         let _memoriesLoaded = false; // 标志：防止在记忆加载前 saveData 覆盖已存数据
         let _classicMemoriesLoaded = false;
         let _initComplete = false; // 守卫标志：防止 onMounted 初始化阶段写入默认值覆盖服务端数据
+        let _dataLoadFailed = false; // 守卫标志：loadData 失败时禁止 saveData 用默认空值覆盖存储中的数据
 
         // --- Active Tool System State ---
         const ACTIVE_TOOL_VECTOR_TYPE = 'vector_memory';
@@ -2208,6 +2253,11 @@ createApp({
 
         const saveData = async (options = {}) => {
             const { saveMemories = true } = options;
+            // 数据加载失败时禁止保存：此时内存中是默认空值，写入会用空值覆盖存储中的真实数据
+            if (_dataLoadFailed) {
+                console.warn('[saveData] Skipped: data load failed, refusing to overwrite stored data with defaults');
+                return;
+            }
             try {
                 if (!db) await initDB();
                 settings.contextSize = MAX_CONTEXT_SIZE;
@@ -2484,6 +2534,7 @@ createApp({
 
             } catch (e) {
                 console.error('Failed to load saved data', e);
+                _dataLoadFailed = true; // 阻止后续 saveData 用默认空值覆盖存储中的数据
                 showToast('加载保存的数据失败', 'error');
             }
         };
@@ -3163,6 +3214,187 @@ ${content}
             container.style.overflow = 'hidden';
             container.appendChild(createExecutableHtmlIframe(rawHtml, extraClass));
             return container.outerHTML;
+        };
+
+        /* 角色卡 executable-html iframe 的 IME 代理桥。
+         * 背景：Android WebView 下 iframe 内 <input> 软键盘能弹出、英文/数字可输入，
+         * 但中文 IME 合成不工作；同时父文档收不到 iframe 的 focus 事件，无法据此
+         * 隐藏底部聊天输入栏（会遮挡卡片）。
+         * 方案：iframe 内 input 获焦时（contentDocument 的 focusin 可触发），在主文档
+         * 原位置放一个透明代理输入框并抢焦——中文 IME 在主文档代理上正常工作，实时
+         * 同步回 iframe 内原输入框；代理存在期间置 isExternalInputFocused=true 隐藏输入栏。
+         * 注意：createExecutableHtmlIframe 返回的元素会被序列化进 v-html，真正挂在 DOM
+         * 上的是重新解析的 iframe，故桥接逻辑由 MutationObserver 在 iframe 入树后挂载。
+         */
+        const IME_PROXY_ATTR = 'data-rph-ime-proxy';
+        const isIframeEditable = (el) => {
+            if (!el || !el.tagName) return false;
+            const tag = el.tagName.toLowerCase();
+            if (tag === 'input') {
+                const t = String(el.type || 'text').toLowerCase();
+                if (['hidden', 'radio', 'checkbox', 'button', 'submit', 'reset', 'file', 'image', 'color', 'range', 'password'].includes(t)) return false;
+                return true;
+            }
+            return tag === 'textarea';
+        };
+
+        const setupIframeImeBridge = (iframe) => {
+            let proxy = null;
+            let hostEl = null;
+            let proxyBornAt = 0;
+            let boundCleanups = [];
+            // 跟踪当前已挂监听器的 contentDocument。
+            // iframe 入树时 contentDocument 通常是 about:blank（complete），
+            // srcdoc 加载后被替换为 about:srcdoc 新 document，
+            // 旧 doc 上的 focusin 监听器随之失效，必须重新挂到新 doc。
+            let lastDoc = null;
+
+            const clearExternalFlagIfStale = () => {
+                setTimeout(() => {
+                    const ae = document.activeElement;
+                    const stillExternal = (ae && ae.tagName === 'IFRAME' && ae.classList && ae.classList.contains('executable-html-frame'))
+                        || !!(ae && ae.getAttribute && ae.getAttribute(IME_PROXY_ATTR) !== null);
+                    if (!stillExternal) isExternalInputFocused.value = false;
+                }, 0);
+            };
+
+            const syncProxyPosition = () => {
+                if (!proxy || !hostEl) return;
+                try {
+                    const rect = hostEl.getBoundingClientRect();
+                    if (rect.width < 4 || rect.height < 4 || rect.bottom < 0 || rect.top > window.innerHeight) {
+                        removeProxy();
+                        return;
+                    }
+                    proxy.style.left = rect.left + 'px';
+                    proxy.style.top = rect.top + 'px';
+                    proxy.style.width = rect.width + 'px';
+                    proxy.style.height = rect.height + 'px';
+                } catch (_) {}
+            };
+            const onScroll = () => { if (Date.now() - proxyBornAt < 600) return; syncProxyPosition(); };
+            const onResize = () => { if (Date.now() - proxyBornAt < 600) return; syncProxyPosition(); };
+
+            const removeProxy = () => {
+                if (proxy) { try { proxy.remove(); } catch (_) {} proxy = null; }
+                hostEl = null;
+                for (const fn of boundCleanups) { try { fn(); } catch (_) {} }
+                boundCleanups = [];
+                clearExternalFlagIfStale();
+            };
+
+            const syncBack = (type) => {
+                if (!proxy || !hostEl) return;
+                try {
+                    hostEl.value = proxy.value;
+                    const doc = iframe.contentDocument;
+                    if (doc && doc.defaultView) hostEl.dispatchEvent(new doc.defaultView.Event(type, { bubbles: true }));
+                } catch (e) { console.warn('[iframe IME] 同步失败', e); }
+            };
+
+            const createProxy = (el) => {
+                const rect = el.getBoundingClientRect();
+                if (!rect || rect.width < 4 || rect.height < 4) return;
+                let cs = {};
+                try { cs = iframe.contentWindow.getComputedStyle(el); } catch (_) {}
+                const tag = el.tagName.toLowerCase();
+                const p = document.createElement(tag === 'textarea' ? 'textarea' : 'input');
+                if (tag === 'input') p.type = String(el.type || 'text');
+                p.value = el.value;
+                if (el.maxLength >= 0) p.maxLength = el.maxLength;
+                p.placeholder = el.placeholder || '';
+                p.setAttribute(IME_PROXY_ATTR, '');
+                const styleParts = [
+                    'position:fixed', 'left:' + rect.left + 'px', 'top:' + rect.top + 'px',
+                    'width:' + rect.width + 'px', 'height:' + rect.height + 'px',
+                    'padding:0', 'margin:0', 'border:0', 'outline:none', 'background:transparent',
+                    'color:' + (cs.color || '#000'), 'font-size:' + (cs.fontSize || '16px'),
+                    'font-family:' + (cs.fontFamily || 'sans-serif'), 'text-align:' + (cs.textAlign || 'left'),
+                    'line-height:' + (cs.lineHeight || 'normal'), 'z-index:2147483647', 'box-shadow:none',
+                    '-webkit-tap-highlight-color:transparent'
+                ];
+                if (tag === 'textarea') styleParts.push('resize:none', 'overflow:hidden');
+                p.style.cssText = styleParts.join(';');
+                p.addEventListener('input', () => syncBack('input'));
+                p.addEventListener('change', () => syncBack('change'));
+                p.addEventListener('blur', () => { syncBack('change'); removeProxy(); });
+                p.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter' && tag !== 'textarea') { try { p.blur(); } catch (_) {} }
+                    e.stopPropagation();
+                });
+                document.body.appendChild(p);
+                proxy = p;
+                hostEl = el;
+                proxyBornAt = Date.now();
+                isExternalInputFocused.value = true;
+                try {
+                    const doc = iframe.contentDocument;
+                    if (doc) {
+                        doc.querySelectorAll('*').forEach(node => {
+                            if (node.scrollHeight > node.clientHeight + 4) {
+                                node.addEventListener('scroll', onScroll, true);
+                                boundCleanups.push(() => { try { node.removeEventListener('scroll', onScroll, true); } catch (_) {} });
+                            }
+                        });
+                    }
+                } catch (_) {}
+                setTimeout(() => {
+                    try { p.focus({ preventScroll: true }); const len = p.value.length; p.setSelectionRange(len, len); } catch (_) {}
+                }, 0);
+            };
+
+            const onFocusIn = (event) => {
+                const el = event.target;
+                if (!isIframeEditable(el)) return;
+                if (hostEl === el) return;
+                if (proxy) { try { proxy.remove(); } catch (_) {} proxy = null; hostEl = null; }
+                createProxy(el);
+            };
+
+            const attachDocListener = () => {
+                let doc;
+                try { doc = iframe.contentDocument; } catch (_) { return; }
+                if (!doc) return;
+                if (doc === lastDoc) return;
+                // contentDocument 从 about:blank 切到 about:srcdoc 时旧监听器失效，先清再挂。
+                if (lastDoc) {
+                    try { lastDoc.removeEventListener('focusin', onFocusIn, true); } catch (_) {}
+                }
+                try {
+                    doc.addEventListener('focusin', onFocusIn, true);
+                    lastDoc = doc;
+                    try { iframe.setAttribute('data-rph-ime-doc', doc.location.href); } catch (_) {}
+                    boundCleanups.push(() => { try { doc.removeEventListener('focusin', onFocusIn, true); } catch (_) {} });
+                } catch (_) {}
+            };
+
+            iframe.addEventListener('load', attachDocListener);
+            try { if (iframe.contentDocument && iframe.contentDocument.readyState) attachDocListener(); } catch (_) {}
+
+            document.addEventListener('scroll', onScroll, true);
+            window.addEventListener('resize', onResize);
+
+            return () => {
+                if (proxy) { try { proxy.remove(); } catch (_) {} proxy = null; }
+                hostEl = null;
+                iframe.removeEventListener('load', attachDocListener);
+                for (const fn of boundCleanups) { try { fn(); } catch (_) {} }
+                boundCleanups = [];
+                document.removeEventListener('scroll', onScroll, true);
+                window.removeEventListener('resize', onResize);
+            };
+        };
+
+        // 已挂载 IME 桥的 iframe -> 清理函数。WeakMap 避免持有已移除的 iframe。
+        const iframeImeBridgeMap = new WeakMap();
+        const ensureIframeImeBridge = (iframe) => {
+            if (!iframe || iframe.tagName !== 'IFRAME') return;
+            if (!iframe.classList || !iframe.classList.contains('executable-html-frame')) return;
+            if (iframeImeBridgeMap.has(iframe)) return;
+            try {
+                iframeImeBridgeMap.set(iframe, setupIframeImeBridge(iframe));
+                iframe.setAttribute('data-rph-ime-bridge', '1');
+            } catch (e) { console.warn('[iframe IME] 挂载失败', e); }
         };
 
         const renderUiTemplateHtml = (template) => {
@@ -10940,6 +11172,35 @@ ${memoryFragmentSection}
             window.addEventListener('resize', handleMobileViewportResize, { passive: true });
             scheduleMobileVisualViewportSync({ force: true });
 
+            // --- 焦点进入角色卡 iframe / IME 代理框时隐藏底部输入栏；离开时恢复 ---
+            // 说明：Android WebView 下父文档收不到 iframe 的 focus 事件，但 IME 代理框
+            // 是主文档元素，其 focusin 可触发；iframe 内部的 focusin 由桥接逻辑处理。
+            document.addEventListener('focusin', (e) => {
+                const t = e.target;
+                const isProxy = !!(t && t.getAttribute && t.getAttribute(IME_PROXY_ATTR) !== null);
+                const isCardIframe = !!(t && t.tagName === 'IFRAME' && t.classList && t.classList.contains('executable-html-frame'));
+                isExternalInputFocused.value = isProxy || isCardIframe;
+            }, true);
+
+            // --- 监听角色卡 iframe 入树，挂载 IME 代理桥 ---
+            // createExecutableHtmlIframe 的产物被序列化进 v-html，真正入树的 iframe 是
+            // 重新解析的元素，故在此观察 DOM 变化后挂桥。
+            const scanAndBridgeIframes = (root) => {
+                try {
+                    if (root.nodeType !== 1) return;
+                    if (root.tagName === 'IFRAME') ensureIframeImeBridge(root);
+                    if (root.querySelectorAll) root.querySelectorAll('iframe.executable-html-frame').forEach(ensureIframeImeBridge);
+                } catch (_) {}
+            };
+            // 初次扫描已有 iframe
+            scanAndBridgeIframes(document.body);
+            const iframeImeObserver = new MutationObserver((mutations) => {
+                for (const m of mutations) {
+                    for (const node of m.addedNodes) scanAndBridgeIframes(node);
+                }
+            });
+            iframeImeObserver.observe(document.body, { childList: true, subtree: true });
+
             // --- 全局点击外部区域收起面板 ---
             document.addEventListener('click', (e) => {
                 if (showInstructionPanel.value && !e.target.closest('.instruction-panel-container')) {
@@ -11155,11 +11416,11 @@ ${memoryFragmentSection}
             showUpdateModal, updateCountdown, latestUpdate, closeUpdateModal, isUpdateScrolledToBottom, checkUpdateScroll, // Update Modal
             showConfirmModal, confirmMessage, modelMode, showNoMemoryNeededModal, // Export for template
             isGenerating, isRemoteGenerating, remoteEstimatedTime, isReceiving, isThinking, hasActiveToolInlineWork, isConversationBusy, activeToolContinuationMessageId, activeToolContinuationHasResponse, userInput, modelSearchQuery, activeModelTag, modelTags, characterSearchQuery, filteredModels, filteredCharacters,
-            user, settings, apiProviderOptions, selectedApiProvider, isCustomApiProvider, customApiProviderOptions, showApiProviderSelector, selectApiProvider, characters, currentCharacter, currentCharacterIndex, chatHistory, displayedChatMessages, chatTopSpacerHeight, chatBottomSpacerHeight, handleChatScroll, presets, presetRoleOptions, fontFamilyOptions, imageStyleOptions, imageSizeOptions, imageGenCountOptions, scopeOptions, uiTemplatePlacementOptions, worldInfoPositionOptions, getPresetRoleLabel, getPresetRoleDisplayLabel, getPresetRoleBadgeClass, regexScripts, worldInfo,
+            user, settings, apiProviderOptions, selectedApiProvider, isCustomApiProvider, customApiProviderOptions, showApiProviderSelector, selectApiProvider, characters, currentCharacter, currentCharacterIndex, chatHistory, displayedChatMessages, chatTopSpacerHeight, chatBottomSpacerHeight, handleChatScroll, presets, presetRoleOptions, fontFamilyOptions, themeModeOptions, imageStyleOptions, imageSizeOptions, imageGenCountOptions, scopeOptions, uiTemplatePlacementOptions, worldInfoPositionOptions, getPresetRoleLabel, getPresetRoleDisplayLabel, getPresetRoleBadgeClass, regexScripts, worldInfo,
             activeTools, activeToolAggressivenessOptions: ACTIVE_TOOL_AGGRESSIVENESS_OPTIONS, editingActiveTool, normalizeActiveTools, isWebActiveTool, getActiveToolDisplayDescription, getActiveToolResultCountMin, getActiveToolResultCountMax,
             getToolCallModeText, hasThinkingOrTools, isMessageThinkingOrRunning, isThinkingSummaryOpen, toggleThinkingSummary, markThinkingSummaryDetailOpened, getTimelineSteps,
             chatRoundStats, conversationBodyLength, summaryCompressedBodyLength,
-            editingCharacter, editingPreset, editingUiTemplate, toasts, chatContainer, isChatFullscreen, isMobileKeyboardOpen, inputBox, messageElements,
+            editingCharacter, editingPreset, editingUiTemplate, toasts, chatContainer, isChatFullscreen, isMobileKeyboardOpen, isExternalInputFocused, inputBox, messageElements,
             isGeneratorLoading, generatorUrl, onGeneratorLoad, // Generator exports
             isSquareLoading, squareUrl, onSquareLoad, openSquareExternally, // Square exports
             editorTab, characterDisplayLimit, displayedCharacters, loadMoreCharacters,

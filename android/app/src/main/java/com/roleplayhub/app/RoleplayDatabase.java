@@ -4,7 +4,9 @@ import android.content.ContentValues;
 import android.content.Context;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
+import android.database.sqlite.SQLiteDoneException;
 import android.database.sqlite.SQLiteOpenHelper;
+import android.database.sqlite.SQLiteStatement;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -50,8 +52,18 @@ final class RoleplayDatabase extends SQLiteOpenHelper {
     }
 
     String getValue(String key) {
-        try (Cursor cursor = getReadableDatabase().query("kv_store", new String[]{"json"}, "key = ?", new String[]{key}, null, null, null)) {
-            return cursor.moveToFirst() ? cursor.getString(0) : null;
+        // 用 SQLiteStatement.simpleQueryForString() 直接读取值，绕过 CursorWindow 的单行大小限制。
+        // 角色等大 JSON（可达 1MB+）通过 Cursor 读取时会抛 SQLiteBlobTooBigException
+        // （"Row too big to fit into CursorWindow"），导致 JS 侧 loadData 失败、
+        // 随后 saveData 用默认空值覆盖恢复的数据。
+        SQLiteStatement statement = getReadableDatabase().compileStatement("SELECT json FROM kv_store WHERE key = ?");
+        try {
+            statement.bindString(1, key);
+            return statement.simpleQueryForString();
+        } catch (SQLiteDoneException noRow) {
+            return null;
+        } finally {
+            statement.close();
         }
     }
 

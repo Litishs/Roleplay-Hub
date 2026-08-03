@@ -1,11 +1,13 @@
-$ErrorActionPreference = 'Stop'
+﻿$ErrorActionPreference = 'Stop'
 
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $localJdk = Get-ChildItem -LiteralPath (Join-Path $projectRoot '.toolchains\jdk') -Directory |
     Sort-Object Name -Descending |
     Select-Object -First 1
 
-if (-not $env:JAVA_HOME -and $localJdk) {
+# 始终优先项目本地 JDK（JDK 21），避免全局 JAVA_HOME 指向低版本
+# 导致 Gradle 工具链（languageVersion=21）匹配失败。
+if ($localJdk) {
     $env:JAVA_HOME = $localJdk.FullName
 }
 if (-not $env:JAVA_HOME) {
