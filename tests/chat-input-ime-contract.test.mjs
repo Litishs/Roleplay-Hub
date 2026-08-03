@@ -16,7 +16,7 @@ test('chat input uses a textarea with IME-safe handlers', async () => {
   assert.match(chatInput, /@keydown="handleChatInputKeydown"/);
   assert.match(chatInput, /@paste="handleChatInputPaste"/);
   assert.match(chatInput, /placeholder=/);
-  assert.match(chatInput, /max-h-\[260px\] md:max-h-\[320px\]/);
+  assert.match(chatInput, /max-h-\[56px\] md:max-h-\[64px\]/);
 
   assert.match(source, /const handleChatInput = \(event\) => \{\s*if \(event\?\.isComposing \|\| chatInputComposing\) return;/);
   assert.match(source, /const handleChatCompositionStart = \(\) => \{[\s\S]*?if \(chatInputResizeRaf\) \{[\s\S]*?cancelAnimationFrame\(chatInputResizeRaf\)/);
@@ -36,6 +36,11 @@ test('chat input reads textarea value, pastes plain text, and auto-resizes', asy
   assert.match(source, /const syncChatInputFromElement = \(element = inputBox\.value\) => \{[\s\S]*?typeof element\.value === 'string' \? element\.value/);
   assert.match(source, /const handleChatInputPaste = \(event\) => \{[\s\S]*?getData\('text\/plain'\)[\s\S]*?document\.execCommand\('insertText', false, text\)/);
   assert.match(source, /const resizeChatInputElement = \(element = inputBox\.value\) => \{\s*if \(!element\) return;\s*if \(element\.tagName === 'TEXTAREA'\)/);
-  assert.match(source, /Math\.min\(Math\.max\(element\.scrollHeight, 44\), maxHeight\)/);
+  // 单行高度交给内容 + CSS min-h 决定，不再强制 44px 下限，避免输入框偏高
+  assert.match(source, /Math\.min\(element\.scrollHeight, maxHeight\)/);
+  assert.doesNotMatch(source, /Math\.max\(element\.scrollHeight, 44\)/);
+  // 内容超出最大高度时视图跟随到末行（光标可见），不让新输入被遮挡；
+  // 并用 rAF 补一次以兼容 Android WebView overflow 切换当帧不可滚动的问题
+  assert.match(source, /if \(overflow\) \{\s*element\.scrollTop = element\.scrollHeight[\s\S]*?requestAnimationFrame\(\(\) => \{\s*element\.scrollTop = element\.scrollHeight/);
   assert.doesNotMatch(source, /watch\(userInput, \(\) =>/);
 });

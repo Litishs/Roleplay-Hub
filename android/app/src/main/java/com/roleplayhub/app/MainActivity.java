@@ -19,10 +19,16 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(NativeStoragePlugin.class);
+        registerPlugin(ThemeBridgePlugin.class);
         WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
         super.onCreate(savedInstanceState);
 
-        getWindow().getDecorView().setBackgroundColor(Color.rgb(249, 250, 251));
+        // 首屏初始主题：按系统夜间模式决定 DecorView/状态栏/导航栏颜色，
+        // 避免 JS 启动前浅色闪烁；JS 启动后由 ThemeBridge 按用户偏好最终修正。
+        boolean isDark = (getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK)
+                == Configuration.UI_MODE_NIGHT_YES;
+        int themeColor = isDark ? Color.rgb(17, 24, 39) : Color.rgb(249, 250, 251);
+        getWindow().getDecorView().setBackgroundColor(themeColor);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             WindowManager.LayoutParams windowParams = getWindow().getAttributes();
             windowParams.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS;
@@ -30,8 +36,10 @@ public class MainActivity extends BridgeActivity {
         }
         WindowInsetsControllerCompat insetsController =
             new WindowInsetsControllerCompat(getWindow(), getWindow().getDecorView());
-        insetsController.setAppearanceLightStatusBars(true);
-        insetsController.setAppearanceLightNavigationBars(true);
+        insetsController.setAppearanceLightStatusBars(!isDark);
+        insetsController.setAppearanceLightNavigationBars(!isDark);
+        getWindow().setStatusBarColor(themeColor);
+        getWindow().setNavigationBarColor(themeColor);
 
         View content = findViewById(android.R.id.content);
         ViewCompat.setOnApplyWindowInsetsListener(content, (view, windowInsets) -> {

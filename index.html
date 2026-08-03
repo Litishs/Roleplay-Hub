@@ -6,6 +6,19 @@
     <meta name="viewport"
         content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, interactive-widget=resizes-content">
     <title>Roleplay Hub</title>
+    <script>
+        // 首屏防闪：Vue/app.js 加载前同步读 localStorage 缓存的 themeMode + 系统偏好，
+        // 立即设 data-theme，避免 body 浅色渲染后再被 watch 改深造成的白闪。
+        // 权威值仍由 NativeStorage 持久化，此处仅快速读取缓存。
+        (function () {
+            try {
+                var m = localStorage.getItem('rph_theme_mode') || 'system';
+                var dark = m === 'dark' || (m === 'system' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+                document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+                document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
+            } catch (e) { }
+        })();
+    </script>
     <link rel="stylesheet" href="assets/css/fonts.css">
     <link rel="stylesheet" href="assets/generated/tailwind.css">
     <link rel="stylesheet" href="assets/css/styles.css">
@@ -854,7 +867,7 @@
 
 
                 <!-- Input Area (Floating Island) -->
-                <div
+                <div v-show="!isExternalInputFocused"
                     class="absolute bottom-0 left-0 right-0 w-full p-2 md:p-3 z-30 pointer-events-none flex justify-center flex-shrink-0 transition-all duration-300 input-area-mobile">
                     <div
                         class="w-full max-w-lg pointer-events-auto p-2.5 md:p-3 bg-white/90 backdrop-blur-xl border border-white/40 shadow-lg rounded-3xl ring-1 ring-black/5 transition-all duration-300 flex flex-col input-island">
@@ -1017,7 +1030,7 @@
                                 @compositionend="handleChatCompositionEnd" @focus="handleChatInputFocus"
                                 @blur="handleChatInputBlur" @keydown="handleChatInputKeydown"
                                 @paste="handleChatInputPaste" placeholder="输入消息..."
-                                class="chat-input-box flex-1 bg-gray-100/70 text-gray-800 rounded-2xl px-4 py-2.5 md:px-4 md:py-2.5 focus:outline-none focus:ring-2 focus:ring-primary-500/30 focus:border-primary-400 border border-transparent shadow-inner transition-colors focus:bg-white chat-input-scrollbar resize-none overflow-y-auto whitespace-pre-wrap break-words min-h-[44px] md:min-h-[46px] max-h-[260px] md:max-h-[320px]"
+                                class="chat-input-box flex-1 bg-gray-100/70 text-gray-800 rounded-xl px-4 py-1.5 md:px-4 md:py-1.5 focus:outline-none focus:ring-2 focus:ring-primary-500/30 focus:border-primary-400 border border-transparent shadow-sm transition-all duration-150 focus:bg-white chat-input-scrollbar resize-none overflow-y-auto whitespace-pre-wrap break-words text-[15px] leading-[1.4] min-h-[32px] md:min-h-[34px] max-h-[56px] md:max-h-[64px]"
                                 ref="inputBox"></textarea>
 
                             <!-- Send/Stop Button -->
@@ -2102,6 +2115,17 @@
                                         <label
                                             class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">界面字体</label>
                                         <custom-select v-model="settings.fontFamily" :options="fontFamilyOptions"
+                                            button-class="rounded-lg px-3 py-1.5 text-sm text-gray-700 focus:border-indigo-400 focus:ring-indigo-100"
+                                            menu-class="text-sm">
+                                        </custom-select>
+                                    </div>
+
+                                    <!-- Theme Mode Setting -->
+                                    <div
+                                        class="bg-gray-50/60 p-4 rounded-xl border border-gray-100 hover:bg-white hover:border-gray-200 hover:shadow-sm transition-all duration-200">
+                                        <label
+                                            class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">外观主题</label>
+                                        <custom-select v-model="settings.themeMode" :options="themeModeOptions"
                                             button-class="rounded-lg px-3 py-1.5 text-sm text-gray-700 focus:border-indigo-400 focus:ring-indigo-100"
                                             menu-class="text-sm">
                                         </custom-select>
