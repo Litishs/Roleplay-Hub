@@ -3258,18 +3258,12 @@ ${content}
             return container.outerHTML;
         };
 
-        /* 角色卡 executable-html iframe 的 IME 代理桥。
-         * 背景：Android WebView 下 iframe 内 <input> 软键盘能弹出、英文/数字可输入，
-         * 但中文 IME 合成不工作；同时父文档收不到 iframe 的 focus 事件，无法据此
-         * 隐藏底部聊天输入栏（会遮挡卡片）。
-         * 方案：iframe 内 input 获焦时（contentDocument 的 focusin 可触发），在主文档
-         * 原位置放一个透明代理输入框并抢焦——中文 IME 在主文档代理上正常工作，实时
-         * 同步回 iframe 内原输入框；代理存在期间置 isExternalInputFocused=true 隐藏输入栏。
-         * 注意：createExecutableHtmlIframe 返回的元素会被序列化进 v-html，真正挂在 DOM
-         * 上的是重新解析的 iframe，故桥接逻辑由 MutationObserver 在 iframe 入树后挂载。
+        /* 角色卡 executable-html iframe 焦点跟踪（captureInput=false 后不再需要 IME 代理框）。
+         * Android WebView 原生输入连接恢复后，iframe 内 <input>/<textarea> 可直接合成中文；
+         * 这里只保留轻量 focusin/focusout 跟踪，用于在焦点进入卡片输入框时隐藏底部聊天输入栏，
+         * 避免遮挡卡片（父文档收不到 iframe 内 focus 事件，需在 contentDocument 上直接监听）。
          */
-        const IME_PROXY_ATTR = 'data-rph-ime-proxy';
-        const isIframeEditable = (el) => {
+        const isEditableElement = (el) => {
             if (!el || !el.tagName) return false;
             const tag = el.tagName.toLowerCase();
             if (tag === 'input') {
@@ -3280,163 +3274,88 @@ ${content}
             return tag === 'textarea';
         };
 
-        const setupIframeImeBridge = (iframe) => {
-            let proxy = null;
-            let hostEl = null;
-            let proxyBornAt = 0;
-            let boundCleanups = [];
-            // 跟踪当前已挂监听器的 contentDocument。
-            // iframe 入树时 contentDocument 通常是 about:blank（complete），
-            // srcdoc 加载后被替换为 about:srcdoc 新 document，
-            // 旧 doc 上的 focusin 监听器随之失效，必须重新挂到新 doc。
+        // 底部输入栏显隐判断的共享状态：iframe 内输入框聚焦由 contentDocument 监听维护，
+        // Shadow DOM 输入框的焦点会 compose 到父文档（用 getRootNode 识别是否在 shadow root 内）。
+        let iframeEditableFocused = false;
+        const isShadowEditable = (el) => {
+            if (!isEditableElement(el)) return false;
+            const root = el.getRootNode ? el.getRootNode() : null;
+            return !!(root && root.nodeType === 11 && root.host);
+        };
+        const computeExternalFocus = () => {
+            const ae = document.activeElement;
+            if (ae && ae.tagName === 'IFRAME' && ae.classList && ae.classList.contains('executable-html-frame')) return true;
+            if (isShadowEditable(ae)) return true;
+            if (iframeEditableFocused) {
+                // 兜底：若所有卡片 iframe 均已移除，则视为已离开
+                let anyConnected = false;
+                document.querySelectorAll('iframe.executable-html-frame').forEach((f) => { if (f.isConnected) anyConnected = true; });
+                if (!anyConnected) { iframeEditableFocused = false; return false; }
+                return true;
+            }
+            return false;
+        };
+
+        const setupIframeFocusTracker = (iframe) => {
             let lastDoc = null;
-
-            const clearExternalFlagIfStale = () => {
+            const clearIfStale = () => {
                 setTimeout(() => {
-                    const ae = document.activeElement;
-                    const stillExternal = (ae && ae.tagName === 'IFRAME' && ae.classList && ae.classList.contains('executable-html-frame'))
-                        || !!(ae && ae.getAttribute && ae.getAttribute(IME_PROXY_ATTR) !== null);
-                    if (!stillExternal) isExternalInputFocused.value = false;
+                    if (!computeExternalFocus()) isExternalInputFocused.value = false;
                 }, 0);
             };
-
-            const syncProxyPosition = () => {
-                if (!proxy || !hostEl) return;
-                try {
-                    const rect = hostEl.getBoundingClientRect();
-                    if (rect.width < 4 || rect.height < 4 || rect.bottom < 0 || rect.top > window.innerHeight) {
-                        removeProxy();
-                        return;
-                    }
-                    proxy.style.left = rect.left + 'px';
-                    proxy.style.top = rect.top + 'px';
-                    proxy.style.width = rect.width + 'px';
-                    proxy.style.height = rect.height + 'px';
-                } catch (_) {}
-            };
-            const onScroll = () => { if (Date.now() - proxyBornAt < 600) return; syncProxyPosition(); };
-            const onResize = () => { if (Date.now() - proxyBornAt < 600) return; syncProxyPosition(); };
-
-            const removeProxy = () => {
-                if (proxy) { try { proxy.remove(); } catch (_) {} proxy = null; }
-                hostEl = null;
-                for (const fn of boundCleanups) { try { fn(); } catch (_) {} }
-                boundCleanups = [];
-                clearExternalFlagIfStale();
-            };
-
-            const syncBack = (type) => {
-                if (!proxy || !hostEl) return;
-                try {
-                    hostEl.value = proxy.value;
-                    const doc = iframe.contentDocument;
-                    if (doc && doc.defaultView) hostEl.dispatchEvent(new doc.defaultView.Event(type, { bubbles: true }));
-                } catch (e) { console.warn('[iframe IME] 同步失败', e); }
-            };
-
-            const createProxy = (el) => {
-                const rect = el.getBoundingClientRect();
-                if (!rect || rect.width < 4 || rect.height < 4) return;
-                let cs = {};
-                try { cs = iframe.contentWindow.getComputedStyle(el); } catch (_) {}
-                const tag = el.tagName.toLowerCase();
-                const p = document.createElement(tag === 'textarea' ? 'textarea' : 'input');
-                if (tag === 'input') p.type = String(el.type || 'text');
-                p.value = el.value;
-                if (el.maxLength >= 0) p.maxLength = el.maxLength;
-                p.placeholder = el.placeholder || '';
-                p.setAttribute(IME_PROXY_ATTR, '');
-                const styleParts = [
-                    'position:fixed', 'left:' + rect.left + 'px', 'top:' + rect.top + 'px',
-                    'width:' + rect.width + 'px', 'height:' + rect.height + 'px',
-                    'padding:0', 'margin:0', 'border:0', 'outline:none', 'background:transparent',
-                    'color:' + (cs.color || '#000'), 'font-size:' + (cs.fontSize || '16px'),
-                    'font-family:' + (cs.fontFamily || 'sans-serif'), 'text-align:' + (cs.textAlign || 'left'),
-                    'line-height:' + (cs.lineHeight || 'normal'), 'z-index:2147483647', 'box-shadow:none',
-                    '-webkit-tap-highlight-color:transparent'
-                ];
-                if (tag === 'textarea') styleParts.push('resize:none', 'overflow:hidden');
-                p.style.cssText = styleParts.join(';');
-                p.addEventListener('input', () => syncBack('input'));
-                p.addEventListener('change', () => syncBack('change'));
-                p.addEventListener('blur', () => { syncBack('change'); removeProxy(); });
-                p.addEventListener('keydown', (e) => {
-                    if (e.key === 'Enter' && tag !== 'textarea') { try { p.blur(); } catch (_) {} }
-                    e.stopPropagation();
-                });
-                document.body.appendChild(p);
-                proxy = p;
-                hostEl = el;
-                proxyBornAt = Date.now();
-                isExternalInputFocused.value = true;
-                try {
-                    const doc = iframe.contentDocument;
-                    if (doc) {
-                        doc.querySelectorAll('*').forEach(node => {
-                            if (node.scrollHeight > node.clientHeight + 4) {
-                                node.addEventListener('scroll', onScroll, true);
-                                boundCleanups.push(() => { try { node.removeEventListener('scroll', onScroll, true); } catch (_) {} });
-                            }
-                        });
-                    }
-                } catch (_) {}
-                setTimeout(() => {
-                    try { p.focus({ preventScroll: true }); const len = p.value.length; p.setSelectionRange(len, len); } catch (_) {}
-                }, 0);
-            };
-
             const onFocusIn = (event) => {
-                const el = event.target;
-                if (!isIframeEditable(el)) return;
-                if (hostEl === el) return;
-                if (proxy) { try { proxy.remove(); } catch (_) {} proxy = null; hostEl = null; }
-                createProxy(el);
+                if (isEditableElement(event.target)) {
+                    iframeEditableFocused = true;
+                    isExternalInputFocused.value = true;
+                }
             };
-
+            const onFocusOut = (event) => {
+                const next = event.relatedTarget;
+                if (!next || !isEditableElement(next)) {
+                    iframeEditableFocused = false;
+                    clearIfStale();
+                }
+            };
             const attachDocListener = () => {
                 let doc;
                 try { doc = iframe.contentDocument; } catch (_) { return; }
-                if (!doc) return;
-                if (doc === lastDoc) return;
-                // contentDocument 从 about:blank 切到 about:srcdoc 时旧监听器失效，先清再挂。
+                if (!doc || doc === lastDoc) return;
                 if (lastDoc) {
-                    try { lastDoc.removeEventListener('focusin', onFocusIn, true); } catch (_) {}
+                    try {
+                        lastDoc.removeEventListener('focusin', onFocusIn, true);
+                        lastDoc.removeEventListener('focusout', onFocusOut, true);
+                    } catch (_) {}
                 }
                 try {
                     doc.addEventListener('focusin', onFocusIn, true);
+                    doc.addEventListener('focusout', onFocusOut, true);
                     lastDoc = doc;
-                    try { iframe.setAttribute('data-rph-ime-doc', doc.location.href); } catch (_) {}
-                    boundCleanups.push(() => { try { doc.removeEventListener('focusin', onFocusIn, true); } catch (_) {} });
                 } catch (_) {}
             };
-
             iframe.addEventListener('load', attachDocListener);
             try { if (iframe.contentDocument && iframe.contentDocument.readyState) attachDocListener(); } catch (_) {}
-
-            document.addEventListener('scroll', onScroll, true);
-            window.addEventListener('resize', onResize);
-
             return () => {
-                if (proxy) { try { proxy.remove(); } catch (_) {} proxy = null; }
-                hostEl = null;
                 iframe.removeEventListener('load', attachDocListener);
-                for (const fn of boundCleanups) { try { fn(); } catch (_) {} }
-                boundCleanups = [];
-                document.removeEventListener('scroll', onScroll, true);
-                window.removeEventListener('resize', onResize);
+                if (lastDoc) {
+                    try {
+                        lastDoc.removeEventListener('focusin', onFocusIn, true);
+                        lastDoc.removeEventListener('focusout', onFocusOut, true);
+                    } catch (_) {}
+                }
+                lastDoc = null;
             };
         };
 
-        // 已挂载 IME 桥的 iframe -> 清理函数。WeakMap 避免持有已移除的 iframe。
-        const iframeImeBridgeMap = new WeakMap();
-        const ensureIframeImeBridge = (iframe) => {
+        // 已挂载焦点跟踪的 iframe -> 清理函数。WeakMap 避免持有已移除的 iframe。
+        const iframeFocusTrackerMap = new WeakMap();
+        const ensureIframeFocusTracker = (iframe) => {
             if (!iframe || iframe.tagName !== 'IFRAME') return;
             if (!iframe.classList || !iframe.classList.contains('executable-html-frame')) return;
-            if (iframeImeBridgeMap.has(iframe)) return;
+            if (iframeFocusTrackerMap.has(iframe)) return;
             try {
-                iframeImeBridgeMap.set(iframe, setupIframeImeBridge(iframe));
-                iframe.setAttribute('data-rph-ime-bridge', '1');
-            } catch (e) { console.warn('[iframe IME] 挂载失败', e); }
+                iframeFocusTrackerMap.set(iframe, setupIframeFocusTracker(iframe));
+                iframe.setAttribute('data-rph-focus-tracker', '1');
+            } catch (e) { console.warn('[iframe focus] 挂载失败', e); }
         };
 
         const renderUiTemplateHtml = (template) => {
@@ -11300,24 +11219,27 @@ ${memoryFragmentSection}
             window.addEventListener('resize', handleMobileViewportResize, { passive: true });
             scheduleMobileVisualViewportSync({ force: true });
 
-            // --- 焦点进入角色卡 iframe / IME 代理框时隐藏底部输入栏；离开时恢复 ---
-            // 说明：Android WebView 下父文档收不到 iframe 的 focus 事件，但 IME 代理框
-            // 是主文档元素，其 focusin 可触发；iframe 内部的 focusin 由桥接逻辑处理。
-            document.addEventListener('focusin', (e) => {
-                const t = e.target;
-                const isProxy = !!(t && t.getAttribute && t.getAttribute(IME_PROXY_ATTR) !== null);
-                const isCardIframe = !!(t && t.tagName === 'IFRAME' && t.classList && t.classList.contains('executable-html-frame'));
-                isExternalInputFocused.value = isProxy || isCardIframe;
+            // --- 焦点进入角色卡 iframe / Shadow DOM 输入框时隐藏底部输入栏；离开时恢复 ---
+            // captureInput=false 后 WebView 原生输入连接恢复，iframe / Shadow DOM 内输入框可直接
+            // 合成中文，不再需要 IME 代理框；这里仅做焦点跟踪：
+            // - iframe 内焦点由 ensureIframeFocusTracker 在 contentDocument 上监听（父文档收不到 iframe 事件）；
+            // - Shadow DOM 输入框的 focusin 会 compose 到父文档，由 computeExternalFocus 识别。
+            document.addEventListener('focusin', () => { isExternalInputFocused.value = computeExternalFocus(); }, true);
+            document.addEventListener('focusout', (e) => {
+                const rt = e.relatedTarget;
+                if (rt && rt.tagName === 'IFRAME' && rt.classList && rt.classList.contains('executable-html-frame')) {
+                    isExternalInputFocused.value = true;
+                    return;
+                }
+                setTimeout(() => { isExternalInputFocused.value = computeExternalFocus(); }, 0);
             }, true);
 
-            // --- 监听角色卡 iframe 入树，挂载 IME 代理桥 ---
-            // createExecutableHtmlIframe 的产物被序列化进 v-html，真正入树的 iframe 是
-            // 重新解析的元素，故在此观察 DOM 变化后挂桥。
+            // --- 监听角色卡 iframe 入树，挂载焦点跟踪 ---
             const scanAndBridgeIframes = (root) => {
                 try {
                     if (root.nodeType !== 1) return;
-                    if (root.tagName === 'IFRAME') ensureIframeImeBridge(root);
-                    if (root.querySelectorAll) root.querySelectorAll('iframe.executable-html-frame').forEach(ensureIframeImeBridge);
+                    if (root.tagName === 'IFRAME') ensureIframeFocusTracker(root);
+                    if (root.querySelectorAll) root.querySelectorAll('iframe.executable-html-frame').forEach(ensureIframeFocusTracker);
                 } catch (_) {}
             };
             // 初次扫描已有 iframe
