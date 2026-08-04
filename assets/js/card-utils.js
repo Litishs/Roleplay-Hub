@@ -324,6 +324,29 @@ year 2025, textless version, {{petite,loli}}, Petite figure, no text, The image 
         };
     };
 
+    // External card fields that RolePlay Hub does not edit (SillyTavern / TavernAI
+    // V1/V2 compatibility). When present on a character we keep them and write them
+    // back on export so an import -> export round-trip is lossless.
+    const preservedCardFields = Object.freeze([
+        'mes_example',
+        'system_prompt',
+        'post_history_instructions',
+        'alternate_greetings',
+        'tags',
+        'creator',
+        'character_version',
+        'spec',
+        'spec_version'
+    ]);
+
+    const includeCardFieldIfPresent = (character, field) => {
+        const value = character ? character[field] : undefined;
+        if (value === undefined || value === null) return {};
+        if (typeof value === 'string') return value === '' ? {} : { [field]: value };
+        if (Array.isArray(value)) return value.length ? { [field]: cloneJsonValue(value, []) } : {};
+        if (typeof value === 'object') return { [field]: cloneJsonValue(value, value) };
+        return { [field]: value };
+    };
     const buildCharacterCardData = (character = {}, options = {}) => {
         const worldInfoMapper = options.worldInfoMapper || toWorldInfoExportEntry;
         const regexScriptMapper = options.regexScriptMapper || toRegexExportEntry;
@@ -347,8 +370,13 @@ year 2025, textless version, {{petite,loli}}, Petite figure, no text, The image 
             personality: character.personality,
             first_mes: character.first_mes,
             creator_notes: character.creator_notes || 'Exported from RolePlay Hub',
+            ...Object.fromEntries(preservedCardFields.map(field => {
+                const entry = includeCardFieldIfPresent(character, field);
+                return Object.keys(entry).length ? [field, entry[field]] : null;
+            }).filter(Boolean)),
             ...(includeUiTemplates ? { uiTemplates } : {}),
             extensions: {
+                ...(character.rawExtensions && typeof character.rawExtensions === 'object' ? character.rawExtensions : {}),
                 rp_hub_watermark: 'rp-hub',
                 regex_scripts: regexScripts,
                 ...(includeUiTemplates ? { rp_hub_ui_templates: uiTemplates } : {})
@@ -487,6 +515,49 @@ year 2025, textless version, {{petite,loli}}, Petite figure, no text, The image 
         }
     };
 
+    const safeExportName = (filename) => String(filename || 'roleplay-hub-export')
+        .replace(/[\\/:*?"<>|\x00-\x1f]/g, '_')
+        .slice(0, 160);
+
+    const exportMimeForName = (name, blob) => {
+        const extension = name.split('.').pop()?.toLowerCase();
+        const fallbackMimeTypes = {
+            json: 'application/json',
+            jsonl: 'application/x-ndjson',
+            png: 'image/png',
+            zip: 'application/zip'
+        };
+        return fallbackMimeTypes[extension] || blob.type || 'application/octet-stream';
+    };
+
+    const readBlobSliceAsBase64 = (blob, start, end) => new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve((reader.result || '').split(',')[1] || '');
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(blob.slice(start, end));
+    });
+
+    // Stream a Blob to the native create-document picker in bounded base64 chunks.
+    // This keeps the peak memory proportional to one chunk instead of the whole
+    // file (the previous whole-file Base64 bridge doubled memory for large files).
+    const downloadBlobChunked = async (blob, filename, nativeStorage) => {
+        const safeName = safeExportName(filename);
+        const mimeType = exportMimeForName(safeName, blob);
+        const sessionId = 'export-' + Date.now() + '-' + Math.random().toString(36).slice(2);
+        const startResult = await nativeStorage.exportFileStart({ sessionId, fileName: safeName, mimeType });
+        if (!startResult || startResult.ready !== true) {
+            return { saved: false, target: 'document', cancelled: true };
+        }
+        const CHUNK_BYTES = 512 * 1024;
+        const total = blob.size;
+        for (let offset = 0; offset < total; offset += CHUNK_BYTES) {
+            const chunk = await readBlobSliceAsBase64(blob, offset, Math.min(offset + CHUNK_BYTES, total));
+            await nativeStorage.exportFileWrite({ sessionId, chunk });
+        }
+        const result = await nativeStorage.exportFileEnd({ sessionId });
+        return { ...(result || {}), target: 'document' };
+    };
+
     const downloadBlob = async (blob, filename, options = {}) => {
         let capacitor = window.Capacitor;
         try {
@@ -497,22 +568,24 @@ year 2025, textless version, {{petite,loli}}, Petite figure, no text, The image 
             downloadBlobInBrowser(blob, filename, options);
             return { saved: true, target: 'browser' };
         }
+        if (nativeStorage.exportFileStart && nativeStorage.exportFileEnd) {
+            try {
+                return await downloadBlobChunked(blob, filename, nativeStorage);
+            } catch (error) {
+                // Never reopen the picker after the user cancelled it.
+                if (String(error?.message || error).toLowerCase().includes('cancel')) {
+                    return { saved: false, target: 'document', cancelled: true };
+                }
+                console.error('Chunked export failed, falling back to whole-file export:', error);
+            }
+        }
 
         const dataUrl = await blobToDataUrl(blob);
         const base64 = dataUrl.slice(dataUrl.indexOf(',') + 1);
-        const safeName = String(filename || 'roleplay-hub-export')
-            .replace(/[\\/:*?"<>|\x00-\x1f]/g, '_')
-            .slice(0, 160);
-        const extension = safeName.split('.').pop()?.toLowerCase();
-        const fallbackMimeTypes = {
-            json: 'application/json',
-            jsonl: 'application/x-ndjson',
-            png: 'image/png',
-            zip: 'application/zip'
-        };
+        const safeName = safeExportName(filename);
         const result = await nativeStorage.exportFile({
             fileName: safeName,
-            mimeType: fallbackMimeTypes[extension] || blob.type || 'application/octet-stream',
+            mimeType: exportMimeForName(safeName, blob),
             data: base64
         });
         return { ...result, target: 'document' };

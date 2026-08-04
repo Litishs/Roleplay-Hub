@@ -39,6 +39,8 @@ import java.nio.file.StandardCopyOption;
 import java.security.KeyStore;
 import java.security.MessageDigest;
 import java.text.SimpleDateFormat;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Date;
 import java.util.Iterator;
 import java.util.Locale;
@@ -276,13 +278,109 @@ public class NativeStoragePlugin extends Plugin {
         }
     }
 
+    private final Map<String, PendingExport> pendingExports = new HashMap<>();
+
+    private static class PendingExport {
+        final OutputStream output;
+        final Uri uri;
+        PendingExport(OutputStream output, Uri uri) {
+            this.output = output;
+            this.uri = uri;
+        }
+    }
+
+    // Chunked export: keeps the system create-document picker open across multiple
+    // bridge calls so large files are streamed in bounded chunks instead of being
+    // base64-encoded in full. This avoids extra memory spikes for very large
+    // avatars or chat exports.
+    @PluginMethod
+    public void exportFileStart(PluginCall call) {
+        String fileName = sanitizeExportFileName(call.getString("fileName", "roleplay-hub-export"));
+        String mimeType = normalizeExportMimeType(call.getString("mimeType", "application/octet-stream"));
+        String sessionId = call.getString("sessionId");
+        if (sessionId == null || sessionId.isEmpty()) { call.reject("sessionId is required"); return; }
+
+        Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType(mimeType);
+        intent.putExtra(Intent.EXTRA_TITLE, fileName);
+        startActivityForResult(call, intent, "exportFileStartResult");
+    }
+
+    @ActivityCallback
+    private void exportFileStartResult(PluginCall call, ActivityResult activityResult) {
+        if (call == null) return;
+        JSObject result = new JSObject();
+        String sessionId = call.getString("sessionId");
+        if (sessionId == null || sessionId.isEmpty()) { call.reject("sessionId is required"); return; }
+        if (activityResult.getResultCode() != Activity.RESULT_OK || activityResult.getData() == null || activityResult.getData().getData() == null) {
+            result.put("ready", false);
+            call.resolve(result);
+            return;
+        }
+        Uri uri = activityResult.getData().getData();
+        try {
+            OutputStream output = getContext().getContentResolver().openOutputStream(uri, "wt");
+            if (output == null) throw new IOException("Unable to open export destination");
+            pendingExports.put(sessionId, new PendingExport(output, uri));
+            result.put("ready", true);
+            call.resolve(result);
+        } catch (Exception error) {
+            call.reject("Unable to export file", error);
+        }
+    }
+
+    @PluginMethod
+    public void exportFileWrite(PluginCall call) {
+        String sessionId = call.getString("sessionId");
+        PendingExport pending = sessionId == null ? null : pendingExports.get(sessionId);
+        if (pending == null) { call.reject("No active export session"); return; }
+        String chunk = call.getString("chunk");
+        if (chunk == null) { call.reject("chunk is required"); return; }
+        try {
+            pending.output.write(Base64.decode(chunk, Base64.DEFAULT));
+            pending.output.flush();
+            call.resolve();
+        } catch (Exception error) {
+            abortPendingExport(sessionId);
+            call.reject("Unable to write export chunk", error);
+        }
+    }
+
+    @PluginMethod
+    public void exportFileEnd(PluginCall call) {
+        String sessionId = call.getString("sessionId");
+        PendingExport pending = sessionId == null ? null : pendingExports.remove(sessionId);
+        if (pending == null) { call.reject("No active export session"); return; }
+        try {
+            pending.output.flush();
+            pending.output.close();
+            JSObject result = new JSObject();
+            result.put("saved", true);
+            result.put("uri", pending.uri.toString());
+            call.resolve(result);
+        } catch (Exception error) {
+            call.reject("Unable to finish export", error);
+        }
+    }
+
+    private void abortPendingExport(String sessionId) {
+        PendingExport pending = sessionId == null ? null : pendingExports.remove(sessionId);
+        if (pending == null) return;
+        try {
+            pending.output.flush();
+            pending.output.close();
+        } catch (IOException ignored) {
+        }
+    }
+
     @PluginMethod
     public void exportBackup(PluginCall call) {
         Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
         intent.addCategory(Intent.CATEGORY_OPENABLE);
         intent.setType("application/zip");
         String timestamp = new SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(new Date());
-        intent.putExtra(Intent.EXTRA_TITLE, "roleplay-hub-" + timestamp + ".rphub-backup");
+        intent.putExtra(Intent.EXTRA_TITLE, "roleplay-hub-" + timestamp + ".rphub-backup.zip");
         startActivityForResult(call, intent, "exportBackupResult");
     }
 
@@ -622,3 +720,4 @@ public class NativeStoragePlugin extends Plugin {
         return new File(directory, base + "-" + UUID.randomUUID().toString().substring(0, 8) + extension);
     }
 }
+
