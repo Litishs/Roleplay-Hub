@@ -3577,6 +3577,74 @@
             </div>
         </div>
 
+        <!-- Chat Import Confirmation Modal -->
+        <div v-if="showChatImportDialog"
+            class="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fade-in">
+            <div class="fixed inset-0" @click="cancelChatImport"></div>
+            <div class="compact-modal-panel">
+                <div class="p-6">
+                    <h3 class="text-lg font-bold text-gray-900 mb-4">导入聊天记录</h3>
+                    <p class="text-sm text-gray-600 mb-4">
+                        将把 <span class="font-semibold text-gray-900">{{ chatImportDialog.validCount }}</span> 条聊天记录导入到角色
+                        <span class="font-semibold text-gray-900">{{ chatImportDialog.characterName }}</span>。
+                        <template v-if="chatImportDialog.totalCount > chatImportDialog.validCount">
+                            其中 <span class="text-amber-600 font-semibold">{{ chatImportDialog.totalCount - chatImportDialog.validCount }}</span> 行因格式无效被跳过。
+                        </template>
+                    </p>
+                    <div class="flex flex-col gap-2">
+                        <button @click="confirmChatImportOverwrite" type="button"
+                            class="w-full inline-flex justify-center rounded-lg border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:text-sm transition-colors">
+                            覆盖现有聊天记录
+                        </button>
+                        <button @click="confirmChatImportAppend" type="button"
+                            class="w-full inline-flex justify-center rounded-lg border border-primary-300 shadow-sm px-4 py-2 bg-primary-50 text-base font-medium text-primary-700 hover:bg-primary-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 sm:text-sm transition-colors">
+                            追加到现有聊天记录
+                        </button>
+                        <button @click="cancelChatImport" type="button"
+                            class="w-full inline-flex justify-center rounded-lg border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 sm:text-sm transition-colors">
+                            取消
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Import Preview / Conflict Summary Modal -->
+        <div v-if="showImportPreview"
+            class="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fade-in">
+            <div class="fixed inset-0" @click="cancelImportPreview"></div>
+            <div class="compact-modal-panel">
+                <div class="p-6">
+                    <h3 class="text-lg font-bold text-gray-900 mb-4">{{ importPreview.title }}</h3>
+                    <p class="text-sm text-gray-600 mb-4">导入前预览（共 {{ importPreview.totalCount }} 条）：</p>
+                    <div class="rounded-lg border border-gray-200 divide-y divide-gray-100 text-sm mb-4">
+                        <div class="flex items-center justify-between px-4 py-2.5">
+                            <span class="text-gray-600">将导入</span>
+                            <span class="font-semibold text-primary-700">{{ importPreview.newCount }}</span>
+                        </div>
+                        <div class="flex items-center justify-between px-4 py-2.5">
+                            <span class="text-gray-600">检测到重复（跳过）</span>
+                            <span class="font-semibold text-amber-600">{{ importPreview.duplicateCount }}</span>
+                        </div>
+                        <div v-if="importPreview.invalidCount > 0" class="flex items-center justify-between px-4 py-2.5">
+                            <span class="text-gray-600">格式无效（跳过）</span>
+                            <span class="font-semibold text-red-600">{{ importPreview.invalidCount }}</span>
+                        </div>
+                    </div>
+                    <div class="flex gap-2">
+                        <button @click="confirmImportPreview" type="button"
+                            class="flex-1 inline-flex justify-center rounded-lg border border-transparent shadow-sm px-4 py-2 bg-primary-600 text-base font-medium text-white hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 sm:text-sm transition-colors">
+                            导入
+                        </button>
+                        <button @click="cancelImportPreview" type="button"
+                            class="flex-1 inline-flex justify-center rounded-lg border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 sm:text-sm transition-colors">
+                            取消
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Model Selector Modal -->
         <transition name="fade">
             <div v-if="showModelSelector"

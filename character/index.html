@@ -1991,6 +1991,11 @@
                     char.worldInfo = Array.isArray(char.worldInfo) ? char.worldInfo.map(normalizeWorldInfoEntry) : [];
                     char.regexScripts = Array.isArray(char.regexScripts) ? char.regexScripts.map(normalizeRegexScript) : [];
                     if (!Array.isArray(char.tags)) char.tags = [];
+                    if (!Array.isArray(char.alternate_greetings)) char.alternate_greetings = [];
+                    if (char.alternate_greetings.length === 0 && char.alternate_greeting) {
+                        char.alternate_greetings = [String(char.alternate_greeting || '')].filter(Boolean);
+                        delete char.alternate_greeting;
+                    }
                     return char;
                 };
 
@@ -2005,7 +2010,12 @@
                     creator_notes: '',
                     system_prompt: '',
                     post_history_instructions: '',
+                    alternate_greetings: [],
                     tags: [],
+                    creator: '',
+                    character_version: '',
+                    spec: '',
+                    spec_version: '',
                     avatar: null,
                     avatar_prompt: '',
                     worldInfo: [],
@@ -2045,7 +2055,28 @@
                         creator_notes: data.creator_notes || data.creatorcomment || data.creator_comment || '',
                         system_prompt: data.system_prompt || '',
                         post_history_instructions: data.post_history_instructions || '',
+                        alternate_greetings: Array.isArray(data.alternate_greetings)
+                            ? data.alternate_greetings
+                            : (data.alternate_greeting ? [String(data.alternate_greeting || '')] : []),
                         tags: Array.isArray(data.tags) ? data.tags : [],
+                        creator: data.creator || '',
+                        character_version: data.character_version || '',
+                        spec: data.spec || '',
+                        spec_version: data.spec_version || '',
+                        rawExtensions: (() => {
+                            const foreign = {};
+                            const collect = (ext) => {
+                                if (!ext || typeof ext !== 'object') return;
+                                Object.keys(ext).forEach(key => {
+                                    if (['regex_scripts', 'rp_hub_ui_templates', 'ui_templates', 'rp_hub_watermark'].includes(key)) return;
+                                    if (ext[key] === undefined || ext[key] === null) return;
+                                    foreign[key] = typeof ext[key] === 'object' ? JSON.parse(JSON.stringify(ext[key])) : ext[key];
+                                });
+                            };
+                            collect(rootExtensions);
+                            collect(dataExtensions);
+                            return Object.keys(foreign).length ? foreign : undefined;
+                        })(),
                         avatar: avatarUrl || data.avatar || data.avatar_url || root.avatar || null,
                         avatar_prompt: data.avatar_prompt || dataExtensions.avatar_prompt || root.avatar_prompt || '',
                         worldInfo: worldEntries,

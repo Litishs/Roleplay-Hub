@@ -1820,6 +1820,45 @@ createApp({
             }
         };
 
+        // Chat Import Dialog State (overwrite / append confirmation)
+        const showChatImportDialog = ref(false);
+        const chatImportDialog = ref(null); // { characterName, totalCount, validCount, invalidCount, apply(mode) }
+
+        const confirmChatImportOverwrite = async () => {
+            const dialog = chatImportDialog.value;
+            showChatImportDialog.value = false;
+            chatImportDialog.value = null;
+            if (dialog?.apply) await dialog.apply('overwrite');
+        };
+
+        const confirmChatImportAppend = async () => {
+            const dialog = chatImportDialog.value;
+            showChatImportDialog.value = false;
+            chatImportDialog.value = null;
+            if (dialog?.apply) await dialog.apply('append');
+        };
+
+        const cancelChatImport = () => {
+            showChatImportDialog.value = false;
+            chatImportDialog.value = null;
+        };
+
+        // Import Preview Dialog State (dedupe / validation summary for presets, regex, world info)
+        const showImportPreview = ref(false);
+        const importPreview = ref(null); // { title, itemLabel, totalCount, newCount, duplicateCount, invalidCount, apply() }
+
+        const confirmImportPreview = () => {
+            const preview = importPreview.value;
+            showImportPreview.value = false;
+            importPreview.value = null;
+            if (preview?.apply) preview.apply();
+        };
+
+        const cancelImportPreview = () => {
+            showImportPreview.value = false;
+            importPreview.value = null;
+        };
+
         // Generator State
         const isGeneratorLoading = ref(true);
         const generatorUrl = ref('./character/index.html');
@@ -9463,6 +9502,25 @@ ${content}
             return { blob, result };
         };
 
+        // --- Import dedupe / preview helpers ---
+        // Stable canonical JSON stringify (object key order independent) used as a
+        // content fingerprint for detecting duplicate imports.
+        const stableJsonStringify = (value) => {
+            if (value === null || typeof value !== 'object') return JSON.stringify(value);
+            if (Array.isArray(value)) return '[' + value.map(stableJsonStringify).join(',') + ']';
+            const keys = Object.keys(value).sort();
+            return '{' + keys.map(key => JSON.stringify(key) + ':' + stableJsonStringify(value[key])).join(',') + '}';
+        };
+        const importItemFingerprint = (item, fields) => {
+            const picked = {};
+            (fields || []).forEach(field => {
+                if (item[field] !== undefined && item[field] !== null && item[field] !== '') {
+                    picked[field] = item[field];
+                }
+            });
+            return stableJsonStringify(picked);
+        };
+
         const readJsonFileInput = (event, handleData, handleError) => {
             const input = event.target;
             const file = input.files?.[0];
@@ -10190,27 +10248,54 @@ image###生成的提示词###
                         charData = rawData.data;
                     }
 
-                    const discardRemovedCardFields = (target) => {
-                        if (!target || typeof target !== 'object') return;
-                        [
-                            'mes_example',
-                            'system_prompt',
-                            'post_history_instructions',
-                            'alternate_greetings',
-                            'tags',
-                            'creator',
-                            'character_version',
-                            'spec',
-                            'spec_version'
-                        ].forEach(field => delete target[field]);
-                        if (target.extensions && typeof target.extensions === 'object') {
-                            delete target.extensions.world;
-                            delete target.extensions.depth_prompt;
+                    // --- Preserve External Card Fields for Lossless Round-Trip ---
+                    // SillyTavern / TavernAI cards carry fields this app does not edit
+                    // (mes_example, system_prompt, post_history_instructions,
+                    // alternate_greetings, tags, creator, character_version, spec, spec_version)
+                    // plus foreign extension data (world, depth_prompt, ...). Earlier versions
+                    // deleted them, which made a single import -> export cycle lossy. We keep
+                    // them on the character object so exports can write them back unchanged.
+                    const PRESERVED_CARD_FIELDS = [
+                        'mes_example',
+                        'system_prompt',
+                        'post_history_instructions',
+                        'alternate_greetings',
+                        'tags',
+                        'creator',
+                        'character_version',
+                        'spec',
+                        'spec_version'
+                    ];
+                    const collectPreservedCardFields = (target) => {
+                        const preserved = {};
+                        if (!target || typeof target !== 'object') return preserved;
+                        for (const field of PRESERVED_CARD_FIELDS) {
+                            const value = target[field];
+                            if (value === undefined || value === null || value === '') continue;
+                            if (Array.isArray(value)) {
+                                if (value.length) preserved[field] = JSON.parse(JSON.stringify(value));
+                            } else if (typeof value === 'object') {
+                                preserved[field] = JSON.parse(JSON.stringify(value));
+                            } else {
+                                preserved[field] = value;
+                            }
                         }
+                        if (target.extensions && typeof target.extensions === 'object') {
+                            const foreign = {};
+                            Object.entries(target.extensions).forEach(([key, value]) => {
+                                if (['regex_scripts', 'rp_hub_ui_templates', 'ui_templates', 'rp_hub_watermark'].includes(key)) return;
+                                if (value === undefined || value === null) return;
+                                foreign[key] = typeof value === 'object' ? JSON.parse(JSON.stringify(value)) : value;
+                            });
+                            if (Object.keys(foreign).length) preserved.rawExtensions = foreign;
+                        }
+                        return preserved;
                     };
-                    discardRemovedCardFields(rawData);
-                    discardRemovedCardFields(rawData.data);
-                    discardRemovedCardFields(charData);
+                    const preservedCardFields = {
+                        ...collectPreservedCardFields(rawData),
+                        ...collectPreservedCardFields(rawData.data),
+                        ...collectPreservedCardFields(charData)
+                    };
 
                     // --- Extract Core Character Fields ---
                     // External cards may use specific field names. We map them to our internal structure.
@@ -10263,6 +10348,16 @@ image###生成的提示词###
                         avatar: avatarUrl || defaultAvatar,
                         personality,
                         creator_notes,
+                        mes_example: preservedCardFields.mes_example || '',
+                        system_prompt: preservedCardFields.system_prompt || '',
+                        post_history_instructions: preservedCardFields.post_history_instructions || '',
+                        alternate_greetings: Array.isArray(preservedCardFields.alternate_greetings) ? preservedCardFields.alternate_greetings : [],
+                        tags: Array.isArray(preservedCardFields.tags) ? preservedCardFields.tags : [],
+                        creator: preservedCardFields.creator || '',
+                        character_version: preservedCardFields.character_version || '',
+                        spec: preservedCardFields.spec || '',
+                        spec_version: preservedCardFields.spec_version || '',
+                        rawExtensions: preservedCardFields.rawExtensions || undefined,
                         worldInfo: [],
                         regexScripts: [],
                         uiTemplates: Array.isArray(uiTemplates) ? uiTemplates.map(t => normalizeUiTemplate({ ...sanitizeUiTemplateImportEntry(t), id: generateUUID(), scope: 'character' })) : [],
@@ -10375,7 +10470,7 @@ image###生成的提示词###
                 }
             };
 
-            if (file.type === 'application/json') {
+            if (file.type === 'application/json' || file.name.toLowerCase().endsWith('.json')) {
                 const reader = new FileReader();
                 reader.onload = async (e) => {
                     try {
@@ -10386,7 +10481,7 @@ image###生成的提示词###
                     }
                 };
                 reader.readAsText(file);
-            } else if (file.type === 'image/png' || file.name.endsWith('.png')) {
+            } else if (file.type === 'image/png' || file.name.toLowerCase().endsWith('.png')) {
                 const reader = new FileReader();
                 reader.onload = async (e) => {
                     try {
@@ -10402,33 +10497,63 @@ image###生成的提示词###
                     }
                 };
                 reader.readAsArrayBuffer(file);
-            } else if (file.name.endsWith('.jsonl')) {
+            } else if (file.name.toLowerCase().endsWith('.jsonl') || file.type === 'application/x-ndjson' || file.type === 'application/jsonl') {
                 const reader = new FileReader();
                 reader.onload = async (e) => {
                     try {
                         const text = e.target.result;
-                        const lines = text.split('\n').filter(line => line.trim() !== '');
-                        const importedChat = lines.map(line => JSON.parse(line));
-
-                        if (importedChat.length > 0) {
-                            if (currentCharacterIndex.value >= 0) {
-                                const char = characters.value[currentCharacterIndex.value];
-                                chatHistory.value = importedChat;
-
-                                // Save to DB
-                                if (char.uuid) {
-                                    await setScopedStoredValue('chat', char.uuid, chatHistory.value);
-                                } else {
-                                    await setScopedStoredValue('chat', currentCharacterIndex.value, chatHistory.value);
-                                }
-
-                                showToast(`成功为 ${char.name} 导入 ${importedChat.length} 条聊天记录`, 'success');
-                            } else {
-                                showToast('请先选择一个角色才能导入聊天记录', 'warning');
+                        const rawLines = text.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+                        const importedChat = [];
+                        let invalidCount = 0;
+                        for (const rawLine of rawLines) {
+                            try {
+                                const parsed = JSON.parse(rawLine);
+                                if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('not an object');
+                                const role = String(parsed.role || '').trim();
+                                const content = parsed.content;
+                                if (!role || typeof content !== 'string') throw new Error('missing role/content');
+                                importedChat.push({ ...parsed, role, content });
+                            } catch (_) {
+                                invalidCount++;
                             }
-                        } else {
-                            showToast('文件中没有有效的聊天记录', 'warning');
                         }
+
+                        if (importedChat.length === 0) {
+                            showToast(invalidCount > 0 ? '文件中没有有效的聊天记录（存在格式错误）' : '文件中没有聊天记录', 'warning');
+                            return;
+                        }
+                        if (currentCharacterIndex.value < 0) {
+                            showToast('请先选择一个角色才能导入聊天记录', 'warning');
+                            return;
+                        }
+
+                        const char = characters.value[currentCharacterIndex.value];
+                        chatImportDialog.value = {
+                            characterName: char.name || '未命名角色',
+                            totalCount: rawLines.length,
+                            validCount: importedChat.length,
+                            invalidCount,
+                            apply: async (mode) => {
+                                try {
+                                    if (mode === 'append') {
+                                        chatHistory.value = [...chatHistory.value, ...importedChat];
+                                    } else {
+                                        chatHistory.value = [...importedChat];
+                                    }
+                                    if (char.uuid) {
+                                        await setScopedStoredValue('chat', char.uuid, chatHistory.value);
+                                    } else {
+                                        await setScopedStoredValue('chat', currentCharacterIndex.value, chatHistory.value);
+                                    }
+                                    const modeLabel = mode === 'append' ? '追加' : '覆盖';
+                                    showToast('已' + modeLabel + ' ' + importedChat.length + ' 条聊天记录到 ' + char.name, 'success');
+                                } catch (err) {
+                                    console.error('Chat import save error:', err);
+                                    showToast('聊天记录保存失败: ' + err.message, 'error');
+                                }
+                            }
+                        };
+                        showChatImportDialog.value = true;
                     } catch (err) {
                         console.error('Chat import error:', err);
                         showToast('聊天记录解析失败: ' + err.message, 'error');
@@ -11623,6 +11748,8 @@ ${memoryFragmentSection}
             toggleMobileMenu, closeMobileMenu,
             fetchModels, selectModel, sendMessage, autoResizeInput, handleChatInput, handleChatCompositionStart, handleChatCompositionEnd, handleChatInputPaste, prepareChatInputSend, handleChatInputKeydown, handleChatInputFocus, handleChatInputBlur, stopGeneration, clearChat, toggleChatFullscreen,
             handleConfirm, handleCancel, // Export handlers
+            showChatImportDialog, chatImportDialog, confirmChatImportOverwrite, confirmChatImportAppend, cancelChatImport,
+            showImportPreview, importPreview, confirmImportPreview, cancelImportPreview,
             copyMessage, deleteMessage, regenerateMessage,
             editMessage, saveEditMessage, cancelEditMessage,
             createNewCharacter, editCharacter, saveCharacter, deleteCharacter, selectCharacter, toggleCharacterFavorite, isCharacterFavorite,
@@ -11701,10 +11828,36 @@ ${memoryFragmentSection}
             },
             importPresets: (event) => readJsonFileInput(event, data => {
                 const items = Array.isArray(data) ? data : [data];
-                if (items.length > 0) {
-                    presets.value = [...presets.value, ...items.map(normalizePreset)];
-                    showToast(`成功导入 ${items.length} 条预设`, 'success');
+                const normalized = items.map(normalizePreset);
+                const existing = new Set(presets.value.map(p => importItemFingerprint(p, ['role', 'content'])));
+                const newItems = [];
+                let duplicateCount = 0;
+                let invalidCount = 0;
+                normalized.forEach(item => {
+                    if (!String(item.content || '').trim()) { invalidCount++; return; }
+                    const fingerprint = importItemFingerprint(item, ['role', 'content']);
+                    if (existing.has(fingerprint)) { duplicateCount++; return; }
+                    existing.add(fingerprint);
+                    newItems.push(item);
+                });
+                if (newItems.length === 0) {
+                    showToast(`没有需要导入的预设（重复 ${duplicateCount} 条${invalidCount ? `，无效 ${invalidCount} 条` : ''}）`, 'warning');
+                    return;
                 }
+                importPreview.value = {
+                    title: '导入预设',
+                    itemLabel: '预设',
+                    totalCount: normalized.length,
+                    newCount: newItems.length,
+                    duplicateCount,
+                    invalidCount,
+                    apply: async () => {
+                        presets.value = [...presets.value, ...newItems];
+                        await saveData();
+                        showToast(`成功导入 ${newItems.length} 条预设${duplicateCount ? `，跳过 ${duplicateCount} 条重复` : ''}`, 'success');
+                    }
+                };
+                showImportPreview.value = true;
             }, () => showToast('导入失败: 格式错误', 'error')),
 
             // Regex Methods
@@ -11743,8 +11896,36 @@ ${memoryFragmentSection}
                     return normalizeRegexScript(s, s.scope);
                 });
 
-                regexScripts.value = [...regexScripts.value, ...normalized];
-                showToast(`成功导入 ${normalized.length} 个正则脚本`, 'success');
+                const existing = new Set(regexScripts.value.map(script => importItemFingerprint(script, ['name', 'regex', 'flags', 'replacement'])));
+                const newItems = [];
+                let duplicateCount = 0;
+                let invalidCount = 0;
+                normalized.forEach(script => {
+                    if (!String(script.regex || '').trim()) { invalidCount++; return; }
+                    const fingerprint = importItemFingerprint(script, ['name', 'regex', 'flags', 'replacement']);
+                    if (existing.has(fingerprint)) { duplicateCount++; return; }
+                    existing.add(fingerprint);
+                    newItems.push(script);
+                });
+
+                if (newItems.length === 0) {
+                    showToast(`没有需要导入的正则脚本（重复 ${duplicateCount} 条${invalidCount ? `，无效 ${invalidCount} 条` : ''}）`, 'warning');
+                    return;
+                }
+                importPreview.value = {
+                    title: '导入正则脚本',
+                    itemLabel: '正则脚本',
+                    totalCount: normalized.length,
+                    newCount: newItems.length,
+                    duplicateCount,
+                    invalidCount,
+                    apply: async () => {
+                        regexScripts.value = [...regexScripts.value, ...newItems];
+                        await saveData();
+                        showToast(`成功导入 ${newItems.length} 个正则脚本${duplicateCount ? `，跳过 ${duplicateCount} 条重复` : ''}`, 'success');
+                    }
+                };
+                showImportPreview.value = true;
             }, error => showToast(`导入失败: ${error.message}`, 'error')),
             createRegex: () => {
                 editingRegex.id = undefined;
@@ -11827,14 +12008,43 @@ ${memoryFragmentSection}
                 } else if (data?.entries && typeof data.entries === 'object') {
                     entries = Object.values(data.entries);
                 }
-                if (entries.length > 0) {
-                    const normalizedEntries = entries.map(normalizeWorldInfoEntry);
-                    worldInfo.value = [...worldInfo.value, ...normalizedEntries];
-                    if (currentCharacterIndex.value !== -1) {
-                        characters.value[currentCharacterIndex.value].worldInfo = JSON.parse(JSON.stringify(worldInfo.value));
-                    }
-                    showToast('世界书导入成功', 'success');
+                const normalized = entries.map(normalizeWorldInfoEntry);
+                if (normalized.length === 0) {
+                    showToast('文件中没有世界书条目', 'warning');
+                    return;
                 }
+                const existing = new Set(worldInfo.value.map(entry => importItemFingerprint(entry, ['keys', 'content'])));
+                const newItems = [];
+                let duplicateCount = 0;
+                let invalidCount = 0;
+                normalized.forEach(entry => {
+                    if (!String(entry.content || '').trim()) { invalidCount++; return; }
+                    const fingerprint = importItemFingerprint(entry, ['keys', 'content']);
+                    if (existing.has(fingerprint)) { duplicateCount++; return; }
+                    existing.add(fingerprint);
+                    newItems.push(entry);
+                });
+                if (newItems.length === 0) {
+                    showToast(`没有需要导入的世界书条目（重复 ${duplicateCount} 条${invalidCount ? `，无效 ${invalidCount} 条` : ''}）`, 'warning');
+                    return;
+                }
+                importPreview.value = {
+                    title: '导入世界书',
+                    itemLabel: '世界书条目',
+                    totalCount: normalized.length,
+                    newCount: newItems.length,
+                    duplicateCount,
+                    invalidCount,
+                    apply: async () => {
+                        worldInfo.value = [...worldInfo.value, ...newItems];
+                        if (currentCharacterIndex.value !== -1) {
+                            characters.value[currentCharacterIndex.value].worldInfo = JSON.parse(JSON.stringify(worldInfo.value));
+                        }
+                        await saveData();
+                        showToast(`成功导入 ${newItems.length} 个世界书条目${duplicateCount ? `，跳过 ${duplicateCount} 条重复` : ''}`, 'success');
+                    }
+                };
+                showImportPreview.value = true;
             }, () => showToast('导入失败: 格式错误', 'error')),
             createWorldInfo: () => {
                 editingWorldInfo.id = undefined;
