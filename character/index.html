@@ -3998,15 +3998,25 @@ JSON 字段（世界书/正则脚本）必须输出为合法的 JSON 数组，**
                     return sanitizeFilename(String(name || '').replace(/\s+/g, '_'), defaultName).slice(0, 48) || defaultName;
                 };
 
-                const downloadFile = (blob, filename) => {
-                    cardUtils.downloadBlob(blob, filename, { targetBlank: true, revokeDelay: 2000 });
+                const downloadFile = async (blob, filename) => {
+                    try {
+                        return await cardUtils.downloadBlob(
+                            blob,
+                            filename,
+                            { targetBlank: true, revokeDelay: 2000 }
+                        );
+                    } catch (error) {
+                        console.error('Export failed:', error);
+                        showToast('导出失败: ' + (error?.message || error), 'error');
+                        return { saved: false, error };
+                    }
                 };
 
-                const exportJSON = () => {
+                const exportJSON = async () => {
                     const data = getCardData();
                     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
                     const filename = sanitizeFilename(currentCharacter.value.name) + '.json';
-                    downloadFile(blob, filename);
+                    await downloadFile(blob, filename);
                 };
 
                 const exportPNG = async () => {
@@ -4030,7 +4040,7 @@ JSON 字段（世界书/正则脚本）必须输出为合法的 JSON 数组，**
                     );
                     const blob = new Blob([newPng], { type: 'image/png' });
                     const filename = sanitizeFilename(currentCharacter.value.name) + '.png';
-                    downloadFile(blob, filename);
+                    await downloadFile(blob, filename);
                 };
 
                 const getSelectiveExportConfig = (type) => {
@@ -4083,7 +4093,7 @@ JSON 字段（世界书/正则脚本）必须输出为合法的 JSON 数组，**
                     exportPicker.selected = exportPicker.items.map(() => shouldSelect);
                 };
 
-                const confirmSelectiveExport = () => {
+                const confirmSelectiveExport = async () => {
                     const config = getSelectiveExportConfig(exportPicker.type);
                     if (!config) return;
                     const selectedMeta = exportPicker.items.filter((_, index) => exportPicker.selected[index]);
@@ -4095,9 +4105,16 @@ JSON 字段（世界书/正则脚本）必须输出为合法的 JSON 数组，**
                     const data = config.build(selectedItems);
                     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
                     const filename = buildSelectiveExportFilename(exportPicker.type, selectedItems, selectedMeta);
-                    downloadFile(blob, filename);
-                    exportPicker.show = false;
-                    showToast(`已导出 ${selectedItems.length} 个${config.title}`, 'success');
+                    try {
+                        const result = await downloadFile(blob, filename);
+                        if (result.saved) {
+                            exportPicker.show = false;
+                            showToast(`已导出 ${selectedItems.length} 个${config.title}`, 'success');
+                        }
+                    } catch (error) {
+                        console.error('Selective export failed:', error);
+                        showToast('导出失败: ' + (error?.message || error), 'error');
+                    }
                 };
 
                 const exportWorldInfo = () => openSelectiveExport('world');

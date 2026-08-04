@@ -240,6 +240,43 @@ public class NativeStoragePlugin extends Plugin {
     }
 
     @PluginMethod
+    public void exportFile(PluginCall call) {
+        String fileName = sanitizeExportFileName(call.getString("fileName", "roleplay-hub-export"));
+        String mimeType = normalizeExportMimeType(call.getString("mimeType", "application/octet-stream"));
+        String data = call.getString("data");
+        if (data == null) { call.reject("data is required"); return; }
+
+        Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType(mimeType);
+        intent.putExtra(Intent.EXTRA_TITLE, fileName);
+        startActivityForResult(call, intent, "exportFileResult");
+    }
+
+    @ActivityCallback
+    private void exportFileResult(PluginCall call, ActivityResult activityResult) {
+        if (call == null) return;
+        JSObject result = new JSObject();
+        if (activityResult.getResultCode() != Activity.RESULT_OK || activityResult.getData() == null || activityResult.getData().getData() == null) {
+            result.put("saved", false);
+            call.resolve(result);
+            return;
+        }
+
+        Uri uri = activityResult.getData().getData();
+        try (OutputStream output = getContext().getContentResolver().openOutputStream(uri, "wt")) {
+            if (output == null) throw new IOException("Unable to open export destination");
+            output.write(Base64.decode(call.getString("data"), Base64.DEFAULT));
+            output.flush();
+            result.put("saved", true);
+            result.put("uri", uri.toString());
+            call.resolve(result);
+        } catch (Exception error) {
+            call.reject("Unable to export file", error);
+        }
+    }
+
+    @PluginMethod
     public void exportBackup(PluginCall call) {
         Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
         intent.addCategory(Intent.CATEGORY_OPENABLE);
@@ -553,6 +590,23 @@ public class NativeStoragePlugin extends Plugin {
         if ("image/gif".equalsIgnoreCase(mimeType)) return ".gif";
         if ("image/jpeg".equalsIgnoreCase(mimeType)) return ".jpg";
         return ".bin";
+    }
+
+    private static String normalizeExportMimeType(String value) {
+        if (value == null) return "application/octet-stream";
+        String normalized = value.split(";", 2)[0].trim().toLowerCase(Locale.ROOT);
+        return normalized.matches("^[a-z0-9!#$&^_.+-]+/[a-z0-9!#$&^_.+-]+$")
+                ? normalized
+                : "application/octet-stream";
+    }
+
+    private static String sanitizeExportFileName(String value) {
+        String sanitized = value == null ? "" : value
+                .replaceAll("[\\x00-\\x1f\\x7f\\\\/:*?\"<>|]", "_")
+                .replaceAll("^\\.+", "")
+                .trim();
+        if (sanitized.isEmpty()) sanitized = "roleplay-hub-export";
+        return sanitized.length() > 160 ? sanitized.substring(0, 160) : sanitized;
     }
 
     private static String sanitizeFileName(String value) {

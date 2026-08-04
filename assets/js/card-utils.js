@@ -492,34 +492,30 @@ year 2025, textless version, {{petite,loli}}, Petite figure, no text, The image 
         try {
             if (!capacitor && window.parent !== window) capacitor = window.parent.Capacitor;
         } catch (_) { }
-        const filesystem = capacitor?.Plugins?.Filesystem;
-        const share = capacitor?.Plugins?.Share;
-        if (!filesystem || !share) {
+        const nativeStorage = capacitor?.Plugins?.NativeStorage;
+        if (!nativeStorage?.exportFile) {
             downloadBlobInBrowser(blob, filename, options);
-            return;
+            return { saved: true, target: 'browser' };
         }
 
-        try {
-            const dataUrl = await blobToDataUrl(blob);
-            const base64 = dataUrl.slice(dataUrl.indexOf(',') + 1);
-            const safeName = String(filename || 'roleplay-hub-export')
-                .replace(/[\\/:*?"<>|]/g, '_')
-                .slice(0, 160);
-            const result = await filesystem.writeFile({
-                path: `exports/${Date.now()}-${safeName}`,
-                data: base64,
-                directory: 'CACHE',
-                recursive: true
-            });
-            await share.share({
-                title: safeName,
-                dialogTitle: '保存或分享导出文件',
-                files: [result.uri]
-            });
-        } catch (error) {
-            console.error('Native export failed, using WebView download fallback:', error);
-            downloadBlobInBrowser(blob, filename, options);
-        }
+        const dataUrl = await blobToDataUrl(blob);
+        const base64 = dataUrl.slice(dataUrl.indexOf(',') + 1);
+        const safeName = String(filename || 'roleplay-hub-export')
+            .replace(/[\\/:*?"<>|\x00-\x1f]/g, '_')
+            .slice(0, 160);
+        const extension = safeName.split('.').pop()?.toLowerCase();
+        const fallbackMimeTypes = {
+            json: 'application/json',
+            jsonl: 'application/x-ndjson',
+            png: 'image/png',
+            zip: 'application/zip'
+        };
+        const result = await nativeStorage.exportFile({
+            fileName: safeName,
+            mimeType: fallbackMimeTypes[extension] || blob.type || 'application/octet-stream',
+            data: base64
+        });
+        return { ...result, target: 'document' };
     };
 
     window.RPHubCardUtils = {
