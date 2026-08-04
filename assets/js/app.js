@@ -548,10 +548,13 @@ createApp({
         const handleChatInputKeydown = (event) => {
             if (event?.key !== 'Enter') return;
             if (event.isComposing || chatInputComposing || event.keyCode === 229) return;
-            if (event.shiftKey) return;
-            event.preventDefault();
-            syncChatInputFromElement(event.currentTarget || inputBox.value);
-            sendMessage();
+            // 回车改为换行（交给 textarea 默认行为插入 \n），不再发送；
+            // 需要键盘发送时使用 Ctrl/Cmd + Enter。
+            if (event.ctrlKey || event.metaKey) {
+                event.preventDefault();
+                syncChatInputFromElement(event.currentTarget || inputBox.value);
+                sendMessage();
+            }
         };
 
         const isMobileViewport = () => (

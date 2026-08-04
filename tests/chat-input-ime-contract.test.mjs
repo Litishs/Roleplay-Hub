@@ -44,3 +44,15 @@ test('chat input reads textarea value, pastes plain text, and auto-resizes', asy
   assert.match(source, /if \(overflow\) \{\s*element\.scrollTop = element\.scrollHeight[\s\S]*?requestAnimationFrame\(\(\) => \{\s*element\.scrollTop = element\.scrollHeight/);
   assert.doesNotMatch(source, /watch\(userInput, \(\) =>/);
 });
+
+
+test('chat input Enter inserts newline, Ctrl/Cmd+Enter sends', async () => {
+  const source = await readFile(new URL('../assets/js/app.js', import.meta.url), 'utf8');
+
+  // 回车不再触发发送：不再有 shiftKey 短路后直接 preventDefault + sendMessage 的旧逻辑
+  assert.doesNotMatch(source, /if \(event\.shiftKey\) return;[\s\S]*?event\.preventDefault\(\);[\s\S]*?sendMessage\(\);/);
+  // 保留 IME 组合守卫
+  assert.match(source, /if \(event\.isComposing \|\| chatInputComposing \|\| event\.keyCode === 229\) return;/);
+  // Ctrl/Cmd+Enter 发送
+  assert.match(source, /if \(event\.ctrlKey \|\| event\.metaKey\) \{\s*event\.preventDefault\(\);\s*syncChatInputFromElement\(event\.currentTarget \|\| inputBox\.value\);\s*sendMessage\(\);/);
+});

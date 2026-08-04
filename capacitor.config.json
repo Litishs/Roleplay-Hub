@@ -5,7 +5,7 @@
   "android": {
     "minWebViewVersion": 83,
     "allowMixedContent": false,
-    "captureInput": true,
+    "captureInput": false,
     "webContentsDebuggingEnabled": true
   },
   "server": {
