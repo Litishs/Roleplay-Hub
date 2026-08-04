@@ -759,6 +759,32 @@ createApp({
             if (input && settings.apiKey !== input.value) settings.apiKey = input.value;
             return String(settings.apiKey || '').trim();
         };
+        const apiKeyVisible = ref(false);
+        const toggleApiKeyVisibility = () => { apiKeyVisible.value = !apiKeyVisible.value; };
+        const readClipboardText = async () => {
+            const native = window.Capacitor?.Plugins?.NativeStorage;
+            if (native && typeof native.clipboardRead === 'function') {
+                const result = await native.clipboardRead();
+                return String(result?.text || '');
+            }
+            if (navigator.clipboard && typeof navigator.clipboard.readText === 'function') {
+                return String(await navigator.clipboard.readText() || '');
+            }
+            return '';
+        };
+        const pasteApiKeyFromClipboard = async () => {
+            let text = '';
+            try { text = await readClipboardText(); } catch (error) { console.warn('Clipboard read failed:', error); }
+            text = String(text || '').trim();
+            if (!text) { showToast('剪贴板中没有可粘贴的内容', 'info'); return; }
+            settings.apiKey = text;
+            if (apiKeyInput.value) {
+                apiKeyInput.value.value = text;
+            }
+            await nextTick();
+            if (apiKeyInput.value) apiKeyInput.value.focus();
+            showToast('已粘贴 API Key', 'success');
+        };
 
         const normalizeFontFamily = (value) => ['modern', 'serif', 'system'].includes(value) ? value : 'modern';
         const applyFontFamily = (value) => {
@@ -1318,7 +1344,9 @@ createApp({
             defaultDepth: MEMORY_VECTOR_DEFAULT_DEPTH,
             vectorKeepFloors: VECTOR_KEEP_FLOORS_DEFAULT,
             summaryKeepFloors: SUMMARY_KEEP_FLOORS_DEFAULT,
-            classicConcurrency: CLASSIC_MEMORY_DEFAULT_CONCURRENCY
+            classicConcurrency: CLASSIC_MEMORY_DEFAULT_CONCURRENCY,
+            embeddingBackend: 'api',        // 'api' | 'local'
+            localEmbeddingModel: 'bge-small-zh-v1.5'
         });
         const isBatchExtracting = ref(false);
         const batchExtractProgress = ref({ current: 0, total: 0 });
@@ -1482,6 +1510,11 @@ createApp({
                 ? Math.max(MEMORY_VECTOR_MIN_SIMILARITY, Math.min(MEMORY_VECTOR_MAX_SIMILARITY, Math.round(similarityThreshold)))
                 : MEMORY_VECTOR_DEFAULT_SIMILARITY;
             memorySettings.defaultDepth = MEMORY_VECTOR_DEFAULT_DEPTH;
+            memorySettings.embeddingBackend = memorySettings.embeddingBackend === 'local' ? 'local' : 'api';
+            const localModelOptions = (globalThis.RPHLocalEmbedding?.MODELS && Object.keys(globalThis.RPHLocalEmbedding.MODELS)) || ['bge-small-zh-v1.5'];
+            memorySettings.localEmbeddingModel = localModelOptions.includes(memorySettings.localEmbeddingModel)
+                ? memorySettings.localEmbeddingModel
+                : 'bge-small-zh-v1.5';
         };
 
         const normalizeActiveToolCallName = (value) => {
@@ -4637,9 +4670,11 @@ ${content}
         };
 
         // API & Models
-        const getApiEndpoint = (path) => settings.apiUrl.endsWith('/v1')
-            ? `${settings.apiUrl}/${path}`
-            : `${settings.apiUrl}/v1/${path}`;
+        const getApiEndpoint = (path) => {
+            const baseUrl = (settings.apiUrl || '').replace(/\/+$/, '');
+            const apiUrl = baseUrl.endsWith('/v1') ? baseUrl : `${baseUrl}/v1`;
+            return `${apiUrl}/${String(path || '').replace(/^\/+/, '')}`;
+        };
 
         const fetchModels = async (isManual = false) => {
             const apiKey = syncApiKeyInput();
@@ -4651,7 +4686,8 @@ ${content}
                 if (isManual) showToast('正在获取模型列表...', 'info');
                 const url = getApiEndpoint('models');
                 const response = await fetch(url, {
-                    headers: { 'Authorization': `Bearer ${apiKey}` }
+                    headers: { 'Authorization': `Bearer ${apiKey}` },
+                    signal: typeof AbortSignal.timeout === 'function' ? AbortSignal.timeout(15000) : undefined
                 });
                 if (!response.ok) throw new Error('Failed to fetch models');
                 const data = await response.json();
@@ -4719,6 +4755,88 @@ ${content}
                 clearTimeout(timeoutId);
             }
         };
+
+        // --- Chat request resilience (timeout / retry / friendly errors) ---
+        const CHAT_FIRST_BYTE_TIMEOUT_MS = 60000;
+        const CHAT_STREAM_IDLE_TIMEOUT_MS = 120000;
+        const CHAT_MAX_ATTEMPTS = 3;
+        const CHAT_RETRY_BASE_DELAY_MS = 800;
+        const sleepChatRetry = (attempt) => new Promise(resolve => setTimeout(resolve, CHAT_RETRY_BASE_DELAY_MS * attempt));
+
+        const truncateErrorMessage = (message, maxLength = 600) => {
+            const text = String(message || '');
+            return text.length > maxLength ? text.slice(0, maxLength) + '…' : text;
+        };
+
+        const isRetryableChatHttpStatus = (status) => status === 429 || (status >= 500 && status <= 599);
+        const isRetryableChatNetworkError = (error) => {
+            if (!error) return false;
+            if (error?.name === 'AbortError') return /timed out/i.test(String(error?.message || ''));
+            if (error?.name === 'TypeError') return true;
+            return /failed to fetch|network error|networkrequestfailed|load failed/i.test(String(error?.message || ''));
+        };
+        const isUserAbortError = (error) => error?.name === 'AbortError' && !/timed out/i.test(String(error?.message || ''));
+
+        const friendlyNetworkErrorMessage = (error, url = '') => {
+            const message = String(error?.message || error || '');
+            const target = String(url || '');
+            if (/^http:\/\//i.test(target)) {
+                return '检测到明文 HTTP 地址，Android 默认禁止明文流量，请改用 https:// 地址';
+            }
+            if (error?.name === 'AbortError' && /timed out/i.test(message)) {
+                return '请求超时（长时间无响应），请检查网络或稍后重试';
+            }
+            if (error?.name === 'TypeError' || /failed to fetch/i.test(message)) {
+                return '网络请求失败：可能是 CORS 限制、网络不可用或服务端无响应';
+            }
+            return message;
+        };
+
+        const MEMORY_API_TIMEOUT_MS = 60000;
+        const withTimeoutSignal = (signal, ms = MEMORY_API_TIMEOUT_MS) => {
+            if (typeof AbortSignal.any === 'function' && typeof AbortSignal.timeout === 'function') {
+                return AbortSignal.any([signal, AbortSignal.timeout(ms)]);
+            }
+            return signal;
+        };
+
+        // --- Request diagnostics export (P3-11) ---
+        const requestDiagnosticsCount = computed(() => {
+            const diagnostics = globalThis.RPHRequestDiagnostics;
+            return diagnostics ? diagnostics.getAll().length : 0;
+        });
+        const writeClipboardText = async (text) => {
+            const native = window.Capacitor?.Plugins?.NativeStorage;
+            if (native && typeof native.clipboardWrite === 'function') {
+                await native.clipboardWrite({ text: String(text || '') });
+                return true;
+            }
+            if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+                await navigator.clipboard.writeText(String(text || ''));
+                return true;
+            }
+            return false;
+        };
+        const exportRequestDiagnostics = async () => {
+            const diagnostics = globalThis.RPHRequestDiagnostics;
+            if (!diagnostics) { showToast('请求诊断不可用', 'error'); return; }
+            const records = diagnostics.getAll();
+            if (!records.length) { showToast('暂无诊断记录', 'info'); return; }
+            const payload = {
+                exportedAt: new Date().toISOString(),
+                app: 'roleplay-hub',
+                records
+            };
+            const json = JSON.stringify(payload, null, 2);
+            try {
+                const written = await writeClipboardText(json);
+                showToast(written ? '诊断信息已复制到剪贴板' : '复制失败，请稍后重试', written ? 'success' : 'error');
+            } catch (error) {
+                console.warn('[Diagnostics] export failed:', error);
+                showToast('导出诊断失败: ' + String(error?.message || error), 'error');
+            }
+        };
+
 
         const checkApiStatus = async () => {
             syncApiKeyInput();
@@ -5013,6 +5131,21 @@ ${content}
 
         const UI_TEMPLATE_ANALYSIS_TIMEOUT_MS = 60000;
         const UI_TEMPLATE_ANALYSIS_MAX_ATTEMPTS = 2;
+        const UI_TEMPLATE_ANALYSIS_CONCURRENCY = 3;
+
+        const runWithConcurrency = async (items, limit, worker) => {
+            const results = new Array(items.length);
+            let nextIndex = 0;
+            const runnerCount = Math.min(Math.max(1, Number(limit) || 1), items.length);
+            const runners = Array.from({ length: runnerCount }, async () => {
+                while (nextIndex < items.length) {
+                    const index = nextIndex++;
+                    results[index] = await worker(items[index], index);
+                }
+            });
+            await Promise.all(runners);
+            return results;
+        };
 
         const isRetryableUiTemplateError = (error) => {
             if (!error) return false;
@@ -5149,7 +5282,7 @@ ${content}
                     });
                 };
 
-                await Promise.all(templates.map(async (template) => {
+                await runWithConcurrency(templates, UI_TEMPLATE_ANALYSIS_CONCURRENCY, async (template) => {
                     const model = fallbackModel;
                     const currentVariableJson = JSON.stringify(template.variableState || {}, null, 2);
                     const variableSchemaText = stringifyUiSchema(template.variableSchema).trim();
@@ -5244,7 +5377,7 @@ ${content}
                             uiTemplateUpdateStatus.remaining = Math.max(0, uiTemplateUpdateStatus.remaining - 1);
                         }
                     }
-                }));
+                });
 
                 if (!isCurrentRun()) {
                     if (uiTemplateUpdateSeq === updateRun.seq) {
@@ -6463,36 +6596,74 @@ ${content}
                             promptBuildMs: Date.now() - generationStartTime,
                             requestType: activeToolDepth > 0 ? 'tool_continuation' : 'chat'
                         }) || null;
-                        const response = await fetch(url, {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'Authorization': `Bearer ${settings.apiKey}`
-                            },
-                            body: JSON.stringify(requestPayload),
-                            signal: abortController.value.signal
-                        });
-                        requestDiagnostic?.responseHeaders(response.status, response.headers.get('content-type') || '');
+                        let response = null;
+                        let chatHeadersReceived = false;
+                        let lastChatActivityMs = Date.now();
+                        const chatWatchdog = setInterval(() => {
+                            if (abortController.value?.signal?.aborted) return;
+                            const idleMs = Date.now() - lastChatActivityMs;
+                            const limit = chatHeadersReceived ? CHAT_STREAM_IDLE_TIMEOUT_MS : CHAT_FIRST_BYTE_TIMEOUT_MS;
+                            if (idleMs > limit) {
+                                abortSafely(abortController.value, 'Generation timed out');
+                            }
+                        }, 5000);
 
-                        if (!response.ok) {
-                            let errorDetail = '';
+                        for (let chatAttempt = 1; chatAttempt <= CHAT_MAX_ATTEMPTS; chatAttempt++) {
+                            lastChatActivityMs = Date.now();
                             try {
-                                const errorText = await response.text();
+                                response = await fetch(url, {
+                                    method: 'POST',
+                                    headers: {
+                                        'Content-Type': 'application/json',
+                                        'Authorization': `Bearer ${settings.apiKey}`
+                                    },
+                                    body: JSON.stringify(requestPayload),
+                                    signal: abortController.value.signal
+                                });
+                                lastChatActivityMs = Date.now();
+                                chatHeadersReceived = true;
+                                requestDiagnostic?.responseHeaders(response.status, response.headers.get('content-type') || '');
+
+                                if (response.ok) break;
+
+                                let errorDetail = '';
                                 try {
-                                    const errorJson = JSON.parse(errorText);
-                                    const apiError = extractApiErrorMessage(errorJson, response.status);
-                                    if (apiError) throwApiError(apiError);
-                                    errorDetail = errorJson;
+                                    const errorText = await response.text();
+                                    try {
+                                        const errorJson = JSON.parse(errorText);
+                                        const apiError = extractApiErrorMessage(errorJson, response.status);
+                                        if (apiError) throwApiError(apiError);
+                                        errorDetail = errorJson;
+                                    } catch (e) {
+                                        if (e.isApiError) throw e;
+                                        if (errorText) errorDetail = errorText;
+                                    }
                                 } catch (e) {
                                     if (e.isApiError) throw e;
-                                    // Not JSON, use text directly
-                                    if (errorText) errorDetail = errorText;
                                 }
-                            } catch (e) {
-                                if (e.isApiError) throw e;
-                                // Cannot read body
+
+                                const status = response.status;
+                                if (isRetryableChatHttpStatus(status) && chatAttempt < CHAT_MAX_ATTEMPTS) {
+                                    await sleepChatRetry(chatAttempt);
+                                    continue;
+                                }
+                                const detailText = formatApiErrorMessage(status, errorDetail);
+                                if (status === 429) {
+                                    throw new Error('请求过于频繁（429），请稍后重试' + (detailText ? ': ' + detailText : ''));
+                                }
+                                throw new Error(detailText);
+                            } catch (error) {
+                                if (error?.isApiError) throw error;
+                                if (isUserAbortError(error)) throw error;
+                                if (isRetryableChatNetworkError(error) && chatAttempt < CHAT_MAX_ATTEMPTS) {
+                                    await sleepChatRetry(chatAttempt);
+                                    continue;
+                                }
+                                if (isRetryableChatNetworkError(error)) {
+                                    throw new Error(friendlyNetworkErrorMessage(error, url));
+                                }
+                                throw error;
                             }
-                            throw new Error(formatApiErrorMessage(response.status, errorDetail));
                         }
 
                         // Check Content-Type to determine if we should stream
@@ -6529,6 +6700,7 @@ ${content}
                             while (true) {
                                 const { done, value } = await reader.read();
                                 if (done) break;
+                                lastChatActivityMs = Date.now();
                                 requestDiagnostic?.networkChunk(value?.byteLength || 0);
 
                                 buffer += decoder.decode(value, { stream: true });
@@ -6737,8 +6909,10 @@ ${content}
             } catch (error) {
                 requestDiagnostic?.fail(error);
                 if (error.name === 'AbortError') {
+                    const timedOut = /timed out/i.test(String(error.message || ''));
+                    const interruptLabel = timedOut ? '*-- 生成超时 --*' : '*-- 生成已中止 --*';
                     _wasCancelled = true;
-                    showToast('生成已中止', 'info');
+                    showToast(timedOut ? '生成超时，已中断' : '生成已中止', 'info');
                     const wasReceiving = isReceiving.value;
                     isGenerating.value = false;
                     isRemoteGenerating.value = false;
@@ -6749,25 +6923,26 @@ ${content}
                         const hasReasoning = !!(lastMessage.reasoning || '').trim();
                         if (hasContent || hasReasoning) {
                             if (hasContent) {
-                                lastMessage.content += '\n\n*-- 生成已中止 --*';
+                                lastMessage.content += '\n\n' + interruptLabel;
                             } else {
-                                lastMessage.content = '*-- 生成已中止 --*';
+                                lastMessage.content = interruptLabel;
                             }
                             lastMessage.shouldAnimate = false;
                             collapseNativeReasoning(lastMessage);
                         } else {
                             chatHistory.value.pop();
-                            chatHistory.value.push({ role: 'system', name: currentCharacter.value.name, content: '生成已中止', skipReveal: true });
+                            chatHistory.value.push({ role: 'system', name: currentCharacter.value.name, content: interruptLabel, skipReveal: true });
                         }
                     } else {
-                        chatHistory.value.push({ role: 'system', name: currentCharacter.value.name, content: '生成已中止', skipReveal: true });
+                        chatHistory.value.push({ role: 'system', name: currentCharacter.value.name, content: interruptLabel, skipReveal: true });
                     }
                 } else if (continuingAssistantMessage) {
-                    const errorMessage = error.message || '生成失败';
+                    const errorMessage = truncateErrorMessage(friendlyNetworkErrorMessage(error, url)) || '生成失败';
                     appendAssistantResponseError(continuingAssistantMessage, errorMessage);
                     activeToolContinuationHasResponse.value = true;
                 } else {
-                    chatHistory.value.push({ role: 'system', name: currentCharacter.value.name, content: error.message });
+                    const errorMessage = truncateErrorMessage(friendlyNetworkErrorMessage(error, url)) || '生成失败';
+                    chatHistory.value.push({ role: 'system', name: currentCharacter.value.name, content: errorMessage });
                 }
             } finally {
                 flushStreamAppends();
@@ -6790,6 +6965,7 @@ ${content}
                 abortController.value = null;
                 const wasCancelled = _wasCancelled;
                 _wasCancelled = false;
+                if (chatWatchdog) clearInterval(chatWatchdog);
                 if (waitTimer) {
                     clearInterval(waitTimer);
                     waitTimer = null;
@@ -6840,11 +7016,100 @@ ${content}
 
         const getMemoryEmbeddingModel = () => (memorySettings.embeddingModel || '').trim();
 
-        const getOpenAICompatUrl = (endpoint) => {
-            const baseUrl = (settings.apiUrl || '').replace(/\/+$/, '');
-            const apiUrl = baseUrl.endsWith('/v1') ? baseUrl : `${baseUrl}/v1`;
-            return `${apiUrl}/${endpoint.replace(/^\/+/, '')}`;
+        // --- Local embedding backend (方案 C1) ---
+        const localEmbeddingStatus = ref({ status: 'idle', error: '', progress: 0, modelId: '', ready: false });
+        let localEmbeddingStatusTimer = null;
+        const refreshLocalEmbeddingStatus = () => {
+            const info = globalThis.RPHLocalEmbedding?.getStatus?.() || { status: 'idle', error: '', progress: 0, modelId: '' };
+            localEmbeddingStatus.value = { ...info, ready: info.status === 'ready' };
+            clearTimeout(localEmbeddingStatusTimer);
+            if (info.status === 'loading' || info.status === 'idle') {
+                localEmbeddingStatusTimer = setTimeout(refreshLocalEmbeddingStatus, 500);
+            }
         };
+        const preloadLocalEmbedding = async () => {
+            const embedder = globalThis.RPHLocalEmbedding;
+            if (!embedder) { showToast('本地嵌入模块不可用', 'error'); return; }
+            refreshLocalEmbeddingStatus();
+            try {
+                await embedder.ensureReady(memorySettings.localEmbeddingModel);
+                refreshLocalEmbeddingStatus();
+                showToast('本地嵌入模型已就绪', 'success');
+            } catch (error) {
+                refreshLocalEmbeddingStatus();
+                console.warn('[Memory] local embedding preload failed:', error);
+                showToast('本地嵌入模型加载失败: ' + String(error?.message || error), 'error');
+            }
+        };
+
+        const localEmbeddingModelOptions = computed(() => {
+            const models = globalThis.RPHLocalEmbedding?.MODELS || {};
+            return Object.keys(models)
+                .filter(id => models[id]?.bundled === true)
+                .map(id => ({ value: id, label: models[id].label || id }));
+        });
+        const localEmbeddingStatusLabel = computed(() => {
+            const info = localEmbeddingStatus.value;
+            if (info.status === 'ready') return '本地模型已就绪';
+            if (info.status === 'loading') return '模型加载中 ' + Math.round(Number(info.progress) || 0) + '%';
+            if (info.status === 'error') return '加载失败: ' + String(info.error || '未知错误').slice(0, 40);
+            if (info.status === 'unavailable') return '本地嵌入不可用';
+            return '未加载(首次使用时加载模型)';
+        });
+        const migrateClassicMemoriesToVectors = async () => {
+            if (!currentCharacter.value?.uuid) { showToast('请先选择一个角色', 'info'); return 0; }
+            if (!memorySettings.enabled) { showToast('请先开启记忆系统', 'info'); return 0; }
+            const candidates = classicMemories.value.filter(memory => memory && String(memory.summary || '').trim());
+            if (candidates.length === 0) { showToast('没有可迁移的总结记忆', 'info'); return 0; }
+            const existingIds = new Set(memories.value.filter(isVectorMemory).map(memory => memory.vectorChunkId).filter(Boolean));
+            const pending = candidates.filter(memory => !existingIds.has(`classic:${memory.turn}`));
+            if (pending.length === 0) { showToast('总结记忆已全部转为向量', 'success'); return 0; }
+
+            let added = 0;
+            try {
+                for (let index = 0; index < pending.length; index++) {
+                    const memory = pending[index];
+                    const chunkId = `classic:${memory.turn}`;
+                    if (memories.value.some(item => item.vectorChunkId === chunkId)) continue;
+                    const vectors = await requestMemoryEmbeddings([memory.summary], null);
+                    memories.value.push(prepareMemoryForRuntime(markRuntimeRaw({
+                        id: generateUUID(),
+                        timestamp: Date.now(),
+                        turn: memory.turn,
+                        summary: trimMemoryText(memory.summary, 900),
+                        enabled: true,
+                        vectorMemory: true,
+                        chunkMode: 'paragraph',
+                        vectorChunkId: chunkId,
+                        sourceRole: 'assistant',
+                        sourceName: currentCharacter.value?.name || '',
+                        paragraph: memory.summary,
+                        contentFingerprint: getVectorMemoryContentFingerprint(memory.summary),
+                        embeddingModel: getMemoryEmbeddingModel(),
+                        embedding: vectors[0],
+                        sourceText: memory.summary,
+                        migratedFromClassic: true,
+                        migratedAt: Date.now()
+                    })));
+                    added++;
+                    if (added % 5 === 0) {
+                        await saveMemoriesNow();
+                        await yieldToBrowser();
+                    }
+                }
+                if (added > 0) await saveMemoriesNow();
+                showToast(`已迁移 ${added} 条总结记忆为向量`, 'success');
+                return added;
+            } catch (error) {
+                if (error?.name !== 'AbortError') {
+                    console.warn('[Memory] classic->vector migration failed:', error);
+                    showToast('迁移失败: ' + String(error?.message || error), 'error');
+                }
+                return added;
+            }
+        };
+
+        const getOpenAICompatUrl = (endpoint) => getApiEndpoint(endpoint);
 
         const trimMemoryText = (text, maxLength = 1800) => {
             const cleanText = String(text || '').replace(/\n{3,}/g, '\n\n').trim();
@@ -7080,7 +7345,7 @@ ${content}
                     stream: false,
                     messages: requestMessages
                 }),
-                signal
+                signal: withTimeoutSignal(signal)
             });
             const rawText = await response.text();
             if (!response.ok) {
@@ -7303,13 +7568,41 @@ ${content}
             return dot / (Math.sqrt(normA) * Math.sqrt(normB));
         };
 
+        const validateEmbeddingVectors = (vectors, expectedCount) => {
+            if (vectors.length !== expectedCount || vectors.some(vector => !vector || vector.length === 0)) {
+                throw new Error('嵌入接口返回的数据不完整');
+            }
+            const firstDim = vectors[0].length;
+            if (vectors.some(vector => vector.length !== firstDim)) {
+                throw new Error('嵌入维度不一致');
+            }
+            const storedDims = new Set(memories.value.filter(isVectorMemory).map(memory => memory.embeddingDims).filter(Boolean));
+            if (storedDims.size > 0 && !storedDims.has(firstDim)) {
+                throw new Error(`向量维度与已有记忆不一致（${[...storedDims].join('/')} vs ${firstDim}），请重建向量记忆或切换模型后重新提取`);
+            }
+        };
+
         const requestMemoryEmbeddings = async (inputs, signal) => {
+            const normalizedInputs = inputs.map(input => String(input || '').trim());
+            if (normalizedInputs.some(input => !input)) throw new Error('嵌入内容不能为空');
+
+            if (memorySettings.embeddingBackend === 'local') {
+                refreshLocalEmbeddingStatus();
+                const localEmbedder = globalThis.RPHLocalEmbedding;
+                if (!localEmbedder) throw new Error('本地嵌入模块未加载');
+                const vectors = await localEmbedder.embedTexts(normalizedInputs, signal);
+                if (signal?.aborted) {
+                    const abortError = new Error('Aborted');
+                    abortError.name = 'AbortError';
+                    throw abortError;
+                }
+                validateEmbeddingVectors(vectors, normalizedInputs.length);
+                return vectors;
+            }
+
             const model = getMemoryEmbeddingModel();
             if (!settings.apiUrl || !settings.apiKey) throw new Error('请先配置 API 地址和 Key');
             if (!model) throw new Error('请先选择向量嵌入模型');
-
-            const normalizedInputs = inputs.map(input => String(input || '').trim());
-            if (normalizedInputs.some(input => !input)) throw new Error('嵌入内容不能为空');
 
             const response = await fetch(getOpenAICompatUrl('embeddings'), {
                 method: 'POST',
@@ -7321,7 +7614,7 @@ ${content}
                     model,
                     input: normalizedInputs.length === 1 ? normalizedInputs[0] : normalizedInputs
                 }),
-                signal
+                signal: withTimeoutSignal(signal)
             });
 
             if (!response.ok) {
@@ -7341,9 +7634,7 @@ ${content}
                 abortError.name = 'AbortError';
                 throw abortError;
             }
-            if (vectors.length !== normalizedInputs.length || vectors.some(vector => vector.length === 0)) {
-                throw new Error('嵌入接口返回的数据不完整');
-            }
+            validateEmbeddingVectors(vectors, normalizedInputs.length);
 
             recordApiUsage(getApiUsagePayload(data), {
                 type: 'embedding',
@@ -11569,11 +11860,14 @@ ${memoryFragmentSection}
             isSquareLoading, squareUrl, onSquareLoad, openSquareExternally, // Square exports
             editorTab, characterDisplayLimit, displayedCharacters, loadMoreCharacters,
             isAutoImageGenEnabled,
-            apiStatus, apiLatency, imageGenStatus, imageGenLatency, checkAllStatuses, apiKeyInput, syncApiKeyInput, // Status Exports
+            apiStatus, apiLatency, imageGenStatus, imageGenLatency, checkAllStatuses, apiKeyInput, syncApiKeyInput, apiKeyVisible, toggleApiKeyVisibility, pasteApiKeyFromClipboard, // Status Exports
             toggleAutoImageGen, setWorldInfoEnabled,
             quotaValue, quotaLoading, quotaError,
             // Memory System Exports
             classicMemoryPage, classicMemoryPageCount, memorySettings,
+            localEmbeddingStatus, refreshLocalEmbeddingStatus, preloadLocalEmbedding, migrateClassicMemoriesToVectors,
+            localEmbeddingModelOptions, localEmbeddingStatusLabel,
+            requestDiagnosticsCount, exportRequestDiagnostics,
             isAnyMemoryProcessing: computed(() => isBatchExtracting.value || isClassicBatchExtracting.value),
             isActiveBatchExtracting: computed(() => memorySettings.mode === MEMORY_MODE_CLASSIC ? isClassicBatchExtracting.value : isBatchExtracting.value),
             activeBatchExtractProgress: computed(() => memorySettings.mode === MEMORY_MODE_CLASSIC ? classicBatchExtractProgress.value : batchExtractProgress.value),

@@ -1,6 +1,9 @@
 package com.roleplayhub.app;
 
 import android.app.Activity;
+import android.content.ClipData;
+import android.content.ClipDescription;
+import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
@@ -117,6 +120,49 @@ public class NativeStoragePlugin extends Plugin {
         }
     }
 
+    /**
+     * Reads the current plain-text clipboard contents.
+     * Reading the clipboard requires no runtime permission on Android;
+     * on Android 13+ the system shows a standard "pasted from clipboard" toast.
+     */
+    @PluginMethod
+    public void clipboardRead(PluginCall call) {
+        try {
+            ClipboardManager clipboard = (ClipboardManager) getContext().getSystemService(Context.CLIPBOARD_SERVICE);
+            if (clipboard == null || !clipboard.hasPrimaryClip() || clipboard.getPrimaryClipDescription() == null
+                    || !clipboard.getPrimaryClipDescription().hasMimeType(ClipDescription.MIMETYPE_TEXT_PLAIN)) {
+                JSObject empty = new JSObject();
+                empty.put("text", "");
+                call.resolve(empty);
+                return;
+            }
+            ClipData.Item item = clipboard.getPrimaryClip().getItemAt(0);
+            CharSequence text = item != null ? item.coerceToText(getContext()) : null;
+            JSObject result = new JSObject();
+            result.put("text", text != null ? text.toString() : "");
+            call.resolve(result);
+        } catch (Exception error) {
+            call.reject("Unable to read clipboard", error);
+        }
+    }
+
+    /**
+     * Writes plain text to the system clipboard.
+     * Writing the clipboard requires no runtime permission on Android.
+     */
+    @PluginMethod
+    public void clipboardWrite(PluginCall call) {
+        String text = call.getString("text");
+        if (text == null) { call.reject("text is required"); return; }
+        try {
+            ClipboardManager clipboard = (ClipboardManager) getContext().getSystemService(Context.CLIPBOARD_SERVICE);
+            if (clipboard == null) throw new IOException("Clipboard unavailable");
+            clipboard.setPrimaryClip(ClipData.newPlainText("Roleplay Hub", text));
+            call.resolve();
+        } catch (Exception error) {
+            call.reject("Unable to write clipboard", error);
+        }
+    }
     @PluginMethod
     public void chatGet(PluginCall call) {
         String characterId = call.getString("characterId");

@@ -1859,11 +1859,39 @@
                                                 </path>
                                             </svg>
                                         </div>
-                                        <input ref="apiKeyInput" v-model="settings.apiKey" type="password"
+                                        <input ref="apiKeyInput" v-model="settings.apiKey"
+                                            :type="apiKeyVisible ? 'text' : 'password'"
                                             @input="syncApiKeyInput" @change="syncApiKeyInput"
                                             @compositionend="syncApiKeyInput" @blur="syncApiKeyInput"
-                                            class="w-full h-12 bg-gray-50/60 border-2 border-gray-100 rounded-xl pl-11 pr-4 py-0 text-gray-800 font-medium focus:bg-white focus:border-teal-500 focus:ring-4 focus:ring-teal-100 focus:outline-none transition-all placeholder-gray-400 font-mono text-sm"
+                                            autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false"
+                                            class="w-full h-12 bg-gray-50/60 border-2 border-gray-100 rounded-xl pl-11 pr-24 py-0 text-gray-800 font-medium focus:bg-white focus:border-teal-500 focus:ring-4 focus:ring-teal-100 focus:outline-none transition-all placeholder-gray-400 font-mono text-sm"
                                             placeholder="sk-...">
+                                        <div
+                                            class="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                                            <button type="button" @click="pasteApiKeyFromClipboard"
+                                                title="从剪贴板粘贴 API Key"
+                                                class="h-9 px-2 rounded-lg bg-teal-50 hover:bg-teal-100 text-teal-700 text-xs font-bold border border-teal-100 transition-all active:scale-95 flex items-center gap-1">
+                                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                        d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path>
+                                                </svg>
+                                                粘贴
+                                            </button>
+                                            <button type="button" @click="toggleApiKeyVisibility"
+                                                :title="apiKeyVisible ? '隐藏 API Key' : '显示 API Key'"
+                                                class="w-9 h-9 rounded-lg bg-gray-50 hover:bg-gray-100 text-gray-500 border border-gray-200 flex items-center justify-center transition-all active:scale-95">
+                                                <svg v-if="!apiKeyVisible" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                        d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                        d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                                                </svg>
+                                                <svg v-else class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                        d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"></path>
+                                                </svg>
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
 
@@ -2652,6 +2680,19 @@
                     </button>
                 </settings-page-header>
 
+                <div class="mb-4 flex items-center justify-between gap-2">
+                    <div class="text-xs text-gray-400">最近 {{ requestDiagnosticsCount }} 条请求诊断</div>
+                    <button type="button" @click="exportRequestDiagnostics()"
+                        class="inline-flex items-center text-xs px-3 py-1.5 rounded-lg bg-gray-50 hover:bg-gray-100 text-gray-600 font-medium border border-gray-200 transition-all active:scale-95">
+                        <svg class="w-3.5 h-3.5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M8 7h8m-8 4h5m-5 4h8m-9 5h10a2 2 0 002-2V5a2 2 0 00-2-2H6a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
+                        </svg>
+                        复制诊断信息
+                    </button>
+                </div>
+
+
                 <div class="mb-4 flex items-center gap-2">
                     <div class="segmented-switch segmented-switch--compact segmented-switch--four min-w-0 flex-1">
                         <div class="segmented-switch__indicator" :class="{
@@ -2995,7 +3036,35 @@
                         <div v-if="memorySettings.enabled"
                             class="space-y-3 pt-3 border-t border-gray-100 animate-fade-in">
                             <div v-if="memorySettings.mode === 'vector'" class="space-y-3">
-                                <div class="bg-gray-50/60 p-3 rounded-xl border border-gray-100">
+                                <div class="p-3 rounded-xl border border-gray-100 bg-white/60">
+                                    <label class="text-xs font-medium text-gray-500 block mb-2">嵌入后端</label>
+                                    <div class="segmented-switch segmented-switch--compact w-full">
+                                        <div class="segmented-switch__indicator" :class="{ 'is-right': memorySettings.embeddingBackend !== 'api' }"></div>
+                                        <div class="segmented-switch__option" :class="{ 'is-active': memorySettings.embeddingBackend === 'api' }">
+                                            <button type="button" @click="memorySettings.embeddingBackend = 'api'" class="absolute inset-0 rounded-lg" aria-label="使用 API 嵌入"></button>
+                                            <span class="relative z-10 pointer-events-none">API</span>
+                                        </div>
+                                        <div class="segmented-switch__option" :class="{ 'is-active': memorySettings.embeddingBackend === 'local' }">
+                                            <button type="button" @click="memorySettings.embeddingBackend = 'local'" class="absolute inset-0 rounded-lg" aria-label="使用本地模型嵌入"></button>
+                                            <span class="relative z-10 pointer-events-none">本地(离线)</span>
+                                        </div>
+                                    </div>
+                                    <div v-if="memorySettings.embeddingBackend === 'local'" class="mt-3 space-y-2">
+                                        <div>
+                                            <label class="text-xs font-medium text-gray-500">本地模型</label>
+                                            <custom-select v-model="memorySettings.localEmbeddingModel" :options="localEmbeddingModelOptions" button-class="rounded-lg px-3 py-1.5 text-sm text-gray-700 focus:border-teal-400 focus:ring-teal-100" menu-class="text-sm"></custom-select>
+                                        </div>
+                                        <div class="flex items-center justify-between gap-2">
+                                            <span class="text-xs text-gray-500">{{ localEmbeddingStatusLabel }}</span>
+                                            <button type="button" @click="preloadLocalEmbedding()" class="text-xs px-2.5 py-1 rounded-lg bg-teal-50 hover:bg-teal-100 text-teal-700 font-medium border border-teal-100 transition-all active:scale-95">预加载模型</button>
+                                        </div>
+                                        <button type="button" @click="migrateClassicMemoriesToVectors()"
+                                            class="w-full text-xs px-3 py-2 rounded-lg bg-primary-50 hover:bg-primary-100 text-primary-700 font-medium border border-primary-200 transition-all active:scale-95">
+                                            迁移「总结记忆 → 向量」
+                                        </button>
+                                    </div>
+                                </div>
+<div v-if="memorySettings.embeddingBackend === 'api'" class="bg-gray-50/60 p-3 rounded-xl border border-gray-100">
                                     <div class="relative mb-2 flex items-center">
                                         <label class="text-xs font-medium text-gray-500">向量嵌入模型</label>
                                         <button type="button"
@@ -3077,6 +3146,14 @@
                             </div>
 
                             <div v-else class="bg-gray-50/60 p-3 rounded-xl border border-gray-100">
+                                <div class="mb-2 p-2 rounded-lg bg-amber-50 border border-amber-200 text-[11px] leading-relaxed text-amber-700">
+                                    <span class="font-bold">总结模式即将弃用</span>：新记忆建议走「向量模式 + 本地模型」，老总结记忆可一键迁移为向量（离线，不出设备）。
+                                </div>
+                                <button type="button" @click="memorySettings.mode = 'vector'; migrateClassicMemoriesToVectors()"
+                                    class="w-full mb-3 text-xs px-3 py-2 rounded-lg bg-primary-50 hover:bg-primary-100 text-primary-700 font-medium border border-primary-200 transition-all active:scale-95">
+                                    迁移「总结记忆 → 向量」并切换到向量模式
+                                </button>
+
                                 <div class="relative mb-2 flex items-center">
                                     <label class="text-xs font-medium text-gray-500">总结模式副模型</label>
                                     <button type="button"
@@ -5020,6 +5097,7 @@
     <script src="assets/js/card-utils.js"></script>
     <script src="assets/js/ui-select.js"></script>
     <script src="assets/js/ui-template-frame.js"></script>
+    <script src="assets/js/local-embedding.js"></script>
     <script src="assets/js/app.js"></script>
 </body>
 

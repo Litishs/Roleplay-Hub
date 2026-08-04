@@ -18,3 +18,24 @@ test('API actions read the live input before validation or iframe sync', () => {
     assert.match(app, /const checkApiStatus = async \(\) => \{\s+syncApiKeyInput\(\)/);
     assert.match(app, /const syncSettingsToGenerator = \(\) => \{\s+syncApiKeyInput\(\)/);
 });
+
+test('API Key input supports show/hide visibility toggle and paste from clipboard', () => {
+    assert.match(html, /:type="apiKeyVisible \? 'text' : 'password'"/);
+    assert.match(html, /@click="toggleApiKeyVisibility"/);
+    assert.match(html, /@click="pasteApiKeyFromClipboard"/);
+    assert.match(html, /autocomplete="off"\s+autocapitalize="none"\s+autocorrect="off"\s+spellcheck="false"/);
+});
+
+test('pasteApiKeyFromClipboard prefers the native clipboard plugin and writes settings.apiKey', () => {
+    assert.match(app, /const apiKeyVisible = ref\(false\);/);
+    assert.match(app, /const pasteApiKeyFromClipboard = async \(\) => \{/);
+    assert.match(app, /window\.Capacitor\?\.Plugins\?\.NativeStorage/);
+    assert.match(app, /typeof native\.clipboardRead === 'function'/);
+    assert.match(app, /settings\.apiKey = text;/);
+});
+
+test('Android NativeStoragePlugin exposes clipboardRead', async () => {
+    const java = await readFile(new URL('../android/app/src/main/java/com/roleplayhub/app/NativeStoragePlugin.java', import.meta.url), 'utf8');
+    assert.match(java, /@PluginMethod\s+public void clipboardRead\(PluginCall call\)/);
+    assert.match(java, /ClipboardManager clipboard = \(ClipboardManager\) getContext\(\)\.getSystemService\(Context\.CLIPBOARD_SERVICE\);/);
+});
