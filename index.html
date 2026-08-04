@@ -815,6 +815,14 @@
                                                 </path>
                                             </svg>
                                         </button>
+                                        <button v-if="msg.role === 'assistant' && msg.uiTemplateBlocks && (msg.uiTemplateBlocks.top?.length || msg.uiTemplateBlocks.bottom?.length) && settings.uiTemplateEnabled && uiTemplateUpdateStatus.state !== 'running'"
+                                            @click="updateUiTemplatesFromChat({ manual: true, targetMessageId: msg.id })"
+                                            class="message-action-button"
+                                            title="重试变量分析">
+                                            <svg class="w-3.5 h-3.5 md:w-4 md:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                                            </svg>
+                                        </button>
                                         <button @click="deleteMessage(index)"
                                             class="message-action-button message-action-button--danger"
                                             title="删除">

@@ -3460,14 +3460,45 @@ ${content}
         const normalizeUiTemplateUpdateList = (parsed) => {
             if (Array.isArray(parsed)) return parsed;
             if (!parsed || typeof parsed !== 'object') return [];
-            if (Array.isArray(parsed.updates)) return parsed.updates;
-            if (Object.prototype.hasOwnProperty.call(parsed, 'variables')) return [parsed];
+            if (Array.isArray(parsed.updates)) {
+                return parsed.updates
+                    .map(update => {
+                        if (!update || typeof update !== 'object') return null;
+                        if (Object.prototype.hasOwnProperty.call(update, 'variables')) return update;
+                        return { variables: update, reason: '' };
+                    })
+                    .filter(Boolean);
+            }
+            if (Object.prototype.hasOwnProperty.call(parsed, 'variables')) {
+                return [{
+                    ...(parsed.id !== undefined ? { id: parsed.id } : {}),
+                    ...(parsed.name !== undefined ? { name: parsed.name } : {}),
+                    variables: parsed.variables,
+                    reason: String(parsed.reason || '').trim()
+                }];
+            }
             return [{ variables: parsed, reason: '' }];
+        };
+
+        const isAllowedUiTemplateKey = (template, key) => {
+            if (!template || key === '$root') return true;
+            const known = new Set();
+            const state = template.variableState;
+            const initial = template.initialVariableState;
+            if (state && typeof state === 'object') Object.keys(state).forEach(k => known.add(k));
+            if (initial && typeof initial === 'object') Object.keys(initial).forEach(k => known.add(k));
+            const schema = template.variableSchema;
+            if (schema && typeof schema === 'object') Object.keys(schema).forEach(k => known.add(k));
+            if (known.size === 0) return true;
+            const parts = splitUiTemplatePath(key);
+            const topLevel = parts.length ? parts[0] : String(key);
+            return known.has(topLevel);
         };
 
         const applyUiTemplateUpdateListToTemplate = (template, updates, { model = '', turn = null, source = 'ai', matchName = true } = {}) => {
             let fieldCount = 0;
             let changed = false;
+            const rejectedKeys = [];
             updates.forEach(update => {
                 if (!template || !update || typeof update !== 'object') return;
                 if (update.id && update.id !== template.id) return;
@@ -3478,6 +3509,10 @@ ${content}
                     ? [['$root', update.variables]]
                     : Object.entries(update.variables);
                 variableEntries.forEach(([key, value]) => {
+                    if (!isAllowedUiTemplateKey(template, key)) {
+                        rejectedKeys.push(key);
+                        return;
+                    }
                     const oldValue = key === '$root'
                         ? template.variableState
                         : getUiTemplateValue(template.variableState || {}, key);
@@ -3486,6 +3521,9 @@ ${content}
                         changes[key] = { from: oldValue, to: value };
                     }
                 });
+                if (rejectedKeys.length) {
+                    console.warn(`[UI模板] ${template.name || template.id} 忽略未定义变量: ${rejectedKeys.join(', ')}`);
+                }
                 if (Object.keys(changes).length > 0) {
                     if (!Array.isArray(template.changeLog)) template.changeLog = [];
                     template.changeLog.unshift({
@@ -3502,17 +3540,19 @@ ${content}
                     changed = true;
                 }
             });
-            return { changed, fieldCount };
+            return { changed, fieldCount, rejectedKeys };
         };
 
         const applyMainModelUiTemplateUpdates = (targetMessage, model = settings.model) => {
             if (!settings.uiTemplateEnabled || !settings.uiTemplateMainModelAnalysis || !targetMessage) {
                 return { handled: false, changed: false };
             }
+            attachUiTemplateBlocksToLastAssistant({ targetMessageId: targetMessage.id });
+
             const match = String(targetMessage.content || '').match(UI_TEMPLATE_UPDATES_PATTERN);
             if (!match) {
                 markUiTemplateStatus('skipped', '主模型未返回变量块', 0, targetMessage.id || null);
-                return { handled: false, changed: false };
+                return { handled: false, changed: false, needsFallback: true };
             }
 
             targetMessage.content = stripUiTemplateUpdateBlock(targetMessage.content);
@@ -3523,11 +3563,10 @@ ${content}
             } catch (e) {
                 failUiTemplateAnalysis('变量分析失败', targetMessage.id || null);
                 console.warn('[UI模板] 主模型变量块解析失败:', e.message, match[1]);
-                return { handled: true, changed: false };
+                return { handled: true, changed: false, needsFallback: true };
             }
 
             if (!updates.length) {
-                attachUiTemplateBlocksToLastAssistant({ targetMessageId: targetMessage.id });
                 markUiTemplateStatus('skipped', '无变化', 0, targetMessage.id || null);
                 return { handled: true, changed: false };
             }
@@ -4972,6 +5011,29 @@ ${content}
             }
         };
 
+        const UI_TEMPLATE_ANALYSIS_TIMEOUT_MS = 60000;
+        const UI_TEMPLATE_ANALYSIS_MAX_ATTEMPTS = 2;
+
+        const isRetryableUiTemplateError = (error) => {
+            if (!error) return false;
+            if (error?.name === 'AbortError') return true;
+            const status = Number(error?.status);
+            if (status === 429 || (status >= 500 && status <= 599)) return true;
+            if (error instanceof TypeError) return true;
+            return false;
+        };
+
+        const createUiTemplateRequestSignal = (signal) => {
+            if (typeof AbortSignal !== 'undefined'
+                && typeof AbortSignal.any === 'function'
+                && typeof AbortSignal.timeout === 'function') {
+                return AbortSignal.any([signal, AbortSignal.timeout(UI_TEMPLATE_ANALYSIS_TIMEOUT_MS)]);
+            }
+            return signal;
+        };
+
+        const sleepUiTemplateRetry = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
         const updateUiTemplatesFromChat = async ({ manual = false, targetMessageId = null } = {}) => {
             if (!settings.uiTemplateEnabled) {
                 markUiTemplateStatus('skipped', '未开启');
@@ -5036,6 +5098,7 @@ ${content}
                 let changedFieldCount = 0;
                 let changedTemplateCount = 0;
                 let failedTemplateCount = 0;
+                let rejectedFieldCount = 0;
                 let firstFailureMessage = '';
                 const failedTemplateIds = new Set();
                 const pendingTemplateUpdates = [];
@@ -5045,25 +5108,29 @@ ${content}
                         return [{ variables: parsed, reason: '' }];
                     }
                     if (!parsed || typeof parsed !== 'object') return [];
-                    const parsedKeys = Object.keys(parsed);
-                    const looksLikeLegacyUpdates = Array.isArray(parsed.updates)
-                        && (
-                            parsed.updates.length === 0 && parsedKeys.every(key => ['updates', 'reason'].includes(key))
-                            || parsed.updates.some(update => update && typeof update === 'object' && Object.prototype.hasOwnProperty.call(update, 'variables'))
-                        );
-                    if (looksLikeLegacyUpdates) {
+                    if (Array.isArray(parsed.updates)) {
                         return parsed.updates
                             .map(update => {
                                 if (!update || typeof update !== 'object') return null;
-                                if (Object.prototype.hasOwnProperty.call(update, 'variables')) return update;
+                                if (Object.prototype.hasOwnProperty.call(update, 'variables')) {
+                                    return {
+                                        ...(update.id !== undefined ? { id: update.id } : {}),
+                                        ...(update.name !== undefined ? { name: update.name } : {}),
+                                        variables: update.variables,
+                                        reason: String(update.reason || '').trim()
+                                    };
+                                }
                                 return { variables: update, reason: '' };
                             })
                             .filter(Boolean);
                     }
-                    const looksLikeLegacyVariables = Object.prototype.hasOwnProperty.call(parsed, 'variables')
-                        && parsedKeys.every(key => ['id', 'variables', 'reason'].includes(key));
-                    if (looksLikeLegacyVariables) {
-                        return [{ variables: parsed.variables, reason: String(parsed.reason || '').trim() }];
+                    if (Object.prototype.hasOwnProperty.call(parsed, 'variables')) {
+                        return [{
+                            ...(parsed.id !== undefined ? { id: parsed.id } : {}),
+                            ...(parsed.name !== undefined ? { name: parsed.name } : {}),
+                            variables: parsed.variables,
+                            reason: String(parsed.reason || '').trim()
+                        }];
                     }
                     return [{ variables: parsed, reason: '' }];
                 };
@@ -5076,80 +5143,102 @@ ${content}
                             changedFieldCount += result.fieldCount;
                             hasChanges = true;
                         }
+                        if (result.rejectedKeys && result.rejectedKeys.length) {
+                            rejectedFieldCount += result.rejectedKeys.length;
+                        }
                     });
                 };
 
                 await Promise.all(templates.map(async (template) => {
                     const model = fallbackModel;
-                    try {
-                        const currentVariableJson = JSON.stringify(template.variableState || {}, null, 2);
-                        const variableSchemaText = stringifyUiSchema(template.variableSchema).trim();
-                        const response = await fetch(url, {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'Authorization': `Bearer ${apiKey}`
-                            },
-                            body: JSON.stringify({
-                                model,
-                                temperature: 0.7,
-                                stream: false,
-                                messages: [
-                                    {
-                                        role: 'system',
-                                        content: [
-                                            '你是RP-Hub的UI变量更新器。当前请求只分析一个UI模板。',
-                                            '只根据用户消息里提供的最近对话，更新下方模板已定义的变量。',
-                                            '严格返回JSON，不要解释，不要输出Markdown。',
-                                            '返回格式固定为 {"variables":{"变量路径":"新值"},"reason":"简短原因"}，例如 {"variables":{"a_line_1":"新台词","a_line_3":"新台词"},"reason":"对话内容更新了角色台词"}。',
-                                            '变量值可以是文字、数字、对象或JSON数组；装备栏、背包、日志这类列表可直接返回完整数组字段，例如 {"equipment":[{"slot":"武器","name":"短剑"}]}。',
-                                            '如果模板根变量本身就是数组，可以直接返回JSON数组；如果只改数组里的一个小项，也可以返回 {"equipment.0.name":"短剑"} 这种路径对象。',
-                                            '没有变化则返回 {"variables":{},"reason":"无变化"}。不要返回模板id，不要套updates数组，不要修改HTML。',
-                                            '',
-                                            '用户信息如下（用于判断称呼、人称和用户相关变量；不要在JSON外复述）：',
-                                            buildUserInfoPrompt(),
-                                            '',
-                                            '当前变量JSON如下：',
-                                            currentVariableJson,
-                                            variableSchemaText ? [
-                                                '',
-                                                '变量说明如下（给AI参考，必须按这里理解字段含义和生成规则）：',
-                                                variableSchemaText
-                                            ].join('\n') : ''
-                                        ].join('\n')
-                                    },
-                                    {
-                                        role: 'user',
-                                        content: JSON.stringify({
-                                            recentMessages
-                                        }, null, 2)
-                                    }
-                                ]
-                            }),
-                            signal: updateRun.signal
-                        });
-                        if (!isCurrentRun()) return;
-                        if (!response.ok) throw new Error(`API Error: ${response.status}`);
-                        const data = await response.json();
-                        if (!isCurrentRun()) return;
-                        let content = data.choices?.[0]?.message?.content || '';
-                        console.log(`[UI模板变量分析] ${template.name || template.id} 原始返回:`, content);
-                        const parsed = parseUiTemplateUpdateJson(content);
-                        const updates = normalizeUiTemplateUpdates(parsed);
-                        recordApiUsage(getApiUsagePayload(data), {
-                            type: 'ui_template',
-                            model,
-                            detail: template.name || ''
-                        });
-                        pendingTemplateUpdates.push({ template, updates, model });
-                    } catch (e) {
-                        if (updateRun.signal.aborted || !isCurrentRun()) return;
-                        failedTemplateCount++;
-                        failedTemplateIds.add(template.id);
-                        if (!firstFailureMessage) {
-                            firstFailureMessage = String(e?.message || e || '未知错误');
+                    const currentVariableJson = JSON.stringify(template.variableState || {}, null, 2);
+                    const variableSchemaText = stringifyUiSchema(template.variableSchema).trim();
+                    const buildAnalysisMessages = () => [
+                        {
+                            role: 'system',
+                            content: [
+                                '你是RP-Hub的UI变量更新器。当前请求只分析一个UI模板。',
+                                '只根据用户消息里提供的最近对话，更新下方模板已定义的变量。',
+                                '严格返回JSON，不要解释，不要输出Markdown，不要输出任何额外字段。',
+                                '返回格式固定为 {"variables":{"变量路径":"新值"},"reason":"简短原因"}，例如 {"variables":{"a_line_1":"新台词","a_line_3":"新台词"},"reason":"对话内容更新了角色台词"}。',
+                                '变量值可以是文字、数字、对象或JSON数组；装备栏、背包、日志这类列表可直接返回完整数组字段，例如 {"equipment":[{"slot":"武器","name":"短剑"}]}。',
+                                '如果模板根变量本身就是数组，可以直接返回JSON数组；如果只改数组里的一个小项，也可以返回 {"equipment.0.name":"短剑"} 这种路径对象。',
+                                '没有变化则返回 {"variables":{},"reason":"无变化"}。不要返回模板id，不要套updates数组，不要修改HTML。',
+                                '',
+                                '用户信息如下（用于判断称呼、人称和用户相关变量；不要在JSON外复述）：',
+                                buildUserInfoPrompt(),
+                                '',
+                                '当前变量JSON如下：',
+                                currentVariableJson,
+                                variableSchemaText ? [
+                                    '',
+                                    '变量说明如下（给AI参考，必须按这里理解字段含义和生成规则）：',
+                                    variableSchemaText
+                                ].join('\n') : ''
+                            ].join('\n')
+                        },
+                        {
+                            role: 'user',
+                            content: JSON.stringify({
+                                recentMessages
+                            }, null, 2)
                         }
-                        console.warn(`[UI模板] ${template.name || template.id} 未成功:`, e.message);
+                    ];
+                    try {
+                        let lastError = null;
+                        for (let attempt = 0; attempt < UI_TEMPLATE_ANALYSIS_MAX_ATTEMPTS; attempt++) {
+                            if (!isCurrentRun()) return;
+                            try {
+                                const response = await fetch(url, {
+                                    method: 'POST',
+                                    headers: {
+                                        'Content-Type': 'application/json',
+                                        'Authorization': `Bearer ${apiKey}`
+                                    },
+                                    body: JSON.stringify({
+                                        model,
+                                        temperature: 0.2,
+                                        max_tokens: 4096,
+                                        stream: false,
+                                        messages: buildAnalysisMessages()
+                                    }),
+                                    signal: createUiTemplateRequestSignal(updateRun.signal)
+                                });
+                                if (!isCurrentRun()) return;
+                                if (!response.ok) {
+                                    const error = new Error(`API Error: ${response.status}`);
+                                    error.status = response.status;
+                                    throw error;
+                                }
+                                const data = await response.json();
+                                if (!isCurrentRun()) return;
+                                const content = data.choices?.[0]?.message?.content || '';
+                                console.log(`[UI模板变量分析] ${template.name || template.id} 原始返回:`, content);
+                                const parsed = parseUiTemplateUpdateJson(content);
+                                const updates = normalizeUiTemplateUpdates(parsed);
+                                recordApiUsage(getApiUsagePayload(data), {
+                                    type: 'ui_template',
+                                    model,
+                                    detail: template.name || ''
+                                });
+                                pendingTemplateUpdates.push({ template, updates, model });
+                                return;
+                            } catch (e) {
+                                if (updateRun.signal.aborted || !isCurrentRun()) return;
+                                lastError = e;
+                                if (!isRetryableUiTemplateError(e) || attempt >= UI_TEMPLATE_ANALYSIS_MAX_ATTEMPTS - 1) break;
+                                uiTemplateUpdateStatus.message = `重试中 (${attempt + 1}/${UI_TEMPLATE_ANALYSIS_MAX_ATTEMPTS})`;
+                                await sleepUiTemplateRetry(800 * (attempt + 1));
+                            }
+                        }
+                        if (lastError && isCurrentRun()) {
+                            failedTemplateCount++;
+                            failedTemplateIds.add(template.id);
+                            if (!firstFailureMessage) {
+                                firstFailureMessage = String(lastError?.message || lastError || '未知错误');
+                            }
+                            console.warn(`[UI模板] ${template.name || template.id} 未成功:`, lastError?.message);
+                        }
                     } finally {
                         if (isCurrentRun()) {
                             uiTemplateUpdateStatus.remaining = Math.max(0, uiTemplateUpdateStatus.remaining - 1);
@@ -5168,7 +5257,7 @@ ${content}
                     applyTemplateUpdates(template, updates, model);
                 });
 
-                const inserted = attachUiTemplateBlocksToLastAssistant({ excludeTemplateIds: failedTemplateIds, targetMessageId: lockedTargetMessageId });
+                const inserted = attachUiTemplateBlocksToLastAssistant({ targetMessageId: lockedTargetMessageId });
 
                 if (hasChanges) {
                     saveGlobalUiTemplateRuntimeForCharacter();
@@ -5181,9 +5270,9 @@ ${content}
                     const detail = firstFailureMessage ? `：${firstFailureMessage.slice(0, 80)}` : '';
                     failUiTemplateAnalysis(`${failedTemplateCount} 个失败${detail}`, lockedTargetMessageId);
                 } else if (hasChanges) {
-                    markUiTemplateStatus('success', `更新 ${changedFieldCount} 项`, 0, lockedTargetMessageId);
+                    markUiTemplateStatus('success', `更新 ${changedFieldCount} 项${rejectedFieldCount ? `，拒绝 ${rejectedFieldCount} 项未定义变量` : ''}`, 0, lockedTargetMessageId);
                 } else {
-                    markUiTemplateStatus('skipped', '无变化', 0, lockedTargetMessageId);
+                    markUiTemplateStatus('skipped', rejectedFieldCount ? `无变化，拒绝 ${rejectedFieldCount} 项未定义变量` : '无变化', 0, lockedTargetMessageId);
                 }
                 if (uiTemplateUpdateSeq === updateRun.seq) {
                     uiTemplateUpdateAbortController = null;
@@ -6624,7 +6713,12 @@ ${content}
                             console.groupEnd();
 
                             if (settings.uiTemplateEnabled && settings.uiTemplateMainModelAnalysis) {
-                                applyMainModelUiTemplateUpdates(assistantMessage, requestModel);
+                                const uiTemplateUpdateResult = applyMainModelUiTemplateUpdates(assistantMessage, requestModel);
+                                if (uiTemplateUpdateResult?.needsFallback) {
+                                    nextTick(() => {
+                                        updateUiTemplatesFromChat({ manual: true, targetMessageId: assistantMessage.id });
+                                    });
+                                }
                             }
 
                             // Record generation time
