@@ -1333,7 +1333,7 @@
                         <div class="flex gap-3 items-end">
                             <!-- Textarea -->
                             <textarea ref="promptInput" v-model="prompt" @input="autoResize"
-                                @keydown.enter.exact.prevent="generateCharacter"
+                                @keydown.enter.exact="handlePromptKeydown"
                                 class="textarea textarea-bordered flex-1 h-14 md:h-16 min-h-[3.5rem] md:min-h-[4rem] max-h-[40vh] resize-none py-3 leading-relaxed bg-base-200/50 focus:bg-base-100 focus:border-primary transition-all rounded-2xl scrollbar-hide shadow-sm hover:shadow-md focus:shadow-lg text-sm md:text-base"
                                 placeholder="描述你想创建的角色..."></textarea>
 
@@ -3451,6 +3451,13 @@ ${FIRST_MESSAGE_FINAL_CHECKS}
                     }
                 };
 
+                                // 中文输入法组合中，回车用于确认候选词，不触发生成
+                const handlePromptKeydown = (event) => {
+                    if (event.isComposing || event.keyCode === 229) return;
+                    event.preventDefault();
+                    generateCharacter();
+                };
+
                 watch(prompt, () => {
                     nextTick(autoResize);
                 });
@@ -4225,6 +4232,7 @@ JSON 字段（世界书/正则脚本）必须输出为合法的 JSON 数组，**
                     promptInput,
 
                     autoResize,
+                    handlePromptKeydown,
                     isAvatarLoading,
                     onAvatarLoad,
                     onAvatarError

@@ -74,7 +74,17 @@ test('ui-template-frame.js wires inline event delegation to instance scope', asy
   assert.match(source, /const INLINE_EVENTS = \['click', 'change', 'input'\];/);
   assert.match(source, /root\.addEventListener\(eventType, this\._inlineDelegate, true\);/);
   assert.match(source, /runInlineHandler,\s*\n\s*extractTopLevelNames,\s*\n\s*instanceScopes/);
-  assert.match(source, /setupImeBridge/);
-  assert.match(source, /Android WebView 无法向 Shadow DOM 内输入框合成 IME 文本/);
-  assert.match(source, /this\._imeCleanup = setupImeBridge\(root\);/);
+  // captureInput=false ????? Shadow DOM IME ???
+  assert.doesNotMatch(source, /setupImeBridge/);
+  assert.doesNotMatch(source, /_imeCleanup/);
+  assert.doesNotMatch(source, /this\.teardownImeBridge\(\)/);
+});
+
+test('app.js tracks card iframe/shadow focus without IME proxy', async () => {
+  const source = await read('assets/js/app.js');
+
+  assert.match(source, /const ensureIframeFocusTracker = \(iframe\) =>/);
+  assert.match(source, /const computeExternalFocus = \(\) =>/);
+  assert.doesNotMatch(source, /setupIframeImeBridge/);
+  assert.doesNotMatch(source, /IME_PROXY_ATTR/);
 });
