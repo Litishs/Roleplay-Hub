@@ -10,3 +10,5 @@ android/local.properties
 *.log
 *.apk
 .trae/
+
+assets/backup/

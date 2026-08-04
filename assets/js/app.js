@@ -1806,15 +1806,15 @@ createApp({
             showCharacterExportModal.value = true;
         };
 
-        const confirmCharacterExport = (type) => {
+        const confirmCharacterExport = async (type) => {
             showCharacterExportModal.value = false;
             if (characterToExportIndex.value !== null) {
                 if (type === 'json') {
-                    exportCharacterJson(characterToExportIndex.value);
+                    await exportCharacterJson(characterToExportIndex.value);
                 } else if (type === 'chat') {
-                    exportCharacterChat(characterToExportIndex.value);
+                    await exportCharacterChat(characterToExportIndex.value);
                 } else {
-                    exportCharacterPng(characterToExportIndex.value);
+                    await exportCharacterPng(characterToExportIndex.value);
                 }
                 characterToExportIndex.value = null;
             }
@@ -9456,11 +9456,11 @@ ${content}
             });
         };
 
-        const downloadJsonFile = (data, fileName, spacing = 2, options = {}) => {
+        const downloadJsonFile = async (data, fileName, spacing = 2, options = {}) => {
             const json = typeof data === 'string' ? data : JSON.stringify(data, null, spacing);
             const blob = new Blob([json], { type: 'application/json;charset=utf-8' });
-            cardUtils.downloadBlob(blob, fileName, options);
-            return blob;
+            const result = await cardUtils.downloadBlob(blob, fileName, options);
+            return { blob, result };
         };
 
         const readJsonFileInput = (event, handleData, handleError) => {
@@ -10446,15 +10446,15 @@ image###生成的提示词###
             regexScriptMapper: (script) => toRegexExportEntry({ ...script, scope: 'character' }, 'character')
         });
 
-        const exportCharacterJson = (index) => {
+        const exportCharacterJson = async (index) => {
             const char = characters.value[index];
             if (!char) return;
 
             try {
                 const v2Data = buildCharacterExportData(char);
                 const blob = new Blob([JSON.stringify(v2Data, null, 2)], { type: 'application/json' });
-                cardUtils.downloadBlob(blob, (char.name || 'character') + '.json');
-                showToast('角色卡 JSON 导出成功', 'success');
+                const result = await cardUtils.downloadBlob(blob, (char.name || 'character') + '.json');
+                if (result.saved) showToast('角色卡 JSON 导出成功', 'success');
             } catch (e) {
                 console.error('JSON export error:', e);
                 showToast('JSON 导出失败: ' + e.message, 'error');
@@ -10476,9 +10476,9 @@ image###生成的提示词###
 
                 if (savedChat && Array.isArray(savedChat) && savedChat.length > 0) {
                     const chatLines = savedChat.map(msg => JSON.stringify(msg)).join('\n');
-                    const chatBlob = new Blob([chatLines], { type: 'application/json lines' });
-                    cardUtils.downloadBlob(chatBlob, (char.name || 'character') + '_chat.jsonl');
-                    showToast('聊天记录导出成功', 'success');
+                    const chatBlob = new Blob([chatLines], { type: 'application/x-ndjson' });
+                    const result = await cardUtils.downloadBlob(chatBlob, (char.name || 'character') + '_chat.jsonl');
+                    if (result.saved) showToast('聊天记录导出成功', 'success');
                 } else {
                     showToast('当前角色没有可导出的聊天记录', 'warning');
                 }
@@ -10500,8 +10500,8 @@ image###生成的提示词###
                     'chara',
                     cardUtils.encodeBase64Utf8(JSON.stringify(v2Data))
                 );
-                cardUtils.downloadBlob(new Blob([finalPng], { type: 'image/png' }), (char.name || 'character') + '.png');
-                showToast('角色卡 PNG 导出成功', 'success');
+                const result = await cardUtils.downloadBlob(new Blob([finalPng], { type: 'image/png' }), (char.name || 'character') + '.png');
+                if (result.saved) showToast('角色卡 PNG 导出成功', 'success');
             } catch (e) {
                 console.error('PNG export error:', e);
                 showToast('PNG 导出失败: ' + e.message, 'error');
@@ -11553,13 +11553,18 @@ ${memoryFragmentSection}
                     exportData = await compactMemoriesForStorageAsync(memories.value);
                     if (exportData.length === 0) { showToast('当前模式没有记忆可导出', 'info'); return; }
                 }
-                const blob = downloadJsonFile(
-                    exportData,
-                    `${isClassicMode ? 'summary_memories' : 'vector_memories'}_${currentCharacter.value?.name || 'unknown'}.json`,
-                    isClassicMode ? 2 : 0,
-                    { revokeDelay: 1000 }
-                );
-                showToast(`${isClassicMode ? '总结模式' : '向量'}记忆已导出，约 ${Math.max(1, Math.round(blob.size / 1024))} KB`, 'success');
+                try {
+                    const { blob, result } = await downloadJsonFile(
+                        exportData,
+                        `${isClassicMode ? 'summary_memories' : 'vector_memories'}_${currentCharacter.value?.name || 'unknown'}.json`,
+                        isClassicMode ? 2 : 0,
+                        { revokeDelay: 1000 }
+                    );
+                    if (result.saved) showToast(`${isClassicMode ? '总结模式' : '向量'}记忆已导出，约 ${Math.max(1, Math.round(blob.size / 1024))} KB`, 'success');
+                } catch (error) {
+                    console.error('Memory export failed:', error);
+                    showToast('记忆导出失败: ' + (error?.message || error), 'error');
+                }
             },
             importMemories: (event) => readJsonFileInput(event, async data => {
                 const isClassicMode = memorySettings.mode === MEMORY_MODE_CLASSIC;
@@ -11656,7 +11661,7 @@ ${memoryFragmentSection}
             deselectAllExportItems: () => {
                 selectedExportIndices.value.clear();
             },
-            confirmExport: () => {
+            confirmExport: async () => {
                 const indices = Array.from(selectedExportIndices.value).sort((a, b) => a - b);
                 const items = indices.map(i => exportItems.value[i]);
 
@@ -11683,10 +11688,16 @@ ${memoryFragmentSection}
                     };
                 }
 
-                downloadJsonFile(dataToExport, fileName);
-
-                showExportModal.value = false;
-                showToast(`成功导出 ${items.length} 个项目`, 'success');
+                try {
+                    const { result } = await downloadJsonFile(dataToExport, fileName);
+                    if (result.saved) {
+                        showExportModal.value = false;
+                        showToast(`成功导出 ${items.length} 个项目`, 'success');
+                    }
+                } catch (error) {
+                    console.error('Export failed:', error);
+                    showToast('导出失败: ' + (error?.message || error), 'error');
+                }
             },
             importPresets: (event) => readJsonFileInput(event, data => {
                 const items = Array.isArray(data) ? data : [data];
