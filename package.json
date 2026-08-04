@@ -1,34 +1,35 @@
-{
-  "name": "roleplay-hub-app",
-  "version": "1.0.0",
-  "private": true,
-  "description": "Offline Android build for Roleplay Hub",
-  "scripts": {
-    "prepare:vendor": "node scripts/prepare-vendor.mjs",
-    "build:css": "tailwindcss -c tailwind.main.config.cjs -i assets/css/tailwind.input.css -o assets/generated/tailwind.css --minify && tailwindcss -c tailwind.character.config.cjs -i assets/css/tailwind.input.css -o assets/generated/character.css --minify",
-    "build:web": "npm run prepare:vendor && npm run build:css && node scripts/build-web.mjs",
-    "test": "node --test tests/*.test.mjs",
-    "android:sync": "npm run build:web && cap sync android",
-    "android:open": "cap open android",
-    "android:debug": "npm run android:sync && powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-android-debug.ps1"
-  },
-  "dependencies": {
-    "@capacitor/android": "^7.4.0",
-    "@capacitor/app": "^7.1.0",
-    "@capacitor/browser": "^7.0.2",
-    "@capacitor/core": "^7.4.0",
-    "@capacitor/filesystem": "^7.1.4",
-    "@capacitor/share": "^7.0.2",
-    "@fontsource-variable/lora": "^5.2.8",
-    "dompurify": "^3.2.6",
-    "jquery": "^3.7.1",
-    "marked": "^15.0.12",
-    "sortablejs": "^1.15.6",
-    "vue": "^3.5.18"
-  },
-  "devDependencies": {
-    "@capacitor/cli": "^7.4.0",
-    "daisyui": "^4.12.24",
-    "tailwindcss": "^3.4.17"
-  }
+﻿{
+    "name":  "roleplay-hub-app",
+    "version":  "1.0.0",
+    "private":  true,
+    "description":  "Offline Android build for Roleplay Hub",
+    "scripts":  {
+                    "prepare:vendor":  "node scripts/prepare-vendor.mjs \u0026\u0026 node scripts/prepare-local-embedding.mjs",
+                    "build:css":  "tailwindcss -c tailwind.main.config.cjs -i assets/css/tailwind.input.css -o assets/generated/tailwind.css --minify \u0026\u0026 tailwindcss -c tailwind.character.config.cjs -i assets/css/tailwind.input.css -o assets/generated/character.css --minify",
+                    "build:web":  "npm run prepare:vendor \u0026\u0026 npm run build:css \u0026\u0026 node scripts/build-web.mjs",
+                    "test":  "node --test tests/*.test.mjs",
+                    "android:sync":  "npm run build:web \u0026\u0026 cap sync android",
+                    "android:open":  "cap open android",
+                    "android:debug":  "npm run android:sync \u0026\u0026 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-android-debug.ps1"
+                },
+    "dependencies":  {
+                         "@capacitor/android":  "^7.4.0",
+                         "@capacitor/app":  "^7.1.0",
+                         "@capacitor/browser":  "^7.0.2",
+                         "@capacitor/core":  "^7.4.0",
+                         "@capacitor/filesystem":  "^7.1.4",
+                         "@capacitor/share":  "^7.0.2",
+                         "@fontsource-variable/lora":  "^5.2.8",
+                         "@huggingface/transformers":  "^3.8.1",
+                         "dompurify":  "^3.2.6",
+                         "jquery":  "^3.7.1",
+                         "marked":  "^15.0.12",
+                         "sortablejs":  "^1.15.6",
+                         "vue":  "^3.5.18"
+                     },
+    "devDependencies":  {
+                            "@capacitor/cli":  "^7.4.0",
+                            "daisyui":  "^4.12.24",
+                            "tailwindcss":  "^3.4.17"
+                        }
 }
