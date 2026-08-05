@@ -215,6 +215,47 @@ public class NativeStoragePlugin extends Plugin {
     }
 
     @PluginMethod
+    public void memoryList(PluginCall call) {
+        String characterId = call.getString("characterId");
+        if (characterId == null) { call.reject("characterId is required"); return; }
+        try {
+            JSObject result = new JSObject();
+            result.put("json", database.getMemoryFragments(characterId).toString());
+            call.resolve(result);
+        } catch (Exception error) {
+            call.reject("Unable to load memory fragments", error);
+        }
+    }
+
+    @PluginMethod
+    public void memoryApply(PluginCall call) {
+        String characterId = call.getString("characterId");
+        String changesJson = call.getString("changesJson");
+        if (characterId == null || changesJson == null) {
+            call.reject("characterId and changesJson are required");
+            return;
+        }
+        try {
+            database.applyMemoryFragments(characterId, new JSONObject(changesJson));
+            call.resolve();
+        } catch (Exception error) {
+            call.reject("Unable to update memory fragments", error);
+        }
+    }
+
+    @PluginMethod
+    public void memoryDelete(PluginCall call) {
+        String characterId = call.getString("characterId");
+        if (characterId == null) { call.reject("characterId is required"); return; }
+        try {
+            database.deleteMemoryFragments(characterId);
+            call.resolve();
+        } catch (Exception error) {
+            call.reject("Unable to delete memory fragments", error);
+        }
+    }
+
+    @PluginMethod
     public void secretSet(PluginCall call) {
         String key = call.getString("key");
         String value = call.getString("value");
