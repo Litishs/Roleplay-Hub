@@ -68,6 +68,11 @@ test('styles.css has dark override rules driven by data-theme', async () => {
   assert.match(css, /\.focus\\:bg-white:focus/);
   // 输入框光标色（深色下不可见需修正）
   assert.match(css, /\[data-theme='dark'\] \.chat-input-box[\s\S]*?caret-color/);
+
+  // 用户消息气泡：bg-blue-50/85 浅蓝底必须被深色覆盖，避免 text-gray-900 白字不可读
+  assert.match(css, /\[data-theme='dark'\] \.bg-blue-50\\\/85/);
+  // 输入浮岛：深色下不得保留 .input-island 硬编码的白色边框
+  assert.match(css, /\[data-theme='dark'\] \.input-island[\s\S]*?border-color/);
 });
 
 test('Android ThemeBridge plugin and values-night fallback exist', async () => {
