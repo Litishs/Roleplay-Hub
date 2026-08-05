@@ -1658,6 +1658,10 @@ createApp({
             const safeUuid = uuid || 'global';
             return `${safeUuid}:vector`;
         };
+        const getMemoryVectorExtractedKey = (uuid) => {
+            const safeUuid = uuid || 'global';
+            return `${safeUuid}:vectorExtracted`;
+        };
 
         const isEmbeddingLike = (value) => Array.isArray(value) || ArrayBuffer.isView(value);
 
@@ -4934,7 +4938,7 @@ ${content}
 
         const sleepUiTemplateRetry = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-        const updateUiTemplatesFromChat = async ({ manual = false, targetMessageId = null } = {}) => {
+        const updateUiTemplatesFromChat = async ({ manual = false, targetMessageId = null, forceSuggestions = false } = {}) => {
             if (!settings.uiTemplateEnabled) {
                 markUiTemplateStatus('skipped', '未开启');
                 return false;
@@ -5083,6 +5087,7 @@ ${content}
                                 '严格返回JSON，不要解释，不要输出Markdown围栏，不要输出任何额外字段。',
                                 '返回格式固定为 {"updates":[{"id":"模板id","variables":{"变量路径":"新值"},"reason":"简短原因"}]}。',
                                 '每个模板最多返回一条更新；没有变化的模板不要出现在updates里。',
+                                ...(forceSuggestions ? ['本次请求为手动刷新建议：每个模板的 action_1/2/3 建议必须按最新情境重新生成，不要沿用上一轮。'] : []),
                                 '变量值可以是文字、数字、对象或JSON数组；数组字段可返回完整数组，也可用 "items.0.name" 这种路径更新单项。',
                                 '只更新每个模板已定义的变量；不要修改HTML；不要编造无关字段。',
                                 '',
@@ -5171,6 +5176,7 @@ ${content}
                                 '变量值可以是文字、数字、对象或JSON数组；装备栏、背包、日志这类列表可直接返回完整数组字段，例如 {"equipment":[{"slot":"武器","name":"短剑"}]}。',
                                 '如果模板根变量本身就是数组，可以直接返回JSON数组；如果只改数组里的一个小项，也可以返回 {"equipment.0.name":"短剑"} 这种路径对象。',
                                 '没有变化则返回 {"variables":{},"reason":"无变化"}。不要返回模板id，不要套updates数组，不要修改HTML。',
+                                ...(forceSuggestions ? ['本次请求为手动刷新建议：action_1/2/3 建议必须按最新情境重新生成，不要沿用上一轮。'] : []),
                                 '',
                                 '用户信息如下（用于判断称呼、人称和用户相关变量；不要在JSON外复述）：',
                                 buildUserInfoPrompt(),
@@ -5343,6 +5349,16 @@ ${content}
                 const matchesSource = memoryIds.some(id => assistantIds.has(id));
                 return !matchesSource && Number(memory.turn) !== turn;
             });
+            // 该轮记忆被移除后，重置向量已提取标记，让后续巡逻重新提取该轮
+            if (currentCharacter.value?.uuid) {
+                if (!memorySettings.vectorExtractedTurns) memorySettings.vectorExtractedTurns = {};
+                const key = getMemoryVectorExtractedKey(currentCharacter.value.uuid);
+                const current = Number(memorySettings.vectorExtractedTurns[key]) || 0;
+                if (current > 0) {
+                    memorySettings.vectorExtractedTurns[key] = Math.min(current, Math.max(0, turn - 1));
+                    saveMemorySettingsNow();
+                }
+            }
             return vectorRemoved + classicRemoved;
         };
 
@@ -10172,8 +10188,12 @@ ${content}
         const startVectorBatchMemoryExtraction = async (options = {}) => {
             const { manual = true } = options;
             if (isBatchExtracting.value || !currentCharacter.value || chatHistory.value.length === 0) return;
-            if (!getMemoryEmbeddingModel()) {
-                if (manual) showToast('请先选择向量嵌入模型', 'warning');
+            const isLocalBackend = memorySettings.embeddingBackend === 'local';
+            const embeddingReady = isLocalBackend
+                ? !!globalThis.RPHLocalEmbedding
+                : !!getMemoryEmbeddingModel();
+            if (!embeddingReady) {
+                if (manual) showToast(isLocalBackend ? '本地嵌入模块不可用' : '请先选择向量嵌入模型', 'warning');
                 return;
             }
 
@@ -10190,14 +10210,21 @@ ${content}
                 const emptyLogKey = getMemoryEmptyTurnsKey(uuid);
                 if (!memorySettings.emptyTurns[emptyLogKey]) memorySettings.emptyTurns[emptyLogKey] = [];
                 const emptyLog = memorySettings.emptyTurns[emptyLogKey];
+                if (!memorySettings.vectorExtractedTurns) memorySettings.vectorExtractedTurns = {};
+                const extractedKey = getMemoryVectorExtractedKey(uuid);
 
                 while (_batchExtractAbort === batchController && !batchController.signal.aborted) {
                     _vectorBatchRescanRequested = false;
                     const snapshot = buildConversationTurnSnapshot(chatHistory.value, { includeSystem: false });
                     const safeTurns = isConversationBusy.value ? snapshot.turns.slice(0, -1) : snapshot.turns;
                     const emptyTurnSet = new Set(emptyLog);
+                    const lastExtracted = Number(memorySettings.vectorExtractedTurns[extractedKey]) || 0;
                     const chunks = safeTurns
-                        .filter(turnInfo => !emptyTurnSet.has(turnInfo.turn))
+                        .filter(turnInfo => {
+                            const turn = Number(turnInfo.turn) || 0;
+                            if (!manual && turn <= lastExtracted) return false;
+                            return !emptyTurnSet.has(turn);
+                        })
                         .map(turnInfo => ({
                             data: turnInfo.messages,
                             endIdx: turnInfo.endIndex,
@@ -10215,6 +10242,12 @@ ${content}
                     }
                     const currentTurnCount = buildConversationTurnSnapshot(chatHistory.value, { includeSystem: false }).turns.length;
                     if (added > 0 || _vectorBatchRescanRequested || currentTurnCount !== scannedTurnCount) continue;
+                    // 全部处理完成：推进已提取轮次标记，避免下次切换角色时重复全量重扫
+                    const maxTurn = safeTurns.reduce((max, turnInfo) => Math.max(max, Number(turnInfo.turn) || 0), 0);
+                    if (maxTurn > lastExtracted) {
+                        memorySettings.vectorExtractedTurns[extractedKey] = maxTurn;
+                        await saveMemorySettingsNow();
+                    }
                     break;
                 }
 
@@ -11761,6 +11794,24 @@ image###生成的提示词###
             await nextTick();
 
             await generateResponse(startTime);
+        };
+
+        // 手动刷新 UI 模板建议（角色卡模板可调用；纯增量桥，不影响其他卡）
+        window.rphRefreshUiTemplateSuggestions = async () => {
+            const lastAssistant = getLastAssistantMessage();
+            if (!lastAssistant) {
+                showToast('暂无可分析的消息', 'warning');
+                return false;
+            }
+            if (!settings.uiTemplateEnabled || !activeUiTemplates.value.length) {
+                showToast('UI 模板未启用或无可刷新模板', 'warning');
+                return false;
+            }
+            return updateUiTemplatesFromChat({
+                manual: true,
+                targetMessageId: lastAssistant.id,
+                forceSuggestions: true
+            });
         };
 
         // Lifecycle

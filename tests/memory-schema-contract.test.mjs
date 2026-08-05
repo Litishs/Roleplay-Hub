@@ -160,6 +160,9 @@ test('app.js wires fact layer state, patrol and maintenance', () => {
     assert.match(app, /memoryModel.*memoryFactModel|memoryFactModel/);
     assert.match(app, /_factLoadedCharacterId === characterId/, '事实加载应记录已加载的角色，而非用 currentCharacter 判断');
     assert.match(app, /memoryFacts\.value = \[\];/, '切换角色时应清空旧角色事实');
+    assert.match(app, /memorySettings\.embeddingBackend === 'local'[\s\S]{0,120}?\? !!globalThis\.RPHLocalEmbedding/, '本地嵌入后端不应再要求 API 嵌入模型');
+    assert.match(app, /vectorExtractedTurns/, '向量补录应按角色记录已提取轮次，避免切换角色重复重扫');
+    assert.match(app, /getMemoryVectorExtractedKey\(currentCharacter\.value\.uuid\)/, '删除/编辑消息后应重置已提取标记');
 });
 
 test('storage-repository.js exposes incremental fragment APIs', () => {
