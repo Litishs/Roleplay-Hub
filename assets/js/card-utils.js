@@ -319,8 +319,7 @@ year 2025, textless version, {{petite,loli}}, Petite figure, no text, The image 
             initialVariableState: cloneJsonValue(template.initialVariableState, variableState),
             variableSchema: (typeof template.variableSchema === 'string' || typeof template.variableSchema === 'object')
                 ? cloneJsonValue(template.variableSchema, template.variableSchema)
-                : '',
-            updateMode: template.updateMode || 'merge'
+                : ''
         };
     };
 

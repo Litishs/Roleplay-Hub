@@ -52,7 +52,7 @@ test('ui-template-frame.js provides shadow render utilities', async () => {
   assert.match(source, /const createUiTemplateDocShim = \(shadowRoot, bodyWrap\) =>/);
   assert.match(source, /const runUiTemplateScripts = \(docShim, scripts, shadowRoot\) =>/);
   assert.match(source, /attachShadow\(\{ mode: 'open' \}\)/);
-  assert.match(source, /new Function\('document', 'window', executable \+ collect\)/);
+  assert.match(source, /new Function\(\s*'document', 'window',\s*'setInterval', 'setTimeout', 'clearInterval', 'clearTimeout',\s*'MutationObserver', 'ResizeObserver',\s*executable \+ collect\s*\)/);
   assert.match(source, /getElementById: \(id\) =>/);
   assert.match(source, /execCommand: \(\.\.\.args\) => realDocument\.execCommand\(\.\.\.args\)/);
   assert.match(source, /get body\(\) \{ return bodyWrap; \}/);
@@ -74,10 +74,25 @@ test('ui-template-frame.js wires inline event delegation to instance scope', asy
   assert.match(source, /const INLINE_EVENTS = \['click', 'change', 'input'\];/);
   assert.match(source, /root\.addEventListener\(eventType, this\._inlineDelegate, true\);/);
   assert.match(source, /runInlineHandler,\s*\n\s*extractTopLevelNames,\s*\n\s*instanceScopes/);
+  assert.match(source, /cleanupShadowRoot,\s*\n\s*\};/);
   // captureInput=false ????? Shadow DOM IME ???
   assert.doesNotMatch(source, /setupImeBridge/);
   assert.doesNotMatch(source, /_imeCleanup/);
   assert.doesNotMatch(source, /this\.teardownImeBridge\(\)/);
+});
+
+test('ui-template-frame.js cleans up template timers and observers on rebuild/unmount', async () => {
+  const source = await read('assets/js/ui-template-frame.js');
+
+  assert.match(source, /const shadowCleanup = new WeakMap\(\);/);
+  assert.match(source, /const cleanupShadowRoot = \(shadowRoot\) => \{/);
+  assert.match(source, /cleanup\.timers\.forEach\(id => \{/);
+  assert.match(source, /observer\.disconnect\(\)/);
+  assert.match(source, /prop === 'setInterval' \|\| prop === 'setTimeout'/);
+  assert.match(source, /prop === 'MutationObserver' \|\| prop === 'ResizeObserver'/);
+  assert.match(source, /class TrackedUiTemplateObserver extends BaseObserver/);
+  assert.match(source, /beforeUnmount\(\) \{\s*\n\s*cleanupShadowRoot\(this\.\$el\?\.shadowRoot\);/);
+  assert.match(source, /cleanupShadowRoot\(root\);\s*\n\s*this\._shadowRendered = true;/);
 });
 
 test('app.js tracks card iframe/shadow focus without IME proxy', async () => {

@@ -111,6 +111,36 @@
      */
     const instanceScopes = new WeakMap();
 
+    /* G1：模板定时器/观察者清理。
+     * 记录模板脚本创建的 setInterval/setTimeout 与 MutationObserver/ResizeObserver 实例，
+     * 组件卸载或 shadowRoot 重建前统一清理，避免泄漏导致面板反复刷新、后台空转。
+     */
+    const shadowCleanup = new WeakMap();
+
+    const getShadowCleanup = (shadowRoot) => {
+        let cleanup = shadowCleanup.get(shadowRoot);
+        if (!cleanup) {
+            cleanup = { timers: new Set(), observers: [] };
+            shadowCleanup.set(shadowRoot, cleanup);
+        }
+        return cleanup;
+    };
+
+    const cleanupShadowRoot = (shadowRoot) => {
+        if (!shadowRoot) return;
+        const cleanup = shadowCleanup.get(shadowRoot);
+        if (!cleanup) return;
+        cleanup.timers.forEach(id => {
+            try { clearInterval(id); } catch (_) { }
+            try { clearTimeout(id); } catch (_) { }
+        });
+        cleanup.timers.clear();
+        cleanup.observers.forEach(observer => {
+            try { observer.disconnect(); } catch (_) { }
+        });
+        cleanup.observers = [];
+    };
+
     const extractTopLevelNames = (code) => {
         const names = new Set();
         const patterns = [
@@ -151,14 +181,51 @@
                 if (prop === 'triggerSlash') {
                     return typeof target.triggerSlash === 'function' ? target.triggerSlash.bind(target) : null;
                 }
+                if (prop === 'setInterval' || prop === 'setTimeout') {
+                    return (fn, ms, ...args) => {
+                        const id = target[prop](fn, ms, ...args);
+                        if (shadowRoot) getShadowCleanup(shadowRoot).timers.add(id);
+                        return id;
+                    };
+                }
+                if (prop === 'clearInterval' || prop === 'clearTimeout') {
+                    return (id) => {
+                        if (shadowRoot) getShadowCleanup(shadowRoot).timers.delete(id);
+                        return target[prop](id);
+                    };
+                }
+                if (prop === 'MutationObserver' || prop === 'ResizeObserver') {
+                    const BaseObserver = target[prop];
+                    if (typeof BaseObserver !== 'function') return undefined;
+                    return class TrackedUiTemplateObserver extends BaseObserver {
+                        constructor(callback) {
+                            super(callback);
+                            if (shadowRoot) getShadowCleanup(shadowRoot).observers.push(this);
+                        }
+                    };
+                }
                 const value = Reflect.get(target, prop, receiver);
                 return typeof value === 'function' ? value.bind(target) : value;
             }
         });
 
         try {
-            const fn = new Function('document', 'window', executable + collect);
-            const values = fn.call(window, docShim, shimWindow);
+            /* 定时器/观察者 API 同时作为形参注入：模板脚本里裸写 setInterval(...)
+             * / new MutationObserver(...)（不走 window.xxx）时也能命中上面的追踪包装。
+             */
+            const fn = new Function(
+                'document', 'window',
+                'setInterval', 'setTimeout', 'clearInterval', 'clearTimeout',
+                'MutationObserver', 'ResizeObserver',
+                executable + collect
+            );
+            const values = fn.call(
+                window,
+                docShim, shimWindow,
+                shimWindow.setInterval, shimWindow.setTimeout,
+                shimWindow.clearInterval, shimWindow.clearTimeout,
+                shimWindow.MutationObserver, shimWindow.ResizeObserver
+            );
             const scope = {};
             names.forEach((name, index) => {
                 const value = values && values[index];
@@ -227,7 +294,10 @@
             if (this._lastRenderedHtml === this.html) return;
             this.renderShadow();
         },
-        beforeUnmount() { this._shadowRendered = false; },
+        beforeUnmount() {
+            cleanupShadowRoot(this.$el?.shadowRoot);
+            this._shadowRendered = false;
+        },
         methods: {
             renderShadow() {
                 const el = this.$el;
@@ -236,6 +306,7 @@
                 this._lastRenderedHtml = html;
 
                 if (/<iframe[\s>]/i.test(html)) {
+                    cleanupShadowRoot(el.shadowRoot);
                     el.innerHTML = html;
                     this._shadowRendered = false;
                     return;
@@ -243,6 +314,8 @@
 
                 let root = el.shadowRoot;
                 if (!root) root = el.attachShadow({ mode: 'open' });
+                // G1：重建前先清理旧 shadowRoot 的定时器/观察者
+                cleanupShadowRoot(root);
                 this._shadowRendered = true;
                 root.textContent = '';
 
@@ -289,5 +362,6 @@
         runInlineHandler,
         extractTopLevelNames,
         instanceScopes,
+        cleanupShadowRoot,
     };
 })();

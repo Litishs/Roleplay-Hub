@@ -1,7 +1,7 @@
 # Roleplay Hub App — API 连接与服务功能审阅报告
 
 - 审阅对象: `D:\AI\RP-Hub` (Roleplay Hub, Capacitor + Vue3 打包的 Android App, 包名 `com.roleplayhub.app`)
-- 审阅日期: 2026-08-04 (v2: 按用户反馈更新——生图可用性暂不处理, 新增"记忆系统与多供应商并存"专题)
+- 审阅日期: 2026-08-04 (v2: 按用户反馈更新——生图可用性暂不处理, 新增"记忆系统与多供应商并存"专题); 2026-08-05 (v3: 真机回归——新增 `chatWatchdog is not defined` 根因分析与"聊天报错角色回复化"需求); 2026-08-05 (v4: 修复落地——标记已实施/真机验证项, 新增 `chatUrl` 作用域修复、断网不弹窗、构建版本号自动递增, 并列出未完成待测项)
 - 审阅范围: API 配置/连接检测、聊天服务、**记忆系统与多供应商并存(本期重点)**、生图服务(仅记录, 不评估可用性)、社区服务、安全与平台约束
 - 主要代码: `assets/js/app.js`(638KB)、`assets/js/request-diagnostics.js`、`assets/js/storage-repository.js`、`android/app/src/main/java/com/roleplayhub/app/NativeStoragePlugin.java`、`capacitor.config.json`、`android/app/src/main/AndroidManifest.xml`
 
@@ -98,10 +98,49 @@ const getOpenAICompatUrl = (endpoint) => {
 
 ### 3.2 发现的问题
 - **[P1] 主聊天请求无超时** — 只有状态检测 10s、UI 模板分析 60s 超时, 主聊天 fetch 无超时; API 挂起则无限"生成中", 只能手动停止。
-- **[P1] 主聊天无自动重试** — 存储(3 次)和 UI 模板分析(2 次)有重试, 主聊天没有; 瞬时抖动/5xx/429 直接失败且失败消息会进聊天历史污染上下文。
-- **[P2] 错误信息原样写入聊天历史** — `error.message` 作为 system 消息持久化, 之后会作为上下文再发给模型。
+- **[P1] 主聊天无自动重试** — 存储(3 次)和 UI 模板分析(2 次)有重试, 主聊天没有; 瞬时抖动/5xx/429 直接失败, 错误以 system 红条留在聊天历史(不进模型上下文, 但占据显示空间且容易被忽略)。
+- **[P2] 错误信息以"红底系统消息"呈现, 用户容易忽略** — `error.message` 作为 `role:'system'` 消息写进聊天(见 3.3 需求 2)。**注**: 原 v2 报告中"之后会作为上下文再发给模型"的说法不准确——构造 API 上下文时 `getPostprocessedChatMessages(chatHistory.value, { includeSystem: false })`(app.js:5838)已过滤 system 消息, 错误/中断消息不会进入模型上下文; 真正的问题是呈现方式(弹窗/系统红条)容易被用户错过。
 - **[P3] 429/限流无特殊处理**, 无退避/提示。
 - **[P3] UI 模板分析并发无节流** — 每模板一个请求, 模板多时可能打爆限流。
+
+### 3.3 真机回归发现(2026-08-05)
+
+**现象**: API 连接检测正常, 但聊天出现两个问题:
+1. 每次生成结束, 控制台报 `ReferenceError: chatWatchdog is not defined`;
+2. 用户自己发消息"无任何反应", 期间偶见"生成已中止/生成超时"提示(弹窗), 之后彻底无响应。
+
+**根因 1: `chatWatchdog` 块级作用域 Bug(P1·阻断)**
+- `app.js:6602` 在 `try` 块内用 `const chatWatchdog = setInterval(...)` 声明——`const` 只属于该 try 块作用域;
+- `app.js:6968` 在 `finally` 块内 `if (chatWatchdog) clearInterval(chatWatchdog);`——finally 是独立作用域, 找不到该标识符, **每次生成(成功/失败/中断)走到 finally 都抛 ReferenceError**。
+
+**影响链(解释"发消息无反应")**:
+1. finally 中 6968 行之前的清理(`isGenerating/isReceiving=false`、`saveChatHistoryNow`、`abortController.value=null` 等)会执行, 但 6968 之后的逻辑全部被跳过: `waitTimer` 不清理(等待计时一直跑)、**`chatWatchdog` 定时器泄漏**, 主动工具续写、记忆提取、UI 模板自动分析等"生成后处理"永不执行;
+2. 泄漏的旧 watchdog 闭包仍持有上一次生成 try 块里的 `lastChatActivityMs`(不再更新), 但每次 tick 读取的是**当前** `abortController.value`。用户下次发消息时, 旧定时器检测到"空闲超 60s"→ 立即 abort 新请求 → 新请求 5 秒内被杀死, 表现为"发了没反应"或反复"生成超时, 已中断"; 每次失败的生成又泄漏一个新 watchdog, 问题不断累积;
+3. `generateResponse` 的 promise 因 ReferenceError 拒绝, `sendMessage` 处形成 unhandled rejection, 后续状态清理不完整。
+
+**为什么没被测试拦住**: `tests/api-resilience-contract.test.mjs` 只做字符串包含断言(`includes('const chatWatchdog = setInterval')` 与 `includes('if (chatWatchdog) clearInterval(chatWatchdog);')`), 两个字符串都存在即通过, 无法发现作用域错误(假阳性)。
+
+**修复方案(已实施, 2026-08-05)**:
+1. 声明提升到函数作用域: `let chatWatchdog = null;`(与 `_wasCancelled`/`waitTimer` 同级, 如 app.js:5709 附近);
+2. try 内改为赋值 `chatWatchdog = setInterval(...)`; finally 内改为 `if (chatWatchdog) { clearInterval(chatWatchdog); chatWatchdog = null; }`, 并将 `waitTimer` 清理放在同一区域;
+3. 契约测试升级: 断言提升声明存在(如 `let chatWatchdog = null;`), 或对生成函数做静态作用域/运行级校验。
+
+**实施与验证(2026-08-05)**: 已按上述方案落地并随 v1.11 装机真机验证——生成结束不再抛 `ReferenceError`, 不再有 watchdog 定时器泄漏, 后续发送恢复正常。
+
+**需求 2: 聊天报错改为"角色回复"呈现(P1·用户反馈)**
+- 现状: 超时/中断走 `showToast('生成超时，已中断'/'生成已中止')`(app.js:6915, 弹窗)+ 以 `role:'system'` 红底消息写聊天; API/网络错误直接以 `role:'system'` 写聊天(app.js:6944-6945); UI 模板分析失败另走 toast(app.js:5099-5102)。
+- 用户诉求: 聊天相关报错直接以**当前角色的回复气泡**(assistant, 角色名/头像)显示在聊天窗口, 不再依赖弹窗(弹窗易被忽略、看不全)。
+- 设计要点:
+  1. 错误消息按 `role:'assistant'` + 当前角色名写入, 气泡带错误态样式(如红边/角标), 保持"角色在解释发生了什么"的观感;
+  2. **必须带标记(如 `isError:true`)并从 API 上下文排除**——现有 system 错误消息因 `includeSystem:false` 本就不进上下文; 改成 assistant 后若不排除, 会作为角色发言进入下一轮请求上下文, 污染对话;
+  3. 主聊天链路的弹窗(toast)移除或降级; 中断/超时标签同样改为角色回复呈现。
+
+**实施与验证(2026-08-05, v1.11 真机)**: 已改为 `createCharacterErrorReply()` 生成 `role:'assistant' + isError:true` 的角色回复气泡, 并从模型上下文/记忆轮次中排除; 断网发送消息后, 聊天记录中落库为「用户消息 + 角色错误回复(`isError:true`, 内容为友好网络错误提示)」, 用户已确认报错以回复形式呈现。
+
+**附加修复(2026-08-05 断网回归中发现, 均已实施)**:
+1. **`chatUrl` 块级作用域 Bug**: 端点变量 `const url` 声明在 try 块内, catch 里 `friendlyNetworkErrorMessage(error, url)` 引用时抛 `ReferenceError: url is not defined`——错误气泡根本无法写入, 报错在真机上"无反应"。已提升为函数作用域 `chatUrl`(与 chatWatchdog 同型 bug, 契约测试同步断言 `friendlyNetworkErrorMessage(error, chatUrl)` 且不再出现旧写法)。
+2. **UI 模板分析失败不再弹 toast**: `failUiTemplateAnalysis()` 原 `showToast(message, 'error')` 在断网/分析失败时弹窗(用户设置 `uiTemplateEnabled=true` 时, 每条消息后自动分析都会触发); 已移除 toast, 只保留设置页内联红色状态条。
+3. **自动拉取模型失败静默**: `fetchModels()` 启动自动拉取失败原会弹「获取模型失败」; 改为仅手动拉取时弹提示, 自动失败静默(状态由设置页状态灯呈现)。
 
 ---
 
@@ -255,6 +294,8 @@ const getOpenAICompatUrl = (endpoint) => {
 
 已有契约/单测(`tests/`): API Key 输入同步、请求诊断、存储仓库、运行时策略、备份/导入导出、主题、IME 等。**API 调用链路本身(URL 归一化、SSE 解析、错误提取)没有自动化测试**。
 
+> ⚠️ **2026-08-05 补充**: `tests/api-resilience-contract.test.mjs` 是**字符串包含式断言**, 存在假阳性——`chatWatchdog` 与 `chatUrl` 两个块级作用域 Bug 都无法被旧断言捕获(`const chatWatchdog = setInterval` 与 `if (chatWatchdog) clearInterval(chatWatchdog);` 两个字符串都存在即通过)。**已升级**: 现在断言提升声明存在(`let chatWatchdog = null;`、`const chatUrl = getApiEndpoint('chat/completions');`)、赋值形式正确(`chatWatchdog = setInterval`)、并断言旧写法不再出现; 新增「断网不弹 toast」「版本号自动递增」契约测试。仍建议后续补充静态作用域检查或运行级校验(详见 3.3)。
+
 做多供应商改造时建议同步补充:
 1. `getApiEndpoint` / `getOpenAICompatUrl` 各种 URL(带/不带 `/v1`、尾斜杠、空值)——改造后应合并为一个函数并覆盖。
 2. 记忆供应商回退逻辑(未配置→回退激活供应商; 配置→用独立供应商 URL+Key)。
@@ -269,6 +310,9 @@ const getOpenAICompatUrl = (endpoint) => {
 2. 主聊天请求加超时(首字节超时 + 流空闲超时), 避免无限等待。 **[已实施] 首字节 60s + 流空闲 120s watchdog, 超时区分"生成超时"提示。**
 3. 主聊天链路增加有限重试(瞬时网络错误/5xx)。 **[已实施] 最多 3 次尝试, 指数退避(800ms×n), 覆盖网络 TypeError/超时/429/5xx; 已出内容或用户取消不重试。**
 4. 发布包关闭 `webContentsDebuggingEnabled`。 **[已实施] capacitor.config.json 已置 false(注意: 同时关闭了 CDP 调试口, 后续真机自动化调试需临时打开)。**
+13. **修复 `chatWatchdog` 作用域 Bug(真机回归, 2026-08-05)**: 声明提升到函数作用域 + finally 正确清理, 并升级契约测试。 **[已实施] 已随 v1.11 真机验证: 不再抛 `ReferenceError`, 定时器不再泄漏。**
+14. **聊天报错"角色回复化"(真机反馈, 2026-08-05)**: API 错误/超时/中断改以当前角色回复气泡呈现于聊天窗口并排除出模型上下文, 去掉弹窗依赖。 **[已实施] 断网真机验证: 错误以 `role:'assistant' + isError:true` 回复气泡落库呈现; 附带修复 `chatUrl` 作用域 Bug、UI 模板分析失败 toast、自动拉取模型失败 toast(见 3.3)。**
+15. **每次构建版本号自动递增**(真机反馈, 2026-08-05): 每次 `npm run android:debug` 自动把 `android/version.properties` 的 `versionCode/versionName` +1(1.9 → 1.10 → 1.11 → 1.12...), 产出 `Roleplay-Hub-{versionName}-debug.apk`, 设置页底部显示 `v{versionName} (build {versionCode})`。 **[已实施] v1.10 / v1.11 已连续构建并装机; `dumpsys package` 确认 versionName/versionCode 正确递增。**
 
 ### 中优先级(P2)
 5. 统一 API URL 归一化(修复尾斜杠导致的 `/v1//v1/` 双重路径)。 **[已实施] `getOpenAICompatUrl` 改为委托 `getApiEndpoint`; 统一去尾斜杠、去路径前导斜杠、补 /v1。**
@@ -286,4 +330,22 @@ const getOpenAICompatUrl = (endpoint) => {
 ### 本期不处理(用户指定)
 - 生图功能可用性(含生图状态检测假阳性、prompt URL 编码、token 暴露等生图相关项), 待后续重新纳入范围。
 
-**总评**: API 接入整体工程化程度不错——流式/SSE 兼容、错误提取、中断处理、密钥加密、诊断与测试都有用心。本期核心增量是**记忆系统与聊天解耦(方案 A / C)**: 凭证层已就绪(`apiProviderKeys`), 只差"服务↔供应商绑定"这一层运行时机制, 改造面可控; 其余主要短板集中在"异常状态下的体验"(状态灯误报、主链路无超时/无重试、URL 归一化不一致)与发布安全配置。
+### 已完成 / 未完成待测清单(2026-08-05 汇总)
+
+**已完成并真机验证(2026-08-05)**
+- 聊天报错「角色回复化」: 断网发送后错误以 `role:'assistant' + isError:true` 角色气泡呈现并排除出上下文(用户已确认);
+- `chatWatchdog` 与 `chatUrl` 两个块级作用域 Bug 修复: 不再抛 ReferenceError, 生成后处理正常;
+- 断网不再弹窗: UI 模板分析失败 toast 移除(保留内联红条)、自动拉取模型失败静默;
+- 构建版本号自动递增: 1.10 → 1.11 连续构建装机, 设置页显示版本号, APK 文件名带版本。
+
+**未完成 / 待测(后续迭代)**
+1. 自动「总结→向量」入库管线(4.5 目标形态) — **未接入**(仅「经典→向量」一键迁移已落地);
+2. 方案 A: 记忆系统独立供应商绑定(服务↔供应商 + 独立模型列表) — **未实施**;
+3. 方案 B: 向量/经典总结分开指定供应商 — **未实施**;
+4. 本地 embedding 模型扩展(`gte-small` / `multilingual-e5-small` 打包) — **未做**, 当前仅内置 `bge-small-zh-v1.5`;
+5. 生图服务可用性与状态灯假阳性 — **本期不处理**;
+6. 断网场景其余视觉复核(模板分析内联红条、设置页版本号显示、状态灯) — **待人工随手确认**;
+7. 明文 HTTP 地址提示、CORS 代理兜底 — **未实施**(仅错误信息友好化);
+8. 契约测试升级为静态作用域/运行级校验 — **建议后续**, 当前已通过字符串断言补齐关键点。
+
+**总评**: API 接入整体工程化程度不错——流式/SSE 兼容、错误提取、中断处理、密钥加密、诊断与测试都有用心。本期核心增量是**记忆系统与聊天解耦(方案 A / C)**: 凭证层已就绪(`apiProviderKeys`), 只差"服务↔供应商绑定"这一层运行时机制, 改造面可控; 其余主要短板集中在"异常状态下的体验"(状态灯误报、主链路无超时/无重试、URL 归一化不一致)与发布安全配置。**2026-08-05 真机回归先后发现并修复: `chatWatchdog` 作用域 Bug、`chatUrl` 作用域 Bug、聊天报错弹窗依赖与 UI 模板分析失败 toast; 聊天报错已按用户要求改为角色回复呈现, 断网不再弹窗; 构建版本号已开始自动递增(1.10/1.11/1.12...)。**

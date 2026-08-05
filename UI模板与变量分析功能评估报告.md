@@ -335,6 +335,33 @@ const shimWindow = new Proxy(window, {
 2. 副模型模式下单个模板失败，该模板面板**仍显示**旧状态，其它模板正常；
 3. 手动/自动重试后变量正确更新，changeLog 正确记录。
 
+### 7.13 实施记录（v3.2，本轮已完成剩余项，2026-08-05）
+
+7.12 中"未做（留待后续轮次）"的 8 项已在 v3.2 全部落地，均通过 `node --check` 与测试套件（`node --test` 91/91，此前 74 + 本轮新增 17）。
+
+| 计划项 | 状态 | 具体改动 |
+|---|---|---|
+| B1 更新指令改插对话末尾 | ✅ | 删除 `insertUserMessageAtDepth(mainModelUiTemplatePrompt, 1)` 中部插入（app.js ~L6101），改为在 `finalMessages` 末尾追加 `role:'system'` 的 `[Instructions for next message]` 指令；`buildMainModelUiTemplateUpdatePrompt` 措辞加强（"块必须在最终正文最末尾，不要写进思考过程，不要用 markdown 围栏包裹"） |
+| C1 response_format 开关 | ✅ | 新增设置 `uiTemplateJsonMode`（默认开）；副模型逐模板与合并请求 body 均带 `response_format:{type:'json_object'}`（关闭开关即兼容不支持该参数的端点）；副模型 prompt 已含"只返回 JSON"约束 |
+| D1 合并请求模式 | ✅ | 新增设置 `uiTemplateBatchMode`（默认开）；模板数 2~5 且 payload ≤200KB 时单次请求返回 `{"updates":[{"id","variables","reason"}]}`（app.js ~L4980 起），复用 `normalizeUiTemplateUpdateList` 并按模板粒度隔离；超限自动回退逐模板模式 |
+| D2 分析模型必填 | ✅ | `uiTemplateModel` 为空不再静默回退主模型：状态置 `skipped '未配置分析模型'`（app.js ~L4950）；逐模板并发上限 3（`runWithConcurrency`，v3.1 已存在，本轮确认保留） |
+| G1 定时器/观察者清理 | ✅ | ui-template-frame.js 新增 `shadowCleanup`/`cleanupShadowRoot`：shimWindow 包装 `setInterval/setTimeout/clearInterval/clearTimeout` 与 `MutationObserver/ResizeObserver` 实例记录；`new Function` 追加 6 个形参注入，覆盖模板裸写标识符（不走 `window.xxx`）的情况；`beforeUnmount` 与 `renderShadow` 重建前统一清理 |
+| G2 模板脚本风险提示 | ✅ | 新增 `analyzeUiTemplateScriptRisk`/`hasUiTemplateScripts`（检测 `<script>`、内联事件属性、iframe、javascript: URI）：模板列表显示"含脚本"红色徽标；导入含脚本模板时确认弹窗提示；保存模板时警告 toast；编辑弹窗内联风险提示 |
+| H1 抽 ui-template-engine 模块 + 运行时单测 | ✅ | 新增 `assets/js/ui-template-engine.js`（挂 `window.RPHUiTemplateEngine`，Node 走 CJS 导出），含 `normalizeUiTemplate`/`renderUiTemplateString`/`renderUiTemplateEachBlocks`/`get|setUiTemplateValue`/`splitUiTemplatePath`/`parseUiTemplateUpdateJson`/`normalizeUiTemplateUpdateList`/`applyUiTemplateUpdateListToTemplate`/`isAllowedUiTemplateKey` 等；app.js 改为解构复用（原三处函数定义删除）；新增 `tests/ui-template-engine.test.mjs` 17 项运行时单测（渲染/路径/解析/归一化/白名单/changeLog 上限/风险检测/updateMode 回归/加载顺序/契约标记） |
+| updateMode 清理 | ✅ | `app.js normalizeUiTemplate` 与 `card-utils.js toUiTemplateExportEntry` 均移除 `updateMode` 字段（死字段不再持久化，导入导出格式同步变更） |
+
+**本轮改动文件**：`assets/js/ui-template-engine.js`（新增）、`assets/js/app.js`、`assets/js/ui-template-frame.js`、`assets/js/card-utils.js`、`index.html`、`tests/ui-template-engine.test.mjs`（新增）、`tests/ui-template-shadow-contract.test.mjs`。
+
+**验证**：`node --check` 4 个改动 JS 全过；`node --test tests/*.test.mjs` **91/91 通过**（UI 模板相关：新增引擎单测 17 项 + 契约测试 8 项）；`npm run build:web` 成功，`dist` 已包含引擎文件。
+
+**备注与偏差**：
+1. C3 沿用 v3.1 "只保留 id/name/variables/reason" 的软化实现（不抛错），引擎版 `normalizeUiTemplateUpdateList` 统一该行为并新增回归测试。
+2. D2 并发上限 3 在 v3.1 代码中已存在（`runWithConcurrency`），本轮补上"分析模型必填"部分。
+3. 设置面板"立即分析"按钮在主模型模式下仍隐藏（v3.1 B2 遗留的 UI 细节），但 F1 消息级"重试变量分析"按钮已覆盖手动入口，功能等价。
+4. 合并请求在模板数 >5 或 payload >200KB 时自动回退逐模板模式；单次请求失败按"所有模板失败"处理，成功时按模板粒度隔离错误（未返回的模板视为无变化）。
+
+**APK 版本号**：`scripts/build-android-debug.ps1` 每次构建前自动读取 `android/version.properties` 并 +1（versionCode/versionName），`android/app/build.gradle` 读取该文件。v3.2 构建后版本将从 1.11 → 1.12。
+
 ---
 
 ## 8. 结论
