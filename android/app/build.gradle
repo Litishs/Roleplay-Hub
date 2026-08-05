@@ -3,12 +3,24 @@ apply plugin: 'com.android.application'
 android {
     namespace "com.roleplayhub.app"
     compileSdk rootProject.ext.compileSdkVersion
+
+    // 从 android/version.properties 读取版本号：scripts/build-android-debug.ps1 每次构建前自动 +1。
+    def versionProperties = new Properties()
+    def versionPropertiesFile = file('../version.properties')
+    if (versionPropertiesFile.exists()) {
+        versionPropertiesFile.withInputStream { stream ->
+            versionProperties.load(stream)
+        }
+    }
+    def appVersionCode = versionProperties.getProperty('versionCode', '1').toInteger()
+    def appVersionName = versionProperties.getProperty('versionName', '1.0')
+
     defaultConfig {
         applicationId "com.roleplayhub.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        versionCode appVersionCode
+        versionName appVersionName
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

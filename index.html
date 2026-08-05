@@ -564,6 +564,7 @@
                                         messageUsesWideLayout(msg) ? 'w-full' : '',
                                         msg.role === 'user' ? (msg.isSelf ? 'bg-blue-50/85 text-gray-900 shadow-[0_4px_12px_rgba(59,130,246,0.1)] border border-primary-300/50' : 'bg-white/70 text-gray-800 border border-white/40 shadow-card') :
                                         msg.role === 'system' ? 'bg-red-50/70 text-red-800 border border-red-200/40' :
+                                        msg.isError ? 'bg-red-50/80 text-red-800 border border-red-300/50' :
                                         'bg-white/70 text-gray-800 border border-white/40 shadow-card',
                                         'backdrop-blur-md glass-stabilize msg-bubble-glass']">
 
@@ -2208,6 +2209,11 @@
                     </div>
 
                 </div>
+                <div class="flex items-center justify-center gap-1.5 text-xs text-gray-400 pb-4 select-none">
+                    <span>Roleplay Hub</span>
+                    <span v-if="appVersionName" class="font-mono">v{{ appVersionName }}</span>
+                    <span v-if="appVersionCode" class="font-mono">(build {{ appVersionCode }})</span>
+                </div>
             </div>
 
             <!-- Presets View -->
@@ -2392,6 +2398,26 @@
                             </div>
                         </div>
                         <div v-if="settings.uiTemplateEnabled && !settings.uiTemplateMainModelAnalysis"
+                            class="flex items-center justify-between mb-3 animate-fade-in">
+                            <div class="flex items-center space-x-3">
+                                <span class="text-sm font-bold text-gray-700" title="多个模板合并为一次请求（模板数≤5且payload≤200KB时生效），显著降低请求次数与token消耗">合并分析请求</span>
+                                <label class="relative inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" v-model="settings.uiTemplateBatchMode" class="settings-toggle-input sr-only">
+                                    <div class="settings-toggle settings-toggle--compact"></div>
+                                </label>
+                            </div>
+                        </div>
+                        <div v-if="settings.uiTemplateEnabled && !settings.uiTemplateMainModelAnalysis"
+                            class="flex items-center justify-between mb-3 animate-fade-in">
+                            <div class="flex items-center space-x-3">
+                                <span class="text-sm font-bold text-gray-700" title="要求分析接口以 response_format 返回 JSON 对象，结构化输出更稳定；不兼容该参数的端点请关闭">JSON结构化输出</span>
+                                <label class="relative inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" v-model="settings.uiTemplateJsonMode" class="settings-toggle-input sr-only">
+                                    <div class="settings-toggle settings-toggle--compact"></div>
+                                </label>
+                            </div>
+                        </div>
+                        <div v-if="settings.uiTemplateEnabled && !settings.uiTemplateMainModelAnalysis"
                             class="space-y-3 pt-3 border-t border-gray-100 animate-fade-in">
                             <div class="grid grid-cols-1 gap-3">
                                 <div>
@@ -2471,6 +2497,11 @@
                                     <span class="text-[10px] px-2 py-0.5 rounded-full border"
                                         :class="template.scope === 'global' ? 'bg-purple-50 text-purple-700 border-purple-200' : 'bg-yellow-50 text-yellow-700 border-yellow-200'">
                                         {{ template.scope === 'global' ? '全局' : '绑定' }}
+                                    </span>
+                                    <span v-if="hasUiTemplateScripts(template.htmlTemplate)"
+                                        class="text-[10px] px-2 py-0.5 rounded-full border bg-red-50 text-red-600 border-red-200"
+                                        title="模板含可执行脚本（<script>/内联事件/iframe），仅在信任来源时使用">
+                                        含脚本
                                     </span>
                                 </div>
                                 <p class="text-xs text-gray-500 mt-1">{{ Object.keys(template.variableState || {}).length }} 个变量 · {{ (template.changeLog || []).length }} 条记录</p>
@@ -4211,6 +4242,10 @@
                             class="w-full bg-white border-0 border-t border-gray-100 rounded-none px-4 py-3 text-gray-800 focus:ring-2 focus:ring-inset focus:ring-primary-500 focus:outline-none font-mono text-sm shadow-inner leading-relaxed resize-y min-h-[460px]"
                             placeholder="<section>...</section>"></textarea>
                     </details>
+                    <div v-if="hasUiTemplateScripts(editingUiTemplate.data.htmlTemplate)"
+                        class="bg-red-50/70 border border-red-200 rounded-xl px-3 py-2 text-xs text-red-700 leading-relaxed">
+                        该模板包含可执行脚本（&lt;script&gt;、内联事件属性或 iframe）。模板脚本在 Shadow DOM 中运行但不受沙箱隔离，仅在你信任其来源时保存使用。
+                    </div>
                     <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
                         <div>
                             <label class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">变量JSON</label>
@@ -5096,8 +5131,10 @@
     <script src="assets/js/utils.js"></script>
     <script src="assets/js/card-utils.js"></script>
     <script src="assets/js/ui-select.js"></script>
+    <script src="assets/js/ui-template-engine.js"></script>
     <script src="assets/js/ui-template-frame.js"></script>
     <script src="assets/js/local-embedding.js"></script>
+    <script src="assets/js/default-presets.js"></script>
     <script src="assets/js/app.js"></script>
 </body>
 
