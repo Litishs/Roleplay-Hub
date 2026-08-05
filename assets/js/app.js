@@ -8441,6 +8441,7 @@ ${content}
         let _factDirty = new Set();
         let _factRemoved = new Set();
         let _factMeta = null;
+        let _factLoadedCharacterId = '';
 
         const schemaLib = () => globalThis.RPHMemorySchema;
 
@@ -8510,8 +8511,9 @@ ${content}
 
         const loadMemoryFacts = async (characterId, errorContext = '') => {
             abortFactExtraction();
-            if (_factFragmentsLoaded && currentCharacter.value?.uuid === characterId) return;
+            if (_factFragmentsLoaded && _factLoadedCharacterId === characterId) return;
             _factFragmentsLoaded = false;
+            memoryFacts.value = [];
             factBaselineStatus.value = 'none';
             try {
                 if (!db) await initDB();
@@ -8532,10 +8534,12 @@ ${content}
                     });
                 }
                 _factFragmentsLoaded = true;
+                _factLoadedCharacterId = characterId;
                 if (migrated) await saveMemoryFactsNow();
             } catch (error) {
                 console.error(`Error loading memory facts${errorContext}:`, error);
                 memoryFacts.value = [];
+                _factLoadedCharacterId = '';
             }
             _factFragmentsLoaded = true;
             _factDirty.clear();
@@ -10947,6 +10951,10 @@ image###生成的提示词###
         };
 
         const loadCharacterMemories = async (characterId, errorContext = '') => {
+            vectorMemorySearchResults.value = [];
+            vectorMemorySearchError.value = '';
+            memoryGraphHighlightIds.value = new Set();
+            memoryGraphSelectedId.value = '';
             try {
                 const savedMemories = await getScopedStoredValue('memories', characterId);
                 memories.value = savedMemories?.length
