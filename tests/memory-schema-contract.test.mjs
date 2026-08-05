@@ -158,6 +158,8 @@ test('app.js wires fact layer state, patrol and maintenance', () => {
     assert.match(app, /const restoreArchivedFact = \(fragment\) => \{/);
     assert.match(app, /const factPreviewText = \(fact\) => \{/);
     assert.match(app, /memoryModel.*memoryFactModel|memoryFactModel/);
+    assert.match(app, /_factLoadedCharacterId === characterId/, '事实加载应记录已加载的角色，而非用 currentCharacter 判断');
+    assert.match(app, /memoryFacts\.value = \[\];/, '切换角色时应清空旧角色事实');
 });
 
 test('storage-repository.js exposes incremental fragment APIs', () => {
