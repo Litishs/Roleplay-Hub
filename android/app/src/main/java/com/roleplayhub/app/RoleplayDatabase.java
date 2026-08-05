@@ -14,7 +14,7 @@ import org.json.JSONObject;
 
 final class RoleplayDatabase extends SQLiteOpenHelper {
     static final String DATABASE_NAME = "roleplay_hub.db";
-    static final int DATABASE_VERSION = 1;
+    static final int DATABASE_VERSION = 2;
 
     RoleplayDatabase(Context context) {
         super(context, DATABASE_NAME, null, DATABASE_VERSION);
@@ -35,12 +35,17 @@ final class RoleplayDatabase extends SQLiteOpenHelper {
         database.execSQL("CREATE INDEX idx_chat_character_position ON chat_messages(character_id, position)");
         database.execSQL("CREATE TABLE media (id TEXT PRIMARY KEY NOT NULL, relative_path TEXT NOT NULL UNIQUE, mime_type TEXT, byte_size INTEGER NOT NULL DEFAULT 0, sha256 TEXT, created_at INTEGER NOT NULL)");
         database.execSQL("CREATE TABLE app_meta (key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL)");
+        database.execSQL("CREATE TABLE memory_fragments (character_id TEXT NOT NULL, kind TEXT NOT NULL, fragment_id TEXT NOT NULL, fragment_json TEXT NOT NULL, updated_at INTEGER NOT NULL, PRIMARY KEY(character_id, kind, fragment_id))");
+        database.execSQL("CREATE INDEX idx_memory_fragments_character ON memory_fragments(character_id, kind)");
         database.execSQL("INSERT INTO app_meta(key, value) VALUES('schema_version', '1')");
     }
 
     @Override
     public void onUpgrade(SQLiteDatabase database, int oldVersion, int newVersion) {
-        // Future migrations are applied incrementally here.
+        if (oldVersion < 2) {
+            database.execSQL("CREATE TABLE IF NOT EXISTS memory_fragments (character_id TEXT NOT NULL, kind TEXT NOT NULL, fragment_id TEXT NOT NULL, fragment_json TEXT NOT NULL, updated_at INTEGER NOT NULL, PRIMARY KEY(character_id, kind, fragment_id))");
+            database.execSQL("CREATE INDEX IF NOT EXISTS idx_memory_fragments_character ON memory_fragments(character_id, kind)");
+        }
     }
 
     void putValue(String key, String json) {
@@ -124,6 +129,65 @@ final class RoleplayDatabase extends SQLiteOpenHelper {
 
     void deleteChat(String characterId) {
         getWritableDatabase().delete("chat_messages", "character_id = ?", new String[]{characterId});
+    }
+
+    JSONArray getMemoryFragments(String characterId) throws JSONException {
+        JSONArray result = new JSONArray();
+        try (Cursor cursor = getReadableDatabase().query(
+                "memory_fragments", new String[]{"kind", "fragment_id", "fragment_json"},
+                "character_id = ?", new String[]{characterId}, null, null, "kind ASC, fragment_id ASC")) {
+            while (cursor.moveToNext()) {
+                JSONObject fragment = new JSONObject(cursor.getString(2));
+                fragment.put("_kind", cursor.getString(0));
+                fragment.put("_fragmentId", cursor.getString(1));
+                result.put(fragment);
+            }
+        }
+        return result;
+    }
+
+    void applyMemoryFragments(String characterId, JSONObject changes) throws JSONException {
+        SQLiteDatabase database = getWritableDatabase();
+        database.beginTransaction();
+        try {
+            JSONArray deletes = changes.optJSONArray("deletes");
+            if (deletes != null) {
+                for (int index = 0; index < deletes.length(); index++) {
+                    JSONObject item = deletes.getJSONObject(index);
+                    database.delete(
+                            "memory_fragments",
+                            "character_id = ? AND kind = ? AND fragment_id = ?",
+                            new String[]{characterId, item.getString("kind"), item.getString("id")}
+                    );
+                }
+            }
+            JSONArray upserts = changes.optJSONArray("upserts");
+            if (upserts != null) {
+                for (int index = 0; index < upserts.length(); index++) {
+                    JSONObject item = upserts.getJSONObject(index);
+                    String kind = item.getString("kind");
+                    String fragmentId = item.getString("id");
+                    JSONObject payload = item.optJSONObject("data");
+                    if (payload == null) payload = item;
+                    payload.put("_kind", kind);
+                    payload.put("_fragmentId", fragmentId);
+                    ContentValues values = new ContentValues();
+                    values.put("character_id", characterId);
+                    values.put("kind", kind);
+                    values.put("fragment_id", fragmentId);
+                    values.put("fragment_json", payload.toString());
+                    values.put("updated_at", System.currentTimeMillis());
+                    database.insertWithOnConflict("memory_fragments", null, values, SQLiteDatabase.CONFLICT_REPLACE);
+                }
+            }
+            database.setTransactionSuccessful();
+        } finally {
+            database.endTransaction();
+        }
+    }
+
+    void deleteMemoryFragments(String characterId) {
+        getWritableDatabase().delete("memory_fragments", "character_id = ?", new String[]{characterId});
     }
 
     void putMedia(String id, String relativePath, String mimeType, long byteSize, String sha256) {

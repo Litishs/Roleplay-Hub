@@ -4,6 +4,7 @@
     const nativePlugin = () => window.Capacitor?.Plugins?.NativeStorage || null;
     const memoryStore = new Map();
     const memoryChats = new Map();
+    const memoryFragments = new Map();
     const memorySecrets = new Map();
     let initialized = false;
 
@@ -148,6 +149,43 @@
             const plugin = nativePlugin();
             if (plugin) await plugin.chatDelete({ characterId: String(characterId) });
             else memoryChats.delete(String(characterId));
+        },
+
+        async loadFragments(characterId) {
+            await this.init();
+            const plugin = nativePlugin();
+            const response = plugin
+                ? await plugin.memoryList({ characterId: String(characterId) })
+                : { json: memoryFragments.get(String(characterId)) || '[]' };
+            return parseJson(response.json, []);
+        },
+
+        async applyFragments(characterId, changes) {
+            await this.init();
+            const plugin = nativePlugin();
+            const normalized = {
+                upserts: cloneJson(changes?.upserts || []),
+                deletes: cloneJson(changes?.deletes || [])
+            };
+            if (plugin) {
+                await plugin.memoryApply({ characterId: String(characterId), changesJson: JSON.stringify(normalized) });
+                return;
+            }
+            const key = String(characterId);
+            const current = parseJson(memoryFragments.get(key) || '[]', []);
+            const byRow = new Map(current.map(item => [`${item._kind}:${item._fragmentId}`, item]));
+            normalized.deletes.forEach(item => byRow.delete(`${item.kind}:${item.id}`));
+            normalized.upserts.forEach(item => {
+                byRow.set(`${item.kind}:${item.id}`, { ...(item.data || item), _kind: item.kind, _fragmentId: item.id });
+            });
+            memoryFragments.set(key, JSON.stringify([...byRow.values()]));
+        },
+
+        async deleteFragments(characterId) {
+            await this.init();
+            const plugin = nativePlugin();
+            if (plugin) await plugin.memoryDelete({ characterId: String(characterId) });
+            else memoryFragments.delete(String(characterId));
         },
 
         async writeMediaDataUrl(dataUrl, preferredName = '') {
