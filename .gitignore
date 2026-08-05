@@ -12,6 +12,8 @@ android/local.properties
 .trae/
 
 assets/backup/
+assets/character/
+documents/
 
 # Phone app data safety backups (contains API keys / user data)
 .rphub-data-safety.*
