@@ -2278,6 +2278,23 @@ opacity: 0;
             color: var(--d-text-4);
         }
 
+        /* 用户消息气泡：深色下 bg-blue-50/85 无覆盖，浅蓝底 + text-gray-900 被覆盖为白字，
+           导致白底白字不可读；改为深蓝底并淡化气泡描边。 */
+        [data-theme='dark'] .bg-blue-50\/85 {
+            background-color: rgba(30, 64, 175, 0.42) !important;
+        }
+        [data-theme='dark'] .border-primary-300\/50 {
+            border-color: rgba(96, 165, 250, 0.35) !important;
+        }
+
+        /* 输入浮岛：.input-island 以 !important 硬编码白色边框，深色模式下背景已变深，
+           边框仍是白色，形成“白色底框”；深色下替换为低透明度的深色描边。 */
+        [data-theme='dark'] .input-island {
+            border-color: rgba(255, 255, 255, 0.08) !important;
+            box-shadow: 0 10px 28px -12px rgba(0, 0, 0, 0.55), 0 1px 2px rgba(0, 0, 0, 0.28) !important;
+            -webkit-box-shadow: 0 10px 28px -12px rgba(0, 0, 0, 0.55), 0 1px 2px rgba(0, 0, 0, 0.28) !important;
+        }
+
         /* —— 渐变工具类（低频兜底） —— */
         [data-theme='dark'] .from-gray-50 { --tw-gradient-from: #111827 var(--tw-gradient-from-position); }
         [data-theme='dark'] .from-gray-100 { --tw-gradient-from: #1f2937 var(--tw-gradient-from-position); }
