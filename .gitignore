@@ -16,6 +16,7 @@ android/keystore/
 assets/backup/
 assets/character/
 documents/
+.archive/
 
 # Phone app data safety backups (contains API keys / user data)
 .rphub-data-safety.*
