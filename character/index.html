@@ -1725,7 +1725,7 @@
                     document.documentElement.dataset.appFont = normalizeFontFamily(value);
                 };
                 applyFontFamily('modern');
-                const IMAGE_GEN_BASE_URL = 'https://nai.sta1n.cn';
+                // 生图服务暂不可用：不再配置任何生图服务商地址
 
                 // Main Settings Sync Listener
                 const setupSyncListener = () => {
@@ -3528,17 +3528,15 @@ ${FIRST_MESSAGE_FINAL_CHECKS}
 
                 // Avatar Helpers
                 const generateAvatarUrl = (tag) => {
-                    let url;
-                    console.log('%c[Workshop Image Request]', 'color: #ec4899; font-weight: bold;', { style: options.avatarStyle, tag: tag });
-                    const tokenParam = options.imageGenKey.trim();
-                    const targetArtists = cardUtils.getImageStyleArtists(options.avatarStyle);
-
-                    const baseUrl = IMAGE_GEN_BASE_URL;
-                    url = `${baseUrl}/generate?tag=${encodeURIComponent(tag)}&token=${tokenParam}&model=nai-diffusion-4-5-full&artist=${encodeURIComponent(targetArtists)}&size=竖图&steps=40&scale=6&cfg=0&sampler=k_dpmpp_2m_sde&negative={{{{bad anatomy}}}},{bad feet},bad hands,{{{bad proportions}}},{blurry},cloned face,cropped,{{{deformed}}},{{{disfigured}}},error,{{{extra arms}}},{extra digit},{{{extra legs}}},extra limbs,{{extra limbs}},{fewer digits},{{{fused fingers}}},gross proportions,ink eyes,ink hair,jpeg artifacts,{{{{long neck}}}},low quality,{malformed limbs},{{missing arms}},{missing fingers},{{missing legs}},{{{more than 2 nipples}}},mutated hands,{{{mutation}}},normal quality,owres,{{poorly drawn face}},{{poorly drawn hands}},reen eyes,signature,text,{{too many fingers}},{{{ugly}}},username,uta,watermark,worst quality,{{{more than 2 legs}}},awkward hand sign,weird hand gesture,contorted hand,unnatural finger pose,deformed hand gesture{shaka},{hang loose},{{rock on}},{shaka sign}&nocache=0&noise_schedule=karras`;
-                    return url;
+                    // 生图服务暂不可用：不再生成任何服务商图片 URL
+                    showToast('生图服务暂不可用', 'warning');
+                    return '';
                 };
 
                 const rerollAvatar = () => {
+                    showToast('生图服务暂不可用', 'warning');
+                    return;
+
                     const prompt = currentCharacter.value.avatar_prompt;
                     if (!prompt) {
                         showToast('当前没有可用的头像提示词', 'warning');
@@ -3999,13 +3997,8 @@ JSON 字段（世界书/正则脚本）必须输出为合法的 JSON 数组，**
                                     // 只有当 Prompt 发生实质变化时才重新生成 URL，防止已缓存的 Base64 被重置为 URL 导致循环加载
                                     if (currentCharacter.value.avatar_prompt !== tag) {
                                         currentCharacter.value.avatar_prompt = tag;
-                                        // 仅在配置了密钥时才生成图片 URL 并赋值，否则保持为空或旧数据，直到最后提示用户
-                                        if (options.imageGenKey) {
-                                            let url = generateAvatarUrl(tag);
-                                            currentCharacter.value.avatar = url;
-                                        } else {
-                                            console.log('Image Generation Key is empty, skipping image request.');
-                                        }
+                                        // 生图服务暂不可用：不请求图片，保留已有头像或留空
+                                        console.log('Image Generation service unavailable, skipping image request.');
                                     }
                                 }
                             } else {

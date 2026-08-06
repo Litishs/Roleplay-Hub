@@ -884,10 +884,10 @@
                             <!-- Left controls: AutoImage -->
                             <div class="flex items-center gap-2">
                                 <!-- Auto Image Button -->
-                                <button @click="toggleAutoImageGen"
+                                <button @click="toggleAutoImageGen" :disabled="imageGenUnavailable"
                                     :class="[isAutoImageGenEnabled ? 'bg-primary-500 text-white shadow-primary-500/30 border-primary-500' : 'bg-white text-gray-500 hover:text-gray-700 hover:bg-gray-50 border-gray-200 shadow-sm']"
-                                    class="rounded-full w-8 h-8 flex items-center justify-center border transition-all active:scale-95"
-                                    title="自动生图开关">
+                                    class="rounded-full w-8 h-8 flex items-center justify-center border transition-all active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
+                                    :title="imageGenUnavailable ? '生图服务暂不可用' : '自动生图开关'">
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                             d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z">
@@ -1728,22 +1728,14 @@
                                     <!-- Image API Status -->
                                     <div
                                         class="model-setting-row">
-                                        <div
-                                            :class="['w-2.5 h-2.5 rounded-full mr-3 shadow-sm flex-shrink-0', imageGenStatus === 'connected' ? 'bg-green-500 shadow-green-200' : (imageGenStatus === 'checking' ? 'bg-yellow-400 animate-pulse shadow-yellow-200' : (imageGenStatus === 'error' ? 'bg-red-500 shadow-red-200' : 'bg-gray-300'))]">
-                                        </div>
+                                        <div class="w-2.5 h-2.5 rounded-full mr-3 shadow-sm flex-shrink-0 bg-gray-300"></div>
                                         <div class="flex-1 min-w-0">
                                             <div class="flex justify-between items-center mb-0.5">
                                                 <div class="flex items-center gap-1.5 min-w-0 text-xs font-bold text-gray-700 truncate">
                                                     <span>生图服务</span>
                                                     <span class="text-gray-400">·</span>
-                                                    <span class="text-gray-500 font-medium whitespace-nowrap">
-                                                        <span v-if="quotaLoading">获取中...</span>
-                                                        <span v-else>{{ quotaError ? '查询失败' : quotaValue + ' 次' }}</span>
-                                                    </span>
+                                                    <span class="text-gray-500 font-medium whitespace-nowrap">暂不可用</span>
                                                 </div>
-                                                <span v-if="imageGenStatus === 'connected'"
-                                                    class="text-xs font-mono font-medium text-teal-600">{{
-                                                    imageGenLatency }}ms</span>
                                             </div>
                                         </div>
                                     </div>
@@ -2026,9 +2018,9 @@
                                             class="generation-setting-card">
                                             <label
                                                 class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">自动生图密钥</label>
-                                            <input v-model="settings.imageGenKey" type="password"
-                                                class="w-full bg-white border border-gray-200 rounded-lg px-3 py-1.5 text-gray-700 text-sm focus:ring-2 focus:ring-teal-100 focus:border-teal-400 focus:outline-none transition-all shadow-sm"
-                                                placeholder="STA1N-...">
+                                            <input v-model="settings.imageGenKey" type="password" :disabled="imageGenUnavailable"
+                                                class="w-full bg-white border border-gray-200 rounded-lg px-3 py-1.5 text-gray-700 text-sm focus:ring-2 focus:ring-teal-100 focus:border-teal-400 focus:outline-none transition-all shadow-sm disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-400"
+                                                placeholder="生图服务暂不可用">
                                         </div>
 
                                         <!-- Image Style -->
@@ -2036,7 +2028,7 @@
                                             class="generation-setting-card">
                                             <label
                                                 class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">生图风格</label>
-                                            <custom-select v-model="settings.imageStyle" :options="imageStyleOptions"
+                                            <custom-select v-model="settings.imageStyle" :options="imageStyleOptions" :disabled="imageGenUnavailable"
                                                 button-class="rounded-lg px-3 py-1.5 text-sm text-gray-700 focus:border-teal-400 focus:ring-teal-100"
                                                 menu-class="text-sm">
                                             </custom-select>
@@ -2051,7 +2043,7 @@
                                             class="generation-setting-card">
                                             <label
                                                 class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">生图比例</label>
-                                            <custom-select v-model="settings.imageSize" :options="imageSizeOptions"
+                                            <custom-select v-model="settings.imageSize" :options="imageSizeOptions" :disabled="imageGenUnavailable"
                                                 button-class="rounded-lg px-3 py-1.5 text-sm text-gray-700 focus:border-teal-400 focus:ring-teal-100"
                                                 menu-class="text-sm">
                                             </custom-select>
@@ -2062,7 +2054,7 @@
                                             class="generation-setting-card">
                                             <label
                                                 class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">期望生图数量</label>
-                                            <custom-select v-model="settings.imageGenCount" :options="imageGenCountOptions"
+                                            <custom-select v-model="settings.imageGenCount" :options="imageGenCountOptions" :disabled="imageGenUnavailable"
                                                 button-class="rounded-lg px-3 py-1.5 text-sm text-gray-700 focus:border-teal-400 focus:ring-teal-100"
                                                 menu-class="text-sm">
                                             </custom-select>
@@ -3847,41 +3839,6 @@
                         class="px-6 py-2 bg-primary-600 hover:bg-primary-700 text-white font-medium rounded-lg shadow-sm hover:shadow transition-all active:scale-95 w-full">
                         我知道了
                     </button>
-                </div>
-            </div>
-        </div>
-
-        <!-- Update Notification Modal -->
-        <div v-if="showUpdateModal"
-            class="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fade-in">
-            <div
-                class="bg-white rounded-xl border border-gray-200 w-full max-w-lg flex flex-col shadow-2xl transform transition-all scale-100 overflow-hidden relative">
-                <div class="bg-gradient-to-r from-primary-50 to-purple-50 p-4 border-b border-gray-100">
-                    <div class="flex items-center gap-3">
-                        <h3 class="text-xl font-bold text-gray-900">{{ latestUpdate.title }}</h3>
-                        <span
-                            class="bg-primary-100 text-primary-600 text-[10px] font-bold px-2 py-0.5 rounded-full border border-primary-200 transform translate-y-0.5">New</span>
-                    </div>
-                </div>
-                <div class="p-4 max-h-[75vh] overflow-y-auto custom-scrollbar update-content" @scroll="checkUpdateScroll">
-                    <div class="prose prose-sm prose-gray max-w-none">
-                        <!-- 使用 Markdown 渲染内容，支持富文本，且不应用正则替换 -->
-                        <div class="markdown-body" v-html="renderMarkdown(latestUpdate.content, 'assistant', true)">
-                        </div>
-                    </div>
-                    <div class="mt-8 mb-2 flex justify-end">
-                        <button @click="closeUpdateModal" :disabled="updateCountdown > 0"
-                            :class="{'opacity-50 cursor-not-allowed': updateCountdown > 0}"
-                            class="px-10 py-2.5 bg-primary-600 hover:bg-primary-700 text-white font-medium rounded-lg shadow-sm hover:shadow transition-all active:scale-95">
-                            知道了 <span v-if="updateCountdown > 0">({{ updateCountdown }}s)</span>
-                        </button>
-                    </div>
-                </div>
-                <div v-show="!isUpdateScrolledToBottom" class="absolute bottom-0 left-0 right-0 pt-12 pb-4 bg-gradient-to-t from-white via-white/80 to-transparent flex justify-center items-end pointer-events-none transition-opacity duration-300 rounded-b-xl">
-                    <div class="text-xs text-blue-500 flex items-center gap-1 animate-bounce bg-white shadow-sm border border-blue-100 px-3 py-1.5 rounded-full">
-                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"></path></svg>
-                        向下滑动查看完整内容
-                    </div>
                 </div>
             </div>
         </div>

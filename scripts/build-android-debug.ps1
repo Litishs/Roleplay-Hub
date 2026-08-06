@@ -56,7 +56,9 @@ try {
 }
 
 $builtApk = Join-Path $projectRoot 'android\app\build\outputs\apk\debug\app-debug.apk'
-$deliveryApk = Join-Path $projectRoot "Roleplay-Hub-$nextVersionName-debug.apk"
+$debugApkDir = Join-Path $projectRoot 'debug_apk'
+New-Item -ItemType Directory -Force -Path $debugApkDir | Out-Null
+$deliveryApk = Join-Path $debugApkDir "Roleplay-Hub-$nextVersionName-debug.apk"
 if (-not (Test-Path -LiteralPath $builtApk)) {
     throw "Debug APK was not produced at $builtApk"
 }

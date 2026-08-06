@@ -10,7 +10,8 @@
                     "test":  "node --test tests/*.test.mjs",
                     "android:sync":  "npm run build:web \u0026\u0026 cap sync android",
                     "android:open":  "cap open android",
-                    "android:debug":  "npm run android:sync \u0026\u0026 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-android-debug.ps1"
+                    "android:debug":  "npm run android:sync \u0026\u0026 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-android-debug.ps1",
+                    "android:release":  "npm run android:sync \u0026\u0026 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-android-release.ps1"
                 },
     "dependencies":  {
                          "@capacitor/android":  "^7.4.0",
