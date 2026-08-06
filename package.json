@@ -2,7 +2,7 @@
     "name":  "roleplay-hub-app",
     "version":  "1.0.0",
     "private":  true,
-    "description":  "Offline Android build for Roleplay Hub",
+    "description":  "Android build for Roleplay Hub",
     "scripts":  {
                     "prepare:vendor":  "node scripts/prepare-vendor.mjs \u0026\u0026 node scripts/prepare-local-embedding.mjs",
                     "build:css":  "tailwindcss -c tailwind.main.config.cjs -i assets/css/tailwind.input.css -o assets/generated/tailwind.css --minify \u0026\u0026 tailwindcss -c tailwind.character.config.cjs -i assets/css/tailwind.input.css -o assets/generated/character.css --minify",

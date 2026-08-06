@@ -283,6 +283,13 @@ createApp({
             quotaError.value = false;
         };
 
+        // Author Notice Modal (首次启动的作者致谢公告)
+        const showAuthorNoticeModal = ref(false);
+        const closeAuthorNoticeModal = () => {
+            showAuthorNoticeModal.value = false;
+            setStoredValue('author_notice_seen', true).catch(error => console.error('Author notice marker save failed:', error));
+        };
+
         const showConfirmModal = ref(false);
         const confirmMessage = ref('');
         const confirmCallback = ref(null);
@@ -11784,6 +11791,12 @@ image###生成的提示词###
             await loadData();
             fetchQuota(); // Fetch quota after saved settings are loaded
 
+            // 首次启动显示作者致谢公告（仅一次）
+            const authorNoticeSeen = await getStoredValue('author_notice_seen');
+            if (!authorNoticeSeen) {
+                showAuthorNoticeModal.value = true;
+            }
+
             // --- 全局清理废弃正则 (思维隐藏及旧版画图迁移项已清理完毕，保留基础结构) ---
             const obsoleteRegexNames = ['隐藏正文的thinking', 'Nai画图正则-本子风', 'Nai画图正则-竖图'];
             let cleanedCount = 0;
@@ -12197,6 +12210,7 @@ image###生成的提示词###
             formatTokenCount, formatTokenAggregate, formatTokenUsageTime, getTokenUsageTypeLabel, clearTokenUsageHistory,
             showCharacterExportModal, openCharacterExportModal, confirmCharacterExport, // Character Export Modal
             showConfirmModal, confirmMessage, modelMode, showNoMemoryNeededModal, // Export for template
+            showAuthorNoticeModal, closeAuthorNoticeModal, // Author Notice Modal
             isGenerating, isRemoteGenerating, remoteEstimatedTime, isReceiving, isThinking, hasActiveToolInlineWork, isConversationBusy, activeToolContinuationMessageId, activeToolContinuationHasResponse, userInput, modelSearchQuery, activeModelTag, modelTags, characterSearchQuery, filteredModels, filteredCharacters,
             user, settings, apiProviderOptions, selectedApiProvider, isCustomApiProvider, customApiProviderOptions, showApiProviderSelector, selectApiProvider, characters, currentCharacter, currentCharacterIndex, chatHistory, displayedChatMessages, chatTopSpacerHeight, chatBottomSpacerHeight, handleChatScroll, presets, presetRoleOptions, fontFamilyOptions, themeModeOptions, imageStyleOptions, imageSizeOptions, imageGenCountOptions, scopeOptions, uiTemplatePlacementOptions, worldInfoPositionOptions, getPresetRoleLabel, getPresetRoleDisplayLabel, getPresetRoleBadgeClass, regexScripts, worldInfo,
             activeTools, activeToolAggressivenessOptions: ACTIVE_TOOL_AGGRESSIVENESS_OPTIONS, editingActiveTool, normalizeActiveTools, isWebActiveTool, getActiveToolDisplayDescription, getActiveToolResultCountMin, getActiveToolResultCountMax,
