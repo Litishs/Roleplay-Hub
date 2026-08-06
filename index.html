@@ -1436,6 +1436,7 @@
                         <svg class="w-6 h-6 md:w-7 md:h-7 mr-2 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><use href="#icon-settings"></use></svg>
                         设置
                     </h2>
+                    <span class="ml-auto text-[10px] md:text-[11px] text-gray-400 font-medium select-none">原作者 STA1N · 二次开发 Litishs</span>
                 </div>
                 <div class="max-w-3xl mx-auto space-y-4 md:space-y-8">
 
@@ -3838,6 +3839,29 @@
                     <button @click="showNoMemoryNeededModal = false"
                         class="px-6 py-2 bg-primary-600 hover:bg-primary-700 text-white font-medium rounded-lg shadow-sm hover:shadow transition-all active:scale-95 w-full">
                         我知道了
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Author Notice Modal (首次启动致谢) -->
+        <div v-if="showAuthorNoticeModal"
+            class="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fade-in">
+            <div
+                class="bg-white rounded-xl border border-gray-200 w-full max-w-md flex flex-col shadow-2xl transform transition-all scale-100 overflow-hidden relative">
+                <div class="bg-gradient-to-r from-primary-50 to-purple-50 p-5 border-b border-gray-100">
+                    <h3 class="text-xl font-bold text-gray-900">致谢与来源</h3>
+                    <p class="text-xs text-gray-500 mt-1">本项目基于 STA1N 的开源项目二次开发</p>
+                </div>
+                <div class="p-5 space-y-3 text-sm text-gray-600">
+                    <p>本项目最初由 <b>STA1N</b> 创作并开源（<span class="font-mono text-xs text-gray-500">github.com/STA1N156/RP-Hub</span>），遵循 <b>CC BY-NC 4.0</b> 许可协议。</p>
+                    <p>由 <b>Litishs</b> 二次开发，封装为 Android 应用，并持续维护。</p>
+                    <p class="text-xs text-gray-400">请保留署名、禁止商用；如需商业授权，请联系原作者 STA1N。</p>
+                </div>
+                <div class="p-4 flex justify-end border-t border-gray-100">
+                    <button @click="closeAuthorNoticeModal"
+                        class="px-8 py-2.5 bg-primary-600 hover:bg-primary-700 text-white font-medium rounded-lg shadow-sm hover:shadow transition-all active:scale-95">
+                        知道了
                     </button>
                 </div>
             </div>
