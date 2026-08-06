@@ -151,12 +151,17 @@ createApp({
         const systemRegexNames = ['Auto Replace {{user}}', 'NAI画图正则'];
         const systemWorldInfoNames = ['自动生图'];
 
-        const IMAGE_GEN_BASE_URL = 'https://nai.sta1n.cn';
+        // --- 生图服务配置（暂不可用） ---
+        // 生图服务当前无可用提供商；后续接入新服务商时只需在 imageGenProviderOptions 增加条目，
+        // 例如：{ id: 'xxx', name: 'XXX', apiUrl: 'https://...', icon: '' }，再在设置页接入选择器即可。
+        const imageGenProviderOptions = [];
+        const getImageGenProviderById = (id) => imageGenProviderOptions.find(provider => provider.id === id);
+        const imageGenUnavailable = computed(() => imageGenProviderOptions.length === 0);
 
         // --- Default API Configuration ---
-        const DEFAULT_API_PROVIDER_ID = 'sta1n';
+        const DEFAULT_API_PROVIDER_ID = 'deepseek';
         const DEFAULT_API_CONFIG = {
-            apiUrl: 'https://cdn.sta1n.cn/v1',
+            apiUrl: 'https://api.deepseek.com/v1',
             apiKey: '',
             model: '', // Default selected
             qualityModel: '',
@@ -165,12 +170,6 @@ createApp({
         };
 
         const apiProviderOptions = [
-            {
-                id: 'sta1n',
-                name: 'STA1N API',
-                apiUrl: 'https://cdn.sta1n.cn/v1',
-                icon: 'https://img.cdn1.vip/i/69c18cc07538b_1774292160.webp'
-            },
             {
                 id: 'deepseek',
                 name: 'DeepSeek',
@@ -188,6 +187,18 @@ createApp({
                 name: 'SiliconFlow',
                 apiUrl: 'https://api.siliconflow.cn/v1',
                 icon: 'https://siliconflow.cn/favicon.ico'
+            },
+            {
+                id: 'bailian',
+                name: '阿里百炼',
+                apiUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+                icon: 'https://www.aliyun.com/favicon.ico'
+            },
+            {
+                id: 'zhipu',
+                name: '智谱',
+                apiUrl: 'https://open.bigmodel.cn/api/paas/v4',
+                icon: ''
             }
         ];
 
@@ -267,109 +278,9 @@ createApp({
         const backupInProgress = ref(false);
 
         const fetchQuota = async () => {
-            quotaLoading.value = true;
+            // 生图服务暂不可用：不再向任何生图服务商请求配额
+            quotaValue.value = 0;
             quotaError.value = false;
-            try {
-                const imageGenToken = settings.imageGenKey.trim();
-                if (!imageGenToken) {
-                    quotaValue.value = 0;
-                    return;
-                }
-                const baseUrl = IMAGE_GEN_BASE_URL;
-                const response = await fetch(`${baseUrl}/api/api/getUser`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ toUserId: imageGenToken })
-                });
-                const data = await response.json();
-                if (data.status === 'ok' && data.type === 'sta1n') {
-                    const val = Number.parseInt(data.data?.value, 10);
-                    if (!Number.isFinite(val)) throw new Error('Invalid quota value');
-                    quotaValue.value = val;
-                } else {
-                    quotaError.value = true;
-                }
-            } catch (e) {
-                console.error('Quota fetch error:', e);
-                quotaError.value = true;
-            } finally {
-                quotaLoading.value = false;
-            }
-        };
-
-        // Update Modal Logic
-        const showUpdateModal = ref(false);
-        const updateCountdown = ref(0);
-        let updateCountdownTimer = null;
-        const isUpdateScrolledToBottom = ref(false);
-
-        const checkUpdateScroll = (e) => {
-            const el = e.target;
-            isUpdateScrolledToBottom.value = (el.scrollHeight - el.scrollTop - el.clientHeight) < 10;
-        };
-        const latestUpdate = reactive({
-            id: 10157, // 确保这是一个五位数ID，每次更新内容时增加这个数字
-            date: new Date().toISOString().split('T')[0],
-            title: '网站公告',
-            content: `
-### RP-Hub 1.7.7
-
-- 新增总结模式单条/总压缩率查看
-- 新增记忆补录并发数调整选项
-- 新增统计页面筛选功能
-- 优化了总结模式的压缩率与信息密度
-- 优化了记忆系统与UI模板展开折叠的动效
-- 优化了聊天界面功能按钮的样式
-- 优化了统计页面的样式与帮助
-- 优化了进入二级页面时的过渡动效
-- 修复了IOS系统角色卡工坊界面无法滑动的问题
-- 修复了聊天内容编辑气泡宽度异常的问题
-- 修复了单行内容过长时的气泡边际问题
-
-本项目为全开源公益项目，严禁倒卖源码，二改需经作者授权
-
-#### 更新时间：07/20/06:12
-                    `
-        });
-
-        const closeUpdateModal = () => {
-            if (updateCountdown.value > 0) return;
-            showUpdateModal.value = false;
-            if (updateCountdownTimer) {
-                clearInterval(updateCountdownTimer);
-                updateCountdownTimer = null;
-            }
-            setStoredValue('update_id', latestUpdate.id).catch(error => console.error('Update marker save failed:', error));
-        };
-
-        const startUpdateCountdown = () => {
-            updateCountdown.value = 10;
-            if (updateCountdownTimer) clearInterval(updateCountdownTimer);
-            updateCountdownTimer = setInterval(() => {
-                if (updateCountdown.value > 0) {
-                    updateCountdown.value--;
-                } else {
-                    clearInterval(updateCountdownTimer);
-                    updateCountdownTimer = null;
-                }
-            }, 1000);
-        };
-
-        const checkUpdate = async () => {
-            const lastId = await getStoredValue('update_id');
-            // 如果没有记录，或者记录的ID小于当前ID，则显示弹窗
-            if (!lastId || parseInt(lastId) < latestUpdate.id) {
-                showUpdateModal.value = true;
-                isUpdateScrolledToBottom.value = false;
-                startUpdateCountdown();
-
-                setTimeout(() => {
-                    const el = document.querySelector('.update-content');
-                    if (el && el.scrollHeight <= el.clientHeight + 10) {
-                        isUpdateScrolledToBottom.value = true;
-                    }
-                }, 100);
-            }
         };
 
         const showConfirmModal = ref(false);
@@ -680,7 +591,7 @@ createApp({
         // Service Status
         const apiStatus = ref('unknown'); // 'unknown', 'checking', 'connected', 'error'
         const apiLatency = ref(0);
-        const imageGenStatus = ref('unknown');
+        const imageGenStatus = ref('unavailable');
         const imageGenLatency = ref(0);
 
         const user = reactive({
@@ -748,6 +659,7 @@ createApp({
             fontSize: window.innerWidth > 768 ? 16 : 14,
             themeMode: 'system',
             imageGenKey: '',
+            imageGenProviderId: '',
             imageStyle: 'vertical',
             customImageArtists: '',
             imageSize: '竖图',
@@ -861,6 +773,8 @@ createApp({
                     settings.apiProviderKeys[provider.id] = '';
                 }
             });
+            // 清理已下架的 STA1N 提供商遗留 key，避免旧 key 串入其他提供商
+            delete settings.apiProviderKeys['sta1n'];
 
             let provider = getApiProviderById(settings.apiProviderId);
             if (!provider && !isCustomApiProviderId(settings.apiProviderId)) {
@@ -2710,6 +2624,7 @@ createApp({
         // Auto Image Gen & Stream Linkage
         const isAutoImageGenEnabled = computed({
             get: () => {
+                if (imageGenUnavailable.value) return false; // 生图服务暂不可用，强制关闭
                 const entry = worldInfo.value.find(w => w.comment === '自动生图');
                 return entry ? entry.enabled : false;
             },
@@ -2728,6 +2643,10 @@ createApp({
         };
 
         const setAutoImageGenEnabled = (enabled) => {
+            if (imageGenUnavailable.value) {
+                showToast('生图服务暂不可用', 'warning');
+                return false;
+            }
             isAutoImageGenEnabled.value = enabled;
             const changed = isAutoImageGenEnabled.value === enabled;
             if (changed) showAutoImageGenToggleToast(enabled);
@@ -2751,6 +2670,11 @@ createApp({
         const updateImageGenRegexState = ({ enableRegex = false } = {}) => {
             const imageGenRegexName = 'NAI画图正则';
             let regex = regexScripts.value.find(r => r.name === imageGenRegexName);
+            if (imageGenUnavailable.value) {
+                // 生图服务暂不可用：强制关闭已有画图正则，不修改其内容
+                if (regex) regex.enabled = false;
+                return [];
+            }
             if (!regex) {
                 enforceSpecialRules();
                 regex = regexScripts.value.find(r => r.name === imageGenRegexName);
@@ -4433,7 +4357,7 @@ ${content}
         // API & Models
         const getApiEndpoint = (path) => {
             const baseUrl = (settings.apiUrl || '').replace(/\/+$/, '');
-            const apiUrl = baseUrl.endsWith('/v1') ? baseUrl : `${baseUrl}/v1`;
+            const apiUrl = /\/v\d+$/i.test(baseUrl) ? baseUrl : `${baseUrl}/v1`;
             return `${apiUrl}/${String(path || '').replace(/^\/+/, '')}`;
         };
 
@@ -4621,13 +4545,9 @@ ${content}
         };
 
         const checkImageGenStatus = async () => {
-            await checkConnectionStatus(imageGenStatus, imageGenLatency, 'Image API', signal => (
-                fetch(IMAGE_GEN_BASE_URL, {
-                    method: 'HEAD',
-                    mode: 'no-cors',
-                    signal
-                })
-            ), () => true);
+            // 生图服务暂不可用：不发起探测请求，固定显示“暂不可用”
+            imageGenStatus.value = 'unavailable';
+            imageGenLatency.value = 0;
         };
 
         const checkAllStatuses = () => {
@@ -10747,8 +10667,10 @@ ${content}
         };
 
         const enforceSpecialRules = () => {
+            const imageGenProvider = getImageGenProviderById(settings.imageGenProviderId);
+            if (!imageGenProvider) return; // 无可用生图服务商：不注入 NAI画图正则与自动生图世界书
             const imageGenToken = settings.imageGenKey.trim();
-            const baseUrl = IMAGE_GEN_BASE_URL;
+            const baseUrl = imageGenProvider.apiUrl.replace(/\/+$/, '');
 
             // 1. NAI画图正则 (统一版本)
             const imageGenRegexName = 'NAI画图正则';
@@ -11862,8 +11784,6 @@ image###生成的提示词###
             await loadData();
             fetchQuota(); // Fetch quota after saved settings are loaded
 
-            checkUpdate(); // Check for updates — 必须在 loadData 之后，否则 localStorage 代理中的 update_id 还未从服务端加载
-
             // --- 全局清理废弃正则 (思维隐藏及旧版画图迁移项已清理完毕，保留基础结构) ---
             const obsoleteRegexNames = ['隐藏正文的thinking', 'Nai画图正则-本子风', 'Nai画图正则-竖图'];
             let cleanedCount = 0;
@@ -12276,7 +12196,6 @@ image###生成的提示词###
             filteredTokenUsageHistory, tokenUsageStats, displayedTokenUsageHistory,
             formatTokenCount, formatTokenAggregate, formatTokenUsageTime, getTokenUsageTypeLabel, clearTokenUsageHistory,
             showCharacterExportModal, openCharacterExportModal, confirmCharacterExport, // Character Export Modal
-            showUpdateModal, updateCountdown, latestUpdate, closeUpdateModal, isUpdateScrolledToBottom, checkUpdateScroll, // Update Modal
             showConfirmModal, confirmMessage, modelMode, showNoMemoryNeededModal, // Export for template
             isGenerating, isRemoteGenerating, remoteEstimatedTime, isReceiving, isThinking, hasActiveToolInlineWork, isConversationBusy, activeToolContinuationMessageId, activeToolContinuationHasResponse, userInput, modelSearchQuery, activeModelTag, modelTags, characterSearchQuery, filteredModels, filteredCharacters,
             user, settings, apiProviderOptions, selectedApiProvider, isCustomApiProvider, customApiProviderOptions, showApiProviderSelector, selectApiProvider, characters, currentCharacter, currentCharacterIndex, chatHistory, displayedChatMessages, chatTopSpacerHeight, chatBottomSpacerHeight, handleChatScroll, presets, presetRoleOptions, fontFamilyOptions, themeModeOptions, imageStyleOptions, imageSizeOptions, imageGenCountOptions, scopeOptions, uiTemplatePlacementOptions, worldInfoPositionOptions, getPresetRoleLabel, getPresetRoleDisplayLabel, getPresetRoleBadgeClass, regexScripts, worldInfo,
@@ -12289,6 +12208,7 @@ image###生成的提示词###
             editorTab, characterDisplayLimit, displayedCharacters, loadMoreCharacters,
             isAutoImageGenEnabled,
             apiStatus, apiLatency, imageGenStatus, imageGenLatency, checkAllStatuses, apiKeyInput, syncApiKeyInput, apiKeyVisible, toggleApiKeyVisibility, pasteApiKeyFromClipboard, // Status Exports
+            imageGenUnavailable,
             toggleAutoImageGen, setWorldInfoEnabled,
             quotaValue, quotaLoading, quotaError,
             // Memory System Exports

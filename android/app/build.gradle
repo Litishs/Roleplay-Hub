@@ -1,5 +1,14 @@
 apply plugin: 'com.android.application'
 
+// 正式签名配置：android/keystore.properties 存在时启用（含密钥路径与密码，不提交到仓库）
+def keystoreProperties = new Properties()
+def keystorePropertiesFile = file('../keystore.properties')
+if (keystorePropertiesFile.exists()) {
+    keystorePropertiesFile.withInputStream { stream ->
+        keystoreProperties.load(stream)
+    }
+}
+
 android {
     namespace "com.roleplayhub.app"
     compileSdk rootProject.ext.compileSdkVersion
@@ -14,6 +23,17 @@ android {
     }
     def appVersionCode = versionProperties.getProperty('versionCode', '1').toInteger()
     def appVersionName = versionProperties.getProperty('versionName', '1.0')
+
+    signingConfigs {
+        release {
+            if (keystorePropertiesFile.exists()) {
+                storeFile file(keystoreProperties['storeFile'])
+                storePassword keystoreProperties['storePassword']
+                keyAlias keystoreProperties['keyAlias']
+                keyPassword keystoreProperties['keyPassword']
+            }
+        }
+    }
 
     defaultConfig {
         applicationId "com.roleplayhub.app"
@@ -32,6 +52,9 @@ android {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            if (keystorePropertiesFile.exists()) {
+                signingConfig signingConfigs.release
+            }
         }
     }
 }

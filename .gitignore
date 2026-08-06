@@ -7,6 +7,8 @@ android/.gradle/
 android/build/
 android/app/build/
 android/local.properties
+android/keystore.properties
+android/keystore/
 *.log
 *.apk
 .trae/
