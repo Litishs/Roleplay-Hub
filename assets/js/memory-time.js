@@ -29,6 +29,14 @@
         '子夜': 7
     });
     const SEGMENT_NAMES = Object.freeze(Object.keys(SEGMENTS));
+    const SEGMENT_ALIASES = Object.freeze({
+        '早上': '清晨', '早晨': '清晨', '天亮': '清晨',
+        '白天': '上午',
+        '晚上': '入夜', '夜晚': '入夜',
+        '午夜': '子夜', '凌晨': '深夜'
+    });
+    const NIGHT_SEGMENTS = new Set(['傍晚', '入夜', '深夜', '子夜']);
+    const LATE_SEGMENTS = new Set(['正午', '下午', '傍晚', '入夜', '深夜', '子夜']);
     const SEGMENT_MINUTES = Object.freeze({
         '清晨': 120,
         '上午': 300,
@@ -142,7 +150,15 @@
         for (const name of SEGMENT_NAMES) {
             if (text.includes(name)) return name;
         }
+        for (const alias of Object.keys(SEGMENT_ALIASES)) {
+            if (text.includes(alias)) return SEGMENT_ALIASES[alias];
+        }
         return null;
+    };
+
+    const rolloverDay = (day, segment, base) => {
+        if ((segment === '清晨' || segment === '上午') && LATE_SEGMENTS.has(base.segment)) return day + 1;
+        return day;
     };
 
     const matchDayDelta = (text) => {
@@ -222,7 +238,16 @@
 
         // 1) 纯时段词
         if (SEGMENTS[text] !== undefined) {
-            return anchor(base.storyDay, text, null, base.absolute, 'high', 'segment', text);
+            const rolledDay = rolloverDay(base.storyDay, text, base);
+            return anchor(
+                rolledDay,
+                text,
+                null,
+                rolledDay !== base.storyDay ? addDaysToAbsolute(base.absolute, 1) : base.absolute,
+                rolledDay !== base.storyDay ? 'medium' : 'high',
+                'segment',
+                text
+            );
         }
 
         // 2) 绝对日期
@@ -311,7 +336,16 @@
         // 7) 纯时段词出现在中间（如 "周五清晨" 已被 weekday 分支处理，"清晨" 单独已处理）
         const anySegment = matchSegment(text);
         if (anySegment) {
-            return anchor(base.storyDay, anySegment, null, base.absolute, 'high', 'segment', text);
+            const rolledDay = rolloverDay(base.storyDay, anySegment, base);
+            return anchor(
+                rolledDay,
+                anySegment,
+                null,
+                rolledDay !== base.storyDay ? addDaysToAbsolute(base.absolute, 1) : base.absolute,
+                rolledDay !== base.storyDay ? 'medium' : 'high',
+                'segment',
+                text
+            );
         }
 
         return unresolved(expression, base);
@@ -362,6 +396,59 @@
     };
 
     /**
+     * 应用模型的时间推进提议：只有显式跳转且规则校验通过才推进；
+     * 低置信度（几天后/数日后）不自动推进。
+     */
+    const applyClockProposal = (clock, proposal) => {
+        const base = normalizeClock(clock);
+        if (!proposal || !proposal.expression) return { clock: base, applied: false };
+        const result = advance(clock, proposal.expression);
+        if (result.confidence === 'low') return { clock: base, applied: false };
+        const segment = matchSegment(proposal.expression);
+        const nextClock = result.advanced
+            ? result.clock
+            : segment && segment !== base.segment
+                ? { ...base, segment }
+                : base;
+        return {
+            clock: nextClock,
+            applied: nextClock.storyDay !== base.storyDay || nextClock.segment !== base.segment
+        };
+    };
+
+    /**
+     * 时钟跟进：用本轮最新事件锚点推进时钟（同日内时段前进、或跨日）。
+     * 模型不主动推演时间时，用规则保证"早上→下午→晚上→次日早上"能自动推进。
+     */
+    const followClock = (clock, anchor) => {
+        const base = normalizeClock(clock);
+        if (!anchor || anchor.storyDay === null || anchor.storyDay === undefined) {
+            return { clock: base, changed: false };
+        }
+        const day = Math.max(0, Number(anchor.storyDay) || 0);
+        const anchorMinutes = toMinutes(anchor.segment, anchor.minutes) ?? 0;
+        const currentMinutes = toMinutes(base.segment, null) ?? 0;
+        if (day > base.storyDay) {
+            return {
+                clock: {
+                    storyDay: day,
+                    segment: anchor.segment || null,
+                    absolute: anchor.absolute || base.absolute,
+                    confidence: 'high'
+                },
+                changed: true
+            };
+        }
+        if (day === base.storyDay && anchorMinutes > currentMinutes && anchor.segment) {
+            return {
+                clock: { ...base, segment: anchor.segment },
+                changed: true
+            };
+        }
+        return { clock: base, changed: false };
+    };
+
+    /**
      * 注入提取提示词的时钟描述。
      */
     const formatForPrompt = (clock) => {
@@ -380,6 +467,8 @@
         toMinutes,
         resolve,
         advance,
+        applyClockProposal,
+        followClock,
         formatForPrompt,
         formatAbsolute
     };

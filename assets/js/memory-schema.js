@@ -20,7 +20,7 @@
 })(typeof self !== 'undefined' ? self : this, function () {
     'use strict';
 
-    const SCHEMA_VERSION = 1;
+    const SCHEMA_VERSION = 2;
 
     const FACT_TYPES = Object.freeze([
         'entity', 'relation', 'event', 'state', 'plot', 'quote'
@@ -29,6 +29,16 @@
     const STATUSES = Object.freeze([
         'current', 'superseded', 'conflict', 'rolled', 'archived'
     ]);
+
+    const ANCHOR_FIELDS = Object.freeze([
+        'storyDay', 'segment', 'minutes', 'timeKey',
+        'anchorConfidence', 'anchorSource', 'relativeTime'
+    ]);
+
+    const SEGMENT_MINUTES = Object.freeze({
+        '清晨': 120, '上午': 300, '正午': 420, '下午': 540,
+        '傍晚': 630, '入夜': 660, '深夜': 780, '子夜': 960
+    });
 
     const DEFAULT_OPTIONS = Object.freeze({
         arcTurnWindow: 20,          // 每多少轮一个剧情弧分组
@@ -72,6 +82,70 @@
         return text.length > maxLength ? `${text.slice(0, maxLength)}…` : text;
     };
 
+    const normalizeAnchor = (raw, turn = 0) => {
+        const storyDay = Number(raw?.storyDay);
+        const segment = Object.prototype.hasOwnProperty.call(SEGMENT_MINUTES, raw?.segment) ? raw.segment : null;
+        const rawMinutes = raw?.minutes;
+        const hasMinutes = rawMinutes !== null && rawMinutes !== undefined && rawMinutes !== ''
+            && Number.isFinite(Number(rawMinutes)) && Number(rawMinutes) >= 0;
+        const minutes = hasMinutes ? Number(rawMinutes) : NaN;
+        const segmentMinutes = segment ? SEGMENT_MINUTES[segment] : null;
+        const resolvedMinutes = hasMinutes ? Math.min(1439, Math.floor(minutes)) : segmentMinutes;
+        const day = Number.isFinite(storyDay) ? Math.max(0, Math.floor(storyDay)) : null;
+        return {
+            storyDay: day,
+            segment,
+            minutes: resolvedMinutes,
+            timeKey: day !== null ? day * 1440 + (resolvedMinutes || 0) : (raw?.timeKey !== undefined ? Number(raw.timeKey) : null),
+            anchorConfidence: raw?.anchorConfidence === 'low' || raw?.anchorConfidence === 'medium'
+                ? raw.anchorConfidence
+                : raw?.anchorConfidence === 'high' ? 'high' : 'low',
+            anchorSource: String(raw?.anchorSource || 'unresolved'),
+            relativeTime: normalizeText(raw?.relativeTime, 120)
+        };
+    };
+
+    const buildEventId = (raw, turn = 0) => {
+        if (raw?.eventId && String(raw.eventId).trim()) return normalizeText(raw.eventId, 80);
+        const day = Number(raw?.storyDay);
+        const participants = Array.isArray(raw?.participants)
+            ? [...raw.participants].map(p => normalizeText(p, 80)).filter(Boolean).sort().join('+')
+            : '';
+        const stem = normalizeText(raw?.summary || raw?.sourceText || '', 24);
+        const dayPart = Number.isFinite(day) ? day : Math.max(0, Number(raw?.sourceTurn) || 0);
+        return `ev:${dayPart}:${hashString(`${participants}|${stem}`)}`;
+    };
+
+    const normalizeForCompare = (text) => String(text || '')
+        .replace(/\s+/g, '')
+        .replace(/[，。、“”‘’：；！？,.!?;:"'`~（）()【】\[\]<>《》]/g, '');
+
+    const bigrams = (text) => {
+        const clean = normalizeForCompare(text);
+        const set = new Set();
+        for (let i = 0; i < clean.length - 1; i++) set.add(clean.slice(i, i + 2));
+        return set;
+    };
+
+    /**
+     * 文本冗余判定（bigram 重叠 / 较短文本 bigram 数），用于"复述不新增"的语义去重降级实现。
+     * 阈值按文本口径取 0.5；未来接入本地 embedding 时按余弦 ≥0.85 升级。
+     */
+    const isRedundantText = (a, b, threshold = 0.5) => {
+        const setA = bigrams(a);
+        const setB = bigrams(b);
+        if (setA.size === 0 || setB.size === 0) return false;
+        let intersection = 0;
+        for (const gram of setA) if (setB.has(gram)) intersection++;
+        const min = Math.min(setA.size, setB.size);
+        return min > 0 && intersection / min >= threshold;
+    };
+
+    const arrayOverlap = (a, b) => {
+        const set = new Set((Array.isArray(b) ? b : []).map(x => String(x || '')));
+        return (Array.isArray(a) ? a : []).some(x => set.has(String(x || '')));
+    };
+
     /**
      * 事实的稳定去重键。同一键视为同一事实，新值写入时旧值降级。
      */
@@ -85,7 +159,7 @@
             case 'state':
                 return `s:${normalizeText(fact.subject, 80)}|${normalizeText(fact.aspect, 80)}`.toLowerCase();
             case 'event':
-                return `ev:${normalizeText(fact.eventId, 80) || hashString(fact.summary)}`.toLowerCase();
+                return `ev:${normalizeText(fact.eventId, 80)}`.toLowerCase();
             case 'plot':
                 return `p:${hashString(fact.summary)}`.toLowerCase();
             case 'quote':
@@ -126,12 +200,17 @@
         if (!FACT_TYPES.includes(type)) return null;
         const turn = Math.max(0, Number(meta.turn) || Number(raw.sourceTurn) || 0);
         const nowTs = now();
+        const anchor = normalizeAnchor(raw, turn);
         const base = {
             id: String(raw.id || `${type}:${turn}:${hashString(stableStringify(raw) + nowTs)}`),
             kind: type,
             type,
             status: STATUSES.includes(raw.status) ? raw.status : 'current',
             sourceTurn: turn,
+            ...ANCHOR_FIELDS.reduce((acc, field) => {
+                acc[field] = anchor[field];
+                return acc;
+            }, {}),
             createdAt: Number(raw.createdAt) || nowTs,
             updatedAt: Number(raw.updatedAt) || nowTs,
             importance: Math.max(0, Math.min(1, Number(raw.importance) || 0.6)),
@@ -155,12 +234,14 @@
                     to: normalizeText(raw.to, 80),
                     strength: Math.max(0, Math.min(1, Number(raw.strength) || 0.5)),
                     attitude: normalizeText(raw.attitude, 120),
-                    trust: Math.max(0, Math.min(1, Number(raw.trust) || 0.5))
+                    trust: Math.max(0, Math.min(1, Number(raw.trust) || 0.5)),
+                    validFrom: anchor.timeKey !== null && anchor.timeKey !== undefined ? anchor.timeKey : null,
+                    validUntil: raw.validUntil !== undefined && raw.validUntil !== null ? Number(raw.validUntil) : null
                 };
             case 'event':
                 return {
                     ...base,
-                    eventId: normalizeText(raw.eventId, 80),
+                    eventId: buildEventId(raw, turn),
                     inStoryTime: normalizeText(raw.inStoryTime, 80),
                     summary: normalizeText(raw.summary, 900),
                     participants: Array.isArray(raw.participants)
@@ -173,7 +254,9 @@
                     subject: normalizeText(raw.subject, 80),
                     aspect: normalizeText(raw.aspect, 80),
                     value: normalizeText(raw.value, 300),
-                    changedFrom: normalizeText(raw.changedFrom, 300)
+                    changedFrom: normalizeText(raw.changedFrom, 300),
+                    validFrom: anchor.timeKey !== null && anchor.timeKey !== undefined ? anchor.timeKey : null,
+                    validUntil: raw.validUntil !== undefined && raw.validUntil !== null ? Number(raw.validUntil) : null
                 };
             case 'plot':
                 return {
@@ -182,7 +265,9 @@
                     plotStatus: raw.status === 'closed' ? 'closed' : 'open',
                     relatedEntities: Array.isArray(raw.relatedEntities)
                         ? raw.relatedEntities.map(e => normalizeText(e, 80)).filter(Boolean)
-                        : []
+                        : [],
+                    deadline: raw.deadline !== undefined && raw.deadline !== null ? Number(raw.deadline) : null,
+                    deadlineText: normalizeText(raw.deadlineText, 120)
                 };
             case 'quote':
                 return {
@@ -215,10 +300,39 @@
         let added = 0;
         let superseded = 0;
         let conflicts = 0;
+        let merged = 0;
+        let redundant = 0;
 
         (Array.isArray(incoming) ? incoming : []).forEach(raw => {
             const fact = normalizeFact(raw, { turn });
             if (!fact) return;
+
+            // 事件：同一 eventId = 同一事件的延续 → 追加描述，不新增
+            if (fact.type === 'event') {
+                const key = getDedupKey(fact);
+                const existingEvent = byKey.get(key);
+                if (existingEvent && existingEvent.status === 'current') {
+                    existingEvent.summary = [existingEvent.summary, fact.summary].filter(Boolean).join('\n');
+                    existingEvent.updatedAt = Math.max(existingEvent.updatedAt, fact.updatedAt);
+                    const participantSet = new Set([
+                        ...(existingEvent.participants || []),
+                        ...(fact.participants || [])
+                    ]);
+                    existingEvent.participants = [...participantSet];
+                    merged++;
+                    return;
+                }
+                // 复述检测：同参与者 + 高相似摘要 → 视为同一事件的重复提取，不新增
+                const duplicateEvent = facts.find(f => f.type === 'event' && f.status === 'current' && f.id !== fact.id
+                    && (f.storyDay === fact.storyDay || (f.storyDay == null && fact.storyDay == null))
+                    && arrayOverlap(f.participants, fact.participants)
+                    && isRedundantText(f.summary, fact.summary));
+                if (duplicateEvent) {
+                    redundant++;
+                    return;
+                }
+            }
+
             const key = getDedupKey(fact);
             const existingFact = byKey.get(key);
             if (!existingFact || existingFact.status !== 'current') {
@@ -237,17 +351,25 @@
                 conflicts++;
                 return;
             }
-            existingFact.status = 'superseded';
-            if (fact.type === 'state') {
-                fact.changedFrom = existingFact.value;
+            if (fact.type === 'state' || fact.type === 'relation') {
+                // 区间更新：旧值关闭区间，新值开启
+                existingFact.status = 'superseded';
+                existingFact.validUntil = fact.timeKey !== null && fact.timeKey !== undefined ? fact.timeKey : null;
+                if (fact.type === 'state') fact.changedFrom = existingFact.value;
+                facts.push(fact);
+                byKey.set(key, fact);
+                added++;
+                superseded++;
+                return;
             }
+            existingFact.status = 'superseded';
             facts.push(fact);
             byKey.set(key, fact);
             added++;
             superseded++;
         });
 
-        return { facts, added, superseded, conflicts };
+        return { facts, added, superseded, conflicts, merged, redundant };
     };
 
     /**
@@ -433,20 +555,200 @@
         return facts.map(fact => normalizeFact(fact, { turn }));
     };
 
+    const unresolvedAnchor = (relative = '', turn = 0) => ({
+        storyDay: null,
+        segment: null,
+        minutes: null,
+        timeKey: null,
+        anchorConfidence: 'low',
+        anchorSource: 'unresolved',
+        relativeTime: normalizeText(relative, 120)
+    });
+
+    /**
+     * Schema v1 → v2 迁移：尽力按 inStoryTime/轮次锚定，不能锚定的标低置信度。
+     * @param {Array} facts 旧事实数组
+     * @param {Object} clock 当前剧情时钟
+     * @param {Function} resolveFn resolve(expression, clock) → anchor
+     */
+    const migrateFactsV1toV2 = (facts, clock = {}, resolveFn = null) => {
+        const resolver = typeof resolveFn === 'function' ? resolveFn : () => unresolvedAnchor();
+        return (Array.isArray(facts) ? facts : []).map(fact => {
+            const migrated = { ...fact };
+            const hasAnchor = ANCHOR_FIELDS.some(field => migrated[field] !== undefined && migrated[field] !== null);
+            if (!hasAnchor) {
+                const expression = migrated.inStoryTime || migrated.deadlineText || migrated.relativeTime
+                    || (migrated.type === 'event' ? '今天' : '');
+                const anchor = expression
+                    ? resolver(expression, clock)
+                    : unresolvedAnchor(expression, migrated.sourceTurn || 0);
+                const mappedAnchor = {
+                    storyDay: anchor.storyDay,
+                    segment: anchor.segment,
+                    minutes: anchor.minutes,
+                    anchorConfidence: anchor.confidence || anchor.anchorConfidence || 'low',
+                    anchorSource: anchor.source || anchor.anchorSource || 'unresolved',
+                    relativeTime: anchor.relative || anchor.relativeTime || expression
+                };
+                const normalizedAnchor = normalizeAnchor(mappedAnchor, migrated.sourceTurn || 0);
+                ANCHOR_FIELDS.forEach(field => {
+                    migrated[field] = normalizedAnchor[field];
+                });
+            }
+            if (migrated.type === 'event') {
+                migrated.eventId = buildEventId(migrated, migrated.sourceTurn || 0);
+            }
+            if (migrated.type === 'state' || migrated.type === 'relation') {
+                if (migrated.validFrom === undefined) {
+                    migrated.validFrom = migrated.timeKey !== null && migrated.timeKey !== undefined ? migrated.timeKey : null;
+                }
+                if (migrated.validUntil === undefined) migrated.validUntil = null;
+            }
+            if (migrated.type === 'plot') {
+                if (migrated.deadlineText && (migrated.deadline === undefined || migrated.deadline === null)) {
+                    const deadlineAnchor = resolver(migrated.deadlineText, clock);
+                    migrated.deadline = deadlineAnchor.timeKey !== null && deadlineAnchor.timeKey !== undefined
+                        ? deadlineAnchor.timeKey
+                        : null;
+                }
+                if (migrated.deadline === undefined) migrated.deadline = null;
+            }
+            return migrated;
+        });
+    };
+
+    /**
+     * 紧凑时间线摘要（纯本地拼接，不调模型）：
+     * 当前状态 → 最近 N 天事件 → 更早只引用日摘要 → 相关关系 → 未决伏笔。
+     */
+    const buildTimelineDigest = (facts, clock = {}, options = {}) => {
+        const opts = Object.assign({
+            recentDays: 3,
+            maxStates: 8,
+            maxRelations: 6,
+            maxPlots: 6,
+            maxRecentEvents: 12
+        }, options || {});
+        const currentDay = Number(clock?.storyDay);
+        const hasCurrentDay = Number.isFinite(currentDay);
+        const list = Array.isArray(facts) ? facts : [];
+        const lines = [];
+
+        const states = list
+            .filter(f => f.kind === 'state' && f.status === 'current' && f.validUntil == null)
+            .sort((a, b) => (b.timeKey || 0) - (a.timeKey || 0))
+            .slice(0, opts.maxStates);
+        if (states.length) {
+            lines.push(`【当前状态】${states.map(s => `${s.subject}·${s.aspect}:${s.value}`).join('; ')}`);
+        }
+
+        const relations = list
+            .filter(f => f.kind === 'relation' && f.status === 'current' && f.validUntil == null)
+            .slice(0, opts.maxRelations);
+        if (relations.length) {
+            lines.push(`【关系】${relations.map(r => {
+                const strength = Number(r.strength);
+                return `${r.from}→${r.relKind || r.kind}→${r.to}${Number.isFinite(strength) ? `(${Math.round(strength * 100)}%)` : ''}`;
+            }).join('; ')}`);
+        }
+
+        const events = list
+            .filter(f => f.kind === 'event' && f.status === 'current' && f.storyDay !== null)
+            .sort((a, b) => (b.timeKey || 0) - (a.timeKey || 0));
+        const recentEvents = events
+            .filter(e => !hasCurrentDay || e.storyDay >= currentDay - opts.recentDays)
+            .slice(0, opts.maxRecentEvents);
+        if (recentEvents.length) {
+            lines.push(`【最近事件】${recentEvents.map(e =>
+                `[D${e.storyDay}${e.segment ? '·' + e.segment : ''}]${e.summary}`
+            ).join('; ')}`);
+        }
+        if (hasCurrentDay) {
+            const olderDays = [...new Set(events
+                .filter(e => e.storyDay < currentDay - opts.recentDays)
+                .map(e => e.storyDay))]
+                .sort((a, b) => b - a);
+            if (olderDays.length) {
+                lines.push(`【更早】${olderDays.slice(0, 5).map(d => `D${d}已凝练`).join('、')}${olderDays.length > 5 ? `等${olderDays.length}天` : ''}`);
+            }
+        }
+
+        const plots = list
+            .filter(f => f.kind === 'plot' && f.status === 'current' && f.plotStatus === 'open')
+            .sort((a, b) => (a.deadline ?? Number.MAX_SAFE_INTEGER) - (b.deadline ?? Number.MAX_SAFE_INTEGER))
+            .slice(0, opts.maxPlots);
+        if (plots.length) {
+            lines.push(`【未决伏笔】${plots.map(p =>
+                p.summary + (p.deadline != null ? `(截止D${Math.floor(p.deadline / 1440)})` : '')
+            ).join('; ')}`);
+        }
+
+        return lines.join('\n');
+    };
+
+    const createTimeAnchor = (clock = {}, meta = {}) => ({
+        id: 'clock',
+        kind: 'time_anchor',
+        type: 'time_anchor',
+        status: 'current',
+        storyDay: Math.max(0, Number(clock?.storyDay) || 0),
+        segment: clock?.segment || null,
+        absolute: clock?.absolute || null,
+        confidence: clock?.confidence || 'high',
+        updatedAt: now()
+    });
+
+    const createDayDigest = (day, eventIds = [], summary = '', meta = {}) => ({
+        id: String(meta.id || `digest:day:${day}`),
+        kind: 'digest',
+        type: 'digest',
+        status: 'current',
+        digestKind: 'day',
+        storyDay: day,
+        eventIds,
+        summary: String(summary || ''),
+        createdAt: now(),
+        updatedAt: now(),
+        importance: 1
+    });
+
+    const createArcDigest = (startDay, endDay, digestIds = [], summary = '', meta = {}) => ({
+        id: String(meta.id || `digest:arc:${startDay}-${endDay}`),
+        kind: 'digest',
+        type: 'digest',
+        status: 'current',
+        digestKind: 'arc',
+        startDay,
+        endDay,
+        digestIds,
+        summary: String(summary || ''),
+        createdAt: now(),
+        updatedAt: now(),
+        importance: 1
+    });
+
     return {
         SCHEMA_VERSION,
         FACT_TYPES,
         STATUSES,
+        ANCHOR_FIELDS,
         DEFAULT_OPTIONS,
         getDedupKey,
         getValuePayload,
         normalizeFact,
+        buildEventId,
         mergeFacts,
+        isRedundantText,
         touchFact,
         computeMaintenanceCandidates,
         createArc,
         createAudit,
         parseFactResponse,
-        buildLocalBaseline
+        buildLocalBaseline,
+        migrateFactsV1toV2,
+        buildTimelineDigest,
+        createTimeAnchor,
+        createDayDigest,
+        createArcDigest
     };
 });

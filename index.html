@@ -3120,6 +3120,10 @@
                                                 {{ memorySettings.factModel || memorySettings.classicModel || '请选择事实抽取模型' }}
                                             </span>
                                         </button>
+                                        <label class="flex items-center gap-1.5 text-[11px] font-bold text-gray-500 mt-2">
+                                            <input type="checkbox" v-model="memorySettings.factClockInjection" class="rounded accent-primary-500">
+                                            抽取时注入剧情时钟（绝对时间锚定）
+                                        </label>
                                     </div>
                                 </div>
 <div v-if="memorySettings.embeddingBackend === 'api'" class="bg-gray-50/60 p-3 rounded-xl border border-gray-100">
@@ -3451,10 +3455,10 @@
                                     @wheel.prevent="onMemoryGraphWheel"
                                     @dblclick="resetMemoryGraphView"></canvas>
                                 <div class="text-[11px] text-gray-400 flex flex-wrap gap-x-4 gap-y-1">
-                                    <span><i class="inline-block w-2 h-2 rounded-full bg-primary-500 mr-1"></i>分片</span>
-                                    <span><i class="inline-block h-0.5 w-4 bg-primary-300 mr-1 align-middle"></i>语义边</span>
-                                    <span><i class="inline-block h-0.5 w-4 bg-gray-300 mr-1 align-middle"></i>同轮串联</span>
-                                    <span><i class="inline-block h-0.5 w-4 bg-teal-400 mr-1 align-middle"></i>关键词共现</span>
+                                    <span><i class="inline-block w-2 h-2 rounded-full bg-gray-400 mr-1"></i>天节点</span>
+                                    <span><i class="inline-block w-2 h-2 rounded-full bg-primary-500 mr-1"></i>事件</span>
+                                    <span><i class="inline-block h-0.5 w-4 bg-gray-300 mr-1 align-middle"></i>时间轴连线</span>
+                                    <span><i class="inline-block h-0.5 w-4 bg-teal-400 mr-1 align-middle"></i>事件网</span>
                                     <span class="ml-auto">拖拽节点/空白平移 · 滚轮缩放 · 双击复位</span>
                                 </div>
                                 <div v-if="memoryGraphSelected"
@@ -3484,6 +3488,34 @@
 
                         <!-- Memory Facts Panel -->
                         <div v-show="memoryGraphView === 'facts'" class="space-y-3">
+                            <div class="rounded-xl border border-gray-100 bg-white px-3 py-2.5">
+                                <div class="flex items-center justify-between gap-2">
+                                    <span class="text-[10px] font-bold text-gray-400">剧情时钟</span>
+                                    <button type="button" @click="editFactClock()"
+                                        class="text-[10px] px-2 py-0.5 rounded bg-white border border-gray-200 text-gray-500 hover:text-gray-700 font-bold transition-all">
+                                        修改
+                                    </button>
+                                </div>
+                                <div class="text-xs font-bold text-gray-800 mt-0.5">{{ factClockLabel }}</div>
+                                <div v-if="factClockEditing" class="mt-2 flex flex-wrap items-center gap-2">
+                                    <input v-model.number="factClockDraft.storyDay" type="number" min="0"
+                                        class="w-20 px-2 py-1 text-xs bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:border-primary-300">
+                                    <select v-model="factClockDraft.segment"
+                                        class="text-xs px-2 py-1 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none">
+                                        <option :value="null">不细分</option>
+                                        <option v-for="s in ['清晨','上午','正午','下午','傍晚','入夜','深夜','子夜']" :key="s" :value="s">{{ s }}</option>
+                                    </select>
+                                    <button type="button" @click="saveFactClock()"
+                                        class="text-[11px] px-2.5 py-1 rounded-lg bg-primary-600 hover:bg-primary-700 text-white font-bold transition-all">
+                                        保存
+                                    </button>
+                                    <button type="button" @click="factClockEditing = false"
+                                        class="text-[11px] px-2.5 py-1 rounded-lg bg-white border border-gray-200 text-gray-500 font-bold transition-all">
+                                        取消
+                                    </button>
+                                </div>
+                            </div>
+
                             <div class="flex flex-wrap items-center gap-2">
                                 <span class="text-[11px] font-bold text-gray-500">基线</span>
                                 <span
@@ -3592,9 +3624,17 @@
                             <div v-if="factEvents.length > 0" class="rounded-xl border border-gray-100 bg-white px-3 py-2.5">
                                 <div class="text-[10px] font-bold text-gray-400 mb-1">最近事件</div>
                                 <div class="space-y-1.5 max-h-52 overflow-y-auto pr-1">
-                                    <div v-for="e in factEvents" :key="e.id" class="text-xs text-gray-700 leading-relaxed">
-                                        <span class="font-mono text-[10px] text-primary-700 bg-primary-50 border border-primary-100 rounded px-1.5 py-0.5 mr-1">
-                                            第 {{ e.sourceTurn }} 轮
+                                    <div v-for="e in factEvents" :key="e.id"
+                                        class="text-xs text-gray-700 leading-relaxed"
+                                        :title="'第 ' + (e.sourceTurn || '?') + ' 轮'">
+                                        <span v-if="e.storyDay !== null"
+                                            class="font-mono text-[10px] text-teal-700 bg-teal-50 border border-teal-100 rounded px-1.5 py-0.5 mr-1">
+                                            D{{ e.storyDay }}{{ e.segment && !String(e.inStoryTime || '').includes(e.segment) ? '·' + e.segment : '' }}
+                                        </span>
+                                        <span v-if="e.anchorConfidence === 'low'"
+                                            class="inline-flex items-center gap-1 text-[10px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5 mr-1">
+                                            时间待定
+                                            <button type="button" @click="reAnchorFact(e)" class="underline hover:no-underline">重解析</button>
                                         </span>
                                         <span v-if="e.inStoryTime" class="text-gray-400">{{ e.inStoryTime }} · </span>
                                         {{ e.summary }}
@@ -3607,6 +3647,7 @@
                                 <div class="space-y-1">
                                     <div v-for="p in factPlots" :key="p.id" class="text-xs text-gray-700">
                                         <span v-if="p.relatedEntities && p.relatedEntities.length" class="text-gray-400">{{ p.relatedEntities.join('、') }} · </span>
+                                        <span v-if="p.deadlineText" class="text-amber-600">{{ p.deadlineText }} · </span>
                                         {{ p.summary }}
                                     </div>
                                 </div>

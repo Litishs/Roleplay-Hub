@@ -12,7 +12,7 @@ const [html, app, repository, javaDatabase, javaPlugin] = await Promise.all([
 ]);
 
 test('memory-schema.js exposes schema primitives', () => {
-    assert.equal(memorySchema.SCHEMA_VERSION, 1);
+    assert.equal(memorySchema.SCHEMA_VERSION, 2);
     assert.deepEqual([...memorySchema.FACT_TYPES], ['entity', 'relation', 'event', 'state', 'plot', 'quote']);
     assert.equal(typeof memorySchema.mergeFacts, 'function');
     assert.equal(typeof memorySchema.computeMaintenanceCandidates, 'function');
@@ -34,6 +34,111 @@ test('normalizeFact produces valid typed facts', () => {
     assert.equal(plot.status, 'current', '伏笔生命周期状态应为 current');
     assert.equal(plot.plotStatus, 'open', '剧情状态应存于 plotStatus');
     assert.equal(memorySchema.normalizeFact({ type: 'unknown', name: 'x' }), null);
+});
+
+test('normalizeFact v2 attaches time anchors and derives timeKey', () => {
+    const anchored = memorySchema.normalizeFact(
+        { type: 'event', summary: '事件', storyDay: 3, segment: '下午', minutes: null, anchorConfidence: 'high', anchorSource: 'relative', relativeTime: '今天下午' },
+        { turn: 5 }
+    );
+    assert.equal(anchored.storyDay, 3);
+    assert.equal(anchored.segment, '下午');
+    assert.equal(anchored.timeKey, 3 * 1440 + 540);
+    assert.equal(anchored.anchorSource, 'relative');
+    const plain = memorySchema.normalizeFact({ type: 'event', summary: '无锚点' }, { turn: 5 });
+    assert.equal(plain.anchorConfidence, 'low');
+    assert.equal(plain.storyDay, null);
+});
+
+test('buildEventId is stable for same participants and summary stem', () => {
+    const a = memorySchema.buildEventId({ storyDay: 3, participants: ['苏语嫣', '用户'], summary: '一起去了灵溪边' }, 5);
+    const b = memorySchema.buildEventId({ storyDay: 3, participants: ['用户', '苏语嫣'], summary: '一起去了灵溪边' }, 5);
+    const c = memorySchema.buildEventId({ storyDay: 3, participants: ['苏语嫣', '用户'], summary: '在山门前争吵' }, 5);
+    assert.equal(a, b, '参与者顺序无关且摘要主干稳定');
+    assert.notEqual(a, c, '不同事件应有不同 eventId');
+});
+
+test('mergeFacts v2 appends same-event continuation instead of adding', () => {
+    const first = memorySchema.mergeFacts([], [
+        { type: 'event', eventId: 'ev:1', storyDay: 3, summary: '灵溪边相遇', participants: ['苏语嫣', '用户'] }
+    ], { turn: 1 });
+    assert.equal(first.added, 1);
+    const second = memorySchema.mergeFacts(first.facts, [
+        { type: 'event', eventId: 'ev:1', storyDay: 3, summary: '灵溪边相遇后一起散步', participants: ['苏语嫣', '用户'] }
+    ], { turn: 2 });
+    assert.equal(second.merged, 1, '同一事件延续应合并到已有节点');
+    assert.equal(second.added, 0);
+    assert.equal(second.facts.filter(f => f.kind === 'event').length, 1);
+});
+
+test('mergeFacts v2 updates state intervals with validFrom/validUntil', () => {
+    const first = memorySchema.mergeFacts([], [
+        { type: 'state', storyDay: 1, subject: '苏语嫣', aspect: '身体状况', value: '完好' }
+    ], { turn: 1 });
+    const old = first.facts[0];
+    assert.equal(old.validFrom, 1 * 1440);
+    const second = memorySchema.mergeFacts(first.facts, [
+        { type: 'state', storyDay: 3, subject: '苏语嫣', aspect: '身体状况', value: '左臂受伤' }
+    ], { turn: 3 });
+    const states = second.facts.filter(f => f.kind === 'state');
+    const newState = states.find(s => s.status === 'current');
+    const oldState = states.find(s => s.status === 'superseded');
+    assert.equal(newState.validFrom, 3 * 1440);
+    assert.equal(oldState.validUntil, 3 * 1440, '旧状态应关闭区间');
+});
+
+test('mergeFacts v2 drops redundant event retellings', () => {
+    const first = memorySchema.mergeFacts([], [
+        { type: 'event', storyDay: 3, summary: '苏语嫣在灵溪边握剑，夕阳照在水面', participants: ['苏语嫣', '用户'] }
+    ], { turn: 1 });
+    const second = memorySchema.mergeFacts(first.facts, [
+        { type: 'event', storyDay: 3, summary: '苏语嫣握剑立于灵溪边，夕阳映在水面上', participants: ['苏语嫣', '用户'] }
+    ], { turn: 2 });
+    assert.equal(second.redundant, 1, '同参与者+高相似摘要应判为复述');
+    assert.equal(second.facts.filter(f => f.kind === 'event').length, 1);
+});
+
+test('mergeFacts v2 keeps similar events on different days', () => {
+    const first = memorySchema.mergeFacts([], [
+        { type: 'event', storyDay: 1, summary: '清晨醒来发现窗外天亮了', participants: ['可可'] }
+    ], { turn: 144 });
+    const second = memorySchema.mergeFacts(first.facts, [
+        { type: 'event', storyDay: 2, summary: '清晨醒来发现窗外天亮了', participants: ['可可'] }
+    ], { turn: 148 });
+    assert.equal(second.redundant, 0, '不同天数的相似事件不应判为复述');
+    assert.equal(second.facts.filter(f => f.kind === 'event').length, 2);
+});
+
+test('migrateFactsV1toV2 anchors old facts by inStoryTime', () => {
+    const oldFacts = [
+        { type: 'event', sourceTurn: 5, inStoryTime: '昨晚', summary: '旧事件', participants: ['A'] },
+        { type: 'state', sourceTurn: 2, subject: 'A', aspect: '健康', value: '正常' }
+    ];
+    const clock = { storyDay: 3, segment: '上午' };
+    const resolver = (expr) => expr === '昨晚'
+        ? { storyDay: 2, segment: '入夜', minutes: 660, timeKey: 2 * 1440 + 660, anchorConfidence: 'high', anchorSource: 'relative', relativeTime: '昨晚' }
+        : { storyDay: null, segment: null, minutes: null, timeKey: null, anchorConfidence: 'low', anchorSource: 'unresolved', relativeTime: expr };
+    const migrated = memorySchema.migrateFactsV1toV2(oldFacts, clock, resolver);
+    const event = migrated.find(f => f.type === 'event');
+    assert.equal(event.storyDay, 2);
+    assert.equal(event.anchorSource, 'relative');
+    assert.ok(event.eventId, '迁移后事件应有 eventId');
+    const state = migrated.find(f => f.type === 'state');
+    assert.ok(state.validFrom === null || Number.isFinite(state.validFrom), '状态应有 validFrom');
+});
+
+test('buildTimelineDigest assembles states, events, relations and plots', () => {
+    const facts = [
+        memorySchema.normalizeFact({ type: 'state', storyDay: 5, subject: '苏语嫣', aspect: '身体状况', value: '左臂受伤', anchorConfidence: 'high' }, { turn: 1 }),
+        memorySchema.normalizeFact({ type: 'event', storyDay: 6, segment: '上午', summary: '去药房抓药', participants: ['苏语嫣'], anchorConfidence: 'high' }, { turn: 2 }),
+        memorySchema.normalizeFact({ type: 'relation', storyDay: 0, from: '用户', relKind: '师徒', to: '苏语嫣', strength: 0.8, anchorConfidence: 'high' }, { turn: 0 }),
+        memorySchema.normalizeFact({ type: 'plot', storyDay: 6, summary: '墨渊残魂来历未解', plotStatus: 'open', deadlineText: '三日后', anchorConfidence: 'high' }, { turn: 3 })
+    ];
+    const digest = memorySchema.buildTimelineDigest(facts, { storyDay: 7 });
+    assert.ok(digest.includes('【当前状态】'));
+    assert.ok(digest.includes('【最近事件】'));
+    assert.ok(digest.includes('【关系】'));
+    assert.ok(digest.includes('【未决伏笔】'));
 });
 
 test('parseFactResponse handles direct, envelope and SSE formats', () => {
@@ -163,6 +268,26 @@ test('app.js wires fact layer state, patrol and maintenance', () => {
     assert.match(app, /memorySettings\.embeddingBackend === 'local'[\s\S]{0,120}?\? !!globalThis\.RPHLocalEmbedding/, '本地嵌入后端不应再要求 API 嵌入模型');
     assert.match(app, /vectorExtractedTurns/, '向量补录应按角色记录已提取轮次，避免切换角色重复重扫');
     assert.match(app, /getMemoryVectorExtractedKey\(currentCharacter\.value\.uuid\)/, '删除/编辑消息后应重置已提取标记');
+});
+
+test('app.js wires timeline clock, digest injection and timeline graph', () => {
+    assert.match(app, /timeLib\(\)\.formatForPrompt\(clockState\)/, '抽取提示词应注入当前剧情时间');
+    assert.match(app, /clockProposal/, '抽取响应应解析时间推进提案');
+    assert.match(app, /ROLE_MEMORY_TIMELINE_OPEN_TAG/, '应有时间线摘要注入标签');
+    assert.match(app, /const buildMemoryDigestForContext = \(\) => \{/, '应有上下文摘要组装');
+    assert.match(app, /const buildTimelineGraphData = \(\) => \{/, '应有时间线图谱数据');
+    assert.match(app, /kind: 'day'/, '时间线视图应有天节点');
+    assert.match(app, /migrateFactsV1toV2/, '应接入 v1→v2 迁移');
+    assert.match(app, /const runTimelineConsolidation = async/, '应有时间滚降凝练');
+});
+
+test('index.html exposes clock card and clock injection setting', () => {
+    assert.match(html, /剧情时钟/);
+    assert.match(html, /factClockLabel/);
+    assert.match(html, /editFactClock\(\)/);
+    assert.match(html, /memorySettings\.factClockInjection/);
+    assert.match(html, /D\{\{ e\.storyDay \}\}/, '事件列表应显示天锚点');
+    assert.match(html, /reAnchorFact\(e\)/, '低置信度锚点应可重解析');
 });
 
 test('storage-repository.js exposes incremental fragment APIs', () => {
