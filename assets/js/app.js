@@ -636,6 +636,9 @@ createApp({
         }, { deep: true });
 
         const MAX_CONTEXT_SIZE = 1000000;
+        const CONTEXT_TOKEN_BUDGET_DEFAULT = 26000;
+        const CONTEXT_TOKEN_BUDGET_MIN = 8000;
+        const CONTEXT_TOKEN_BUDGET_MAX = 64000;
 
         const settings = reactive({
             apiUrl: DEFAULT_API_CONFIG.apiUrl,
@@ -646,6 +649,7 @@ createApp({
             customApiUrl2: '',
             model: DEFAULT_API_CONFIG.qualityModel,
             contextSize: MAX_CONTEXT_SIZE,
+            contextTokenBudget: CONTEXT_TOKEN_BUDGET_DEFAULT,
             temperature: 1.0,
             autoFetchModels: true,
             stream: true,
@@ -675,6 +679,27 @@ createApp({
             balancedModel: DEFAULT_API_CONFIG.balancedModel,
             fastModel: DEFAULT_API_CONFIG.fastModel
         });
+
+        // --- 上下文 token 估算与预算（P0，本地启发式） ---
+        const estimateTokens = (text) => {
+            const source = String(text || '');
+            if (!source) return 0;
+            const cjk = (source.match(/[\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff]/g) || []).length;
+            const asciiWords = (source
+                .replace(/[\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff]/g, ' ')
+                .match(/[A-Za-z0-9_]+/g) || []).length;
+            const other = source.length - cjk - (source.match(/[A-Za-z0-9_]+/g) || []).join('').length;
+            return Math.max(0, Math.ceil(cjk * 0.8 + asciiWords * 1.3 + other * 0.2));
+        };
+        const estimateMessagesTokens = (messages) => (Array.isArray(messages) ? messages : [])
+            .reduce((sum, message) => sum + estimateTokens(message?.content), 0);
+        const getContextTokenBudget = () => {
+            const budget = Number(settings.contextTokenBudget);
+            return Number.isFinite(budget) && budget > 0
+                ? Math.max(CONTEXT_TOKEN_BUDGET_MIN, Math.min(CONTEXT_TOKEN_BUDGET_MAX, Math.round(budget)))
+                : 0;
+        };
+
         const apiKeyInput = ref(null);
         const syncApiKeyInput = event => {
             const eventTarget = event?.target;
@@ -1258,12 +1283,13 @@ createApp({
         const CLASSIC_MEMORY_DEFAULT_CONCURRENCY = 5;
         const MEMORY_MODE_VECTOR = 'vector';
         const MEMORY_MODE_CLASSIC = 'classic';
-        const VECTOR_KEEP_FLOORS_MIN = 30;
-        const VECTOR_KEEP_FLOORS_MAX = 80;
-        const VECTOR_KEEP_FLOORS_DEFAULT = 50;
-        const SUMMARY_KEEP_FLOORS_MIN = 10;
-        const SUMMARY_KEEP_FLOORS_MAX = 40;
-        const SUMMARY_KEEP_FLOORS_DEFAULT = 20;
+        const VECTOR_KEEP_FLOORS_MIN = 8;
+        const VECTOR_KEEP_FLOORS_MAX = 40;
+        const VECTOR_KEEP_FLOORS_DEFAULT = 16;
+        const SUMMARY_KEEP_FLOORS_MIN = 6;
+        const SUMMARY_KEEP_FLOORS_MAX = 24;
+        const SUMMARY_KEEP_FLOORS_DEFAULT = 12;
+        const MIN_CONTEXT_FLOORS = 6;          // 原文现场窗口下限（质量保底）
         const LIST_PAGE_SIZE = 10;
         const memories = ref([]);
         const classicMemories = ref([]);
@@ -5920,8 +5946,31 @@ ${content}
                 }
             }
 
-            // 添加聊天记录
-            messages = messages.concat(chatHistoryForContext
+            // 时间线摘要（记忆背景）计入前缀预算
+            const timelineDigestText = memorySettings.enabled
+                && memorySettings.mode === MEMORY_MODE_VECTOR
+                ? buildMemoryDigestForContext()
+                : '';
+
+            // 添加聊天记录（按 token 预算保留最近楼层，至少保留现场窗口下限）
+            const contextBudget = getContextTokenBudget();
+            let budgetedChatHistory = chatHistoryForContext;
+            if (contextBudget > 0 && chatHistoryForContext.length > MIN_CONTEXT_FLOORS) {
+                const prefixTokens = estimateMessagesTokens(messages) + estimateTokens(timelineDigestText);
+                const historyBudget = Math.max(0, contextBudget - prefixTokens);
+                let used = 0;
+                let keepCount = 0;
+                for (let i = chatHistoryForContext.length - 1; i >= 0; i--) {
+                    const est = estimateTokens(chatHistoryForContext[i].content || '');
+                    if (keepCount >= MIN_CONTEXT_FLOORS && used + est > historyBudget) break;
+                    used += est;
+                    keepCount++;
+                }
+                if (keepCount < chatHistoryForContext.length) {
+                    budgetedChatHistory = chatHistoryForContext.slice(-Math.max(MIN_CONTEXT_FLOORS, keepCount));
+                }
+            }
+            messages = messages.concat(budgetedChatHistory
                 .map((m, index) => {
                     const sourceIndexes = Array.isArray(m._sourceIndexes) ? m._sourceIndexes : [];
                     const sourceMessages = sourceIndexes.length > 0
@@ -5962,10 +6011,19 @@ ${content}
                     excludedTurns: getRetainedRecentMemoryTurns(postprocessedChatHistory)
                 });
             }
-            const timelineDigestText = memorySettings.enabled
-                && memorySettings.mode === MEMORY_MODE_VECTOR
-                ? buildMemoryDigestForContext()
-                : '';
+            if (contextBudget > 0 && selectedVectorMemories.length > 0) {
+                const remainingBudget = Math.max(0, contextBudget - estimateMessagesTokens(messages) - estimateTokens(timelineDigestText));
+                let used = 0;
+                const capped = [];
+                for (const memory of selectedVectorMemories) {
+                    if (capped.length >= 5) break;
+                    const est = estimateTokens(getVectorMemoryText(memory));
+                    if (capped.length > 0 && used + est > remainingBudget) break;
+                    used += est;
+                    capped.push(memory);
+                }
+                selectedVectorMemories = capped;
+            }
 
             // Handle @D (At Depth) and other message-level injections
             const processMessageInjections = (msgArray) => {
@@ -12205,6 +12263,12 @@ image###生成的提示词###
 
             // 每次启动时强制重置温度为 1.0
             settings.temperature = 1.0;
+
+            // 上下文 token 预算钳制（P0）
+            const budgetValue = Number(settings.contextTokenBudget);
+            settings.contextTokenBudget = Number.isFinite(budgetValue) && budgetValue > 0
+                ? Math.max(CONTEXT_TOKEN_BUDGET_MIN, Math.min(CONTEXT_TOKEN_BUDGET_MAX, Math.round(budgetValue)))
+                : CONTEXT_TOKEN_BUDGET_DEFAULT;
 
             // --- Restore Default API Settings if enabled ---
             // Cleanup legacy API mode settings

@@ -290,6 +290,23 @@ test('index.html exposes clock card and clock injection setting', () => {
     assert.match(html, /reAnchorFact\(e\)/, '低置信度锚点应可重解析');
 });
 
+test('app.js implements context token budget and slimmer floor defaults', () => {
+    assert.match(app, /VECTOR_KEEP_FLOORS_DEFAULT = 16/, '向量默认保留楼层应降为 16');
+    assert.match(app, /SUMMARY_KEEP_FLOORS_DEFAULT = 12/, '总结默认保留楼层应降为 12');
+    assert.match(app, /MIN_CONTEXT_FLOORS = 6/, '应保留现场窗口下限');
+    assert.match(app, /CONTEXT_TOKEN_BUDGET_DEFAULT = 26000/, '应有默认上下文预算');
+    assert.match(app, /const estimateTokens = \(text\) => \{/, '应有本地 token 估算器');
+    assert.match(app, /const getContextTokenBudget = \(\) => \{/, '应有预算读取');
+    assert.match(app, /budgetedChatHistory/, '历史楼层应按预算截取');
+    assert.match(app, /settings\.contextTokenBudget/, '设置中应含上下文预算');
+});
+
+test('index.html exposes context token budget slider', () => {
+    assert.match(html, /上下文 Token 预算/);
+    assert.match(html, /settings\.contextTokenBudget/);
+    assert.match(html, /向量模式可选 8–40 楼/);
+});
+
 test('storage-repository.js exposes incremental fragment APIs', () => {
     assert.match(repository, /async loadFragments\(characterId\)/);
     assert.match(repository, /async applyFragments\(characterId, changes\)/);
