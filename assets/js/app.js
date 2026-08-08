@@ -653,6 +653,7 @@ createApp({
             contextSize: MAX_CONTEXT_SIZE,
             contextTokenBudget: CONTEXT_TOKEN_BUDGET_DEFAULT,
             maxOutputTokens: 4096,
+            worldInfoTokenBudget: 4000,     // 世界书 token 预算（0=不限）
             chatProviderId: '',             // 聊天供应商，空=回退设置页当前浏览的供应商
             temperature: 1.0,
             autoFetchModels: true,
@@ -706,6 +707,10 @@ createApp({
         const getMaxOutputTokens = () => {
             const value = Number(settings.maxOutputTokens);
             return Number.isFinite(value) ? Math.max(256, Math.min(8192, Math.round(value))) : 4096;
+        };
+        const getWorldInfoTokenBudget = () => {
+            const value = Number(settings.worldInfoTokenBudget);
+            return Number.isFinite(value) ? Math.max(0, Math.min(16000, Math.round(value))) : 0;
         };
 
         const apiKeyInput = ref(null);
@@ -5913,7 +5918,43 @@ ${content}
                 return (b.order || 0) - (a.order || 0);
             });
 
-            const budgetedEntries = finalEntries;
+            // P4 世界书预算治理：先与角色卡去重，再按 token 预算裁剪
+            // （常驻优先；保底保留最高优先常驻 + 最高优先触发各 1 条，避免预算把关键设定全砍）
+            const worldInfoBudgetTokens = getWorldInfoTokenBudget();
+            const charPromptForDedup = String(getCurrentCharacterPrompt() || '');
+            const dedupedEntries = [];
+            finalEntries.forEach(entry => {
+                const text = String(entry.content || '').trim();
+                if (!text) return;
+                if (charPromptForDedup && schemaLib()
+                    && schemaLib().isRedundantText(text, charPromptForDedup, 0.85)) {
+                    return; // 与角色卡描述高度重复，只保留角色卡那份
+                }
+                dedupedEntries.push(entry);
+            });
+
+            let budgetedEntries = dedupedEntries;
+            if (worldInfoBudgetTokens > 0 && dedupedEntries.length > 0) {
+                const forced = [];
+                [dedupedEntries.find(e => e.constant), dedupedEntries.find(e => !e.constant)].forEach(entry => {
+                    if (entry && !forced.includes(entry)) forced.push(entry);
+                });
+                const selected = [];
+                let used = 0;
+                forced.forEach(entry => {
+                    selected.push(entry);
+                    used += estimateTokens(entry.content || '');
+                });
+                dedupedEntries.forEach(entry => {
+                    if (forced.includes(entry)) return;
+                    const tokens = estimateTokens(entry.content || '');
+                    if (used + tokens <= worldInfoBudgetTokens) {
+                        selected.push(entry);
+                        used += tokens;
+                    }
+                });
+                budgetedEntries = selected;
+            }
 
             // --- Output Trigger Log ---
             console.groupCollapsed('📚 World Info Trigger Log');
@@ -12469,6 +12510,12 @@ image###生成的提示词###
             settings.maxOutputTokens = Number.isFinite(maxOutputValue) && maxOutputValue > 0
                 ? Math.max(256, Math.min(8192, Math.round(maxOutputValue)))
                 : 4096;
+
+            // 世界书 token 预算钳制（P4，0=不限）
+            const worldInfoBudgetValue = Number(settings.worldInfoTokenBudget);
+            settings.worldInfoTokenBudget = Number.isFinite(worldInfoBudgetValue) && worldInfoBudgetValue > 0
+                ? Math.max(0, Math.min(16000, Math.round(worldInfoBudgetValue)))
+                : 4000;
 
             // --- Restore Default API Settings if enabled ---
             // Cleanup legacy API mode settings

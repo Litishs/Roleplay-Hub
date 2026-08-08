@@ -353,6 +353,18 @@ test('model selector shows provider grouping and bindings', () => {
     assert.match(html, /chatBindingLabel/, '设置页应展示聊天绑定');
 });
 
+test('worldbook budget governance (P4) trims by tokens and dedups with character card', () => {
+    assert.match(app, /worldInfoTokenBudget: 4000/, '世界书应有默认 token 预算');
+    assert.match(app, /const getWorldInfoTokenBudget = \(\) => \{/, '应有世界书预算读取');
+    assert.match(app, /isRedundantText\(text, charPromptForDedup, 0\.85\)/, '世界书条目应与角色卡描述去重');
+    assert.match(app, /charPromptForDedup = String\(getCurrentCharacterPrompt\(\) \|\| ''\)/, '去重应使用可调用的角色卡提示，避免 TDZ');
+    assert.ok(!app.includes("charPromptForDedup = String(charPrompt || '')"), '不得在 charPrompt 初始化前引用');
+    assert.match(app, /dedupedEntries\.find\(e => e\.constant\)/, '预算裁剪应保底保留最高优先常驻条目');
+    assert.match(app, /dedupedEntries\.find\(e => !e\.constant\)/, '预算裁剪应保底保留最高优先触发条目');
+    assert.match(html, /世界书 Token 预算/);
+    assert.match(html, /settings\.worldInfoTokenBudget/);
+});
+
 test('storage-repository.js exposes incremental fragment APIs', () => {
     assert.match(repository, /async loadFragments\(characterId\)/);
     assert.match(repository, /async applyFragments\(characterId, changes\)/);

@@ -3799,6 +3799,18 @@
                                 <input type="range" v-model.number="worldInfoSettings.maxDepth" min="0" max="50"
                                     class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary-600">
                             </div>
+                            <!-- World Info Token Budget -->
+                            <div>
+                                <div class="flex justify-between items-center mb-1">
+                                    <label class="font-medium text-gray-600">世界书 Token 预算</label>
+                                    <span class="text-primary-600 font-mono bg-primary-50 px-2 py-0.5 rounded">{{
+                                        settings.worldInfoTokenBudget > 0 ? settings.worldInfoTokenBudget + ' tok' : '不限'
+                                        }}</span>
+                                </div>
+                                <input type="range" v-model.number="settings.worldInfoTokenBudget" min="0" max="16000" step="500"
+                                    class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary-600">
+                                <div class="text-[10px] text-gray-400 mt-1">超预算时按优先级裁剪（常驻优先，触发按 order），始终保底保留最高优先常驻与触发各一条；0 表示不限。与角色卡描述重复的条目自动去重。</div>
+                            </div>
                         </div>
                     </div>
                 </div>
