@@ -36,7 +36,8 @@ test('chat errors render as character replies and are excluded from model contex
     assert.ok(app.includes('chatHistory.value.push(createCharacterErrorReply(interruptLabel));'));
     assert.ok(app.includes('chatHistory.value.push(createCharacterErrorReply(errorMessage));'));
     // 2026-08-05 真机回归: url 必须提升到函数作用域，catch 里 friendlyNetworkErrorMessage 才能拿到端点
-    assert.ok(app.includes("const chatUrl = getApiEndpoint('chat/completions');"));
+    // 2026-08-08: 聊天供应商解耦后，端点取自聊天供应商而非设置页浏览的供应商
+    assert.ok(app.includes("const chatUrl = getChatProviderEndpoint('chat/completions');"));
     assert.ok(app.includes('friendlyNetworkErrorMessage(error, chatUrl)'));
     assert.ok(!app.includes('friendlyNetworkErrorMessage(error, url)'));
     const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');

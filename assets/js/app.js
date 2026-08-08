@@ -313,6 +313,8 @@ createApp({
         const popularModelFamilies = ['claude', 'gemini', 'deepseek', 'llama', 'glm', 'minimax', 'moonshot', 'grok'];
         const characterSearchQuery = ref('');
         const availableModels = ref([]);
+        const providerModels = reactive({});
+        const activeProviderTag = ref('all');
         const toasts = ref([]);
         let toastIdSeed = 0;
         const chatContainer = ref(null);
@@ -650,6 +652,8 @@ createApp({
             model: DEFAULT_API_CONFIG.qualityModel,
             contextSize: MAX_CONTEXT_SIZE,
             contextTokenBudget: CONTEXT_TOKEN_BUDGET_DEFAULT,
+            maxOutputTokens: 4096,
+            chatProviderId: '',             // 聊天供应商，空=回退设置页当前浏览的供应商
             temperature: 1.0,
             autoFetchModels: true,
             stream: true,
@@ -698,6 +702,10 @@ createApp({
             return Number.isFinite(budget) && budget > 0
                 ? Math.max(CONTEXT_TOKEN_BUDGET_MIN, Math.min(CONTEXT_TOKEN_BUDGET_MAX, Math.round(budget)))
                 : 0;
+        };
+        const getMaxOutputTokens = () => {
+            const value = Number(settings.maxOutputTokens);
+            return Number.isFinite(value) ? Math.max(256, Math.min(8192, Math.round(value))) : 4096;
         };
 
         const apiKeyInput = ref(null);
@@ -828,6 +836,129 @@ createApp({
                 settings.apiProviderKeys[settings.apiProviderId] = settings.apiKey;
             }
             settings.apiKey = settings.apiProviderKeys[settings.apiProviderId] || '';
+            if (apiKeyInput.value) apiKeyInput.value.value = settings.apiKey;
+            const chatProviderId = String(settings.chatProviderId || '').trim();
+            settings.chatProviderId = chatProviderId
+                && (getApiProviderById(chatProviderId) || isCustomApiProviderId(chatProviderId))
+                ? chatProviderId
+                : '';
+        };
+        const getProviderDisplayName = (id) => {
+            const named = getApiProviderById(id);
+            if (named) return named.name;
+            if (id === 'custom') return '自定义';
+            if (id === 'custom2') return '自定义2';
+            return String(id || '');
+        };
+        // --- 聊天供应商（与设置页浏览供应商解耦；选模型时自动绑定） ---
+        const getChatProvider = () => {
+            const requestedId = String(settings.chatProviderId || '').trim();
+            const fallbackId = settings.apiProviderId || DEFAULT_API_PROVIDER_ID;
+            const providerId = requestedId && (getApiProviderById(requestedId) || isCustomApiProviderId(requestedId))
+                ? requestedId
+                : fallbackId;
+            let apiUrl = '';
+            if (isCustomApiProviderId(providerId)) {
+                apiUrl = settings[getCustomApiUrlKey(providerId)] || '';
+            } else {
+                const provider = getApiProviderById(providerId);
+                apiUrl = provider ? provider.apiUrl : settings.apiUrl;
+            }
+            const apiKey = settings.apiProviderKeys?.[providerId] || '';
+            return { providerId, apiUrl, apiKey, isFallback: !requestedId };
+        };
+        const getChatProviderEndpoint = (path) => {
+            const baseUrl = (getChatProvider().apiUrl || '').replace(/\/+$/, '');
+            const apiUrl = /\/v\d+$/i.test(baseUrl) ? baseUrl : `${baseUrl}/v1`;
+            return `${apiUrl}/${String(path || '').replace(/^\/+/, '')}`;
+        };
+        // --- 记忆供应商（P6：记忆服务可绑定独立供应商，与聊天解耦） ---
+        const getMemoryProvider = () => {
+            const requestedId = String(memorySettings.memoryProviderId || '').trim();
+            const fallbackId = settings.apiProviderId || DEFAULT_API_PROVIDER_ID;
+            const providerId = requestedId && (getApiProviderById(requestedId) || isCustomApiProviderId(requestedId))
+                ? requestedId
+                : fallbackId;
+            let apiUrl = '';
+            if (isCustomApiProviderId(providerId)) {
+                apiUrl = settings[getCustomApiUrlKey(providerId)] || '';
+            } else {
+                const provider = getApiProviderById(providerId);
+                apiUrl = provider ? provider.apiUrl : settings.apiUrl;
+            }
+            const apiKey = settings.apiProviderKeys?.[providerId] || '';
+            return { providerId, apiUrl, apiKey, isFallback: !requestedId };
+        };
+        const getMemoryApiEndpoint = (path) => {
+            const baseUrl = (getMemoryProvider().apiUrl || '').replace(/\/+$/, '');
+            const apiUrl = /\/v\d+$/i.test(baseUrl) ? baseUrl : `${baseUrl}/v1`;
+            return `${apiUrl}/${String(path || '').replace(/^\/+/, '')}`;
+        };
+        const getMemoryApiKey = () => getMemoryProvider().apiKey || '';
+        const memoryProviderLabel = computed(() => {
+            const provider = getMemoryProvider();
+            if (provider.isFallback) {
+                const chatProvider = getApiProviderById(settings.apiProviderId);
+                return `聊天供应商（${chatProvider ? chatProvider.name : settings.apiProviderId}）`;
+            }
+            const named = getApiProviderById(provider.providerId);
+            if (named) return named.name;
+            if (provider.providerId === 'custom') return '自定义';
+            if (provider.providerId === 'custom2') return '自定义2';
+            return provider.providerId;
+        });
+        const memoryProviderSelectOptions = computed(() => [
+            { id: '', name: '聊天供应商（默认）' },
+            ...apiProviderOptions.map(provider => ({ id: provider.id, name: provider.name })),
+            ...customApiProviderOptions.map(provider => ({ id: provider.id, name: provider.name }))
+        ]);
+        let _modelListProviderId = '';
+        const fetchModelsForProvider = async (providerId, options = {}) => {
+            const { isManual = false } = options;
+            const resolvedId = String(providerId || '');
+            let apiUrl = '';
+            if (isCustomApiProviderId(resolvedId)) {
+                apiUrl = settings[getCustomApiUrlKey(resolvedId)] || '';
+            } else {
+                const provider = getApiProviderById(resolvedId);
+                apiUrl = provider ? provider.apiUrl : settings.apiUrl;
+            }
+            const apiKey = settings.apiProviderKeys?.[resolvedId] || '';
+            if (!apiKey) {
+                if (isManual) showToast('请先填写该供应商的 Key', 'info');
+                return;
+            }
+            try {
+                const baseUrl = (apiUrl || '').replace(/\/+$/, '');
+                const url = `${(/\/v\d+$/i.test(baseUrl) ? baseUrl : `${baseUrl}/v1`)}/models`;
+                const response = await fetch(url, {
+                    headers: { 'Authorization': `Bearer ${apiKey}` },
+                    signal: typeof AbortSignal.timeout === 'function' ? AbortSignal.timeout(15000) : undefined
+                });
+                if (!response.ok) throw new Error('Failed to fetch models');
+                const data = await response.json();
+                availableModels.value = data.data || [];
+                providerModels[resolvedId] = data.data || [];
+                _modelListProviderId = resolvedId;
+                if (isManual) showToast(`成功获取 ${availableModels.value.length} 个模型`, 'success');
+            } catch (error) {
+                console.error(error);
+                if (isManual) showToast('获取模型失败: ' + error.message, 'error');
+            }
+        };
+        const fetchModelsForMemoryProvider = () => {
+            const provider = getMemoryProvider();
+            fetchModelsForProvider(provider.providerId, { isManual: false });
+        };
+        const fetchAllConfiguredProviderModels = () => {
+            const providerIds = [...apiProviderOptions, ...customApiProviderOptions]
+                .map(provider => provider.id)
+                .filter(id => settings.apiProviderKeys && String(settings.apiProviderKeys[id] || '').trim());
+            if (providerIds.length === 0) {
+                // 至少保证当前编辑的供应商有模型列表可拉（即使未填 Key 也会失败，静默）
+                if (settings.apiProviderId) providerIds.push(settings.apiProviderId);
+            }
+            providerIds.forEach(id => fetchModelsForProvider(id, { isManual: false }));
         };
         const selectedApiProvider = computed(() => {
             const customProvider = customApiProviderOptions.find(provider => (
@@ -848,6 +979,8 @@ createApp({
                 ? settings[getCustomApiUrlKey(provider.id)] || ''
                 : provider.apiUrl;
             settings.apiKey = settings.apiProviderKeys[provider.id] || '';
+            // 强制同步输入框 DOM，避免旧 Key 残留被 change/blur 写回新供应商槽（跨供应商串 Key）
+            if (apiKeyInput.value) apiKeyInput.value.value = settings.apiKey;
             showApiProviderSelector.value = false;
         };
         normalizeApiProviderSettings();
@@ -1309,7 +1442,8 @@ createApp({
             localEmbeddingModel: 'bge-small-zh-v1.5',
             factExtractionEnabled: true,    // 差异式事实层开关（向量模式下生效）
             factModel: '',                   // 事实抽取模型，缺省回退 classicModel
-            factClockInjection: true         // 事实抽取提示词注入剧情时钟
+            factClockInjection: true,        // 事实抽取提示词注入剧情时钟
+            memoryProviderId: ''             // 记忆供应商（嵌入/总结/事实抽取），空=聊天供应商
         });
         const isBatchExtracting = ref(false);
         const batchExtractProgress = ref({ current: 0, total: 0 });
@@ -1494,6 +1628,11 @@ createApp({
             memorySettings.factExtractionEnabled = memorySettings.factExtractionEnabled !== false;
             memorySettings.factModel = String(memorySettings.factModel || '').trim();
             memorySettings.factClockInjection = memorySettings.factClockInjection !== false;
+            const memoryProviderId = String(memorySettings.memoryProviderId || '').trim();
+            memorySettings.memoryProviderId = memoryProviderId
+                && (getApiProviderById(memoryProviderId) || isCustomApiProviderId(memoryProviderId))
+                ? memoryProviderId
+                : '';
             const localModelOptions = (globalThis.RPHLocalEmbedding?.MODELS && Object.keys(globalThis.RPHLocalEmbedding.MODELS)) || ['bge-small-zh-v1.5'];
             memorySettings.localEmbeddingModel = localModelOptions.includes(memorySettings.localEmbeddingModel)
                 ? memorySettings.localEmbeddingModel
@@ -3778,10 +3917,10 @@ ${content}
         watch(() => [classicMemories.value.length, memorySettings.enabled, memorySettings.mode, memorySettings.summaryKeepFloors], () => scheduleChatStatsRecompute(50));
 
         const modelTags = computed(() => {
-            const counts = { all: availableModels.value.length, other: 0 };
+            const counts = { all: allProviderModels.value.length, other: 0 };
             const tags = new Set();
 
-            availableModels.value.forEach(m => {
+            allProviderModels.value.forEach(m => {
                 const id = m.id.toLowerCase();
                 let found = false;
                 for (const family of popularModelFamilies) {
@@ -3802,8 +3941,37 @@ ${content}
             return result;
         });
 
+        const allProviderModels = computed(() => {
+            const output = [];
+            Object.entries(providerModels).forEach(([providerId, models]) => {
+                (Array.isArray(models) ? models : []).forEach(model => {
+                    output.push({ ...model, _providerId: providerId });
+                });
+            });
+            return output;
+        });
+
+        const providerTags = computed(() => {
+            const counts = {};
+            allProviderModels.value.forEach(model => {
+                counts[model._providerId] = (counts[model._providerId] || 0) + 1;
+            });
+            return [
+                { id: 'all', name: '全部', count: allProviderModels.value.length },
+                ...Object.entries(counts).map(([id, count]) => ({
+                    id,
+                    name: getProviderDisplayName(id),
+                    count
+                }))
+            ];
+        });
+
         const filteredModels = computed(() => {
-            let result = availableModels.value;
+            let result = allProviderModels.value;
+
+            if (activeProviderTag.value && activeProviderTag.value !== 'all') {
+                result = result.filter(m => m._providerId === activeProviderTag.value);
+            }
 
             if (activeModelTag.value && activeModelTag.value !== 'all') {
                 if (activeModelTag.value === 'other') {
@@ -3822,7 +3990,11 @@ ${content}
                 result = result.filter(m => m.id.toLowerCase().includes(query));
             }
 
-            return result.sort((a, b) => a.id.localeCompare(b.id));
+            return result.sort((a, b) => {
+                const providerDiff = String(a._providerId).localeCompare(String(b._providerId));
+                if (providerDiff !== 0) return providerDiff;
+                return a.id.localeCompare(b.id);
+            });
         });
 
         const getCharacterWICount = (char) => {
@@ -4415,6 +4587,7 @@ ${content}
                 if (!response.ok) throw new Error('Failed to fetch models');
                 const data = await response.json();
                 availableModels.value = data.data || [];
+                _modelListProviderId = settings.apiProviderId || DEFAULT_API_PROVIDER_ID;
                 if (isManual) showToast(`成功获取 ${availableModels.value.length} 个模型`, 'success');
             } catch (error) {
                 console.error(error);
@@ -4433,26 +4606,33 @@ ${content}
                 modelSearchQuery.value = '';
             }
             showModelSelector.value = true;
+            activeProviderTag.value = 'all';
+            fetchAllConfiguredProviderModels();
         };
 
-        const selectModel = (modelId) => {
+        const selectModel = (modelId, providerId = '') => {
+            const selectedProviderId = String(providerId || '').trim() || getChatProvider().providerId;
             if (modelSelectionTarget.value === 'memoryEmbeddingModel') {
                 memorySettings.embeddingModel = modelId;
+                if (selectedProviderId) memorySettings.memoryProviderId = selectedProviderId;
                 showModelSelector.value = false;
                 return;
             }
             if (modelSelectionTarget.value === 'memoryClassicModel') {
                 memorySettings.classicModel = modelId;
+                if (selectedProviderId) memorySettings.memoryProviderId = selectedProviderId;
                 showModelSelector.value = false;
                 return;
             }
             if (modelSelectionTarget.value === 'memoryFactModel') {
                 memorySettings.factModel = modelId;
+                if (selectedProviderId) memorySettings.memoryProviderId = selectedProviderId;
                 showModelSelector.value = false;
                 return;
             }
 
             settings[modelSelectionTarget.value] = modelId;
+            if (selectedProviderId) settings.chatProviderId = selectedProviderId;
 
             if (
                 (modelSelectionTarget.value === 'qualityModel' && currentModelMode.value === 'quality') ||
@@ -4464,6 +4644,17 @@ ${content}
 
             showModelSelector.value = false;
         };
+
+        const chatBindingLabel = computed(() => {
+            const provider = getChatProvider();
+            return `聊天：${getProviderDisplayName(provider.providerId)} · ${String(settings.model || '').trim() || '未选模型'}`;
+        });
+        const embeddingBindingLabel = computed(() => {
+            if (memorySettings.embeddingBackend === 'local') {
+                return `本地模型 · ${String(memorySettings.localEmbeddingModel || 'bge-small-zh-v1.5').trim()}`;
+            }
+            return `${memoryProviderLabel.value} · ${String(memorySettings.embeddingModel || '').trim() || '未选'}`;
+        });
 
         const checkConnectionStatus = async (status, latency, label, request, isConnected = response => response.ok) => {
             status.value = 'checking';
@@ -4939,8 +5130,8 @@ ${content}
                 }));
             const recentMessages = sourceMessages.slice(-normalizedUiTemplateAnalysisDepth);
 
-            const apiKey = syncApiKeyInput();
-            if (!apiKey) {
+            const chatProviderForAnalysis = getChatProvider();
+            if (!chatProviderForAnalysis.apiKey) {
                 markUiTemplateStatus('skipped', '未填 API Key');
                 return false;
             }
@@ -4950,7 +5141,7 @@ ${content}
                 markUiTemplateStatus('skipped', '未配置分析模型');
                 return false;
             }
-            const url = getApiEndpoint('chat/completions');
+            const url = getChatProviderEndpoint('chat/completions');
 
             try {
                 const updateRun = startUiTemplateUpdateRun();
@@ -5067,12 +5258,12 @@ ${content}
                                 method: 'POST',
                                 headers: {
                                     'Content-Type': 'application/json',
-                                    'Authorization': `Bearer ${apiKey}`
+                                    'Authorization': `Bearer ${chatProviderForAnalysis.apiKey}`
                                 },
                                 body: JSON.stringify({
                                     model: batchModel,
                                     temperature: 0.2,
-                                    max_tokens: 4096,
+                                    max_tokens: getMaxOutputTokens(),
                                     ...(settings.uiTemplateJsonMode !== false ? { response_format: { type: 'json_object' } } : {}),
                                     stream: false,
                                     messages: buildBatchMessages()
@@ -5169,7 +5360,7 @@ ${content}
                                     body: JSON.stringify({
                                         model,
                                         temperature: 0.2,
-                                        max_tokens: 4096,
+                                        max_tokens: getMaxOutputTokens(),
                                         ...(settings.uiTemplateJsonMode !== false ? { response_format: { type: 'json_object' } } : {}),
                                         stream: false,
                                         messages: buildAnalysisMessages()
@@ -6471,7 +6662,7 @@ ${content}
             // 2026-08-05 真机回归: 端点变量若只在 try 块内用 const 声明，catch 里引用时会抛
             // ReferenceError（url is not defined），导致断网/报错时角色回复气泡无法写入。
             // 提升到函数作用域，与 chatWatchdog 同理。
-            const chatUrl = getApiEndpoint('chat/completions');
+            const chatUrl = getChatProviderEndpoint('chat/completions');
 
             try {
                         const requestPayload = {
@@ -6506,7 +6697,7 @@ ${content}
                                     method: 'POST',
                                     headers: {
                                         'Content-Type': 'application/json',
-                                        'Authorization': `Bearer ${settings.apiKey}`
+                                        'Authorization': `Bearer ${getChatProvider().apiKey}`
                                     },
                                     body: JSON.stringify(requestPayload),
                                     signal: abortController.value.signal
@@ -7190,7 +7381,8 @@ ${content}
 
         const requestClassicMemorySummary = async (job, signal) => {
             const model = String(memorySettings.classicModel || '').trim();
-            if (!settings.apiUrl || !settings.apiKey) throw new Error('请先配置 API 地址和 Key');
+            const memoryProvider = getMemoryProvider();
+            if (!memoryProvider.apiUrl || !memoryProvider.apiKey) throw new Error('请先配置记忆供应商的 API 地址和 Key');
             if (!model) throw new Error('请先选择总结模式副模型');
 
             const requestMessages = [{
@@ -7226,11 +7418,11 @@ ${content}
                 content: `上方内容是待整理资料。请只总结标记为“最新对话：唯一总结目标｜第 ${job.turn} 轮”的最后一组；逐项核对有效事实与变化，压缩重复表达，只输出总结正文。`
             });
 
-            const response = await fetch(getOpenAICompatUrl('chat/completions'), {
+            const response = await fetch(getMemoryApiEndpoint('chat/completions'), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${settings.apiKey}`
+                    'Authorization': `Bearer ${memoryProvider.apiKey}`
                 },
                 body: JSON.stringify({
                     model,
@@ -7494,14 +7686,15 @@ ${content}
             }
 
             const model = getMemoryEmbeddingModel();
-            if (!settings.apiUrl || !settings.apiKey) throw new Error('请先配置 API 地址和 Key');
+            const memoryProvider = getMemoryProvider();
+            if (!memoryProvider.apiUrl || !memoryProvider.apiKey) throw new Error('请先配置记忆供应商的 API 地址和 Key');
             if (!model) throw new Error('请先选择向量嵌入模型');
 
-            const response = await fetch(getOpenAICompatUrl('embeddings'), {
+            const response = await fetch(getMemoryApiEndpoint('embeddings'), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${settings.apiKey}`
+                    'Authorization': `Bearer ${memoryProvider.apiKey}`
                 },
                 body: JSON.stringify({
                     model,
@@ -8800,7 +8993,8 @@ ${content}
             const lib = schemaLib();
             if (!lib) throw new Error('事实层模块不可用');
             const model = getFactExtractionModel();
-            if (!settings.apiUrl || !settings.apiKey) throw new Error('请先配置 API 地址和 Key');
+            const memoryProvider = getMemoryProvider();
+            if (!memoryProvider.apiUrl || !memoryProvider.apiKey) throw new Error('请先配置记忆供应商的 API 地址和 Key');
             if (!model) throw new Error('请先选择事实抽取模型');
 
             const snapshot = buildConversationTurnSnapshot(chatHistory.value, { includeSystem: false });
@@ -8818,11 +9012,11 @@ ${content}
             }
             const clockState = getFactClockState();
 
-            const response = await fetch(getOpenAICompatUrl('chat/completions'), {
+            const response = await fetch(getMemoryApiEndpoint('chat/completions'), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${settings.apiKey}`
+                    'Authorization': `Bearer ${memoryProvider.apiKey}`
                 },
                 body: JSON.stringify({
                     model,
@@ -12270,6 +12464,12 @@ image###生成的提示词###
                 ? Math.max(CONTEXT_TOKEN_BUDGET_MIN, Math.min(CONTEXT_TOKEN_BUDGET_MAX, Math.round(budgetValue)))
                 : CONTEXT_TOKEN_BUDGET_DEFAULT;
 
+            // 输出长度上限钳制（P7）
+            const maxOutputValue = Number(settings.maxOutputTokens);
+            settings.maxOutputTokens = Number.isFinite(maxOutputValue) && maxOutputValue > 0
+                ? Math.max(256, Math.min(8192, Math.round(maxOutputValue)))
+                : 4096;
+
             // --- Restore Default API Settings if enabled ---
             // Cleanup legacy API mode settings
             if (settings.autoRestoreDefaultAPI !== undefined) {
@@ -12381,7 +12581,7 @@ image###生成的提示词###
             }
 
             if (settings.autoFetchModels) {
-                fetchModels();
+                fetchAllConfiguredProviderModels();
             }
 
             // Initial Status Check
@@ -12638,6 +12838,8 @@ image###生成的提示词###
             backupInProgress, exportNativeBackup, restoreNativeBackup,
             processMainContent,
             currentView, showDescriptionPanel, showModelSelector, modelSelectionTarget, openModelSelector, showChatModelSelector, showCharacterEditor, showAddCharacterMenu, showPresetEditor, showUiTemplateEditor,
+            memoryProviderSelectOptions, memoryProviderLabel,
+            chatBindingLabel, embeddingBindingLabel, providerTags, activeProviderTag, getProviderDisplayName,
             showActiveToolEditor,
             showExportModal, sysInstruction, showInstructionPanel, exportItems, selectedExportIndices, // Export Modal
             showContextViewerModal, lastContextMessages, lastTriggeredWorldInfos, lastContextTotalLength, // Context Viewer

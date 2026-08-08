@@ -956,82 +956,6 @@
                                 </button>
                             </div>
 
-                            <!-- Right controls: Model switcher -->
-                            <div class="flex items-center">
-                                <div class="relative">
-                                    <!-- Model Selector Popup -->
-                                    <transition enter-active-class="transition-all duration-150 ease-out"
-                                        enter-from-class="opacity-0 translate-y-2 scale-95"
-                                        enter-to-class="opacity-100 translate-y-0 scale-100"
-                                        leave-active-class="transition-all duration-100 ease-in"
-                                        leave-from-class="opacity-100 translate-y-0 scale-100"
-                                        leave-to-class="opacity-0 translate-y-2 scale-95">
-                                        <div v-if="showChatModelSelector"
-                                            class="absolute bottom-full right-0 mb-3 md:mb-4 z-50 pointer-events-auto w-[min(22rem,calc(100vw-1rem))] md:w-[min(24rem,calc(100vw-2rem))] transform-gpu origin-bottom-right">
-                                            <div
-                                                class="bg-white/95 backdrop-blur-xl border border-gray-200/80 shadow-[0_12px_40px_rgba(0,0,0,0.12)] rounded-2xl p-2 flex flex-col gap-1.5 ring-1 ring-black/5 max-w-full overflow-hidden">
-                                                <button @click="modelMode = 'quality'; showChatModelSelector = false"
-                                                    :class="['w-full min-w-0 px-3.5 py-2.5 rounded-xl text-[13px] md:text-sm font-semibold transition-all duration-200 flex items-center justify-between active:scale-[0.98]', modelMode === 'quality' ? 'bg-primary-50/80 text-primary-700 shadow-sm font-bold' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900']">
-                                                    <span class="truncate min-w-0 flex-1 text-left pr-3"
-                                                        :title="settings.qualityModel">{{ settings.qualityModel }}</span>
-                                                    <svg v-if="modelMode === 'quality'"
-                                                        class="w-4 h-4 text-primary-600 flex-shrink-0" fill="none"
-                                                        stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path stroke-linecap="round" stroke-linejoin="round"
-                                                            stroke-width="2.5" d="M5 13l4 4L19 7"></path>
-                                                    </svg>
-                                                </button>
-                                                <button @click="modelMode = 'balanced'; showChatModelSelector = false"
-                                                    :class="['w-full min-w-0 px-3.5 py-2.5 rounded-xl text-[13px] md:text-sm font-semibold transition-all duration-200 flex items-center justify-between active:scale-[0.98]', modelMode === 'balanced' ? 'bg-primary-50/80 text-primary-700 shadow-sm font-bold' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900']">
-                                                    <span class="truncate min-w-0 flex-1 text-left pr-3"
-                                                        :title="settings.balancedModel">{{ settings.balancedModel }}</span>
-                                                    <svg v-if="modelMode === 'balanced'"
-                                                        class="w-4 h-4 text-primary-600 flex-shrink-0" fill="none"
-                                                        stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path stroke-linecap="round" stroke-linejoin="round"
-                                                            stroke-width="2.5" d="M5 13l4 4L19 7"></path>
-                                                    </svg>
-                                                </button>
-                                                <button @click="modelMode = 'fast'; showChatModelSelector = false"
-                                                    :class="['w-full min-w-0 px-3.5 py-2.5 rounded-xl text-[13px] md:text-sm font-semibold transition-all duration-200 flex items-center justify-between active:scale-[0.98]', modelMode === 'fast' ? 'bg-primary-50/80 text-primary-700 shadow-sm font-bold' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900']">
-                                                    <span class="truncate min-w-0 flex-1 text-left pr-3"
-                                                        :title="settings.fastModel">{{ settings.fastModel }}</span>
-                                                    <svg v-if="modelMode === 'fast'"
-                                                        class="w-4 h-4 text-primary-600 flex-shrink-0" fill="none"
-                                                        stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path stroke-linecap="round" stroke-linejoin="round"
-                                                            stroke-width="2.5" d="M5 13l4 4L19 7"></path>
-                                                    </svg>
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </transition>
-
-                                    <!-- Current Model Toggle Button -->
-                                    <button @click.stop="showChatModelSelector = !showChatModelSelector"
-                                        class="px-3.5 py-1.5 rounded-full text-[10px] md:text-xs font-bold transition-all duration-300 flex items-center bg-white hover:bg-gray-50 border border-gray-200 shadow-sm active:scale-95 text-primary-600"
-                                        title="切换模型">
-                                        <svg v-if="modelMode === 'quality'" class="w-3.5 h-3.5 mr-1" fill="none"
-                                            stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                                d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z">
-                                            </path>
-                                        </svg>
-                                        <svg v-else-if="modelMode === 'balanced'" class="w-3.5 h-3.5 mr-1" fill="none"
-                                            stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                                d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3">
-                                            </path>
-                                        </svg>
-                                        <svg v-else class="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor"
-                                            viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                                d="M13 10V3L4 14h7v7l9-11h-7z"></path>
-                                        </svg>
-                                        模型
-                                    </button>
-                                </div>
-                            </div>
                         </div>
                         <div class="relative w-full flex items-end gap-2 px-1">
                             <textarea role="textbox" aria-multiline="true"
@@ -1799,6 +1723,9 @@
                                                     <path stroke-linecap="round" stroke-linejoin="round"
                                                         stroke-width="2" d="M5 13l4 4L19 7"></path>
                                                 </svg>
+                                                <span v-if="settings.apiProviderKeys && settings.apiProviderKeys[provider.id]"
+                                                    class="ml-1.5 w-2 h-2 rounded-full bg-emerald-400 shrink-0"
+                                                    title="已配置 Key"></span>
                                             </button>
                                             <button v-for="provider in customApiProviderOptions" :key="provider.id"
                                                 type="button" @click="selectApiProvider(provider)"
@@ -1823,6 +1750,9 @@
                                                     <path stroke-linecap="round" stroke-linejoin="round"
                                                         stroke-width="2" d="M5 13l4 4L19 7"></path>
                                                 </svg>
+                                                <span v-if="settings.apiProviderKeys && settings.apiProviderKeys[provider.id]"
+                                                    class="ml-1.5 w-2 h-2 rounded-full bg-emerald-400 shrink-0"
+                                                    title="已配置 Key"></span>
                                             </button>
                                         </div>
                                     </div>
@@ -1887,6 +1817,39 @@
                                             </button>
                                         </div>
                                     </div>
+                                </div>
+
+                                <!-- 当前绑定（聊天/记忆供应商与模型） -->
+                                <div class="mt-4 rounded-xl border border-teal-100 bg-teal-50/50 px-3 py-2.5 text-[11px] text-gray-600 space-y-1">
+                                    <div class="flex items-center justify-between gap-2">
+                                        <span class="font-bold text-gray-700">{{ chatBindingLabel }}</span>
+                                        <button type="button" @click="openModelSelector('model')"
+                                            class="text-[10px] px-2 py-0.5 rounded bg-white border border-teal-200 text-teal-700 font-bold transition-all">
+                                            换聊天模型
+                                        </button>
+                                    </div>
+                                    <div class="flex items-center justify-between gap-2">
+                                        <span class="font-bold text-gray-700 truncate">记忆总结：{{ memoryProviderLabel }} · {{ memorySettings.classicModel || '未选' }}</span>
+                                        <button type="button" @click="openModelSelector('memoryClassicModel')"
+                                            class="text-[10px] px-2 py-0.5 rounded bg-white border border-teal-200 text-teal-700 font-bold transition-all">
+                                            换
+                                        </button>
+                                    </div>
+                                    <div class="flex items-center justify-between gap-2">
+                                        <span class="font-bold text-gray-700 truncate">事实抽取：{{ memoryProviderLabel }} · {{ memorySettings.factModel || memorySettings.classicModel || '未选' }}</span>
+                                        <button type="button" @click="openModelSelector('memoryFactModel')"
+                                            class="text-[10px] px-2 py-0.5 rounded bg-white border border-teal-200 text-teal-700 font-bold transition-all">
+                                            换
+                                        </button>
+                                    </div>
+                                    <div class="flex items-center justify-between gap-2">
+                                        <span class="font-bold text-gray-700 truncate">向量嵌入：{{ embeddingBindingLabel }}</span>
+                                        <button v-if="memorySettings.embeddingBackend !== 'local'" type="button" @click="openModelSelector('memoryEmbeddingModel')"
+                                            class="text-[10px] px-2 py-0.5 rounded bg-white border border-teal-200 text-teal-700 font-bold transition-all">
+                                            换
+                                        </button>
+                                    </div>
+                                    <div class="text-[10px] text-gray-400">在模型列表里选哪个供应商的模型，聊天/记忆就自动绑定该供应商；设置页切换浏览的供应商不影响已绑定。</div>
                                 </div>
 
                                 <!-- Model Configuration Inputs -->
@@ -2012,6 +1975,22 @@
                                             <input v-model.number="settings.temperature" type="range" min="0" max="1"
                                                 step="0.01"
                                                 class="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-teal-500 hover:accent-teal-400 transition-all">
+                                        </div>
+
+                                        <!-- 输出长度上限 -->
+                                        <div
+                                            class="bg-gray-50/60 p-4 rounded-xl border border-gray-100 hover:bg-white hover:border-gray-200 hover:shadow-sm transition-all duration-200">
+                                            <div class="flex justify-between items-center mb-3">
+                                                <label
+                                                    class="text-xs font-bold text-gray-500 uppercase tracking-wider">输出长度上限</label>
+                                                <span
+                                                    class="text-xs font-mono text-teal-600 bg-teal-50 px-1.5 py-0.5 rounded border border-teal-100">{{
+                                                    settings.maxOutputTokens }} tok</span>
+                                            </div>
+                                            <input v-model.number="settings.maxOutputTokens" type="range" min="256" max="8192"
+                                                step="256"
+                                                class="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-teal-500 hover:accent-teal-400 transition-all">
+                                            <div class="text-[10px] text-gray-400 mt-1">单次回复的最大输出 token 数，按你的需求设定上限。</div>
                                         </div>
 
                                         <!-- Image Key -->
@@ -3089,6 +3068,14 @@
                                     </div>
                                 </div>
                                 <div class="bg-gray-50/60 p-3 rounded-xl border border-gray-100">
+                                    <label class="text-xs font-medium text-gray-500">记忆供应商（嵌入 / 总结 / 事实抽取）</label>
+                                    <select v-model="memorySettings.memoryProviderId"
+                                        class="w-full mt-2 px-3 py-2 text-sm bg-white/80 border border-gray-200 rounded-xl focus:border-primary-300 focus:outline-none transition-all">
+                                        <option v-for="p in memoryProviderSelectOptions" :key="p.id" :value="p.id">{{ p.name }}</option>
+                                    </select>
+                                    <div class="text-[10px] text-gray-400 mt-1.5">当前记忆请求使用：<span class="font-mono text-teal-600">{{ memoryProviderLabel }}</span>。留空则跟随聊天供应商，可同时保存多家 Key。</div>
+                                </div>
+                                <div class="bg-gray-50/60 p-3 rounded-xl border border-gray-100">
                                     <div class="flex items-center justify-between mb-2">
                                         <div class="relative flex items-center">
                                             <label class="text-xs font-medium text-gray-500">事实层抽取</label>
@@ -3113,13 +3100,6 @@
                                         </label>
                                     </div>
                                     <div v-if="memorySettings.factExtractionEnabled" class="mt-2">
-                                        <button @click="openModelSelector('memoryFactModel')"
-                                            class="w-full px-3 py-2 text-sm text-left bg-white/80 border border-gray-200 rounded-xl hover:border-primary-300 hover:bg-white transition-all cursor-pointer truncate"
-                                            :title="memorySettings.factModel || memorySettings.classicModel || '请选择事实抽取模型（缺省用总结副模型）'">
-                                            <span :class="(memorySettings.factModel || memorySettings.classicModel) ? 'text-gray-800 font-mono' : 'text-gray-400'">
-                                                {{ memorySettings.factModel || memorySettings.classicModel || '请选择事实抽取模型' }}
-                                            </span>
-                                        </button>
                                         <label class="flex items-center gap-1.5 text-[11px] font-bold text-gray-500 mt-2">
                                             <input type="checkbox" v-model="memorySettings.factClockInjection" class="rounded accent-primary-500">
                                             抽取时注入剧情时钟（绝对时间锚定）
@@ -3144,13 +3124,6 @@
                                             <span class="settings-help-popover-content">用于把对话转换成可比较的向量坐标，它不是聊天模型。</span>
                                         </div>
                                     </div>
-                                    <button @click="openModelSelector('memoryEmbeddingModel')"
-                                        class="w-full px-3 py-2 text-sm text-left bg-white/80 border border-gray-200 rounded-xl hover:border-primary-300 hover:bg-white transition-all cursor-pointer truncate"
-                                        :title="memorySettings.embeddingModel || '请选择向量嵌入模型'">
-                                        <span
-                                            :class="memorySettings.embeddingModel ? 'text-gray-800 font-mono' : 'text-gray-400'">{{
-                                            memorySettings.embeddingModel || '请选择向量嵌入模型' }}</span>
-                                    </button>
                                 </div>
                                 <div class="bg-gray-50/60 p-3 rounded-xl border border-gray-100">
                                     <div class="flex justify-between items-center mb-2">
@@ -3233,12 +3206,6 @@
                                         <span class="settings-help-popover-content">使用普通聊天模型在后台整理逐轮记忆。它会读取最近四轮对话作为背景，但只整理明确标记的最新一轮；生成的记忆内容用于替换非保留楼层中的 AI 原文，不会改动聊天界面。</span>
                                     </div>
                                 </div>
-                                <button @click="openModelSelector('memoryClassicModel')"
-                                    class="w-full px-3 py-2 text-sm text-left bg-white/80 border border-gray-200 rounded-xl hover:border-primary-300 hover:bg-white transition-all cursor-pointer truncate"
-                                    :title="memorySettings.classicModel || '请选择总结模式副模型'">
-                                    <span :class="memorySettings.classicModel ? 'text-gray-800 font-mono' : 'text-gray-400'">{{
-                                        memorySettings.classicModel || '请选择总结模式副模型' }}</span>
-                                </button>
                             </div>
 
                             <div v-if="memorySettings.mode === 'classic'" class="relative bg-gray-50/60 p-3 rounded-xl border border-gray-100">
@@ -4117,6 +4084,17 @@
 
                         <!-- Model Category Tags -->
                         <div class="flex flex-wrap gap-2 max-h-[160px] overflow-y-auto custom-scrollbar items-center py-1">
+                            <button v-for="tag in providerTags" :key="tag.id" @click="activeProviderTag = tag.id" :class="[
+                                    'flex items-center px-3 py-1.5 text-xs font-bold rounded-full transition-all border outline-none active:scale-95 whitespace-nowrap',
+                                    activeProviderTag === tag.id
+                                        ? 'bg-teal-600 text-white border-teal-600 shadow-sm'
+                                        : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50 hover:text-gray-700 hover:border-gray-300 shadow-sm'
+                                ]">
+                                <span class="leading-none">{{ tag.name }}</span>
+                                <span class="ml-1.5 opacity-70 font-mono text-[11px] leading-none">{{ tag.count }}</span>
+                            </button>
+                        </div>
+                        <div class="flex flex-wrap gap-2 max-h-[160px] overflow-y-auto custom-scrollbar items-center py-1">
                             <button v-for="tag in modelTags" :key="tag.name" @click="activeModelTag = tag.name" :class="[
                                     'flex items-center px-3.5 py-1.5 text-xs font-bold rounded-full transition-all border outline-none active:scale-95 whitespace-nowrap',
                                     activeModelTag === tag.name
@@ -4142,11 +4120,15 @@
                             未找到模型或正在加载...
                         </div>
                         <div class="space-y-1">
-                            <button v-for="model in filteredModels" :key="model.id" @click="selectModel(model.id)"
+                            <button v-for="model in filteredModels" :key="model._providerId + ':' + model.id" @click="selectModel(model.id, model._providerId)"
                                 class="w-full text-left px-4 py-3 rounded-xl hover:bg-gray-50 hover:shadow-[0_2px_4px_rgba(0,0,0,0.02)] transition-colors flex justify-between items-center group border border-transparent hover:border-gray-100 active:bg-gray-100">
-                                <span
-                                    class="text-gray-700 font-mono font-medium group-hover:text-primary-600 transition-colors">{{
-                                    model.id }}</span>
+                                <span class="min-w-0">
+                                    <span
+                                        class="block text-gray-700 font-mono font-medium group-hover:text-primary-600 transition-colors">{{
+                                        model.id }}</span>
+                                    <span class="block text-[10px] text-gray-400 mt-0.5">{{
+                                        getProviderDisplayName(model._providerId) }}</span>
+                                </span>
                                 <span
                                     v-if="(modelSelectionTarget === 'memoryEmbeddingModel' ? memorySettings.embeddingModel : (modelSelectionTarget === 'memoryClassicModel' ? memorySettings.classicModel : settings[modelSelectionTarget])) === model.id"
                                     class="text-primary-600 bg-primary-50 p-1 rounded-full shadow-sm">

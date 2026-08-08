@@ -307,6 +307,52 @@ test('index.html exposes context token budget slider', () => {
     assert.match(html, /向量模式可选 8–40 楼/);
 });
 
+test('app.js implements memory provider decoupling (P6) and output limit (P7)', () => {
+    assert.match(app, /memoryProviderId/, '记忆设置应含记忆供应商字段');
+    assert.match(app, /const getMemoryProvider = \(\) => \{/, '应有记忆供应商解析');
+    assert.match(app, /const getMemoryApiEndpoint = \(path\) => \{/, '记忆请求应走记忆供应商端点');
+    assert.match(app, /const fetchModelsForMemoryProvider = \(\) => \{/, '记忆模型选择器应拉记忆供应商模型');
+    assert.match(app, /fetchModelsForProvider\(provider\.providerId/, '记忆模型选择应路由到记忆供应商');
+    assert.match(app, /maxOutputTokens: 4096/, '设置应含输出上限');
+    assert.match(app, /const getMaxOutputTokens = \(\) => \{/, '应有输出上限读取');
+    assert.match(app, /max_tokens: getMaxOutputTokens\(\)/, '请求应使用用户设定的输出上限');
+});
+
+test('index.html exposes memory provider selector and output limit slider', () => {
+    assert.match(html, /记忆供应商/);
+    assert.match(html, /memoryProviderSelectOptions/);
+    assert.match(html, /memoryProviderLabel/);
+    assert.match(html, /输出长度上限/);
+    assert.match(html, /settings\.maxOutputTokens/);
+});
+
+test('provider switching force-syncs the API key input and marks configured providers', () => {
+    assert.match(app, /apiKeyInput\.value\.value = settings\.apiKey/, '切换供应商后应强制同步输入框，防止旧 Key 串槽');
+    assert.match(html, /settings\.apiProviderKeys && settings\.apiProviderKeys\[provider\.id\]/, '供应商下拉应标注已配置 Key 的供应商');
+});
+
+test('chat decoupled from settings browsing provider and models aggregated per provider', () => {
+    assert.match(app, /chatProviderId: ''/, '聊天供应商字段默认回退');
+    assert.match(app, /const getChatProvider = \(\) => \{/, '应有聊天供应商解析');
+    assert.match(app, /const getChatProviderEndpoint = \(path\) => \{/, '聊天请求应走聊天供应商端点');
+    assert.match(app, /chatUrl = getChatProviderEndpoint\('chat\/completions'\)/, '聊天请求 URL 应来自聊天供应商');
+    assert.match(app, /Bearer \$\{getChatProvider\(\)\.apiKey\}/, '聊天请求 Key 应来自聊天供应商');
+    assert.match(app, /const providerModels = reactive\(\{\}\)/, '应有按供应商聚合的模型注册表');
+    assert.match(app, /const fetchAllConfiguredProviderModels = \(\) => \{/, '应拉取所有已配 Key 供应商的模型');
+    assert.match(app, /selectModel = \(modelId, providerId = ''\) => \{/, '选模型应携带供应商');
+    assert.match(app, /settings\.chatProviderId = selectedProviderId/, '选聊天模型应绑定其供应商');
+    assert.match(app, /memorySettings\.memoryProviderId = selectedProviderId/, '选记忆模型应绑定其供应商');
+    assert.match(app, /const chatBindingLabel = computed/, '设置页应显示聊天绑定');
+});
+
+test('model selector shows provider grouping and bindings', () => {
+    assert.match(html, /activeProviderTag = tag\.id/, '模型选择器应有供应商筛选');
+    assert.match(html, /providerTags/, '应有供应商标签');
+    assert.match(html, /getProviderDisplayName\(model\._providerId\)/, '模型行应显示来源供应商');
+    assert.match(html, /selectModel\(model\.id, model\._providerId\)/, '选模型应带供应商');
+    assert.match(html, /chatBindingLabel/, '设置页应展示聊天绑定');
+});
+
 test('storage-repository.js exposes incremental fragment APIs', () => {
     assert.match(repository, /async loadFragments\(characterId\)/);
     assert.match(repository, /async applyFragments\(characterId, changes\)/);
