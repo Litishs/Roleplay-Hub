@@ -1441,11 +1441,17 @@ createApp({
         const memories = ref([]);
         const classicMemories = ref([]);
         const classicMemoryPage = ref(1);
+        // --- 滚动摘要（记忆重构 P0：原文真相源 + 派生摘要层） ---
+        const memorySummaries = ref(null);
+        const summaryProgress = ref(null); // {fromTurn,toTurn,status:'running'|'done'|'failed'}
+        let _summaryInFlight = false;
+        let _summaryDoneTimer = null;
         const memorySettings = reactive({
             enabled: false,
             mode: MEMORY_MODE_CLASSIC,
             embeddingModel: '',
             classicModel: '',
+            keepFloors: VECTOR_KEEP_FLOORS_DEFAULT,
             vectorTopK: MEMORY_VECTOR_DEFAULT_TOP_K,
             similarityThreshold: MEMORY_VECTOR_DEFAULT_SIMILARITY,
             defaultDepth: MEMORY_VECTOR_DEFAULT_DEPTH,
@@ -6176,13 +6182,37 @@ ${content}
                 });
             }
 
-            // 记忆压缩：向量模式移除已覆盖的旧轮次；总结模式只替换旧轮次的 AI 消息。
+            // 记忆压缩：新引擎（滚动摘要）保留最近 keepFloors 轮原文，更早轮次由摘要覆盖；
+            // 旧模式逻辑仅在派生摘要层尚未建立时保留（过渡，P3 移除）。
             let chatHistoryForContext = postprocessedChatHistory.map((message, index) => ({
                 ...message,
                 _contextFloor: index + 1
             }));
 
             if (memorySettings.enabled
+                && memorySummaries.value
+                && (memorySummaries.value.short || memorySummaries.value.long)) {
+                const totalFloors = chatHistoryForContext.length;
+                const keepCount = memorySettings.keepFloors;
+                if (totalFloors > keepCount) {
+                    const candidateCount = totalFloors - keepCount;
+                    const removableIndices = new Set();
+                    const contextSnapshot = buildConversationTurnSnapshot(chatHistoryForContext, { alreadyPostprocessed: true });
+                    contextSnapshot.turns.forEach(turnInfo => {
+                        if (!turnInfo.messageIndexes.every(messageIndex => messageIndex < candidateCount)) return;
+                        turnInfo.messageIndexes.forEach(messageIndex => removableIndices.add(messageIndex));
+                    });
+                    if (removableIndices.size > 0) {
+                        const newChatHistoryForContext = [];
+                        for (let idx = 0; idx < chatHistoryForContext.length; idx++) {
+                            if (!removableIndices.has(idx)) {
+                                newChatHistoryForContext.push(chatHistoryForContext[idx]);
+                            }
+                        }
+                        chatHistoryForContext = newChatHistoryForContext;
+                    }
+                }
+            } else if (memorySettings.enabled
                 && memorySettings.mode === MEMORY_MODE_VECTOR
                 && memories.value.length > 0) {
                 const totalFloors = chatHistoryForContext.length;
@@ -6247,10 +6277,11 @@ ${content}
                 }
             }
 
-            // 时间线摘要（记忆背景）计入前缀预算
+            // 记忆背景（滚动摘要）计入前缀预算；派生摘要层未建立时回退旧时间线摘要（过渡，P3 移除）
             const timelineDigestText = memorySettings.enabled
-                && memorySettings.mode === MEMORY_MODE_VECTOR
-                ? buildMemoryDigestForContext()
+                ? (buildMemoryContextForPrompt() || (
+                    memorySettings.mode === MEMORY_MODE_VECTOR ? buildMemoryDigestForContext() : ''
+                ))
                 : '';
 
             // 添加聊天记录（按 token 预算保留最近楼层，至少保留现场窗口下限）
@@ -9650,6 +9681,179 @@ ${content}
             };
         });
 
+        // --- 滚动摘要（记忆重构 P0：原文真相源 + 派生摘要层） ---
+        const summaryLib = () => globalThis.RPHMemorySummary;
+
+        const getMemorySummaries = () => {
+            if (!memorySummaries.value) {
+                memorySummaries.value = { long: '', short: '', batches: [], updatedAt: 0 };
+            }
+            return memorySummaries.value;
+        };
+
+        const saveMemorySummariesNow = async () => {
+            if (!currentCharacter.value?.uuid || !memorySummaries.value) return;
+            await setScopedStoredValue(
+                'memory_summaries',
+                getCurrentChatStorageScopeId(),
+                cloneForStorage(memorySummaries.value),
+                { clone: false }
+            );
+        };
+
+        const loadMemorySummaries = async (characterId) => {
+            try {
+                const saved = await getScopedStoredValue('memory_summaries', characterId);
+                memorySummaries.value = saved && typeof saved === 'object'
+                    ? {
+                        long: String(saved.long || '').trim(),
+                        short: String(saved.short || '').trim(),
+                        batches: Array.isArray(saved.batches) ? saved.batches : [],
+                        updatedAt: Number(saved.updatedAt) || 0
+                    }
+                    : null;
+            } catch (error) {
+                console.error('Error loading memory summaries:', error);
+                memorySummaries.value = null;
+            }
+        };
+
+        const clearSummaryProgress = () => {
+            if (_summaryDoneTimer) {
+                clearTimeout(_summaryDoneTimer);
+                _summaryDoneTimer = null;
+            }
+            summaryProgress.value = null;
+        };
+
+        const setSummaryProgress = (progress, autoClear = true) => {
+            summaryProgress.value = progress;
+            if (autoClear && _summaryDoneTimer) {
+                clearTimeout(_summaryDoneTimer);
+                _summaryDoneTimer = null;
+            }
+            if (autoClear && progress.status !== 'running') {
+                _summaryDoneTimer = setTimeout(clearSummaryProgress, 4000);
+            }
+        };
+
+        const collectTurnsForBatch = (fromTurn, toTurn) => {
+            const snapshot = buildConversationTurnSnapshot(chatHistory.value, { includeSystem: false });
+            return snapshot.turns
+                .filter(turnInfo => Number(turnInfo.turn) >= fromTurn && Number(turnInfo.turn) <= toTurn)
+                .map(turnInfo => ({
+                    turn: turnInfo.turn,
+                    userContent: turnInfo.userContent,
+                    assistantContent: turnInfo.assistantContent
+                }));
+        };
+
+        const requestRollingSummary = async (batch, signal) => {
+            const lib = summaryLib();
+            if (!lib) throw new Error('滚动摘要模块未加载');
+            const model = String(memorySettings.classicModel || '').trim();
+            const memoryProvider = getMemoryProvider();
+            if (!memoryProvider.apiUrl || !memoryProvider.apiKey) throw new Error('请先配置记忆供应商的 API 地址和 Key');
+            if (!model) throw new Error('请先选择记忆模型');
+            const current = getMemorySummaries();
+            const turns = collectTurnsForBatch(batch.fromTurn, batch.toTurn);
+            const messages = lib.buildRewriteMessages({
+                shortSummary: current.short,
+                longSummary: current.long,
+                batch,
+                turns,
+                characterName: currentCharacter.value?.name || '角色',
+                userRoleName: user.name || '用户'
+            });
+            const response = await fetch(getMemoryApiEndpoint('chat/completions'), {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${memoryProvider.apiKey}`
+                },
+                body: JSON.stringify({
+                    model,
+                    temperature: 0.2,
+                    stream: false,
+                    messages
+                }),
+                signal: withTimeoutSignal(signal)
+            });
+            const rawText = await response.text();
+            if (!response.ok) {
+                let payload = null;
+                try { payload = JSON.parse(rawText); } catch (_) { }
+                throw new Error(extractApiErrorMessage(payload, response.status) || `API Error: ${response.status}`);
+            }
+            const content = getClassicSummaryResponseContent(rawText);
+            const parsed = lib.parseSummaryJson(content);
+            if (!parsed.short) throw new Error('记忆模型没有返回有效摘要');
+            return parsed;
+        };
+
+        const runRollingSummaryCheck = async () => {
+            const lib = summaryLib();
+            if (!lib || !memorySettings.enabled || !currentCharacter.value?.uuid) return false;
+            if (_summaryInFlight) return false;
+            const current = getMemorySummaries();
+            const turnCount = buildConversationTurnSnapshot(chatHistory.value, { includeSystem: false }).turns.length;
+            const batch = lib.computePendingBatch(current.batches, turnCount, {
+                keepFloors: memorySettings.keepFloors,
+                batchSize: lib.DEFAULTS.batchSize
+            });
+            if (!batch) return false;
+            _summaryInFlight = true;
+            setSummaryProgress({ ...batch, status: 'running' }, false);
+            try {
+                const parsed = await requestRollingSummary(batch, new AbortController().signal);
+                current.long = parsed.long || current.long;
+                current.short = parsed.short;
+                current.batches = [...current.batches, { ...batch, status: 'done', at: Date.now() }];
+                current.updatedAt = Date.now();
+                await saveMemorySummariesNow();
+                setSummaryProgress({ ...batch, status: 'done' });
+                return true;
+            } catch (error) {
+                if (error.name !== 'AbortError') {
+                    current.batches = [...current.batches, {
+                        ...batch,
+                        status: 'failed',
+                        at: Date.now(),
+                        error: String(error.message || error)
+                    }];
+                    setSummaryProgress({ ...batch, status: 'failed' });
+                    console.error('Rolling summary failed:', error);
+                }
+                return false;
+            } finally {
+                _summaryInFlight = false;
+            }
+        };
+
+        const retryRollingSummary = () => {
+            const progress = summaryProgress.value;
+            if (!progress || progress.status !== 'failed') return;
+            const batch = { fromTurn: progress.fromTurn, toTurn: progress.toTurn };
+            setSummaryProgress({ ...batch, status: 'running' }, false);
+            runRollingSummaryCheck();
+        };
+
+        const buildMemoryContextForPrompt = () => {
+            const lib = summaryLib();
+            if (!lib || !memorySummaries.value) return '';
+            const current = getMemorySummaries();
+            const parts = [];
+            if (current.long) parts.push(`<long_summary>\n${current.long}\n</long_summary>`);
+            if (current.short) parts.push(`<short_summary>\n${current.short}\n</short_summary>`);
+            if (parts.length === 0) return '';
+            return [
+                '<role_memory>',
+                '  <description>以下为滚出上下文的旧对话摘要：长期摘要为整体要点，短期摘要为最近一段历史的细节；事件时间均为剧情时间。</description>',
+                ...parts.map(part => indentXmlText(part, 2)),
+                '</role_memory>'
+            ].join('\n');
+        };
+
         const buildMemoryDigestForContext = () => {
             const lib = schemaLib();
             const time = timeLib();
@@ -11209,6 +11413,10 @@ ${content}
 
         const startAutomaticMemoryPatrol = (mode = memorySettings.mode) => {
             if (!memorySettings.enabled || !currentCharacter.value) return Promise.resolve(false);
+            // 滚动摘要（新引擎）：每轮对话后检查窗口外是否攒满一批待总结
+            if (!_summaryInFlight) {
+                nextTick(() => runRollingSummaryCheck());
+            }
             if (mode === MEMORY_MODE_CLASSIC) {
                 if (isClassicBatchExtracting.value) {
                     _classicBatchRescanRequested = true;
@@ -11490,6 +11698,7 @@ ${content}
                             deleteScopedStoredValue('chat', scopeId),
                             deleteScopedStoredValue('memories', scopeId),
                             deleteScopedStoredValue('classic_memories', scopeId),
+                            deleteScopedStoredValue('memory_summaries', scopeId),
                             db.deleteFragments(scopeId)
                         ]));
                         await deleteScopedStoredValue('branches', char.uuid);
@@ -11558,6 +11767,7 @@ ${content}
                                 deleteScopedStoredValue('chat', scopeId),
                                 deleteScopedStoredValue('memories', scopeId),
                                 deleteScopedStoredValue('classic_memories', scopeId),
+                                deleteScopedStoredValue('memory_summaries', scopeId),
                                 db.deleteFragments(scopeId)
                             ]));
                             await deleteScopedStoredValue('branches', char.uuid);
@@ -11827,6 +12037,7 @@ image###生成的提示词###
             vectorMemorySearchError.value = '';
             memoryGraphHighlightIds.value = new Set();
             memoryGraphSelectedId.value = '';
+            await loadMemorySummaries(characterId);
             try {
                 const savedMemories = await getScopedStoredValue('memories', characterId);
                 memories.value = savedMemories?.length
@@ -12079,14 +12290,16 @@ image###生成的提示词###
                 const branchNumber = storyBranches.value.filter(branch => branch.id !== 'main').length + 1;
                 const branchName = api ? api.defaultBranchName(branchNumber) : `分支 ${branchNumber}`;
                 const now = Date.now();
-                const [savedChat, savedMemories, savedClassicMemories] = await Promise.all([
+                const [savedChat, savedMemories, savedClassicMemories, savedSummaries] = await Promise.all([
                     getStoredChatHistoryWithRetry(parentScopeId),
                     getScopedStoredValue('memories', parentScopeId),
-                    getScopedStoredValue('classic_memories', parentScopeId)
+                    getScopedStoredValue('classic_memories', parentScopeId),
+                    getScopedStoredValue('memory_summaries', parentScopeId)
                 ]);
                 let branchChat = Array.isArray(savedChat) ? savedChat : [];
                 let branchMemories = Array.isArray(savedMemories) ? savedMemories : [];
                 let branchClassicMemories = Array.isArray(savedClassicMemories) ? savedClassicMemories : [];
+                let branchSummaries = savedSummaries && typeof savedSummaries === 'object' ? { ...savedSummaries } : null;
                 let forkTurn = null;
                 if (forkFromMessage) {
                     const sourceIndex = forkMessageId
@@ -12102,10 +12315,16 @@ image###生成的提示词###
                     ).turns.length;
                     branchMemories = branchMemories.filter(memory => Number(memory?.turn) <= forkTurn);
                     branchClassicMemories = branchClassicMemories.filter(memory => Number(memory?.turn) <= forkTurn);
+                    if (branchSummaries && Array.isArray(branchSummaries.batches)) {
+                        branchSummaries.batches = branchSummaries.batches.filter(b => Number(b?.toTurn) <= forkTurn);
+                    }
                 }
                 await setScopedStoredValue('chat', branchScopeId, branchChat, { clone: false });
                 await setScopedStoredValue('memories', branchScopeId, branchMemories, { clone: false });
                 await setScopedStoredValue('classic_memories', branchScopeId, branchClassicMemories, { clone: false });
+                if (branchSummaries) {
+                    await setScopedStoredValue('memory_summaries', branchScopeId, cloneForStorage(branchSummaries), { clone: false });
+                }
                 if (db) {
                     let parentFacts = [];
                     try { parentFacts = await db.loadFragments(parentScopeId); } catch (_) { parentFacts = []; }
@@ -12211,6 +12430,7 @@ image###生成的提示词###
                     getScopedStoredValue('memories', targetScopeId),
                     getScopedStoredValue('classic_memories', targetScopeId)
                 ]);
+                await loadMemorySummaries(targetScopeId);
                 _isApplyingCharacterScopedData = true;
                 activeStoryBranchId.value = branchId;
                 resetChatRenderWindow();
@@ -12323,6 +12543,7 @@ image###生成的提示词###
                             deleteScopedStoredValue('chat', scopeId),
                             deleteScopedStoredValue('memories', scopeId),
                             deleteScopedStoredValue('classic_memories', scopeId),
+                            deleteScopedStoredValue('memory_summaries', scopeId),
                             db.deleteFragments(scopeId)
                         ]));
                         scopeIds.forEach(scopeId => {
@@ -13658,6 +13879,7 @@ image###生成的提示词###
             processMainContent,
             currentView, showDescriptionPanel, showModelSelector, modelSelectionTarget, openModelSelector, showChatModelSelector, showCharacterEditor, showAddCharacterMenu, showPresetEditor, showUiTemplateEditor,
             memoryProviderSelectOptions, memoryProviderLabel,
+            memorySummaries, summaryProgress, retryRollingSummary, clearSummaryProgress,
             chatBindingLabel, embeddingBindingLabel, providerTags, activeProviderTag, getProviderDisplayName,
             showActiveToolEditor,
             showExportModal, sysInstruction, showInstructionPanel, exportItems, selectedExportIndices, // Export Modal
@@ -13781,8 +14003,14 @@ image###生成的提示词###
             }),
             clearAllMemories: () => {
                 const isClassicMode = memorySettings.mode === MEMORY_MODE_CLASSIC;
-                const modeName = isClassicMode ? '总结模式' : '事实层';
-                confirmAction(`确定要清空${modeName}吗？${isClassicMode ? '' : '向量分片证据会保留，事实层将重建基线。'}此操作无法撤销。`, async () => {
+                const modeName = isClassicMode ? '总结模式' : '记忆';
+                confirmAction(`确定要清空${modeName}吗？${isClassicMode ? '' : '原文聊天记录会保留，摘要与索引将从原文重建。'}此操作无法撤销。`, async () => {
+                    // 滚动摘要（新引擎）：清空派生摘要层，原文保留可重建
+                    memorySummaries.value = null;
+                    clearSummaryProgress();
+                    if (currentCharacter.value?.uuid) {
+                        await deleteScopedStoredValue('memory_summaries', getCurrentChatStorageScopeId());
+                    }
                     if (isClassicMode) {
                         abortClassicBatchExtraction();
                         classicMemories.value = [];

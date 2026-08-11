@@ -502,6 +502,29 @@
                     @scroll="handleChatScroll"
                     class="flex-1 overflow-y-auto overflow-x-hidden px-2 pt-14 md:pt-16 pb-44 md:pb-60 relative z-0 space-y-14 md:space-y-16 transition-all duration-500"
                     :class="!settings.useCharacterBackground || !currentCharacter || !currentCharacter?.avatar ? 'bg-gray-50' : ''">
+                    <div v-if="summaryProgress" class="mx-auto max-w-2xl px-2 -mt-8 md:-mt-10">
+                        <div :class="['flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold shadow-sm border',
+                            summaryProgress.status === 'failed' ? 'bg-rose-50 border-rose-200 text-rose-700'
+                            : summaryProgress.status === 'running' ? 'bg-white border-primary-100 text-primary-700'
+                            : 'bg-white border-emerald-100 text-emerald-700']">
+                            <span v-if="summaryProgress.status === 'running'"
+                                class="inline-block w-3 h-3 border-2 border-primary-400 border-t-transparent rounded-full animate-spin flex-shrink-0"></span>
+                            <span class="truncate">
+                                <template v-if="summaryProgress.status === 'running'">正在总结 第 {{ summaryProgress.fromTurn }}–{{ summaryProgress.toTurn }} 轮…</template>
+                                <template v-else-if="summaryProgress.status === 'failed'">第 {{ summaryProgress.fromTurn }}–{{ summaryProgress.toTurn }} 轮总结失败，稍后自动重试</template>
+                                <template v-else>已总结 第 {{ summaryProgress.fromTurn }}–{{ summaryProgress.toTurn }} 轮</template>
+                            </span>
+                            <button v-if="summaryProgress.status === 'failed'" type="button"
+                                @click="retryRollingSummary"
+                                class="ml-auto flex-shrink-0 px-2 py-0.5 rounded-lg bg-rose-100 text-rose-700 hover:bg-rose-200 transition-colors">
+                                重试
+                            </button>
+                            <button v-else type="button" @click="clearSummaryProgress"
+                                class="ml-auto flex-shrink-0 px-1.5 text-gray-400 hover:text-gray-600 transition-colors">
+                                ✕
+                            </button>
+                        </div>
+                    </div>
                     <div v-if="!currentCharacter"
                         class="flex flex-col items-center justify-center h-full text-gray-500">
                         <div class="w-24 h-24 bg-gray-200 rounded-full mb-4 flex items-center justify-center">
@@ -5824,6 +5847,7 @@
     <script src="assets/js/memory-schema.js"></script>
     <script src="assets/js/memory-time.js"></script>
     <script src="assets/js/memory-graph.js"></script>
+    <script src="assets/js/memory-summary.js"></script>
     <script src="assets/js/default-presets.js"></script>
     <script src="assets/js/tts-text.js"></script>
     <script src="assets/js/tts-engine.js"></script>
