@@ -13939,34 +13939,13 @@ image###生成的提示词###
             showConfirmModal.value = true;
         };
 
-        const activeKeepFloors = computed(() => (
-            memorySettings.mode === MEMORY_MODE_CLASSIC
-                ? memorySettings.summaryKeepFloors
-                : memorySettings.vectorKeepFloors
-        ));
-        const keepFloorsSliderMin = computed(() => (
-            memorySettings.mode === MEMORY_MODE_CLASSIC
-                ? SUMMARY_KEEP_FLOORS_MIN
-                : VECTOR_KEEP_FLOORS_MIN
-        ));
-        const keepFloorsSliderMax = computed(() => (
-            memorySettings.mode === MEMORY_MODE_CLASSIC
-                ? SUMMARY_KEEP_FLOORS_MAX
-                : VECTOR_KEEP_FLOORS_MAX
-        ));
+        const activeKeepFloors = computed(() => memorySettings.keepFloors);
+        const keepFloorsSliderMin = computed(() => VECTOR_KEEP_FLOORS_MIN);
+        const keepFloorsSliderMax = computed(() => VECTOR_KEEP_FLOORS_MAX);
         const keepFloorsSlider = computed({
             get: () => activeKeepFloors.value,
             set: (value) => {
-                if (memorySettings.mode === MEMORY_MODE_CLASSIC) {
-                    memorySettings.summaryKeepFloors = normalizeKeepFloors(
-                        value,
-                        SUMMARY_KEEP_FLOORS_MIN,
-                        SUMMARY_KEEP_FLOORS_MAX,
-                        SUMMARY_KEEP_FLOORS_DEFAULT
-                    );
-                    return;
-                }
-                memorySettings.vectorKeepFloors = normalizeKeepFloors(
+                memorySettings.keepFloors = normalizeKeepFloors(
                     value,
                     VECTOR_KEEP_FLOORS_MIN,
                     VECTOR_KEEP_FLOORS_MAX,
@@ -14045,7 +14024,7 @@ image###生成的提示词###
             processMainContent,
             currentView, showDescriptionPanel, showModelSelector, modelSelectionTarget, openModelSelector, showChatModelSelector, showCharacterEditor, showAddCharacterMenu, showPresetEditor, showUiTemplateEditor,
             memoryProviderSelectOptions, memoryProviderLabel,
-            memorySummaries, memoryProfile, summaryProgress, retryRollingSummary, clearSummaryProgress,
+            memorySummaries, memoryProfile, summaryProgress, retryRollingSummary, clearSummaryProgress, runRollingSummaryCheck,
             memoryRelationCanvas,
             chatBindingLabel, embeddingBindingLabel, providerTags, activeProviderTag, getProviderDisplayName,
             showActiveToolEditor,
@@ -14201,6 +14180,10 @@ image###生成的提示词###
                         nextTick(() => ensureFactBaseline());
                     }
                     showToast(`${modeName}已清空`, 'success');
+                    // 清空并重建：原文仍在，若窗口外已有轮次则立即重新滚动
+                    if (currentCharacter.value?.uuid && memorySettings.enabled) {
+                        nextTick(() => runRollingSummaryCheck());
+                    }
                 });
             },
             exportMemories: async () => {

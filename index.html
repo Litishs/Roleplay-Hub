@@ -3171,7 +3171,7 @@
                     </label>
                         <button @click="clearAllMemories()" v-if="memoryStats.activeTotal > 0"
                             class="p-2.5 bg-white text-red-600 rounded-xl border border-gray-200 shadow-sm active:scale-95 transition-all"
-                            title="清空当前模式记忆">
+                            title="清空并重建记忆（原文保留，摘要与关系从聊天记录重建）">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor"><use href="#icon-delete"></use></svg>
                         </button>
                 </settings-page-header>
@@ -3225,16 +3225,7 @@
                             <div class="flex items-center gap-2">
 
 
-                                <button v-if="isActiveBatchExtracting" @click="abortBatchExtraction()"
-                                    class="inline-flex items-center text-xs px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 rounded-lg border border-red-200/80 transition-all shadow-sm hover:shadow font-medium active:scale-95">
-                                    <svg class="w-3.5 h-3.5 mr-1.5 animate-pulse" fill="none" stroke="currentColor"
-                                        viewBox="0 0 24 24">
-                                        <rect x="6" y="6" width="12" height="12" rx="2" stroke-width="2"></rect>
-                                    </svg>
-                                    <span>停止补录 ({{ activeBatchExtractProgress.current }}/{{ activeBatchExtractProgress.total
-                                        }})</span>
-                                </button>
-                                <button v-else @click="startBatchMemoryExtraction()"
+                                <button type="button" @click="runRollingSummaryCheck()"
                                     :disabled="!memorySettings.enabled"
                                     class="inline-flex items-center text-xs px-3 py-1.5 bg-gradient-to-r from-primary-50 to-blue-50 hover:from-primary-100 hover:to-blue-100 text-primary-700 rounded-lg border border-primary-200/80 transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-sm hover:shadow font-medium active:scale-95">
                                     <svg class="w-3.5 h-3.5 mr-1.5" fill="none" stroke="currentColor"
@@ -3243,60 +3234,19 @@
                                             d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10">
                                         </path>
                                     </svg>
-                                    <span>补录记忆</span>
+                                    <span>立即总结</span>
                                 </button>
                             </div>
                         </div>
                         <div v-if="memorySettings.enabled" class="mb-3 animate-fade-in">
-                            <div class="segmented-switch segmented-switch--compact w-full">
-                                <div class="segmented-switch__indicator"
-                                    :class="{ 'is-right': memorySettings.mode !== 'classic' }"></div>
-                                <div class="segmented-switch__option"
-                                    :class="{ 'is-active': memorySettings.mode === 'classic' }">
-                                    <button type="button" @click="memorySettings.mode = 'classic'; settingsHelpTopic = ''"
-                                        class="absolute inset-0 rounded-lg" aria-label="切换到总结模式"></button>
-                                    <span class="relative z-10 pointer-events-none">总结模式</span>
-                                    <button type="button"
-                                        @click.stop="settingsHelpTopic = settingsHelpTopic === 'summaryMode' ? '' : 'summaryMode'"
-                                        class="settings-help-trigger relative z-20"
-                                        :class="{ 'is-open': settingsHelpTopic === 'summaryMode' }"
-                                        :aria-expanded="settingsHelpTopic === 'summaryMode'"
-                                        aria-label="查看总结模式说明">
-                                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                                d="M9.1 9a3 3 0 115.8 1.1c-.6 1.1-1.9 1.3-2.5 2.2-.3.4-.4.8-.4 1.2M12 17h.01"></path>
-                                        </svg>
-                                    </button>
-                                    <div v-if="settingsHelpTopic === 'summaryMode'" class="settings-help-popover memory-mode-help-popover">
-                                        <span class="settings-help-popover-content">使用副模型为每轮对话生成第三人称的高密度记忆。超过保留楼层后，用户原文保持不变，AI 原文会由对应的本轮记忆替代，不依赖向量相关度进行召回。</span>
-                                    </div>
-                                </div>
-                                <div class="segmented-switch__option"
-                                    :class="{ 'is-active': memorySettings.mode === 'vector' }">
-                                    <button type="button" @click="memorySettings.mode = 'vector'; settingsHelpTopic = ''"
-                                        class="absolute inset-0 rounded-lg" aria-label="切换到向量模式"></button>
-                                    <span class="relative z-10 pointer-events-none">向量模式</span>
-                                    <button type="button"
-                                        @click.stop="settingsHelpTopic = settingsHelpTopic === 'vectorMode' ? '' : 'vectorMode'"
-                                        class="settings-help-trigger relative z-20"
-                                        :class="{ 'is-open': settingsHelpTopic === 'vectorMode' }"
-                                        :aria-expanded="settingsHelpTopic === 'vectorMode'"
-                                        aria-label="查看向量模式说明">
-                                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                                d="M9.1 9a3 3 0 115.8 1.1c-.6 1.1-1.9 1.3-2.5 2.2-.3.4-.4.8-.4 1.2M12 17h.01"></path>
-                                        </svg>
-                                    </button>
-                                    <div v-if="settingsHelpTopic === 'vectorMode'" class="settings-help-popover memory-mode-help-popover is-right">
-                                        <span class="settings-help-popover-content">将历史对话拆成可检索的向量记忆分片，并根据当前输入的相关度召回内容。超过保留楼层后，已有记忆覆盖的旧对话会从原始上下文中移除，相关分片会在需要时重新带入。</span>
-                                    </div>
-                                </div>
+                            <div class="rounded-xl border border-primary-100 bg-primary-50/60 px-3 py-2.5 text-xs leading-relaxed text-primary-800">
+                                滚动记忆引擎：原文是唯一真相源，窗口内直接读取原文；窗口外由滚动摘要（长期 + 短期）+ 固定信息卡（角色状态 / 有向关系 / 未决伏笔）覆盖，旧对话可经原文检索按需召回。
                             </div>
                         </div>
                         <!-- Expandable Settings -->
                         <div v-if="memorySettings.enabled"
                             class="space-y-3 pt-3 border-t border-gray-100 animate-fade-in">
-                            <div v-if="memorySettings.mode === 'vector'" class="space-y-3">
+                            <div class="space-y-3">
                                 <div class="p-3 rounded-xl border border-gray-100 bg-white/60">
                                     <label class="text-xs font-medium text-gray-500 block mb-2">嵌入后端</label>
                                     <div class="segmented-switch segmented-switch--compact w-full">
@@ -3319,14 +3269,10 @@
                                             <span class="text-xs text-gray-500">{{ localEmbeddingStatusLabel }}</span>
                                             <button type="button" @click="preloadLocalEmbedding()" class="text-xs px-2.5 py-1 rounded-lg bg-teal-50 hover:bg-teal-100 text-teal-700 font-medium border border-teal-100 transition-all active:scale-95">预加载模型</button>
                                         </div>
-                                        <button type="button" @click="migrateClassicMemoriesToVectors()"
-                                            class="w-full text-xs px-3 py-2 rounded-lg bg-primary-50 hover:bg-primary-100 text-primary-700 font-medium border border-primary-200 transition-all active:scale-95">
-                                            迁移「总结记忆 → 向量」
-                                        </button>
                                     </div>
                                 </div>
                                 <div class="bg-gray-50/60 p-3 rounded-xl border border-gray-100">
-                                    <label class="text-xs font-medium text-gray-500">记忆供应商（嵌入 / 总结 / 事实抽取）</label>
+                                    <label class="text-xs font-medium text-gray-500">记忆供应商（滚动总结 / 嵌入）</label>
                                     <select v-model="memorySettings.memoryProviderId"
                                         class="w-full mt-2 px-3 py-2 text-sm bg-white/80 border border-gray-200 rounded-xl focus:border-primary-300 focus:outline-none transition-all">
                                         <option v-for="p in memoryProviderSelectOptions" :key="p.id" :value="p.id">{{ p.name }}</option>
@@ -3334,37 +3280,14 @@
                                     <div class="text-[10px] text-gray-400 mt-1.5">当前记忆请求使用：<span class="font-mono text-teal-600">{{ memoryProviderLabel }}</span>。留空则跟随聊天供应商，可同时保存多家 Key。</div>
                                 </div>
                                 <div class="bg-gray-50/60 p-3 rounded-xl border border-gray-100">
-                                    <div class="flex items-center justify-between mb-2">
-                                        <div class="relative flex items-center">
-                                            <label class="text-xs font-medium text-gray-500">事实层抽取</label>
-                                            <button type="button"
-                                                @click.stop="settingsHelpTopic = settingsHelpTopic === 'factLayer' ? '' : 'factLayer'"
-                                                class="settings-help-trigger"
-                                                :class="{ 'is-open': settingsHelpTopic === 'factLayer' }"
-                                                :aria-expanded="settingsHelpTopic === 'factLayer'"
-                                                aria-label="查看事实层说明">
-                                                <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                                        d="M9.1 9a3 3 0 115.8 1.1c-.6 1.1-1.9 1.3-2.5 2.2-.3.4-.4.8-.4 1.2M12 17h.01"></path>
-                                                </svg>
-                                            </button>
-                                            <div v-if="settingsHelpTopic === 'factLayer'" class="settings-help-popover">
-                                                <span class="settings-help-popover-content">用聊天模型把每轮对话提炼成动态事实（事件/关系/状态/伏笔），只存增量；离线时可先建本地基线，等有模型再补录。</span>
-                                            </div>
-                                        </div>
-                                        <label class="relative inline-flex items-center cursor-pointer">
-                                            <input type="checkbox" v-model="memorySettings.factExtractionEnabled" class="settings-toggle-input sr-only">
-                                            <div class="settings-toggle settings-toggle--compact"></div>
-                                        </label>
-                                    </div>
-                                    <div v-if="memorySettings.factExtractionEnabled" class="mt-2">
-                                        <label class="flex items-center gap-1.5 text-[11px] font-bold text-gray-500 mt-2">
-                                            <input type="checkbox" v-model="memorySettings.factClockInjection" class="rounded accent-primary-500">
-                                            抽取时注入剧情时钟（绝对时间锚定）
-                                        </label>
-                                    </div>
+                                    <label class="text-xs font-medium text-gray-500">记忆模型（滚动总结 / 固定信息卡）</label>
+                                    <button type="button" @click="openModelSelector('memoryClassicModel')"
+                                        class="w-full mt-2 px-3 py-2 text-left text-sm bg-white/80 border border-gray-200 rounded-xl hover:border-primary-300 transition-all">
+                                        <span class="font-mono text-teal-600">{{ memorySettings.classicModel || '未选择（跟随聊天模型）' }}</span>
+                                    </button>
+                                    <div class="text-[10px] text-gray-400 mt-1.5">滚动总结与固定信息卡刷新使用的模型；由记忆供应商提供。</div>
                                 </div>
-<div v-if="memorySettings.embeddingBackend === 'api'" class="bg-gray-50/60 p-3 rounded-xl border border-gray-100">
+                                <div v-if="memorySettings.embeddingBackend === 'api'" class="bg-gray-50/60 p-3 rounded-xl border border-gray-100">
                                     <div class="relative mb-2 flex items-center">
                                         <label class="text-xs font-medium text-gray-500">向量嵌入模型</label>
                                         <button type="button"
@@ -3438,61 +3361,6 @@
                                 </div>
                             </div>
 
-                            <div v-else class="bg-gray-50/60 p-3 rounded-xl border border-gray-100">
-                                <div class="mb-2 p-2 rounded-lg bg-amber-50 border border-amber-200 text-[11px] leading-relaxed text-amber-700">
-                                    <span class="font-bold">总结模式即将弃用</span>：新记忆建议走「向量模式 + 本地模型」，老总结记忆可一键迁移为向量（离线，不出设备）。
-                                </div>
-                                <button type="button" @click="memorySettings.mode = 'vector'; migrateClassicMemoriesToVectors()"
-                                    class="w-full mb-3 text-xs px-3 py-2 rounded-lg bg-primary-50 hover:bg-primary-100 text-primary-700 font-medium border border-primary-200 transition-all active:scale-95">
-                                    迁移「总结记忆 → 向量」并切换到向量模式
-                                </button>
-
-                                <div class="relative mb-2 flex items-center">
-                                    <label class="text-xs font-medium text-gray-500">总结模式副模型</label>
-                                    <button type="button"
-                                        @click.stop="settingsHelpTopic = settingsHelpTopic === 'classicModel' ? '' : 'classicModel'"
-                                        class="settings-help-trigger"
-                                        :class="{ 'is-open': settingsHelpTopic === 'classicModel' }"
-                                        :aria-expanded="settingsHelpTopic === 'classicModel'"
-                                        aria-label="查看总结模式副模型说明">
-                                        <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                                d="M9.1 9a3 3 0 115.8 1.1c-.6 1.1-1.9 1.3-2.5 2.2-.3.4-.4.8-.4 1.2M12 17h.01"></path>
-                                        </svg>
-                                    </button>
-                                    <div v-if="settingsHelpTopic === 'classicModel'" class="settings-help-popover">
-                                        <span class="settings-help-popover-content">使用普通聊天模型在后台整理逐轮记忆。它会读取最近四轮对话作为背景，但只整理明确标记的最新一轮；生成的记忆内容用于替换非保留楼层中的 AI 原文，不会改动聊天界面。</span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div v-if="memorySettings.mode === 'classic'" class="relative bg-gray-50/60 p-3 rounded-xl border border-gray-100">
-                                <div class="flex justify-between items-center mb-2">
-                                    <div class="relative flex items-center">
-                                        <label class="text-xs font-medium text-gray-500">补录并发数</label>
-                                        <button type="button"
-                                            @click.stop="settingsHelpTopic = settingsHelpTopic === 'classicConcurrency' ? '' : 'classicConcurrency'"
-                                            class="settings-help-trigger"
-                                            :class="{ 'is-open': settingsHelpTopic === 'classicConcurrency' }"
-                                            :aria-expanded="settingsHelpTopic === 'classicConcurrency'"
-                                            aria-label="查看补录并发数说明">
-                                            <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                                    d="M9.1 9a3 3 0 115.8 1.1c-.6 1.1-1.9 1.3-2.5 2.2-.3.4-.4.8-.4 1.2M12 17h.01"></path>
-                                            </svg>
-                                        </button>
-                                        <div v-if="settingsHelpTopic === 'classicConcurrency'" class="settings-help-popover is-above">
-                                            <span class="settings-help-popover-content">控制总结模式同时处理多少个补录任务。数值越高补录越快，但会同时占用更多 API 并发额度，也更容易触发服务商限流；它只影响处理速度，不改变总结内容和记忆顺序。</span>
-                                        </div>
-                                    </div>
-                                    <span class="text-xs font-mono text-primary-600 bg-primary-50 px-1.5 py-0.5 rounded border border-primary-100">
-                                        {{ memorySettings.classicConcurrency }} 并发
-                                    </span>
-                                </div>
-                                <input type="range" v-model.number="memorySettings.classicConcurrency" min="1" max="10" step="1"
-                                    class="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary-500">
-                            </div>
-
                             <!-- Context Compression Settings -->
                             <div class="pt-3 border-t border-gray-100 mt-1">
                                 <div class="relative bg-gray-50/60 p-3 rounded-xl border border-gray-100">
@@ -3511,7 +3379,7 @@
                                                 </svg>
                                             </button>
                                             <div v-if="settingsHelpTopic === 'keepFloors'" class="settings-help-popover is-above">
-                                                <span class="settings-help-popover-content">决定最近多少楼原始对话保留在上下文中，更早的内容会由记忆引擎替代。总结模式可选 6–24 楼，向量模式可选 8–40 楼；滑块每次调整 2 楼，始终保持双数。数值越大，保留的原文越多、上下文占用也越高。</span>
+                                                <span class="settings-help-popover-content">决定最近多少轮原文保留在上下文中（8–40 轮），更早的轮次会由滚动摘要覆盖，可经原文检索按需召回。数值越大，保留的原文越多、上下文占用也越高。</span>
                                             </div>
                                         </div>
                                         <span
@@ -3519,7 +3387,7 @@
                                             activeKeepFloors + ' 楼'
                                             }}</span>
                                     </div>
-                                    <input :key="memorySettings.mode" type="range" v-model.number="keepFloorsSlider" :min="keepFloorsSliderMin" :max="keepFloorsSliderMax" step="2"
+                                    <input type="range" v-model.number="keepFloorsSlider" :min="keepFloorsSliderMin" :max="keepFloorsSliderMax" step="2"
                                         class="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary-500">
                                 </div>
                                 <div class="relative bg-gray-50/60 p-3 rounded-xl border border-gray-100 mt-2">
@@ -3570,18 +3438,14 @@
                             <span class="truncate">向量记忆</span>
                         </span>
                         <div class="flex items-center gap-2 flex-shrink-0">
-                            <div class="grid grid-cols-4 gap-1 bg-gray-50 border border-gray-200 rounded-lg p-0.5">
+                            <div class="grid grid-cols-3 gap-1 bg-gray-50 border border-gray-200 rounded-lg p-0.5">
                                 <button type="button" @click="setMemoryGraphView('list')"
                                     :class="['px-2.5 py-1 text-xs font-bold rounded-md transition-all', memoryGraphView === 'list' ? 'bg-white text-primary-700 shadow-sm border border-primary-100' : 'text-gray-400 hover:text-gray-600']">
                                     检索
                                 </button>
-                                <button type="button" @click="setMemoryGraphView('graph')"
-                                    :class="['px-2.5 py-1 text-xs font-bold rounded-md transition-all', memoryGraphView === 'graph' ? 'bg-white text-primary-700 shadow-sm border border-primary-100' : 'text-gray-400 hover:text-gray-600']">
-                                    图谱
-                                </button>
-                                <button type="button" @click="setMemoryGraphView('facts')"
-                                    :class="['px-2.5 py-1 text-xs font-bold rounded-md transition-all', memoryGraphView === 'facts' ? 'bg-white text-primary-700 shadow-sm border border-primary-100' : 'text-gray-400 hover:text-gray-600']">
-                                    事实
+                                <button type="button" @click="setMemoryGraphView('summary')"
+                                    :class="['px-2.5 py-1 text-xs font-bold rounded-md transition-all', memoryGraphView === 'summary' ? 'bg-white text-primary-700 shadow-sm border border-primary-100' : 'text-gray-400 hover:text-gray-600']">
+                                    摘要
                                 </button>
                                 <button type="button" @click="setMemoryGraphView('relations')"
                                     :class="['px-2.5 py-1 text-xs font-bold rounded-md transition-all', memoryGraphView === 'relations' ? 'bg-white text-primary-700 shadow-sm border border-primary-100' : 'text-gray-400 hover:text-gray-600']">
@@ -3737,6 +3601,34 @@
                                                 第 {{ neighbor.turn }} 轮 · {{ String(neighbor.text || '').slice(0, 16) }}
                                             </button>
                                         </div>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+
+                        <!-- Memory Summary Panel（滚动摘要，P2） -->
+                        <div v-show="memoryGraphView === 'summary'" class="space-y-3">
+                            <div v-if="!memorySummaries || (!memorySummaries.long && !memorySummaries.short)"
+                                class="py-8 text-center text-sm text-gray-400">
+                                还没有摘要，聊够 {{ memorySettings.keepFloors }} 轮后自动生成
+                            </div>
+                            <template v-else>
+                                <div v-if="memorySummaries.long" class="rounded-xl border border-gray-100 bg-white px-3 py-2.5">
+                                    <div class="text-[10px] font-bold text-gray-400 mb-1">长期摘要</div>
+                                    <p class="text-xs text-gray-700 whitespace-pre-line">{{ memorySummaries.long }}</p>
+                                </div>
+                                <div v-if="memorySummaries.short" class="rounded-xl border border-gray-100 bg-white px-3 py-2.5">
+                                    <div class="text-[10px] font-bold text-gray-400 mb-1">短期摘要</div>
+                                    <p class="text-xs text-gray-700 whitespace-pre-line">{{ memorySummaries.short }}</p>
+                                </div>
+                                <div v-if="memorySummaries.batches.length > 0"
+                                    class="rounded-xl border border-gray-100 bg-white px-3 py-2.5">
+                                    <div class="text-[10px] font-bold text-gray-400 mb-1">总结批次</div>
+                                    <div class="flex flex-wrap gap-1.5">
+                                        <span v-for="(b, idx) in memorySummaries.batches" :key="idx"
+                                            :class="['text-[10px] px-2 py-1 rounded-lg border', b.status === 'done' ? 'bg-emerald-50 border-emerald-100 text-emerald-700' : b.status === 'failed' ? 'bg-rose-50 border-rose-100 text-rose-700' : 'bg-gray-50 border-gray-100 text-gray-500']">
+                                            第 {{ b.fromTurn }}–{{ b.toTurn }} 轮{{ b.status === 'done' ? '·已总结' : b.status === 'failed' ? '·失败' : '' }}
+                                        </span>
                                     </div>
                                 </div>
                             </template>

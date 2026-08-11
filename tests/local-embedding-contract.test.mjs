@@ -41,8 +41,6 @@ test('app.js wires embeddingBackend local routing and classic->vector migration'
 test('memory settings UI exposes backend selector and migration actions', () => {
     assert.match(html, /嵌入后端/);
     assert.match(html, /memorySettings\.embeddingBackend === 'local'/);
-    assert.match(html, /migrateClassicMemoriesToVectors\(\)/);
-    assert.match(html, /总结模式即将弃用/);
     assert.match(html, /localEmbeddingStatusLabel/);
 });
 
