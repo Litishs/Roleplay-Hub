@@ -371,6 +371,17 @@ test('worldbook budget governance (P4) trims by tokens and dedups with character
     assert.match(html, /settings\.worldInfoTokenBudget/);
 });
 
+test('vector embedding storage supports new float32 and legacy int8 formats', () => {
+    assert.match(app, /typeof memory\?\.embeddingF === 'string'/, 'hasVectorEmbedding 应识别新 float32 格式');
+    assert.match(app, /const base64ToFloat32Array = \(base64\) => \{/, '应有 float32 解包');
+    assert.match(app, /const packFloat32EmbeddingForStorage = \(embedding\) => \{/, '新数据应打包为 float32');
+    assert.match(app, /embeddingEncoding: 'float32:v1'/, '新格式应标记 float32:v1');
+    assert.match(app, /if \(typeof memory\.embeddingF === 'string'/, '运行时优先解包 embeddingF');
+    assert.match(app, /base64ToInt8Array\(memory\.embeddingQ\)/, '旧 embeddingQ(int8) 兼容解包');
+    assert.match(app, /if \(typeof cleanMemory\.embeddingF === 'string'/, '落盘时旧 embeddingF 不重打包');
+    assert.match(app, /const packed = packFloat32EmbeddingForStorage\(embedding\);/, '新数据落盘走 float32 而非 int8 量化');
+});
+
 test('storage-repository.js exposes incremental fragment APIs', () => {
     assert.match(repository, /async loadFragments\(characterId\)/);
     assert.match(repository, /async applyFragments\(characterId, changes\)/);

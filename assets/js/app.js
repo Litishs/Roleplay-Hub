@@ -1764,6 +1764,7 @@ createApp({
         const hasVectorEmbedding = (memory) => (
             (isEmbeddingLike(memory?.embedding) && memory.embedding.length > 0)
             || (typeof memory?.embeddingQ === 'string' && memory.embeddingQ.length > 0)
+            || (typeof memory?.embeddingF === 'string' && memory.embeddingF.length > 0)
         );
 
         const isVectorMemory = (memory) => {
@@ -1802,6 +1803,26 @@ createApp({
             return new Int8Array(bytes.buffer);
         };
 
+        const base64ToFloat32Array = (base64) => {
+            const binary = atob(String(base64 || ''));
+            const bytes = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; i++) {
+                bytes[i] = binary.charCodeAt(i);
+            }
+            return new Float32Array(bytes.buffer);
+        };
+
+        // 新格式：float32 直接存储（base64），不量化；旧数据保持 embeddingQ(int8) 不动
+        const packFloat32EmbeddingForStorage = (embedding) => {
+            if (!isEmbeddingLike(embedding) || embedding.length === 0) return null;
+            const float32 = Float32Array.from(embedding, value => Number(value) || 0);
+            return {
+                embeddingF: bytesToBase64(new Uint8Array(float32.buffer)),
+                embeddingDims: float32.length,
+                embeddingEncoding: 'float32:v1'
+            };
+        };
+
         const quantizeEmbeddingForStorage = (embedding) => {
             if (!isEmbeddingLike(embedding) || embedding.length === 0) return null;
             let maxAbs = 0;
@@ -1830,18 +1851,25 @@ createApp({
             if (Object.prototype.hasOwnProperty.call(memory, 'depth')) {
                 delete memory.depth;
             }
-            if (typeof memory.embeddingQ === 'string' && memory.embeddingQ.length > 0) {
+            if (typeof memory.embeddingF === 'string' && memory.embeddingF.length > 0) {
+                try {
+                    memory.embedding = markRuntimeRaw(base64ToFloat32Array(memory.embeddingF));
+                } catch (e) {
+                    memory.embedding = [];
+                }
+            } else if (typeof memory.embeddingQ === 'string' && memory.embeddingQ.length > 0) {
                 try {
                     memory.embedding = markRuntimeRaw(base64ToInt8Array(memory.embeddingQ));
                 } catch (e) {
                     memory.embedding = [];
                 }
             } else if (isEmbeddingLike(memory.embedding)) {
-                const packed = quantizeEmbeddingForStorage(memory.embedding);
-                if (packed) {
-                    Object.assign(memory, packed);
-                    memory.embedding = markRuntimeRaw(base64ToInt8Array(packed.embeddingQ));
-                }
+                // 新格式：内存中保留浮点数组（落盘时统一打包为 embeddingF）
+                memory.embedding = markRuntimeRaw(
+                    memory.embedding instanceof Float32Array
+                        ? memory.embedding
+                        : Float32Array.from(memory.embedding, value => Number(value) || 0)
+                );
             }
             if (isEmbeddingLike(memory.embedding)) {
                 memory.embedding = markRuntimeRaw(memory.embedding);
@@ -1884,8 +1912,11 @@ createApp({
             if (typeof cleanMemory.embeddingQ === 'string' && cleanMemory.embeddingQ.length > 0) {
                 return cleanMemory;
             }
+            if (typeof cleanMemory.embeddingF === 'string' && cleanMemory.embeddingF.length > 0) {
+                return cleanMemory;
+            }
 
-            const packed = quantizeEmbeddingForStorage(embedding);
+            const packed = packFloat32EmbeddingForStorage(embedding);
             return packed ? { ...cleanMemory, ...packed } : cleanMemory;
         };
 
