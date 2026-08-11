@@ -9298,8 +9298,8 @@ ${content}
                 .filter(turnInfo => Number(turnInfo.turn) >= fromTurn && Number(turnInfo.turn) <= toTurn)
                 .map(turnInfo => ({
                     turn: turnInfo.turn,
-                    userContent: turnInfo.userContent,
-                    assistantContent: turnInfo.assistantContent
+                    userContent: turnInfo.user?.content,
+                    assistantContent: turnInfo.assistant?.content
                 }));
         };
 
