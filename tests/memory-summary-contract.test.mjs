@@ -97,3 +97,15 @@ test('滚动摘要:app.js 接入注入、触发与存储键', () => {
     assert.ok(app.includes("'memory_summaries'"));
     assert.ok(app.includes('memorySettings.keepFloors'));
 });
+
+test('记忆重构:单一引擎且旧模式/事实层 UI 已移除', () => {
+    assert.ok(html.includes("setMemoryGraphView('summary')"));
+    assert.ok(html.includes("setMemoryGraphView('relations')"));
+    assert.ok(!html.includes("setMemoryGraphView('graph')"));
+    assert.ok(!html.includes("setMemoryGraphView('facts')"));
+    assert.ok(!html.includes('总结模式'));
+    assert.ok(!html.includes('事实层抽取'));
+    assert.ok(!html.includes('剧情时钟'));
+    assert.ok(!app.includes('MEMORY_MODE_CLASSIC'));
+    assert.ok(!app.includes('memory-schema.js'));
+});
