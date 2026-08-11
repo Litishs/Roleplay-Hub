@@ -1900,6 +1900,16 @@ opacity: 0;
             contain-intrinsic-size: 1px 300px; /* Rough estimate of card height */
         }
 
+        .char-grid-item.is-card-pressing {
+            transform: scale(0.94);
+            transition-duration: 120ms;
+        }
+
+        .char-grid-item.is-card-releasing {
+            transform: scale(1);
+            transition-duration: 180ms;
+        }
+
         /* Chain of Thought (CoT) UI - Enhanced */
         .cot-ui {
             background-color: #ffffff;

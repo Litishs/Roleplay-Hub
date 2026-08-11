@@ -1153,8 +1153,12 @@
                 <!-- Mobile View (Grid) -->
                 <div class="md:hidden grid grid-cols-2 gap-4">
                     <div v-for="char in displayedCharacters" :key="'mobile-'+char.uuid"
-                        class="char-grid-item relative aspect-[2/3] rounded-2xl overflow-hidden shadow-md active:scale-[0.97] transition-[transform,shadow,border-color] duration-300 border border-gray-100"
+                        class="char-grid-item relative aspect-[2/3] rounded-2xl overflow-hidden shadow-md transition-[transform,shadow,border-color] duration-300 border border-gray-100"
                         :class="{'ring-4 ring-primary-500 ring-offset-2': currentCharacter && currentCharacter.uuid === char.uuid && !isBatchDeleteMode}"
+                        @pointerdown="beginCharacterCardPress"
+                        @pointerup="endCharacterCardPress"
+                        @pointercancel="endCharacterCardPress"
+                        @pointerleave="endCharacterCardPress"
                         @click="isBatchDeleteMode ? toggleCharacterSelection(char.originalIndex) : selectCharacter(char.originalIndex)">
 
                         <!-- Avatar Background -->
@@ -1242,6 +1246,10 @@
                              'ring-4 ring-primary-500 ring-offset-2': currentCharacter && currentCharacter.uuid === char.uuid && !isBatchDeleteMode,
                              'ring-2 ring-red-500 border-red-500': isBatchDeleteMode && selectedCharacterIndices.has(char.originalIndex)
                          }"
+                        @pointerdown="beginCharacterCardPress"
+                        @pointerup="endCharacterCardPress"
+                        @pointercancel="endCharacterCardPress"
+                        @pointerleave="endCharacterCardPress"
                         @click="isBatchDeleteMode ? toggleCharacterSelection(char.originalIndex) : selectCharacter(char.originalIndex)">
                         <div class="aspect-w-2 aspect-h-3 relative h-[500px] overflow-hidden">
                             <img :src="char?.avatar"

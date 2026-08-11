@@ -7875,12 +7875,13 @@ ${content}
             });
 
             if (fragmentItems.length === 0) {
-                batchExtractProgress.value = { current: chunks.length, total: chunks.length };
+                batchExtractProgress.value = { current: 0, total: 0 };
                 await saveMemorySettingsNow();
                 return 0;
             }
 
-            batchExtractProgress.value = { current: 0, total: fragmentItems.length };
+            const totalRequests = Math.ceil(fragmentItems.length / MEMORY_VECTOR_BATCH_SIZE);
+            batchExtractProgress.value = { current: 0, total: totalRequests };
             let batchesSinceSave = 0;
             const flushBatchMemorySave = async () => {
                 if (batchesSinceSave <= 0) return;
@@ -7929,7 +7930,10 @@ ${content}
                         }
                     });
 
-                    batchExtractProgress.value.current = Math.min(i + batch.length, fragmentItems.length);
+                    batchExtractProgress.value.current = Math.min(
+                        Math.floor(i / MEMORY_VECTOR_BATCH_SIZE) + 1,
+                        totalRequests
+                    );
                     batchesSinceSave++;
 
                     const isLastBatch = i + batch.length >= fragmentItems.length;
@@ -12147,6 +12151,31 @@ image###生成的提示词###
             );
         };
 
+        // 角色卡按压动画（同步上游 main 热修）：pointerdown 缩小、松开回弹
+        const characterCardPressStates = new WeakMap();
+        const beginCharacterCardPress = (event) => {
+            const card = event.currentTarget;
+            const previousState = characterCardPressStates.get(card);
+            if (previousState?.timer) clearTimeout(previousState.timer);
+            card.classList.remove('is-card-releasing');
+            card.classList.add('is-card-pressing');
+            characterCardPressStates.set(card, { startedAt: performance.now(), releasing: false, timer: null });
+        };
+        const endCharacterCardPress = (event) => {
+            const card = event.currentTarget;
+            const state = characterCardPressStates.get(card);
+            if (!state || state.releasing) return;
+            state.releasing = true;
+            state.timer = setTimeout(() => {
+                card.classList.remove('is-card-pressing');
+                card.classList.add('is-card-releasing');
+                state.timer = setTimeout(() => {
+                    card.classList.remove('is-card-releasing');
+                    characterCardPressStates.delete(card);
+                }, 180);
+            }, Math.max(0, 120 - (performance.now() - state.startedAt)));
+        };
+
         const selectCharacter = async (index, isNewImport = false) => {
             if (isConversationBusy.value) {
                 stopGeneration();
@@ -13710,7 +13739,7 @@ image###生成的提示词###
             showImportPreview, importPreview, confirmImportPreview, cancelImportPreview,
             copyMessage, deleteMessage, regenerateMessage,
             editMessage, saveEditMessage, cancelEditMessage,
-            createNewCharacter, editCharacter, saveCharacter, deleteCharacter, selectCharacter, toggleCharacterFavorite, isCharacterFavorite,
+            createNewCharacter, editCharacter, saveCharacter, deleteCharacter, selectCharacter, beginCharacterCardPress, endCharacterCardPress, toggleCharacterFavorite, isCharacterFavorite,
             currentUiTemplates, activeUiTemplates, uiTemplateUpdateStatus, createUiTemplate, editUiTemplate, saveUiTemplate, deleteUiTemplate, importUiTemplates, updateUiTemplatesFromChat, renderEditingUiTemplatePreview, handleUiTemplateClick, formatUiTemplateChangeValue, hasUiTemplateScripts,
             isBatchDeleteMode, isSidebarCollapsed, isAdvancedNavOpen, toggleAdvancedNav, selectedCharacterIndices, toggleBatchDeleteMode, toggleCharacterSelection, batchDeleteCharacters,
             getCharacterWICount, getCharacterRegexCount,

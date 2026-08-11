@@ -270,6 +270,12 @@ test('app.js wires fact layer state, patrol and maintenance', () => {
     assert.match(app, /getMemoryVectorExtractedKey\(getCurrentChatStorageScopeId\(\)\)/, '删除/编辑消息后应重置已提取标记（按分支作用域）');
 });
 
+test('app.js reports vector backfill progress by actual request count', () => {
+    assert.match(app, /const totalRequests = Math\.ceil\(fragmentItems\.length \/ MEMORY_VECTOR_BATCH_SIZE\)/, '补录总量应按实际请求（批次）数计算');
+    assert.match(app, /batchExtractProgress\.value = \{ current: 0, total: totalRequests \}/, '补录进度总量应使用请求数');
+    assert.match(app, /batchExtractProgress\.value\.current = Math\.min\(\s*Math\.floor\(i \/ MEMORY_VECTOR_BATCH_SIZE\) \+ 1,\s*totalRequests\s*\)/, '补录进度当前值应按已完成请求数推进');
+});
+
 test('app.js wires timeline clock, digest injection and timeline graph', () => {
     assert.match(app, /timeLib\(\)\.formatForPrompt\(clockState\)/, '抽取提示词应注入当前剧情时间');
     assert.match(app, /clockProposal/, '抽取响应应解析时间推进提案');
