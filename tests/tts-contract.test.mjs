@@ -88,6 +88,16 @@ test('index.html renders TTS play/stop action and settings section', () => {
     assert.match(html, /v-model="ttsReadMode"/);
 });
 
+test('voice settings section is placed inside the settings view, not the uitemplates view', () => {
+    const settingsView = html.indexOf(`v-if="currentView === 'settings'"`);
+    const presetsView = html.indexOf(`v-if="currentView === 'presets'"`);
+    const uitemplatesView = html.indexOf(`v-if="currentView === 'uitemplates'"`);
+    const voiceSection = html.indexOf('语音服务设置');
+    assert.ok(settingsView > 0 && presetsView > settingsView && uitemplatesView > presetsView);
+    assert.ok(voiceSection > settingsView && voiceSection < presetsView);
+    assert.ok(voiceSection < uitemplatesView);
+});
+
 test('app.js wires TTS defaults, engine, actions and auto-play', () => {
     assert.match(app, /ttsEnabled: false/);
     assert.match(app, /ttsAutoPlay: false/);
