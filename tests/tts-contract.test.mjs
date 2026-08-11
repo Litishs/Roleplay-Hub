@@ -80,19 +80,25 @@ test('index.html loads tts modules before app.js', () => {
 test('index.html renders TTS play/stop action and settings section', () => {
     assert.match(html, /toggleSpeakMessage\(index\)/);
     assert.match(html, /settings\.ttsEnabled && ttsStatus\.available/);
-    assert.match(html, /语音服务设置/);
+    assert.match(html, /语音设置/);
     assert.match(html, /v-model="settings\.ttsEnabled"/);
-    assert.match(html, /v-model="settings\.ttsVoice"/);
+    assert.match(html, /settings\.ttsService === 'system'/);
+    assert.match(html, /ttsSettingsExpanded/);
+    assert.match(html, /selectTtsService\('system'\)/);
+    assert.match(html, /语音引擎/);
+    assert.match(html, /引擎设置/);
+    assert.match(html, /朗读偏好/);
     assert.match(html, /v-model="settings\.ttsAutoPlay"/);
     assert.match(html, /testTtsVoice/);
     assert.match(html, /v-model="ttsReadMode"/);
+    assert.doesNotMatch(html, /v-model="settings\.ttsVoice"/);
 });
 
 test('voice settings section is placed inside the settings view, not the uitemplates view', () => {
     const settingsView = html.indexOf(`v-if="currentView === 'settings'"`);
     const presetsView = html.indexOf(`v-if="currentView === 'presets'"`);
     const uitemplatesView = html.indexOf(`v-if="currentView === 'uitemplates'"`);
-    const voiceSection = html.indexOf('语音服务设置');
+    const voiceSection = html.indexOf('语音设置');
     assert.ok(settingsView > 0 && presetsView > settingsView && uitemplatesView > presetsView);
     assert.ok(voiceSection > settingsView && voiceSection < presetsView);
     assert.ok(voiceSection < uitemplatesView);
@@ -101,6 +107,7 @@ test('voice settings section is placed inside the settings view, not the uitempl
 test('app.js wires TTS defaults, engine, actions and auto-play', () => {
     assert.match(app, /ttsEnabled: false/);
     assert.match(app, /ttsAutoPlay: false/);
+    assert.match(app, /ttsService: 'system'/);
     assert.match(app, /ttsVoice: ''/);
     assert.match(app, /ttsRate: 1\.0/);
     assert.match(app, /ttsPitch: 1\.0/);
@@ -113,7 +120,11 @@ test('app.js wires TTS defaults, engine, actions and auto-play', () => {
     assert.match(app, /const stopSpeaking = async \(\) => \{/);
     assert.match(app, /settings\.ttsEnabled && settings\.ttsAutoPlay/);
     assert.match(app, /stopSpeaking\(\);/);
-    assert.match(app, /ttsStatus, ttsStatusLabel, ttsPlayingMessageId, ttsVoiceOptions, ttsReadMode,/);
+    assert.match(app, /const selectTtsService = \(id\) => \{/);
+    assert.match(app, /ttsSettingsExpanded = ref\(false\)/);
+    assert.match(app, /ttsStatus, ttsStatusLabel, ttsPlayingMessageId, ttsSettingsExpanded, ttsServiceOptions, ttsReadMode,/);
+    assert.doesNotMatch(app, /refreshTtsVoiceOptions/);
+    assert.doesNotMatch(app, /ttsVoiceOptions/);
 });
 
 test('native side registers TTSSpeech plugin and exposes TTS methods', () => {

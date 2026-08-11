@@ -682,6 +682,7 @@ createApp({
             imageGenCount: 2,
             ttsEnabled: false,
             ttsAutoPlay: false,
+            ttsService: 'system',
             ttsVoice: '',
             ttsRate: 1.0,
             ttsPitch: 1.0,
@@ -7314,7 +7315,11 @@ ${content}
         // --- TTS 语音朗读（P0：Android 系统语音引擎） ---
         const ttsStatus = ref({ available: false, engineLabel: '', state: 'idle', error: '', checked: false });
         const ttsPlayingMessageId = ref(null);
-        const ttsVoiceOptions = ref([]);
+        const ttsSettingsExpanded = ref(false);
+        const ttsServiceOptions = [
+            { id: 'system', name: '系统语音', desc: 'Android 系统引擎，无需下载', available: true },
+            { id: 'local', name: '本地模型', desc: '设备端神经 TTS（暂未接入）', available: false }
+        ];
         let ttsStateListener = null;
 
         const refreshTtsStatus = async () => {
@@ -7327,7 +7332,6 @@ ${content}
                 const info = await engine.refreshStatus();
                 ttsStatus.value = { ...info };
                 if (info.available) {
-                    if (!ttsVoiceOptions.value.length) refreshTtsVoiceOptions();
                     if (!ttsStateListener) {
                         ttsStateListener = (payload) => {
                             if (payload && (payload.state === 'done' || payload.state === 'error' || payload.state === 'stop')) {
@@ -7345,18 +7349,6 @@ ${content}
             }
         };
 
-        const refreshTtsVoiceOptions = async () => {
-            const engine = globalThis.RPHTts;
-            if (!engine) return;
-            try {
-                const voices = await engine.getVoices(true);
-                ttsVoiceOptions.value = (Array.isArray(voices) ? voices : [])
-                    .map(v => ({ id: v.id, name: v.name, locale: v.locale }));
-            } catch (error) {
-                console.warn('[TTS] load voices failed:', error);
-            }
-        };
-
         const ttsStatusLabel = computed(() => {
             const info = ttsStatus.value;
             if (!info.checked && !info.available) return '语音引擎检测中…';
@@ -7364,6 +7356,16 @@ ${content}
             if (info.state === 'speaking') return '正在朗读…';
             return '系统语音引擎已就绪';
         });
+
+        const selectTtsService = (id) => {
+            const service = ttsServiceOptions.find(option => option.id === id);
+            if (!service) return;
+            if (!service.available) {
+                showToast('本地 TTS 模型暂未接入，请使用系统语音引擎', 'info');
+                return;
+            }
+            settings.ttsService = id;
+        };
 
         const ttsReadMode = computed({
             get: () => (settings.ttsDialogueOnly ? 'dialogue' : 'full'),
@@ -13679,8 +13681,8 @@ image###生成的提示词###
             classicMemoryPage, classicMemoryPageCount, memorySettings,
             localEmbeddingStatus, refreshLocalEmbeddingStatus, preloadLocalEmbedding, migrateClassicMemoriesToVectors,
             localEmbeddingModelOptions, localEmbeddingStatusLabel,
-            ttsStatus, ttsStatusLabel, ttsPlayingMessageId, ttsVoiceOptions, ttsReadMode,
-            refreshTtsStatus, refreshTtsVoiceOptions, testTtsVoice, ttsSpeakTextFor, toggleSpeakMessage, stopSpeaking,
+            ttsStatus, ttsStatusLabel, ttsPlayingMessageId, ttsSettingsExpanded, ttsServiceOptions, ttsReadMode,
+            selectTtsService, refreshTtsStatus, testTtsVoice, ttsSpeakTextFor, toggleSpeakMessage, stopSpeaking,
             requestDiagnosticsCount, exportRequestDiagnostics,
             isAnyMemoryProcessing: computed(() => isBatchExtracting.value || isClassicBatchExtracting.value),
             isActiveBatchExtracting: computed(() => memorySettings.mode === MEMORY_MODE_CLASSIC ? isClassicBatchExtracting.value : isBatchExtracting.value),
