@@ -1433,6 +1433,9 @@ createApp({
         const MIN_CONTEXT_FLOORS = 6;          // 原文现场窗口下限（质量保底）
         const LIST_PAGE_SIZE = 10;
         const memories = ref([]);
+        // 遗留数据兼容：classicMemories 不再写入，仅保留 ref 供旧数据查看/导出逻辑引用
+        const classicMemories = ref([]);
+        const classicMemoryPage = ref(1);
         // --- 滚动摘要（记忆重构 P0：原文真相源 + 派生摘要层） ---
         const memorySummaries = ref(null);
         const memoryProfile = ref(null);
@@ -11459,8 +11462,6 @@ image###生成的提示词###
         const loadCharacterMemories = async (characterId, errorContext = '') => {
             vectorMemorySearchResults.value = [];
             vectorMemorySearchError.value = '';
-            memoryGraphHighlightIds.value = new Set();
-            memoryGraphSelectedId.value = '';
             await loadMemorySummaries(characterId);
             await loadMemoryProfile(characterId);
             try {
@@ -13106,12 +13107,6 @@ image###生成的提示词###
             if (mobileViewportRaf) cancelAnimationFrame(mobileViewportRaf);
             if (chatInputSyncRaf) cancelAnimationFrame(chatInputSyncRaf);
             if (chatInputResizeRaf) cancelAnimationFrame(chatInputResizeRaf);
-            if (_memoryGraphResizeObserver) {
-                _memoryGraphResizeObserver.disconnect();
-                _memoryGraphResizeObserver = null;
-            }
-            if (_memoryGraphRaf) cancelAnimationFrame(_memoryGraphRaf);
-            if (_memoryGraphRebuildTimer) clearTimeout(_memoryGraphRebuildTimer);
             clearTimeout(mobileKeyboardBlurTimer);
         });
         // 解析并截断生成的包含 HTML UI 的正文，避免闪屏问题
