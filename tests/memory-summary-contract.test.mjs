@@ -18,6 +18,12 @@ test('滚动摘要:窗口外攒满一批时返回批次区间', () => {
     assert.deepEqual(pending, { fromTurn: 1, toTurn: 8 });
 });
 
+test('滚动摘要:手动强制模式忽略批次下限', () => {
+    const pending = memorySummary.computePendingBatch([], 20, { keepFloors: 16, batchSize: 8 }, { force: true });
+    assert.deepEqual(pending, { fromTurn: 1, toTurn: 4 });
+    assert.equal(memorySummary.computePendingBatch([], 16, { keepFloors: 16, batchSize: 8 }, { force: true }), null);
+});
+
 test('滚动摘要:已总结批次推进后再触发下一批', () => {
     const batches = [{ fromTurn: 1, toTurn: 8, status: 'done' }];
     const pending = memorySummary.computePendingBatch(batches, 33, { keepFloors: 16, batchSize: 8 });
@@ -108,4 +114,9 @@ test('记忆重构:单一引擎且旧模式/事实层 UI 已移除', () => {
     assert.ok(!html.includes('剧情时钟'));
     assert.ok(!app.includes('MEMORY_MODE_CLASSIC'));
     assert.ok(!app.includes('memory-schema.js'));
+});
+
+test('立即总结按钮使用强制模式', () => {
+    assert.ok(html.includes("runRollingSummaryCheck({ force: true })"));
+    assert.ok(app.includes("force: options.force === true"));
 });

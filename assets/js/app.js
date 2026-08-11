@@ -9351,7 +9351,7 @@ ${content}
             return parsed;
         };
 
-        const runRollingSummaryCheck = async () => {
+        const runRollingSummaryCheck = async (options = {}) => {
             const lib = summaryLib();
             if (!lib || !memorySettings.enabled || !currentCharacter.value?.uuid) return false;
             if (_summaryInFlight) return false;
@@ -9360,8 +9360,13 @@ ${content}
             const batch = lib.computePendingBatch(current.batches, turnCount, {
                 keepFloors: memorySettings.keepFloors,
                 batchSize: lib.DEFAULTS.batchSize
-            });
-            if (!batch) return false;
+            }, { force: options.force === true });
+            if (!batch) {
+                if (options.force === true) {
+                    showToast(`当前对话 ${turnCount} 轮未超过保留窗口（${memorySettings.keepFloors} 轮），暂无需要总结的内容，继续聊天后会自动总结`, 'info');
+                }
+                return false;
+            }
             _summaryInFlight = true;
             setSummaryProgress({ ...batch, status: 'running' }, false);
             try {

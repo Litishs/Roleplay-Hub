@@ -41,9 +41,10 @@
      * @param {Array} batches 已记录批次 [{fromTurn,toTurn,status}]
      * @param {number} currentTurn 当前总轮数
      * @param {Object} [state]
+     * @param {Object} [options] { force:boolean } 手动触发时忽略批次下限，窗口外有未总结轮次即返回
      * @returns {{fromTurn:number,toTurn:number}|null}
      */
-    const computePendingBatch = (batches, currentTurn, state = {}) => {
+    const computePendingBatch = (batches, currentTurn, state = {}, options = {}) => {
         const s = normalizeState(state);
         const turns = Number(currentTurn) || 0;
         const done = Array.isArray(batches)
@@ -53,9 +54,10 @@
             ? Math.max(...done.map(b => Number(b.toTurn) || 0))
             : 0;
         const windowedOut = Math.max(0, turns - s.keepFloors);
-        if (windowedOut - lastTo < s.batchSize) return null;
+        if (windowedOut <= lastTo) return null;
+        if (!options.force && windowedOut - lastTo < s.batchSize) return null;
         const fromTurn = lastTo + 1;
-        const toTurn = Math.min(fromTurn + s.batchSize - 1, windowedOut);
+        const toTurn = options.force ? windowedOut : Math.min(fromTurn + s.batchSize - 1, windowedOut);
         return { fromTurn, toTurn };
     };
 
