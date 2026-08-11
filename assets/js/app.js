@@ -1426,21 +1426,13 @@ createApp({
         const MEMORY_VECTOR_DEFAULT_SIMILARITY = 50;
         const MEMORY_VECTOR_DEFAULT_DEPTH = 1;
         const CLASSIC_MEMORY_MIN_CONCURRENCY = 1;
-        const CLASSIC_MEMORY_MAX_CONCURRENCY = 10;
-        const CLASSIC_MEMORY_DEFAULT_CONCURRENCY = 5;
         const MEMORY_MODE_VECTOR = 'vector';
-        const MEMORY_MODE_CLASSIC = 'classic';
         const VECTOR_KEEP_FLOORS_MIN = 8;
         const VECTOR_KEEP_FLOORS_MAX = 40;
         const VECTOR_KEEP_FLOORS_DEFAULT = 16;
-        const SUMMARY_KEEP_FLOORS_MIN = 6;
-        const SUMMARY_KEEP_FLOORS_MAX = 24;
-        const SUMMARY_KEEP_FLOORS_DEFAULT = 12;
         const MIN_CONTEXT_FLOORS = 6;          // 原文现场窗口下限（质量保底）
         const LIST_PAGE_SIZE = 10;
         const memories = ref([]);
-        const classicMemories = ref([]);
-        const classicMemoryPage = ref(1);
         // --- 滚动摘要（记忆重构 P0：原文真相源 + 派生摘要层） ---
         const memorySummaries = ref(null);
         const memoryProfile = ref(null);
@@ -1449,22 +1441,16 @@ createApp({
         let _summaryDoneTimer = null;
         const memorySettings = reactive({
             enabled: false,
-            mode: MEMORY_MODE_CLASSIC,
+            mode: MEMORY_MODE_VECTOR,
             embeddingModel: '',
             classicModel: '',
             keepFloors: VECTOR_KEEP_FLOORS_DEFAULT,
             vectorTopK: MEMORY_VECTOR_DEFAULT_TOP_K,
             similarityThreshold: MEMORY_VECTOR_DEFAULT_SIMILARITY,
             defaultDepth: MEMORY_VECTOR_DEFAULT_DEPTH,
-            vectorKeepFloors: VECTOR_KEEP_FLOORS_DEFAULT,
-            summaryKeepFloors: SUMMARY_KEEP_FLOORS_DEFAULT,
-            classicConcurrency: CLASSIC_MEMORY_DEFAULT_CONCURRENCY,
             embeddingBackend: 'api',        // 'api' | 'local'
             localEmbeddingModel: 'bge-small-zh-v1.5',
-            factExtractionEnabled: true,    // 差异式事实层开关（向量模式下生效）
-            factModel: '',                   // 事实抽取模型，缺省回退 classicModel
-            factClockInjection: true,        // 事实抽取提示词注入剧情时钟
-            memoryProviderId: ''             // 记忆供应商（嵌入/总结/事实抽取），空=聊天供应商
+            memoryProviderId: ''             // 记忆供应商（滚动总结/嵌入），空=聊天供应商
         });
         const isBatchExtracting = ref(false);
         const batchExtractProgress = ref({ current: 0, total: 0 });
@@ -1473,24 +1459,8 @@ createApp({
         const vectorMemorySearchError = ref('');
         const vectorMemorySearchSortMode = ref('time');
         const isVectorMemorySearching = ref(false);
-        // --- Memory Graph State (P0) ---
         const memoryGraphView = ref('list');
         const memoryRelationCanvas = ref(null);
-        const memoryGraphKeyword = ref('');
-        const memoryGraphSemanticThreshold = ref(0.55);
-        const memoryGraphShowIsolated = ref(false);
-        const memoryGraphNodes = ref([]);
-        const memoryGraphEdges = ref([]);
-        const memoryGraphSelectedId = ref('');
-        const memoryGraphHighlightIds = ref(new Set());
-        const memoryGraphCanvas = ref(null);
-        let _memoryGraphView = { scale: 1, tx: 0, ty: 0 };
-        let _memoryGraphViewInitialized = false;
-        let _memoryGraphRaf = null;
-        let _memoryGraphDrag = null;
-        let _memoryGraphHoverId = '';
-        let _memoryGraphResizeObserver = null;
-        let _memoryGraphRebuildTimer = null;
         const isClassicBatchExtracting = ref(false);
         const classicBatchExtractProgress = ref({ current: 0, total: 0 });
         let _vectorMemorySearchAbort = null;
@@ -1605,12 +1575,6 @@ createApp({
             return Math.max(min, Math.min(max, Math.round(floors / 2) * 2));
         };
 
-        const normalizeClassicMemoryConcurrency = (value) => {
-            const concurrency = Number(value);
-            if (!Number.isFinite(concurrency)) return CLASSIC_MEMORY_DEFAULT_CONCURRENCY;
-            return Math.max(CLASSIC_MEMORY_MIN_CONCURRENCY, Math.min(CLASSIC_MEMORY_MAX_CONCURRENCY, Math.round(concurrency)));
-        };
-
         const normalizeMemorySettings = () => {
             if (!memorySettings.classicModel && memorySettings.model) {
                 memorySettings.classicModel = String(memorySettings.model).trim();
@@ -1618,25 +1582,19 @@ createApp({
             ['model', 'autoExtract', 'keepFloors', `re${'rankEnabled'}`, `re${'rankModel'}`].forEach(key => {
                 delete memorySettings[key];
             });
-            memorySettings.mode = memorySettings.mode === MEMORY_MODE_CLASSIC
-                ? MEMORY_MODE_CLASSIC
-                : memorySettings.mode === MEMORY_MODE_VECTOR
-                    ? MEMORY_MODE_VECTOR
-                    : MEMORY_MODE_CLASSIC;
+            memorySettings.mode = MEMORY_MODE_VECTOR;
             memorySettings.classicModel = String(memorySettings.classicModel || '').trim();
-            memorySettings.vectorKeepFloors = normalizeKeepFloors(
-                memorySettings.vectorKeepFloors,
+            if (!Number.isFinite(Number(memorySettings.keepFloors))) {
+                memorySettings.keepFloors = Number.isFinite(Number(memorySettings.vectorKeepFloors))
+                    ? Number(memorySettings.vectorKeepFloors)
+                    : VECTOR_KEEP_FLOORS_DEFAULT;
+            }
+            memorySettings.keepFloors = normalizeKeepFloors(
+                memorySettings.keepFloors,
                 VECTOR_KEEP_FLOORS_MIN,
                 VECTOR_KEEP_FLOORS_MAX,
                 VECTOR_KEEP_FLOORS_DEFAULT
             );
-            memorySettings.summaryKeepFloors = normalizeKeepFloors(
-                memorySettings.summaryKeepFloors,
-                SUMMARY_KEEP_FLOORS_MIN,
-                SUMMARY_KEEP_FLOORS_MAX,
-                SUMMARY_KEEP_FLOORS_DEFAULT
-            );
-            memorySettings.classicConcurrency = normalizeClassicMemoryConcurrency(memorySettings.classicConcurrency);
             const vectorTopK = Number(memorySettings.vectorTopK);
             memorySettings.vectorTopK = Number.isFinite(vectorTopK)
                 ? Math.max(MEMORY_VECTOR_MIN_TOP_K, Math.min(MEMORY_VECTOR_MAX_TOP_K, vectorTopK))
@@ -1647,9 +1605,6 @@ createApp({
                 : MEMORY_VECTOR_DEFAULT_SIMILARITY;
             memorySettings.defaultDepth = MEMORY_VECTOR_DEFAULT_DEPTH;
             memorySettings.embeddingBackend = memorySettings.embeddingBackend === 'local' ? 'local' : 'api';
-            memorySettings.factExtractionEnabled = memorySettings.factExtractionEnabled !== false;
-            memorySettings.factModel = String(memorySettings.factModel || '').trim();
-            memorySettings.factClockInjection = memorySettings.factClockInjection !== false;
             const memoryProviderId = String(memorySettings.memoryProviderId || '').trim();
             memorySettings.memoryProviderId = memoryProviderId
                 && (getApiProviderById(memoryProviderId) || isCustomApiProviderId(memoryProviderId))
@@ -3952,9 +3907,7 @@ ${content}
 
         const calculateSummaryCompressedBodyLength = () => {
             let predictedLength = conversationBodyLength.value;
-            if (!memorySettings.enabled
-                || memorySettings.mode !== MEMORY_MODE_CLASSIC
-                || classicMemories.value.length === 0) return predictedLength;
+            if (!memorySettings.enabled) return predictedLength;
 
             const messages = getPostprocessedChatMessages(chatHistory.value, { includeSystem: false });
             const candidateCount = Math.max(0, messages.length - memorySettings.summaryKeepFloors);
@@ -6003,10 +5956,6 @@ ${content}
             finalEntries.forEach(entry => {
                 const text = String(entry.content || '').trim();
                 if (!text) return;
-                if (charPromptForDedup && schemaLib()
-                    && schemaLib().isRedundantText(text, charPromptForDedup, 0.85)) {
-                    return; // 与角色卡描述高度重复，只保留角色卡那份
-                }
                 dedupedEntries.push(entry);
             });
 
@@ -6218,7 +6167,7 @@ ${content}
                 && memorySettings.mode === MEMORY_MODE_VECTOR
                 && memories.value.length > 0) {
                 const totalFloors = chatHistoryForContext.length;
-                const keepCount = memorySettings.vectorKeepFloors;
+                const keepCount = memorySettings.keepFloors;
 
                 if (totalFloors > keepCount) {
                     const candidateCount = totalFloors - keepCount;
@@ -6258,32 +6207,11 @@ ${content}
                         chatHistoryForContext = newChatHistoryForContext;
                     }
                 }
-            } else if (memorySettings.enabled
-                && memorySettings.mode === MEMORY_MODE_CLASSIC
-                && classicMemories.value.length > 0) {
-                const candidateCount = Math.max(0, chatHistoryForContext.length - memorySettings.summaryKeepFloors);
-                if (candidateCount > 0) {
-                    const lookup = buildClassicMemoryLookup();
-                    const contextSnapshot = buildConversationTurnSnapshot(chatHistoryForContext, { alreadyPostprocessed: true });
-                    contextSnapshot.turns.forEach(turnInfo => {
-                        const assistantIndex = turnInfo.messageIndexes[1];
-                        if (assistantIndex >= candidateCount) return;
-                        const memory = findClassicMemoryForTurn(turnInfo, lookup);
-                        if (!memory?.summary) return;
-                        chatHistoryForContext[assistantIndex] = {
-                            ...chatHistoryForContext[assistantIndex],
-                            content: memory.summary,
-                            _sourceIndexes: []
-                        };
-                    });
-                }
             }
 
-            // 记忆背景（滚动摘要）计入前缀预算；派生摘要层未建立时回退旧时间线摘要（过渡，P3 移除）
+            // 记忆背景（滚动摘要 + 固定信息卡）计入前缀预算
             const timelineDigestText = memorySettings.enabled
-                ? (buildMemoryContextForPrompt() || (
-                    memorySettings.mode === MEMORY_MODE_VECTOR ? buildMemoryDigestForContext() : ''
-                ))
+                ? buildMemoryContextForPrompt()
                 : '';
 
             // 添加聊天记录（按 token 预算保留最近楼层，至少保留现场窗口下限）
@@ -8420,7 +8348,7 @@ ${content}
 
         const getRetainedRecentMemoryTurns = (messages) => {
             if (!Array.isArray(messages) || messages.length === 0) return new Set();
-            const keepFloors = memorySettings.vectorKeepFloors;
+            const keepFloors = memorySettings.keepFloors;
 
             const retainedStartIndex = Math.max(0, messages.length - keepFloors);
             const snapshot = buildConversationTurnSnapshot(messages, { alreadyPostprocessed: true });
@@ -8605,458 +8533,13 @@ ${content}
             isVectorMemorySearching.value = false;
         };
 
-        // --- Memory Graph (P0)：图谱视图 ---
-        const getGraphMemoryPool = () => memories.value
-            .filter(isEnabledVectorMemory)
-            .map(memory => ({
-                id: memory.id,
-                turn: memory.turn,
-                sequence: memory.sequence,
-                paragraph: getVectorMemoryText(memory),
-                summary: getVectorMemoryText(memory),
-                sourceText: memory.sourceText || memory.paragraph || memory.summary || '',
-                embedding: memory.embedding
-            }));
-
-        const buildTimelineGraphData = () => {
-            const lib = schemaLib();
-            if (!lib) return null;
-            const events = memoryFacts.value.filter(f => f.kind === 'event' && f.status === 'current' && f.storyDay !== null);
-            if (events.length === 0) return null;
-            const days = [...new Set(events.map(e => e.storyDay))].sort((a, b) => a - b);
-            const nodes = [];
-            const edges = [];
-            const spacing = 180;
-            days.forEach((day, index) => {
-                nodes.push({
-                    id: `day:${day}`,
-                    kind: 'day',
-                    turn: day,
-                    sequence: 0,
-                    text: `第${day}天`,
-                    degree: 0,
-                    x: (index + 1) * spacing,
-                    y: 0,
-                    vx: 0,
-                    vy: 0
-                });
-            });
-            for (let i = 0; i < days.length - 1; i++) {
-                edges.push({ source: `day:${days[i]}`, target: `day:${days[i + 1]}`, types: ['turn'], weight: 0.35 });
-            }
-            events.forEach((e, index) => {
-                const dayIndex = days.indexOf(e.storyDay);
-                const segmentNodeId = e.segment ? `seg:${e.storyDay}:${e.segment}` : null;
-                if (segmentNodeId && !nodes.some(n => n.id === segmentNodeId)) {
-                    nodes.push({
-                        id: segmentNodeId,
-                        kind: 'segment',
-                        turn: e.storyDay,
-                        sequence: 0,
-                        text: e.segment,
-                        degree: 0,
-                        x: (dayIndex + 1) * spacing,
-                        y: 75,
-                        vx: 0,
-                        vy: 0
-                    });
-                    edges.push({ source: `day:${e.storyDay}`, target: segmentNodeId, types: ['turn'], weight: 0.35 });
-                }
-                nodes.push({
-                    id: e.id,
-                    kind: 'event',
-                    turn: e.storyDay,
-                    sequence: index + 1,
-                    text: e.summary,
-                    degree: 0,
-                    x: (dayIndex + 1) * spacing + ((index % 5) - 2) * 46,
-                    y: 150 + (index % 6) * 58,
-                    vx: 0,
-                    vy: 0
-                });
-                edges.push({ source: segmentNodeId || `day:${e.storyDay}`, target: e.id, types: ['turn'], weight: 0.4 });
-            });
-            // 事件网：同参与者按时间串联
-            const byParticipant = new Map();
-            events.forEach(e => {
-                (e.participants || []).forEach(p => {
-                    if (!byParticipant.has(p)) byParticipant.set(p, []);
-                    byParticipant.get(p).push(e);
-                });
-            });
-            const seenEdges = new Set();
-            byParticipant.forEach(group => {
-                group.sort((a, b) => (a.timeKey || 0) - (b.timeKey || 0));
-                for (let i = 0; i < group.length - 1; i++) {
-                    const key = `${group[i].id}|${group[i + 1].id}`;
-                    if (seenEdges.has(key)) continue;
-                    seenEdges.add(key);
-                    edges.push({ source: group[i].id, target: group[i + 1].id, types: ['keyword'], weight: 0.7 });
-                }
-            });
-            return { nodes, edges };
-        };
-
-        const rebuildMemoryGraph = () => {
-            const graphLib = globalThis.RPHMemoryGraph;
-            if (!graphLib) return;
-            const timelineGraph = buildTimelineGraphData();
-            if (timelineGraph) {
-                memoryGraphNodes.value = timelineGraph.nodes;
-                memoryGraphEdges.value = timelineGraph.edges;
-                if (memoryGraphSelectedId.value && !timelineGraph.nodes.some(n => n.id === memoryGraphSelectedId.value)) {
-                    memoryGraphSelectedId.value = '';
-                }
-                _memoryGraphViewInitialized = false;
-                requestMemoryGraphRender();
-                return;
-            }
-            let pool = getGraphMemoryPool();
-            const keyword = String(memoryGraphKeyword.value || '').trim().toLowerCase();
-            if (keyword) {
-                pool = pool.filter(item => {
-                    const text = String(item.paragraph || '').toLowerCase();
-                    return text.includes(keyword) || String(item.turn || '').includes(keyword);
-                });
-            }
-            const { nodes, edges } = graphLib.computeGraph(pool, {
-                semanticThreshold: Number(memoryGraphSemanticThreshold.value) || 0.55
-            });
-            let visibleNodes = nodes;
-            if (memoryGraphShowIsolated.value) {
-                const connected = new Set();
-                edges.forEach(edge => {
-                    connected.add(edge.source);
-                    connected.add(edge.target);
-                });
-                visibleNodes = nodes.filter(node => connected.has(node.id));
-            }
-            graphLib.runForceLayout(visibleNodes, edges, { layoutIterations: 45 });
-            memoryGraphNodes.value = visibleNodes;
-            memoryGraphEdges.value = edges;
-            if (memoryGraphSelectedId.value && !visibleNodes.some(node => node.id === memoryGraphSelectedId.value)) {
-                memoryGraphSelectedId.value = '';
-            }
-            _memoryGraphViewInitialized = false;
-            requestMemoryGraphRender();
-        };
-
         const setMemoryGraphView = (view) => {
             memoryGraphView.value = view;
             if (view === 'relations') {
                 nextTick(() => drawRelationView());
                 return;
             }
-            if (view === 'graph') {
-                if (_memoryGraphRebuildTimer) {
-                    clearTimeout(_memoryGraphRebuildTimer);
-                    _memoryGraphRebuildTimer = null;
-                }
-                rebuildMemoryGraph();
-                nextTick(() => {
-                    const canvas = memoryGraphCanvas.value;
-                    if (!_memoryGraphResizeObserver && typeof ResizeObserver !== 'undefined' && canvas) {
-                        _memoryGraphResizeObserver = new ResizeObserver(() => requestMemoryGraphRender());
-                        _memoryGraphResizeObserver.observe(canvas);
-                    }
-                    // v-show 生效后再按可见尺寸自动缩放，避免用隐藏时的 1px 宽度计算视图
-                    _memoryGraphViewInitialized = false;
-                    requestMemoryGraphRender();
-                });
-            }
         };
-
-        const requestMemoryGraphRender = () => {
-            if (_memoryGraphRaf) return;
-            _memoryGraphRaf = requestAnimationFrame(() => {
-                _memoryGraphRaf = null;
-                drawMemoryGraph();
-            });
-        };
-
-        const fitMemoryGraphView = () => {
-            const canvas = memoryGraphCanvas.value;
-            const nodes = memoryGraphNodes.value;
-            if (!canvas || nodes.length === 0) return;
-            const rect = canvas.getBoundingClientRect();
-            const width = Math.max(1, rect.width);
-            const height = Math.max(1, rect.height);
-            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-            nodes.forEach(node => {
-                minX = Math.min(minX, node.x);
-                minY = Math.min(minY, node.y);
-                maxX = Math.max(maxX, node.x);
-                maxY = Math.max(maxY, node.y);
-            });
-            const padding = 70;
-            const contentW = Math.max(maxX - minX, 1);
-            const contentH = Math.max(maxY - minY, 1);
-            const scale = Math.max(0.25, Math.min(1.5, Math.min(
-                (width - padding * 2) / contentW,
-                (height - padding * 2) / contentH
-            )));
-            const cx = (minX + maxX) / 2;
-            const cy = (minY + maxY) / 2;
-            _memoryGraphView = {
-                scale,
-                tx: width / 2 - cx * scale,
-                ty: height / 2 - cy * scale
-            };
-        };
-
-        const getMemoryGraphTurnColor = (turn) => {
-            const hue = ((Number(turn) || 0) * 47) % 360;
-            return `hsl(${hue}, 68%, 56%)`;
-        };
-
-        const drawMemoryGraph = () => {
-            const canvas = memoryGraphCanvas.value;
-            if (!canvas) return;
-            const rect = canvas.getBoundingClientRect();
-            const width = Math.max(1, Math.round(rect.width));
-            const height = Math.max(1, Math.round(rect.height));
-            if (width === 0 || height === 0) return;
-            const dpr = Math.min(window.devicePixelRatio || 1, 2.5);
-            if (canvas.width !== Math.round(width * dpr) || canvas.height !== Math.round(height * dpr)) {
-                canvas.width = Math.round(width * dpr);
-                canvas.height = Math.round(height * dpr);
-            }
-            const ctx = canvas.getContext('2d');
-            if (!ctx) return;
-            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-            ctx.clearRect(0, 0, width, height);
-
-            const nodes = memoryGraphNodes.value;
-            const edges = memoryGraphEdges.value;
-            if (nodes.length === 0) return;
-
-            if (!_memoryGraphViewInitialized) {
-                fitMemoryGraphView();
-                _memoryGraphViewInitialized = true;
-            }
-            const view = _memoryGraphView;
-            const selectedId = memoryGraphSelectedId.value;
-            const highlightIds = memoryGraphHighlightIds.value;
-            const nodeMap = new Map(nodes.map(node => [node.id, node]));
-            const toScreen = (x, y) => [x * view.scale + view.tx, y * view.scale + view.ty];
-
-            edges.forEach(edge => {
-                const source = nodeMap.get(edge.source);
-                const target = nodeMap.get(edge.target);
-                if (!source || !target) return;
-                const [ax, ay] = toScreen(source.x, source.y);
-                const [bx, by] = toScreen(target.x, target.y);
-                const active = selectedId && (edge.source === selectedId || edge.target === selectedId);
-                const highlighted = highlightIds.size > 0 && (highlightIds.has(edge.source) || highlightIds.has(edge.target));
-                let color = '#e5e7eb';
-                let lineWidth = 0.8;
-                if (edge.types.includes('semantic')) {
-                    color = active ? '#6366f1' : '#a5b4fc';
-                    lineWidth = Math.max(1, Math.min(3, edge.weight * 3.2));
-                } else if (edge.types.includes('keyword')) {
-                    color = active ? '#14b8a6' : '#99f6e4';
-                    lineWidth = 1.4;
-                }
-                ctx.strokeStyle = color;
-                ctx.globalAlpha = active ? 1 : highlighted ? 0.9 : 0.55;
-                ctx.lineWidth = active ? 2.6 : highlighted ? 2 : lineWidth;
-                ctx.beginPath();
-                ctx.moveTo(ax, ay);
-                ctx.lineTo(bx, by);
-                ctx.stroke();
-                ctx.globalAlpha = 1;
-            });
-
-            nodes.forEach(node => {
-                const [sx, sy] = toScreen(node.x, node.y);
-                if (sx < -40 || sy < -40 || sx > width + 40 || sy > height + 40) return;
-                const radius = node.kind === 'day'
-                    ? 7
-                    : node.kind === 'segment'
-                        ? 5
-                    : Math.max(5, Math.min(12, 6.5 + Math.log2(1 + node.degree) * 1.8));
-                const isSelected = node.id === selectedId;
-                const isHighlighted = highlightIds.size > 0 && highlightIds.has(node.id);
-                const isHover = node.id === _memoryGraphHoverId;
-                ctx.beginPath();
-                ctx.arc(sx, sy, radius, 0, Math.PI * 2);
-                ctx.fillStyle = isHighlighted ? '#f59e0b'
-                    : node.kind === 'day' ? '#94a3b8'
-                    : node.kind === 'segment' ? '#14b8a6'
-                    : getMemoryGraphTurnColor(node.turn);
-                ctx.fill();
-                ctx.lineWidth = isSelected ? 3 : isHover ? 2 : 1;
-                ctx.strokeStyle = isSelected ? '#1d4ed8' : node.kind === 'day' ? 'rgba(71, 85, 105, 0.4)' : 'rgba(29, 78, 216, 0.35)';
-                ctx.stroke();
-                if (isSelected || isHover || view.scale > 1.2) {
-                    ctx.font = '10px sans-serif';
-                    ctx.fillStyle = '#374151';
-                    ctx.fillText(
-                        node.kind === 'day' ? `第${node.turn}天`
-                            : node.kind === 'segment' ? `D${node.turn}·${node.text}`
-                            : `D${node.turn}`,
-                        sx + radius + 4,
-                        sy + 3
-                    );
-                }
-            });
-        };
-
-        const canvasPointToWorld = (e) => {
-            const canvas = memoryGraphCanvas.value;
-            const rect = canvas.getBoundingClientRect();
-            const sx = e.clientX - rect.left;
-            const sy = e.clientY - rect.top;
-            return {
-                sx,
-                sy,
-                wx: (sx - _memoryGraphView.tx) / _memoryGraphView.scale,
-                wy: (sy - _memoryGraphView.ty) / _memoryGraphView.scale
-            };
-        };
-
-        const onMemoryGraphPointerDown = (e) => {
-            const canvas = memoryGraphCanvas.value;
-            if (!canvas) return;
-            try { canvas.setPointerCapture(e.pointerId); } catch (_) { }
-            const { sx, sy, wx, wy } = canvasPointToWorld(e);
-            const graphLib = globalThis.RPHMemoryGraph;
-            const node = graphLib?.findNodeAt(memoryGraphNodes.value, wx, wy, 18 / _memoryGraphView.scale) || null;
-            if (node) {
-                _memoryGraphDrag = {
-                    type: 'node',
-                    id: node.id,
-                    startX: sx,
-                    startY: sy,
-                    origX: node.x,
-                    origY: node.y
-                };
-                memoryGraphSelectedId.value = node.id;
-            } else {
-                _memoryGraphDrag = {
-                    type: 'pan',
-                    startX: sx,
-                    startY: sy,
-                    origTx: _memoryGraphView.tx,
-                    origTy: _memoryGraphView.ty
-                };
-            }
-            requestMemoryGraphRender();
-        };
-
-        const onMemoryGraphPointerMove = (e) => {
-            const canvas = memoryGraphCanvas.value;
-            if (!canvas) return;
-            const { sx, sy, wx, wy } = canvasPointToWorld(e);
-            if (!_memoryGraphDrag) {
-                const graphLib = globalThis.RPHMemoryGraph;
-                const node = graphLib?.findNodeAt(memoryGraphNodes.value, wx, wy, 18 / _memoryGraphView.scale) || null;
-                const hoverId = node?.id || '';
-                if (hoverId !== _memoryGraphHoverId) {
-                    _memoryGraphHoverId = hoverId;
-                    canvas.style.cursor = hoverId ? 'pointer' : 'grab';
-                    requestMemoryGraphRender();
-                }
-                return;
-            }
-            const drag = _memoryGraphDrag;
-            if (drag.type === 'node') {
-                const node = memoryGraphNodes.value.find(item => item.id === drag.id);
-                if (node) {
-                    node.x = drag.origX + (sx - drag.startX) / _memoryGraphView.scale;
-                    node.y = drag.origY + (sy - drag.startY) / _memoryGraphView.scale;
-                }
-            } else {
-                _memoryGraphView.tx = drag.origTx + (sx - drag.startX);
-                _memoryGraphView.ty = drag.origTy + (sy - drag.startY);
-            }
-            requestMemoryGraphRender();
-        };
-
-        const onMemoryGraphPointerUp = () => {
-            _memoryGraphDrag = null;
-        };
-
-        const onMemoryGraphPointerLeave = () => {
-            _memoryGraphHoverId = '';
-            requestMemoryGraphRender();
-        };
-
-        const onMemoryGraphWheel = (e) => {
-            const canvas = memoryGraphCanvas.value;
-            if (!canvas) return;
-            const { sx, sy } = canvasPointToWorld(e);
-            const factor = e.deltaY < 0 ? 1.12 : 0.89;
-            const scale = Math.max(0.25, Math.min(4, _memoryGraphView.scale * factor));
-            const ratio = scale / _memoryGraphView.scale;
-            _memoryGraphView = {
-                scale,
-                tx: sx - (sx - _memoryGraphView.tx) * ratio,
-                ty: sy - (sy - _memoryGraphView.ty) * ratio
-            };
-            requestMemoryGraphRender();
-        };
-
-        const selectMemoryGraphNode = (id) => {
-            memoryGraphSelectedId.value = id;
-            requestMemoryGraphRender();
-        };
-
-        const resetMemoryGraphView = () => {
-            _memoryGraphViewInitialized = false;
-            requestMemoryGraphRender();
-        };
-
-        const relayoutMemoryGraph = () => {
-            const graphLib = globalThis.RPHMemoryGraph;
-            if (!graphLib) return;
-            graphLib.runForceLayout(memoryGraphNodes.value, memoryGraphEdges.value, { layoutIterations: 48 });
-            resetMemoryGraphView();
-        };
-
-        const showSearchResultsInGraph = () => {
-            const ids = new Set(vectorMemorySearchResults.value.map(item => item.id).filter(Boolean));
-            memoryGraphHighlightIds.value = ids;
-            setMemoryGraphView('graph');
-        };
-
-        const clearMemoryGraphHighlight = () => {
-            memoryGraphHighlightIds.value = new Set();
-            requestMemoryGraphRender();
-        };
-
-        const memoryGraphSelected = computed(() => (
-            memoryGraphNodes.value.find(node => node.id === memoryGraphSelectedId.value) || null
-        ));
-        const memoryGraphNeighbors = computed(() => {
-            const selectedId = memoryGraphSelectedId.value;
-            if (!selectedId) return [];
-            const neighborIds = new Set();
-            memoryGraphEdges.value.forEach(edge => {
-                if (edge.source === selectedId) neighborIds.add(edge.target);
-                if (edge.target === selectedId) neighborIds.add(edge.source);
-            });
-            const byId = new Map(memoryGraphNodes.value.map(node => [node.id, node]));
-            return [...neighborIds].map(id => byId.get(id)).filter(Boolean);
-        });
-        const memoryGraphNeighborEdges = computed(() => {
-            const selectedId = memoryGraphSelectedId.value;
-            if (!selectedId) return [];
-            return memoryGraphEdges.value.filter(edge => edge.source === selectedId || edge.target === selectedId);
-        });
-
-        watch(
-            [memoryGraphKeyword, memoryGraphSemanticThreshold, memoryGraphShowIsolated,
-             () => memories.value.length, () => currentCharacter.value?.uuid],
-            () => {
-                if (memoryGraphView.value !== 'graph') return;
-                if (_memoryGraphRebuildTimer) clearTimeout(_memoryGraphRebuildTimer);
-                _memoryGraphRebuildTimer = setTimeout(() => {
-                    _memoryGraphRebuildTimer = null;
-                    rebuildMemoryGraph();
-                }, 300);
-            }
-        );
 
         // --- 差异式事实层（P1：抽取 / P2：整理） ---
         const memoryFacts = ref([]);
@@ -9625,68 +9108,6 @@ ${content}
             }
         };
 
-        // --- 时间线记忆：时钟 / 锚定 / 摘要 / 凝练（P1–P4） ---
-        const timeLib = () => globalThis.RPHMemoryTime;
-
-        const getFactClock = () => {
-            let clock = memoryFacts.value.find(f => f.kind === 'time_anchor' && f.id === 'clock');
-            if (!clock) {
-                clock = schemaLib().createTimeAnchor({ storyDay: 0, segment: null, absolute: null, confidence: 'high' });
-                memoryFacts.value.push(clock);
-                markFactDirty(clock);
-            }
-            return clock;
-        };
-
-        const getFactClockState = () => {
-            const clock = memoryFacts.value.find(f => f.kind === 'time_anchor' && f.id === 'clock');
-            return timeLib().normalizeClock(clock);
-        };
-
-        const updateFactClock = (patch) => {
-            const clock = getFactClock();
-            Object.assign(clock, patch, { updatedAt: Date.now() });
-            markFactDirty(clock);
-            return clock;
-        };
-
-        const extractClockProposal = (rawText) => {
-            const tryRead = (text) => {
-                try {
-                    const data = JSON.parse(text);
-                    if (data && typeof data === 'object' && data.clockProposal) return data.clockProposal;
-                } catch (_) { }
-                return null;
-            };
-            const direct = tryRead(rawText);
-            if (direct) return direct;
-            try {
-                const envelope = JSON.parse(rawText);
-                const content = envelope?.choices?.[0]?.message?.content ?? envelope?.choices?.[0]?.text ?? '';
-                const fenced = content.match(/```(?:json)?\s*([\s\S]*?)```/i);
-                const parsed = tryRead(fenced ? fenced[1] : content);
-                if (parsed) return parsed;
-            } catch (_) { }
-            return null;
-        };
-
-        const anchorFactsForExtraction = (facts, clockState) => (Array.isArray(facts) ? facts : []).map(raw => {
-            if (!raw || typeof raw !== 'object') return raw;
-            const expression = String(raw.inStoryTime || raw.deadlineText || raw.relativeTime || raw.timeExpr || '').trim();
-            if (!expression) return raw;
-            const anchor = timeLib().resolve(expression, clockState);
-            return {
-                ...raw,
-                storyDay: anchor.storyDay,
-                segment: anchor.segment,
-                minutes: anchor.minutes,
-                timeKey: anchor.timeKey,
-                anchorConfidence: anchor.confidence,
-                anchorSource: anchor.source,
-                relativeTime: anchor.relative || expression
-            };
-        });
-
         // --- 滚动摘要（记忆重构 P0：原文真相源 + 派生摘要层） ---
         const summaryLib = () => globalThis.RPHMemorySummary;
         const profileLib = () => globalThis.RPHMemoryProfile;
@@ -10008,135 +9429,6 @@ ${content}
                 ...parts.map(part => indentXmlText(part, 2)),
                 '</role_memory>'
             ].join('\n');
-        };
-
-        const buildMemoryDigestForContext = () => {
-            const lib = schemaLib();
-            const time = timeLib();
-            if (!lib || !time || !memorySettings.factClockInjection) return '';
-            const facts = memoryFacts.value.filter(f => lib.FACT_TYPES.includes(f.kind));
-            if (facts.length === 0) return '';
-            const clock = getFactClockState();
-            const digest = lib.buildTimelineDigest(facts, clock);
-            if (!digest) return '';
-            return [
-                ROLE_MEMORY_TIMELINE_OPEN_TAG,
-                '  <description>以下是按当前剧情时间组织的紧凑记忆摘要，并非全部历史；请作为当前状态与近期剧情的背景。</description>',
-                `  ${time.formatForPrompt(clock)}`,
-                indentXmlText(digest, 4),
-                ROLE_MEMORY_TIMELINE_CLOSE_TAG
-            ].join('\n');
-        };
-
-        const getRollableEventDays = (facts, clockState, options = {}) => {
-            const keepDays = Number(options.keepDays) || 3;
-            const currentDay = Number(clockState?.storyDay) || 0;
-            const events = facts.filter(f => f.kind === 'event' && f.status === 'current'
-                && f.storyDay !== null && f.storyDay <= currentDay - keepDays);
-            const byDay = new Map();
-            events.forEach(e => {
-                if (!byDay.has(e.storyDay)) byDay.set(e.storyDay, []);
-                byDay.get(e.storyDay).push(e);
-            });
-            return [...byDay.entries()].sort((a, b) => a[0] - b[0]);
-        };
-
-        const runTimelineConsolidation = async (options = {}) => {
-            const { manual = true } = options;
-            const lib = schemaLib();
-            if (!lib || !currentCharacter.value?.uuid) return 0;
-            const facts = memoryFacts.value.filter(f => lib.FACT_TYPES.includes(f.kind) || f.kind === 'digest');
-            const rollableDays = getRollableEventDays(facts, getFactClockState());
-            if (rollableDays.length === 0) {
-                if (manual) showToast('当前没有可凝练的旧事件', 'info');
-                return 0;
-            }
-            let consolidated = 0;
-            for (const [day, events] of rollableDays) {
-                const digestId = `digest:day:${day}`;
-                if (memoryFacts.value.some(f => f.kind === 'digest' && f.id === digestId)) continue;
-                const summary = events.map(e => `[D${e.storyDay}${e.segment ? '·' + e.segment : ''}] ${e.summary}`).join('\n');
-                const digest = lib.createDayDigest(day, events.map(e => e.id), summary);
-                memoryFacts.value.push(digest);
-                markFactDirty(digest);
-                events.forEach(e => { e.status = 'rolled'; markFactDirty(e); });
-                const audit = lib.createAudit('timeline-rollup', { day, events: events.length });
-                memoryFacts.value.push(audit);
-                markFactDirty(audit);
-                consolidated++;
-            }
-            if (consolidated > 0) {
-                await saveMemoryFactsNow();
-                if (manual) showToast(`已凝练 ${consolidated} 个剧情日`, 'success');
-            }
-            return consolidated;
-        };
-
-        const reAnchorFact = (fact) => {
-            const lib = schemaLib();
-            const time = timeLib();
-            if (!lib || !time || !fact) return;
-            const expression = String(fact.relativeTime || fact.inStoryTime || '').trim();
-            if (!expression) { showToast('该事实没有可重解析的时间表达', 'info'); return; }
-            const anchor = time.resolve(expression, getFactClockState());
-            Object.assign(fact, {
-                storyDay: anchor.storyDay,
-                segment: anchor.segment,
-                minutes: anchor.minutes,
-                timeKey: anchor.timeKey,
-                anchorConfidence: anchor.confidence,
-                anchorSource: anchor.source,
-                relativeTime: anchor.relative || expression
-            });
-            markFactDirty(fact);
-            saveMemoryFactsNow();
-            showToast('已重新解析时间锚点', 'success');
-        };
-
-        const reAnchorLowConfidenceFacts = () => {
-            const lib = schemaLib();
-            const time = timeLib();
-            if (!lib || !time) return;
-            const low = memoryFacts.value.filter(f => lib.FACT_TYPES.includes(f.kind) && f.anchorConfidence === 'low');
-            if (low.length === 0) { showToast('没有低置信度锚点', 'info'); return; }
-            low.forEach(fact => {
-                const expression = String(fact.relativeTime || fact.inStoryTime || '').trim();
-                if (!expression) return;
-                const anchor = time.resolve(expression, getFactClockState());
-                Object.assign(fact, {
-                    storyDay: anchor.storyDay,
-                    segment: anchor.segment,
-                    minutes: anchor.minutes,
-                    timeKey: anchor.timeKey,
-                    anchorConfidence: anchor.confidence,
-                    anchorSource: anchor.source,
-                    relativeTime: anchor.relative || expression
-                });
-                markFactDirty(fact);
-            });
-            saveMemoryFactsNow();
-            showToast(`已重解析 ${low.length} 条低置信度锚点`, 'success');
-        };
-
-        const factClockEditing = ref(false);
-        const factClockDraft = reactive({ storyDay: 0, segment: null });
-        const factClockLabel = computed(() => {
-            const time = timeLib();
-            const clock = memoryFacts.value.find(f => f.kind === 'time_anchor' && f.id === 'clock');
-            return time ? time.formatForPrompt(clock || { storyDay: 0, segment: null, absolute: null }) : '时钟不可用';
-        });
-        const editFactClock = () => {
-            const state = getFactClockState();
-            factClockDraft.storyDay = state.storyDay;
-            factClockDraft.segment = state.segment;
-            factClockEditing.value = true;
-        };
-        const saveFactClock = () => {
-            const day = Math.max(0, Number(factClockDraft.storyDay) || 0);
-            updateFactClock({ storyDay: day, segment: factClockDraft.segment || null, updatedAt: Date.now() });
-            factClockEditing.value = false;
-            reAnchorLowConfidenceFacts();
-            showToast(`剧情时钟已更新为第 ${day} 天`, 'success');
         };
 
         const searchVectorMemoriesForTool = async (query, limit, signal) => {
@@ -11573,19 +10865,7 @@ ${content}
             if (!_summaryInFlight) {
                 nextTick(() => runRollingSummaryCheck());
             }
-            if (mode === MEMORY_MODE_CLASSIC) {
-                if (isClassicBatchExtracting.value) {
-                    _classicBatchRescanRequested = true;
-                    return Promise.resolve(false);
-                }
-                return _classicMemoriesLoaded
-                    ? startClassicBatchMemoryExtraction({ manual: false })
-                    : Promise.resolve(false);
-            }
-            if (memorySettings.factExtractionEnabled && !isFactExtracting.value) {
-                nextTick(() => startFactExtractionPatrol({ manual: false }));
-            }
-            nextTick(() => ensureFactBaseline());
+            // 原文归档：继续用向量分片把每轮文本落库（检索/证据层）
             if (isBatchExtracting.value) {
                 _vectorBatchRescanRequested = true;
                 return Promise.resolve(false);
@@ -11602,20 +10882,6 @@ ${content}
         ], ([enabled]) => {
             if (enabled && _initComplete) nextTick(() => startAutomaticMemoryPatrol());
         });
-
-        const startBatchMemoryExtraction = () => (
-            memorySettings.mode === MEMORY_MODE_CLASSIC
-                ? startClassicBatchMemoryExtraction({ manual: true })
-                : startVectorBatchMemoryExtraction({ manual: true })
-        );
-
-        const abortBatchExtraction = () => (
-            memorySettings.mode === MEMORY_MODE_CLASSIC
-                ? abortClassicBatchExtraction()
-                : abortVectorBatchExtraction()
-        );
-
-
 
         // Character Management
         const createNewCharacter = () => {
@@ -12217,9 +11483,8 @@ image###生成的提示词###
                 console.error(`Error loading classic memories${errorContext}:`, error);
                 classicMemories.value = [];
             }
-            await loadMemoryFacts(characterId, errorContext);
             if (memorySettings.enabled
-                && (memorySettings.mode !== MEMORY_MODE_CLASSIC || _classicMemoriesLoaded)) {
+                && _classicMemoriesLoaded) {
                 nextTick(() => startAutomaticMemoryPatrol());
             }
         };
@@ -12489,23 +11754,6 @@ image###生成的提示词###
                 if (branchProfile) {
                     await setScopedStoredValue('memory_profile', branchScopeId, cloneForStorage(branchProfile), { clone: false });
                 }
-                if (db) {
-                    let parentFacts = [];
-                    try { parentFacts = await db.loadFragments(parentScopeId); } catch (_) { parentFacts = []; }
-                    const factsForBranch = forkFromMessage
-                        ? (Array.isArray(parentFacts) ? parentFacts.filter(f => Number(f?.turn) <= forkTurn) : [])
-                        : (Array.isArray(parentFacts) ? parentFacts : []);
-                    if (factsForBranch.length) {
-                        await db.applyFragments(branchScopeId, {
-                            upserts: factsForBranch.map(f => ({
-                                kind: f._kind || f.kind,
-                                id: f._fragmentId || f.fragment_id || f.id,
-                                data: f
-                            })),
-                            deletes: []
-                        });
-                    }
-                }
                 copyUiTemplateRuntimeForBranch(parentScopeId, branchScopeId, forkTurn);
                 const floorCount = getPostprocessedChatMessages(branchChat, { includeSystem: false }).length;
                 const wordCount = branchChat.reduce((sum, message) => sum + String(message?.content || '').length, 0);
@@ -12537,11 +11785,7 @@ image###生成的提示词###
                 classicMemories.value = prepareClassicMemoriesForRuntime(branchClassicMemories);
                 _memoriesLoaded = true;
                 _classicMemoriesLoaded = true;
-                _factFragmentsLoaded = false;
-                _factLoadedCharacterId = '';
-                memoryFacts.value = [];
                 finishApplyingCharacterScopedData();
-                await loadMemoryFacts(branchScopeId, ' (分支创建)');
                 showToast(`已创建并进入“${branchName}”`, 'success');
                 await scrollChatToBottom();
             } catch (error) {
@@ -12608,12 +11852,8 @@ image###生成的提示词###
                 classicMemories.value = prepareClassicMemoriesForRuntime(savedClassicMemories);
                 _memoriesLoaded = true;
                 _classicMemoriesLoaded = true;
-                _factFragmentsLoaded = false;
-                _factLoadedCharacterId = '';
-                memoryFacts.value = [];
                 loadGlobalUiTemplateRuntimeForCharacter(char);
                 finishApplyingCharacterScopedData();
-                await loadMemoryFacts(targetScopeId, ' (分支切换)');
                 updateCurrentStoryBranchSummary();
                 await saveStoryBranchesForCharacter(char);
                 currentView.value = 'chat';
@@ -14058,24 +13298,9 @@ image###生成的提示词###
             ttsStatus, ttsStatusLabel, ttsPlayingMessageId, ttsSettingsExpanded, ttsServiceOptions, ttsReadMode,
             settingsSectionsOpen, selectTtsService, refreshTtsStatus, testTtsVoice, ttsSpeakTextFor, toggleSpeakMessage, stopSpeaking,
             requestDiagnosticsCount, exportRequestDiagnostics,
-            isAnyMemoryProcessing: computed(() => isBatchExtracting.value || isClassicBatchExtracting.value),
-            isActiveBatchExtracting: computed(() => memorySettings.mode === MEMORY_MODE_CLASSIC ? isClassicBatchExtracting.value : isBatchExtracting.value),
-            activeBatchExtractProgress: computed(() => memorySettings.mode === MEMORY_MODE_CLASSIC ? classicBatchExtractProgress.value : batchExtractProgress.value),
             vectorMemorySearchQuery, vectorMemorySearchResults, vectorMemorySearchError, vectorMemorySearchSortMode, isVectorMemorySearching,
-            startBatchMemoryExtraction, abortBatchExtraction, searchVectorMemories, clearVectorMemorySearch,
-            memoryGraphView, memoryGraphKeyword, memoryGraphSemanticThreshold, memoryGraphShowIsolated,
-            memoryGraphNodes, memoryGraphEdges, memoryGraphSelected, memoryGraphNeighbors, memoryGraphNeighborEdges,
-            memoryGraphHighlightIds, memoryGraphCanvas, setMemoryGraphView, rebuildMemoryGraph, relayoutMemoryGraph,
-            resetMemoryGraphView, selectMemoryGraphNode, showSearchResultsInGraph, clearMemoryGraphHighlight,
-            onMemoryGraphPointerDown, onMemoryGraphPointerMove, onMemoryGraphPointerUp, onMemoryGraphPointerLeave, onMemoryGraphWheel,
-            memoryFacts, isFactExtracting, isFactMaintaining, factExtractProgress, factMaintenancePreview,
-            factBaselineStatus, factShowRecycleBin, factArcRetainTurns, factArcMinEvents,
-            factEntities, factRelations, factEvents, factStates, factPlots, factArcs, factRecycleBin, factStats,
-            factMaintenanceSummary,
-            startFactExtractionPatrol, abortFactExtraction, runFactMaintenance, confirmFactMaintenance,
-            cancelFactMaintenance, restoreArchivedFact, factPreviewText,
-            factClockLabel, factClockEditing, factClockDraft, editFactClock, saveFactClock,
-            reAnchorFact, reAnchorLowConfidenceFacts, runTimelineConsolidation,
+            searchVectorMemories, clearVectorMemorySearch,
+            memoryGraphView, setMemoryGraphView,
             activeKeepFloors, keepFloorsSlider, keepFloorsSliderMin, keepFloorsSliderMax,
             // 滑块值映射：4-10 为变量分析消息层数。
             uiTemplateAnalysisDepthSlider: computed({
@@ -14144,13 +13369,11 @@ image###生成的提示词###
                     vector,
                     vectorTurns,
                     classic,
-                    activeTotal: memorySettings.mode === MEMORY_MODE_CLASSIC ? classic : vector
+                    activeTotal: vector
                 };
             }),
             clearAllMemories: () => {
-                const isClassicMode = memorySettings.mode === MEMORY_MODE_CLASSIC;
-                const modeName = isClassicMode ? '总结模式' : '记忆';
-                confirmAction(`确定要清空${modeName}吗？${isClassicMode ? '' : '原文聊天记录会保留，摘要与索引将从原文重建。'}此操作无法撤销。`, async () => {
+                confirmAction('确定要清空并重建记忆吗？原文聊天记录会保留，摘要、关系与索引将从原文重建。此操作无法撤销。', async () => {
                     // 滚动摘要（新引擎）：清空派生摘要层，原文保留可重建
                     memorySummaries.value = null;
                     memoryProfile.value = null;
@@ -14159,27 +13382,10 @@ image###生成的提示词###
                         await deleteScopedStoredValue('memory_summaries', getCurrentChatStorageScopeId());
                         await deleteScopedStoredValue('memory_profile', getCurrentChatStorageScopeId());
                     }
-                    if (isClassicMode) {
-                        abortClassicBatchExtraction();
-                        classicMemories.value = [];
-                        await saveClassicMemoriesNow();
-                    } else {
-                        abortVectorBatchExtraction();
-                        abortFactExtraction();
-                        abortFactMaintenance();
-                        if (currentCharacter.value?.uuid) {
-                            if (!db) await initDB();
-                            await db.deleteFragments(getCurrentChatStorageScopeId());
-                        }
-                        memoryFacts.value = [];
-                        _factDirty.clear();
-                        _factRemoved.clear();
-                        _factMeta = null;
-                        factBaselineStatus.value = 'none';
-                        factMaintenancePreview.value = null;
-                        nextTick(() => ensureFactBaseline());
-                    }
-                    showToast(`${modeName}已清空`, 'success');
+                    abortVectorBatchExtraction();
+                    memories.value = [];
+                    await saveMemoriesNow();
+                    showToast('记忆已清空，将从原文重建', 'success');
                     // 清空并重建：原文仍在，若窗口外已有轮次则立即重新滚动
                     if (currentCharacter.value?.uuid && memorySettings.enabled) {
                         nextTick(() => runRollingSummaryCheck());
@@ -14187,93 +13393,31 @@ image###生成的提示词###
                 });
             },
             exportMemories: async () => {
-                const isClassicMode = memorySettings.mode === MEMORY_MODE_CLASSIC;
-                let exportData;
-                if (isClassicMode) {
-                    if (classicMemories.value.length === 0) { showToast('当前模式没有记忆可导出', 'info'); return; }
-                    const exportedMemories = [...classicMemories.value]
-                        .sort((a, b) => (a.turn || 0) - (b.turn || 0))
-                        .map(memory => ({
-                            turn: memory.turn,
-                            user: {
-                                content: memory.sourceUserText || '',
-                                messageIds: memory.sourceUserIds || []
-                            },
-                            assistant: {
-                                content: memory.sourceAssistantText || '',
-                                messageIds: memory.sourceAssistantIds || []
-                            },
-                            summary: memory.summary
-                        }));
-                    exportData = {
-                        type: 'rp-hub-summary-memories',
-                        version: 1,
-                        character: currentCharacter.value?.name || 'unknown',
-                        exportedAt: new Date().toISOString(),
-                        total: exportedMemories.length,
-                        memories: exportedMemories
-                    };
-                } else {
-                    const memoriesExport = await compactMemoriesForStorageAsync(memories.value);
-                    if (memoriesExport.length === 0) { showToast('当前模式没有记忆可导出', 'info'); return; }
-                    const lib = schemaLib();
-                    const factsExport = lib
-                        ? memoryFacts.value.filter(f => lib.FACT_TYPES.includes(f.kind) || f.kind === 'arc' || f.kind === 'meta')
-                        : [];
-                    exportData = {
-                        type: 'rp-hub-vector-memories-v2',
-                        schemaVersion: lib ? lib.SCHEMA_VERSION : 1,
-                        character: currentCharacter.value?.name || 'unknown',
-                        exportedAt: new Date().toISOString(),
-                        memories: memoriesExport,
-                        facts: factsExport
-                    };
-                }
+                const memoriesExport = await compactMemoriesForStorageAsync(memories.value);
+                if (memoriesExport.length === 0) { showToast('当前没有记忆可导出', 'info'); return; }
+                const exportData = {
+                    type: 'rp-hub-vector-memories-v2',
+                    schemaVersion: 1,
+                    character: currentCharacter.value?.name || 'unknown',
+                    exportedAt: new Date().toISOString(),
+                    memories: memoriesExport,
+                    summaries: memorySummaries.value || null,
+                    profile: memoryProfile.value || null
+                };
                 try {
                     const { blob, result } = await downloadJsonFile(
                         exportData,
-                        `${isClassicMode ? 'summary_memories' : 'vector_memories'}_${currentCharacter.value?.name || 'unknown'}.json`,
+                        `memories_${currentCharacter.value?.name || 'unknown'}.json`,
                         2,
                         { revokeDelay: 1000 }
                     );
-                    if (result.saved) showToast(`${isClassicMode ? '总结模式' : '向量'}记忆已导出，约 ${Math.max(1, Math.round(blob.size / 1024))} KB`, 'success');
+                    if (result.saved) showToast(`记忆已导出，约 ${Math.max(1, Math.round(blob.size / 1024))} KB`, 'success');
                 } catch (error) {
                     console.error('Memory export failed:', error);
                     showToast('记忆导出失败: ' + (error?.message || error), 'error');
                 }
             },
             importMemories: (event) => readJsonFileInput(event, async data => {
-                const isClassicMode = memorySettings.mode === MEMORY_MODE_CLASSIC;
-                if (isClassicMode) {
-                    if (data?.type !== 'rp-hub-summary-memories' || !Array.isArray(data.memories)) {
-                        throw new Error('这不是总结模式记忆文件');
-                    }
-                    const normalized = prepareClassicMemoriesForRuntime(data.memories.map(memory => ({
-                        id: generateUUID(),
-                        timestamp: Date.now(),
-                        turn: memory?.turn,
-                        summary: memory?.summary,
-                        enabled: true,
-                        classicMemory: true,
-                        sourceUserIds: Array.isArray(memory?.user?.messageIds) ? memory.user.messageIds : [],
-                        sourceAssistantIds: Array.isArray(memory?.assistant?.messageIds) ? memory.assistant.messageIds : [],
-                        sourceUserText: String(memory?.user?.content || ''),
-                        sourceAssistantText: String(memory?.assistant?.content || '')
-                    })));
-                    if (normalized.length === 0) throw new Error('文件中没有有效的总结模式记忆');
-                    const existingKeys = new Set(classicMemories.value.map(memory => getClassicMemoryKey(memory.sourceAssistantIds, memory.turn)));
-                    const added = normalized.filter(memory => {
-                        const key = getClassicMemoryKey(memory.sourceAssistantIds, memory.turn);
-                        if (existingKeys.has(key)) return false;
-                        existingKeys.add(key);
-                        return true;
-                    });
-                    classicMemories.value = [...classicMemories.value, ...added];
-                    await saveClassicMemoriesNow();
-                    showToast(`成功导入 ${added.length} 条总结模式记忆`, 'success');
-                    return;
-                }
-
                 const items = Array.isArray(data) ? data : data?.memories;
                 if (!Array.isArray(items)) throw new Error('文件内容不正确');
                 const normalized = items
@@ -14294,25 +13438,20 @@ image###生成的提示词###
                 if (normalized.length === 0) throw new Error('这不是向量记忆文件');
                 memories.value = [...memories.value, ...prepareMemoriesForRuntime(normalized)];
                 await saveMemoriesNow();
-                let factAdded = 0;
-                const lib = schemaLib();
-                if (lib && Array.isArray(data?.facts)) {
-                    const existingIds = new Set(memoryFacts.value.map(f => f.id));
-                    const existingKeys = new Set(memoryFacts.value.map(f => lib.getDedupKey(f)).filter(Boolean));
-                    data.facts.forEach(raw => {
-                        const fact = lib.normalizeFact({ ...raw, id: raw.id || generateUUID() }, { turn: raw.sourceTurn || 0 });
-                        if (!fact) return;
-                        const key = lib.getDedupKey(fact);
-                        if (existingIds.has(fact.id) || (key && existingKeys.has(key))) return;
-                        existingIds.add(fact.id);
-                        if (key) existingKeys.add(key);
-                        memoryFacts.value.push(fact);
-                        markFactDirty(fact);
-                        factAdded++;
-                    });
-                    if (factAdded > 0) await saveMemoryFactsNow();
+                if (data?.summaries && typeof data.summaries === 'object') {
+                    memorySummaries.value = {
+                        long: String(data.summaries.long || '').trim(),
+                        short: String(data.summaries.short || '').trim(),
+                        batches: Array.isArray(data.summaries.batches) ? data.summaries.batches : [],
+                        updatedAt: Number(data.summaries.updatedAt) || 0
+                    };
+                    await saveMemorySummariesNow();
                 }
-                showToast(`成功导入 ${normalized.length} 个分片${factAdded ? `、${factAdded} 条事实` : ''}`, 'success');
+                if (data?.profile && typeof data.profile === 'object' && profileLib()) {
+                    memoryProfile.value = profileLib().normalizeProfile(data.profile);
+                    await saveMemoryProfileNow();
+                }
+                showToast(`成功导入 ${normalized.length} 个分片`, 'success');
             }, error => showToast(`导入失败: ${error.message || 'JSON 格式错误'}`, 'error')),
             toggleMobileMenu, closeMobileMenu,
             fetchModels, selectModel, sendMessage, autoResizeInput, handleChatInput, handleChatCompositionStart, handleChatCompositionEnd, handleChatInputPaste, prepareChatInputSend, handleChatInputKeydown, handleChatInputFocus, handleChatInputBlur, stopGeneration, clearChat, toggleChatFullscreen,

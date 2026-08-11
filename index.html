@@ -1919,15 +1919,8 @@
                                         </button>
                                     </div>
                                     <div class="flex items-center justify-between gap-2">
-                                        <span class="font-bold text-gray-700 truncate">记忆总结：{{ memoryProviderLabel }} · {{ memorySettings.classicModel || '未选' }}</span>
+                                        <span class="font-bold text-gray-700 truncate">记忆模型：{{ memoryProviderLabel }} · {{ memorySettings.classicModel || '未选' }}</span>
                                         <button type="button" @click="openModelSelector('memoryClassicModel')"
-                                            class="text-[10px] px-2 py-0.5 rounded bg-white border border-teal-200 text-teal-700 font-bold transition-all">
-                                            换
-                                        </button>
-                                    </div>
-                                    <div class="flex items-center justify-between gap-2">
-                                        <span class="font-bold text-gray-700 truncate">事实抽取：{{ memoryProviderLabel }} · {{ memorySettings.factModel || memorySettings.classicModel || '未选' }}</span>
-                                        <button type="button" @click="openModelSelector('memoryFactModel')"
                                             class="text-[10px] px-2 py-0.5 rounded bg-white border border-teal-200 text-teal-700 font-bold transition-all">
                                             换
                                         </button>
@@ -3453,7 +3446,7 @@
                                 </button>
                             </div>
                             <div class="text-xs font-mono text-gray-600 bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-1">
-                                {{ memoryGraphView === 'graph' ? memoryGraphNodes.length : memoryStats.vector }} 个分片
+                                {{ memoryGraphView === 'relations' ? (memoryProfile?.relations?.length || 0) + ' 条关系' : memoryGraphView === 'summary' ? (memorySummaries ? memorySummaries.batches.length : 0) + ' 批摘要' : memoryStats.vector + ' 个分片' }}
                             </div>
                         </div>
                     </div>
@@ -3530,82 +3523,6 @@
                         </div>
                         </div>
 
-                        <!-- Memory Graph Panel -->
-                        <div v-show="memoryGraphView === 'graph'" class="space-y-3">
-                            <div class="flex flex-wrap items-center gap-2">
-                                <input v-model="memoryGraphKeyword" type="text"
-                                    placeholder="过滤关键词"
-                                    class="w-32 px-2.5 py-1.5 text-xs bg-gray-50/60 border border-gray-200 rounded-lg focus:bg-white focus:border-primary-300 focus:ring-2 focus:ring-primary-100 outline-none transition-all">
-                                <label class="text-[11px] font-bold text-gray-500 flex items-center gap-1.5">
-                                    语义边 ≥
-                                    <span class="text-primary-600 font-mono">{{ Number(memoryGraphSemanticThreshold).toFixed(2) }}</span>
-                                </label>
-                                <input type="range" v-model.number="memoryGraphSemanticThreshold" min="0.40" max="0.75" step="0.05"
-                                    class="w-24 h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary-500">
-                                <label class="text-[11px] font-bold text-gray-500 flex items-center gap-1">
-                                    <input type="checkbox" v-model="memoryGraphShowIsolated" class="rounded accent-primary-500">
-                                    隐藏孤立节点
-                                </label>
-                                <button type="button" @click="relayoutMemoryGraph()"
-                                    class="text-[11px] px-2.5 py-1.5 rounded-lg bg-white border border-gray-200 text-gray-600 hover:text-gray-800 hover:bg-gray-50 font-bold transition-all">
-                                    重新布局
-                                </button>
-                                <button type="button" @click="resetMemoryGraphView()"
-                                    class="text-[11px] px-2.5 py-1.5 rounded-lg bg-white border border-gray-200 text-gray-600 hover:text-gray-800 hover:bg-gray-50 font-bold transition-all">
-                                    重置视图
-                                </button>
-                                <button v-if="memoryGraphHighlightIds.size > 0" type="button" @click="clearMemoryGraphHighlight()"
-                                    class="text-[11px] px-2.5 py-1.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-700 hover:bg-amber-100 font-bold transition-all">
-                                    清除高亮
-                                </button>
-                            </div>
-
-                            <div v-if="memoryGraphNodes.length === 0"
-                                class="py-8 text-center text-sm text-gray-400">
-                                还没有可展示的分片，可继续对话或点击补录记忆
-                            </div>
-                            <template v-else>
-                                <canvas ref="memoryGraphCanvas"
-                                    class="w-full h-80 rounded-xl border border-gray-100 bg-white touch-none select-none cursor-grab"
-                                    @pointerdown="onMemoryGraphPointerDown"
-                                    @pointermove="onMemoryGraphPointerMove"
-                                    @pointerup="onMemoryGraphPointerUp"
-                                    @pointercancel="onMemoryGraphPointerUp"
-                                    @pointerleave="onMemoryGraphPointerLeave"
-                                    @wheel.prevent="onMemoryGraphWheel"
-                                    @dblclick="resetMemoryGraphView"></canvas>
-                                <div class="text-[11px] text-gray-400 flex flex-wrap gap-x-4 gap-y-1">
-                                    <span><i class="inline-block w-2 h-2 rounded-full bg-gray-400 mr-1"></i>天节点</span>
-                                    <span><i class="inline-block w-2 h-2 rounded-full bg-primary-500 mr-1"></i>事件</span>
-                                    <span><i class="inline-block h-0.5 w-4 bg-gray-300 mr-1 align-middle"></i>时间轴连线</span>
-                                    <span><i class="inline-block h-0.5 w-4 bg-teal-400 mr-1 align-middle"></i>事件网</span>
-                                    <span class="ml-auto">拖拽节点/空白平移 · 滚轮缩放 · 双击复位</span>
-                                </div>
-                                <div v-if="memoryGraphSelected"
-                                    class="rounded-xl border border-primary-100 bg-primary-50/50 px-3 py-2.5">
-                                    <div class="flex items-center gap-2 flex-wrap mb-1">
-                                        <span class="text-[10px] font-mono text-primary-700 bg-primary-50 border border-primary-100 rounded-md px-2 py-0.5">
-                                            第 {{ memoryGraphSelected.turn }} 轮 · {{ memoryGraphSelected.kind }}
-                                        </span>
-                                        <span class="text-[10px] font-mono text-gray-500 bg-gray-50 border border-gray-100 rounded-md px-2 py-0.5">
-                                            相连 {{ memoryGraphNeighborEdges.length }} 条
-                                        </span>
-                                    </div>
-                                    <p class="text-xs text-gray-700 leading-relaxed whitespace-pre-line max-h-40 overflow-y-auto">{{ memoryGraphSelected.text }}</p>
-                                    <div v-if="memoryGraphNeighbors.length > 0" class="mt-2 pt-2 border-t border-primary-100">
-                                        <div class="text-[10px] font-bold text-gray-400 mb-1">相邻节点</div>
-                                        <div class="flex flex-wrap gap-1.5">
-                                            <button v-for="neighbor in memoryGraphNeighbors" :key="neighbor.id" type="button"
-                                                @click="selectMemoryGraphNode(neighbor.id)"
-                                                class="text-[10px] px-2 py-1 rounded-lg bg-white border border-primary-100 text-primary-700 hover:bg-primary-100 transition-all max-w-[240px] truncate">
-                                                第 {{ neighbor.turn }} 轮 · {{ String(neighbor.text || '').slice(0, 16) }}
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                            </template>
-                        </div>
-
                         <!-- Memory Summary Panel（滚动摘要，P2） -->
                         <div v-show="memoryGraphView === 'summary'" class="space-y-3">
                             <div v-if="!memorySummaries || (!memorySummaries.long && !memorySummaries.short)"
@@ -3662,253 +3579,6 @@
                             </template>
                         </div>
 
-                        <!-- Memory Facts Panel -->
-                        <div v-show="memoryGraphView === 'facts'" class="space-y-3">
-                            <div class="rounded-xl border border-gray-100 bg-white px-3 py-2.5">
-                                <div class="flex items-center justify-between gap-2">
-                                    <span class="text-[10px] font-bold text-gray-400">剧情时钟</span>
-                                    <button type="button" @click="editFactClock()"
-                                        class="text-[10px] px-2 py-0.5 rounded bg-white border border-gray-200 text-gray-500 hover:text-gray-700 font-bold transition-all">
-                                        修改
-                                    </button>
-                                </div>
-                                <div class="text-xs font-bold text-gray-800 mt-0.5">{{ factClockLabel }}</div>
-                                <div v-if="factClockEditing" class="mt-2 flex flex-wrap items-center gap-2">
-                                    <input v-model.number="factClockDraft.storyDay" type="number" min="0"
-                                        class="w-20 px-2 py-1 text-xs bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:border-primary-300">
-                                    <select v-model="factClockDraft.segment"
-                                        class="text-xs px-2 py-1 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none">
-                                        <option :value="null">不细分</option>
-                                        <option v-for="s in ['清晨','上午','正午','下午','傍晚','入夜','深夜','子夜']" :key="s" :value="s">{{ s }}</option>
-                                    </select>
-                                    <button type="button" @click="saveFactClock()"
-                                        class="text-[11px] px-2.5 py-1 rounded-lg bg-primary-600 hover:bg-primary-700 text-white font-bold transition-all">
-                                        保存
-                                    </button>
-                                    <button type="button" @click="factClockEditing = false"
-                                        class="text-[11px] px-2.5 py-1 rounded-lg bg-white border border-gray-200 text-gray-500 font-bold transition-all">
-                                        取消
-                                    </button>
-                                </div>
-                            </div>
-
-                            <div class="flex flex-wrap items-center gap-2">
-                                <span class="text-[11px] font-bold text-gray-500">基线</span>
-                                <span
-                                    :class="['text-[11px] px-2 py-1 rounded-lg border font-bold', factBaselineStatus === 'local' ? 'bg-teal-50 border-teal-200 text-teal-700' : factBaselineStatus === 'existing' ? 'bg-blue-50 border-blue-200 text-blue-700' : factBaselineStatus === 'pending' ? 'bg-amber-50 border-amber-200 text-amber-700' : 'bg-gray-50 border-gray-200 text-gray-500']">
-                                    {{ factBaselineStatus === 'local' ? '本地基线已建' : factBaselineStatus === 'existing' ? '已有事实' : factBaselineStatus === 'pending' ? '构建中' : '未建' }}
-                                </span>
-                                <button v-if="isFactExtracting" type="button" @click="abortFactExtraction()"
-                                    class="inline-flex items-center text-[11px] px-2.5 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 rounded-lg border border-red-200/80 font-medium transition-all">
-                                    停止补录 ({{ factExtractProgress.current }}/{{ factExtractProgress.total }})
-                                </button>
-                                <button v-else type="button" @click="startFactExtractionPatrol()"
-                                    class="text-[11px] px-2.5 py-1.5 rounded-lg bg-primary-600 hover:bg-primary-700 text-white font-bold transition-all">
-                                    补录事实
-                                </button>
-                                <button type="button" @click="runFactMaintenance()" :disabled="isFactMaintaining"
-                                    class="text-[11px] px-2.5 py-1.5 rounded-lg bg-white border border-gray-200 text-gray-600 hover:text-gray-800 hover:bg-gray-50 font-bold transition-all disabled:opacity-40">
-                                    整理记忆
-                                </button>
-                                <button type="button" @click="factShowRecycleBin = !factShowRecycleBin"
-                                    class="text-[11px] px-2.5 py-1.5 rounded-lg bg-white border border-gray-200 text-gray-600 hover:text-gray-800 hover:bg-gray-50 font-bold transition-all">
-                                    回收站 {{ factStats.archived }}
-                                </button>
-                            </div>
-
-                            <div v-if="factMaintenancePreview"
-                                class="rounded-xl border border-primary-200 bg-primary-50/60 px-3 py-2.5">
-                                <div class="text-xs font-bold text-primary-700 mb-1">整理预览</div>
-                                <div class="text-[11px] text-gray-600 mb-2">{{ factMaintenanceSummary }}</div>
-                                <div class="flex gap-2">
-                                    <button type="button" @click="confirmFactMaintenance()"
-                                        class="text-[11px] px-2.5 py-1.5 rounded-lg bg-primary-600 hover:bg-primary-700 text-white font-bold transition-all">
-                                        确认整理
-                                    </button>
-                                    <button type="button" @click="cancelFactMaintenance()"
-                                        class="text-[11px] px-2.5 py-1.5 rounded-lg bg-white border border-gray-200 text-gray-600 hover:bg-gray-50 font-bold transition-all">
-                                        取消
-                                    </button>
-                                </div>
-                            </div>
-
-                            <div class="grid grid-cols-3 sm:grid-cols-7 gap-1.5">
-                                <div class="rounded-lg bg-gray-50 border border-gray-100 px-2 py-1.5 text-center">
-                                    <div class="text-[10px] font-bold text-gray-400">实体</div>
-                                    <div class="text-sm font-black text-gray-800">{{ factStats.entities }}</div>
-                                </div>
-                                <div class="rounded-lg bg-gray-50 border border-gray-100 px-2 py-1.5 text-center">
-                                    <div class="text-[10px] font-bold text-gray-400">关系</div>
-                                    <div class="text-sm font-black text-gray-800">{{ factStats.relations }}</div>
-                                </div>
-                                <div class="rounded-lg bg-gray-50 border border-gray-100 px-2 py-1.5 text-center">
-                                    <div class="text-[10px] font-bold text-gray-400">事件</div>
-                                    <div class="text-sm font-black text-gray-800">{{ factStats.events }}</div>
-                                </div>
-                                <div class="rounded-lg bg-gray-50 border border-gray-100 px-2 py-1.5 text-center">
-                                    <div class="text-[10px] font-bold text-gray-400">状态</div>
-                                    <div class="text-sm font-black text-gray-800">{{ factStats.states }}</div>
-                                </div>
-                                <div class="rounded-lg bg-gray-50 border border-gray-100 px-2 py-1.5 text-center">
-                                    <div class="text-[10px] font-bold text-gray-400">伏笔</div>
-                                    <div class="text-sm font-black text-gray-800">{{ factStats.plots }}</div>
-                                </div>
-                                <div class="rounded-lg bg-gray-50 border border-gray-100 px-2 py-1.5 text-center">
-                                    <div class="text-[10px] font-bold text-gray-400">剧情弧</div>
-                                    <div class="text-sm font-black text-gray-800">{{ factStats.arcs }}</div>
-                                </div>
-                                <div class="rounded-lg bg-gray-50 border border-gray-100 px-2 py-1.5 text-center">
-                                    <div class="text-[10px] font-bold text-gray-400">审计</div>
-                                    <div class="text-sm font-black text-gray-800">{{ memoryFacts.filter(f => f.kind === 'audit').length }}</div>
-                                </div>
-                            </div>
-
-                            <div v-if="factShowRecycleBin && factRecycleBin.length > 0"
-                                class="rounded-xl border border-amber-100 bg-amber-50/50 px-3 py-2.5 space-y-1.5">
-                                <div class="text-[10px] font-bold text-amber-700 mb-1">回收站（可恢复，超期低重要度会被清理）</div>
-                                <div v-for="item in factRecycleBin" :key="item.id"
-                                    class="flex items-center gap-2 text-xs text-gray-600">
-                                    <span class="font-mono text-[10px] text-gray-400">{{ item.kind }}</span>
-                                    <span class="flex-1 truncate">{{ factPreviewText(item) }}</span>
-                                    <button type="button" @click="restoreArchivedFact(item)"
-                                        class="text-[10px] px-2 py-0.5 rounded bg-white border border-amber-200 text-amber-700 hover:bg-amber-100 transition-all">
-                                        恢复
-                                    </button>
-                                </div>
-                            </div>
-
-                            <div v-if="factStates.length > 0" class="rounded-xl border border-gray-100 bg-white px-3 py-2.5">
-                                <div class="text-[10px] font-bold text-gray-400 mb-1">当前状态</div>
-                                <div class="space-y-1">
-                                    <div v-for="s in factStates" :key="s.id" class="text-xs text-gray-700">
-                                        <span class="font-medium">{{ s.subject }}</span> · {{ s.aspect }}：{{ s.value }}
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div v-if="factRelations.length > 0" class="rounded-xl border border-gray-100 bg-white px-3 py-2.5">
-                                <div class="text-[10px] font-bold text-gray-400 mb-1">关系网</div>
-                                <div class="space-y-1">
-                                    <div v-for="r in factRelations" :key="r.id" class="text-xs text-gray-700">
-                                        {{ r.from }} → <span class="font-medium">{{ r.relKind || r.kind }}</span> → {{ r.to }}
-                                        <span v-if="Number.isFinite(Number(r.strength))" class="text-gray-400">（强度 {{ (Number(r.strength) * 100).toFixed(0) }}%）</span>
-                                        <span v-if="r.attitude" class="text-gray-400"> · {{ r.attitude }}</span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div v-if="factEvents.length > 0" class="rounded-xl border border-gray-100 bg-white px-3 py-2.5">
-                                <div class="text-[10px] font-bold text-gray-400 mb-1">最近事件</div>
-                                <div class="space-y-1.5 max-h-52 overflow-y-auto pr-1">
-                                    <div v-for="e in factEvents" :key="e.id"
-                                        class="text-xs text-gray-700 leading-relaxed"
-                                        :title="'第 ' + (e.sourceTurn || '?') + ' 轮'">
-                                        <span v-if="e.storyDay !== null"
-                                            class="font-mono text-[10px] text-teal-700 bg-teal-50 border border-teal-100 rounded px-1.5 py-0.5 mr-1">
-                                            D{{ e.storyDay }}{{ e.segment && !String(e.inStoryTime || '').includes(e.segment) ? '·' + e.segment : '' }}
-                                        </span>
-                                        <span v-if="e.anchorConfidence === 'low'"
-                                            class="inline-flex items-center gap-1 text-[10px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5 mr-1">
-                                            时间待定
-                                            <button type="button" @click="reAnchorFact(e)" class="underline hover:no-underline">重解析</button>
-                                        </span>
-                                        <span v-if="e.inStoryTime" class="text-gray-400">{{ e.inStoryTime }} · </span>
-                                        {{ e.summary }}
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div v-if="factPlots.length > 0" class="rounded-xl border border-amber-100 bg-amber-50/40 px-3 py-2.5">
-                                <div class="text-[10px] font-bold text-amber-700 mb-1">未决伏笔</div>
-                                <div class="space-y-1">
-                                    <div v-for="p in factPlots" :key="p.id" class="text-xs text-gray-700">
-                                        <span v-if="p.relatedEntities && p.relatedEntities.length" class="text-gray-400">{{ p.relatedEntities.join('、') }} · </span>
-                                        <span v-if="p.deadlineText" class="text-amber-600">{{ p.deadlineText }} · </span>
-                                        {{ p.summary }}
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div v-if="factArcs.length > 0" class="rounded-xl border border-gray-100 bg-white px-3 py-2.5">
-                                <div class="text-[10px] font-bold text-gray-400 mb-1">剧情弧（自动凝练）</div>
-                                <div class="space-y-1.5 max-h-40 overflow-y-auto">
-                                    <div v-for="a in factArcs" :key="a.id" class="text-xs text-gray-700 leading-relaxed">
-                                        <span class="font-mono text-[10px] text-gray-500 bg-gray-50 border border-gray-100 rounded px-1.5 py-0.5 mr-1">
-                                            第 {{ a.startTurn }}-{{ a.endTurn }} 轮
-                                        </span>
-                                        {{ a.summary }}
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div v-if="factEvents.length === 0 && factStates.length === 0 && factRelations.length === 0 && factPlots.length === 0"
-                                class="py-8 text-center text-sm text-gray-400">
-                                还没有动态事实，可点击「补录事实」或继续对话
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Classic Memory View -->
-                <div v-else-if="memorySettings.enabled"
-                    class="bg-white/70 backdrop-blur-sm p-1 rounded-2xl border border-gray-200 shadow-sm mb-4 overflow-hidden">
-                    <div class="w-full flex justify-between items-center px-4 py-3 rounded-xl font-bold text-gray-700 bg-white">
-                        <span class="flex items-center min-w-0">
-                            <div class="p-1.5 rounded-lg mr-3 bg-gray-100 text-gray-500">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                        d="M8 6h8M8 10h8M8 14h5m-7 7h12a2 2 0 002-2V5a2 2 0 00-2-2H6a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
-                                </svg>
-                            </div>
-                            <span class="truncate">记忆浏览</span>
-                        </span>
-                        <div class="text-xs font-mono text-gray-600 bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-1">
-                            {{ memoryStats.classic }} 个分片
-                        </div>
-                    </div>
-
-                    <div class="px-4 pb-4 pt-3 border-t border-gray-100">
-                        <div v-if="displayedClassicMemories.length === 0"
-                            class="py-8 text-center text-sm text-gray-400">
-                            还没有总结模式记忆，可继续对话或点击补录记忆
-                        </div>
-                        <div v-else class="space-y-3">
-                            <article v-for="memory in displayedClassicMemories" :key="memory.id"
-                                class="rounded-xl border border-gray-100 bg-white px-3.5 py-3 shadow-sm">
-                                <div class="mb-3 flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 pb-2.5">
-                                    <div class="flex items-center gap-2">
-                                        <span class="h-1.5 w-1.5 rounded-full bg-primary-500"></span>
-                                        <span class="text-sm font-medium text-gray-800">第 {{ memory.displayTurn || '?' }} 轮</span>
-                                    </div>
-                                    <div class="flex items-baseline gap-1 text-[13px] font-medium text-gray-400"
-                                        title="本轮原始正文 → 使用总结后的正文">
-                                        <span>{{ Number(memory.originalChars || 0).toLocaleString() }}字</span>
-                                        <span class="text-gray-300" aria-hidden="true">→</span>
-                                        <span class="font-medium leading-none text-gray-700">{{ Number(memory.compressedChars || 0).toLocaleString() }}字</span>
-                                    </div>
-                                </div>
-                                <div class="rounded-lg border border-primary-100 bg-primary-50/50 px-3 py-2.5">
-                                    <p class="text-xs text-gray-700 leading-relaxed whitespace-pre-line">{{ memory.summary }}</p>
-                                </div>
-                            </article>
-                            <nav v-if="classicMemoryPageCount > 1" class="flex items-center justify-center gap-2 pt-1" aria-label="总结模式记忆分页">
-                                <button type="button" @click="classicMemoryPage--" :disabled="classicMemoryPage === 1"
-                            class="pagination-button">
-                                    <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
-                                    </svg>
-                                    上一页
-                                </button>
-                                <span class="min-w-[58px] text-center text-xs font-mono text-gray-500">{{ classicMemoryPage }} / {{ classicMemoryPageCount }}</span>
-                                <button type="button" @click="classicMemoryPage++" :disabled="classicMemoryPage === classicMemoryPageCount"
-                            class="pagination-button">
-                                    下一页
-                                    <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
-                                    </svg>
-                                </button>
-                            </nav>
-                        </div>
                     </div>
                 </div>
 
@@ -5768,9 +5438,6 @@
     <script src="assets/js/ui-template-engine.js"></script>
     <script src="assets/js/ui-template-frame.js"></script>
     <script src="assets/js/local-embedding.js"></script>
-    <script src="assets/js/memory-schema.js"></script>
-    <script src="assets/js/memory-time.js"></script>
-    <script src="assets/js/memory-graph.js"></script>
     <script src="assets/js/memory-summary.js"></script>
     <script src="assets/js/memory-profile.js"></script>
     <script src="assets/js/default-presets.js"></script>
