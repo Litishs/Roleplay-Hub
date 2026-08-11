@@ -104,6 +104,19 @@ test('voice settings section is placed inside the settings view, not the uitempl
     assert.ok(voiceSection < uitemplatesView);
 });
 
+test('settings sections are collapsible and local-data sits at the bottom', () => {
+    assert.match(html, /settingsSectionsOpen\.user/);
+    assert.match(html, /settingsSectionsOpen\.api/);
+    assert.match(html, /settingsSectionsOpen\.advanced/);
+    assert.match(html, /settingsSectionsOpen\.localData/);
+    const userIdx = html.indexOf('id="user-settings-panel"');
+    const apiIdx = html.indexOf('id="api-settings-panel"');
+    const advancedIdx = html.indexOf('id="advanced-settings-panel"');
+    const voiceIdx = html.indexOf('id="tts-settings-panel"');
+    const localIdx = html.indexOf('id="local-data-panel"');
+    assert.ok(userIdx < apiIdx && apiIdx < advancedIdx && advancedIdx < voiceIdx && voiceIdx < localIdx);
+});
+
 test('app.js wires TTS defaults, engine, actions and auto-play', () => {
     assert.match(app, /ttsEnabled: false/);
     assert.match(app, /ttsAutoPlay: false/);
@@ -122,7 +135,9 @@ test('app.js wires TTS defaults, engine, actions and auto-play', () => {
     assert.match(app, /stopSpeaking\(\);/);
     assert.match(app, /const selectTtsService = \(id\) => \{/);
     assert.match(app, /ttsSettingsExpanded = ref\(false\)/);
+    assert.match(app, /settingsSectionsOpen = reactive\(\{/);
     assert.match(app, /ttsStatus, ttsStatusLabel, ttsPlayingMessageId, ttsSettingsExpanded, ttsServiceOptions, ttsReadMode,/);
+    assert.match(app, /settingsSectionsOpen, selectTtsService,/);
     assert.doesNotMatch(app, /refreshTtsVoiceOptions/);
     assert.doesNotMatch(app, /ttsVoiceOptions/);
 });

@@ -1420,13 +1420,20 @@
                                 </svg>
                             </div>
 
-                            <div class="mt-4 ml-6 text-white font-semibold flex items-center relative z-10">
+                            <button type="button" @click="settingsSectionsOpen.user = !settingsSectionsOpen.user; settingsHelpTopic = ''"
+                                class="mt-4 ml-6 text-white font-semibold flex items-center relative z-10 cursor-pointer select-none"
+                                aria-expanded="settingsSectionsOpen.user" aria-controls="user-settings-panel">
                                 <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                         d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
                                 </svg>
                                 用户设置
-                            </div>
+                                <svg :class="{'transform rotate-180': settingsSectionsOpen.user}"
+                                    class="settings-collapse-chevron w-4 h-4 ml-2" fill="none" stroke="currentColor"
+                                    viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                                </svg>
+                            </button>
 
                             <!-- Profile Management Controls -->
                             <div class="mt-3 mr-4 flex flex-wrap items-center gap-1.5 md:gap-2 relative"
@@ -1525,6 +1532,10 @@
                             </div>
                         </div>
 
+                        <div id="user-settings-panel" class="settings-collapse" :class="{'is-open': settingsSectionsOpen.user}"
+                            :aria-hidden="!settingsSectionsOpen.user" :inert="!settingsSectionsOpen.user">
+                            <div class="settings-collapse__inner">
+                                <div class="settings-collapse__content">
                         <div class="px-6 pb-6 relative">
                             <!-- Avatar Section (Overlapping Header) -->
                             <div class="flex flex-col md:flex-row gap-8 items-start -mt-10">
@@ -1639,28 +1650,41 @@
                                 </div>
                             </div>
                         </div>
+                        </div>
+                        </div>
+                    </div>
                     </div>
 
                     <!-- API Settings - Optimized UI -->
                     <div class="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden mb-6">
                         <!-- Header -->
-                        <div
-                            class="h-16 bg-gradient-to-r from-teal-500 to-emerald-600 relative overflow-hidden flex items-center px-6">
+                        <button type="button" @click="settingsSectionsOpen.api = !settingsSectionsOpen.api; settingsHelpTopic = ''"
+                            class="h-16 bg-gradient-to-r from-teal-500 to-emerald-600 relative overflow-hidden flex items-center px-6 w-full text-left cursor-pointer"
+                            aria-expanded="settingsSectionsOpen.api" aria-controls="api-settings-panel">
                             <div class="absolute inset-0 opacity-10">
                                 <svg class="w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
                                     <path d="M0 0 L100 0 L100 100 L0 100 Z" fill="transparent" />
                                     <path d="M0 50 Q 50 100 100 50" stroke="white" stroke-width="2" fill="none" />
                                 </svg>
                             </div>
-                            <div class="text-white font-semibold flex items-center text-lg relative z-10">
+                            <div class="text-white font-semibold flex items-center text-lg relative z-10 flex-1">
                                 <svg class="w-6 h-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                         d="M13 10V3L4 14h7v7l9-11h-7z"></path>
                                 </svg>
                                 API 连接与服务
                             </div>
-                        </div>
+                            <svg :class="{'transform rotate-180': settingsSectionsOpen.api}"
+                                class="settings-collapse-chevron w-5 h-5 ml-3 text-white/80 relative z-10" fill="none"
+                                stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                            </svg>
+                        </button>
 
+                        <div id="api-settings-panel" class="settings-collapse" :class="{'is-open': settingsSectionsOpen.api}"
+                            :aria-hidden="!settingsSectionsOpen.api" :inert="!settingsSectionsOpen.api">
+                            <div class="settings-collapse__inner">
+                                <div class="settings-collapse__content">
                         <div class="p-6 space-y-6">
                             <!-- Integrated Service Status Monitoring -->
                             <div class="mb-6 pb-6 border-b border-gray-100">
@@ -2087,25 +2111,38 @@
 
                             </div>
                         </div>
+                        </div>
+                        </div>
+                    </div>
                     </div>
 
                     <!-- Advanced Settings -->
                     <div class="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden mb-6">
                         <!-- Header -->
-                        <div
-                            class="h-16 bg-gradient-to-r from-indigo-600 to-violet-700 relative overflow-hidden flex items-center px-6">
+                        <button type="button" @click="settingsSectionsOpen.advanced = !settingsSectionsOpen.advanced; settingsHelpTopic = ''"
+                            class="h-16 bg-gradient-to-r from-indigo-600 to-violet-700 relative overflow-hidden flex items-center px-6 w-full text-left cursor-pointer"
+                            aria-expanded="settingsSectionsOpen.advanced" aria-controls="advanced-settings-panel">
                             <div class="absolute inset-0 opacity-10">
                                 <svg class="w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
                                     <path d="M0 0 L100 0 L100 100 L0 100 Z" fill="transparent" />
                                     <path d="M0 50 Q 50 100 100 50" stroke="white" stroke-width="2" fill="none" />
                                 </svg>
                             </div>
-                            <div class="text-white font-semibold flex items-center text-lg relative z-10">
+                            <div class="text-white font-semibold flex items-center text-lg relative z-10 flex-1">
                                 <svg class="w-6 h-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><use href="#icon-settings"></use></svg>
                                 高级设置
                             </div>
-                        </div>
+                            <svg :class="{'transform rotate-180': settingsSectionsOpen.advanced}"
+                                class="settings-collapse-chevron w-5 h-5 ml-3 text-white/80 relative z-10" fill="none"
+                                stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                            </svg>
+                        </button>
 
+                        <div id="advanced-settings-panel" class="settings-collapse" :class="{'is-open': settingsSectionsOpen.advanced}"
+                            :aria-hidden="!settingsSectionsOpen.advanced" :inert="!settingsSectionsOpen.advanced">
+                            <div class="settings-collapse__inner">
+                                <div class="settings-collapse__content">
                         <div class="p-6 space-y-6">
                             <!-- Settings Toggles Grid -->
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -2200,27 +2237,9 @@
                                 </div>
                             </div>
                         </div>
+                        </div>
+                        </div>
                     </div>
-
-                    <div class="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden mb-6">
-                        <div class="px-6 py-4 border-b border-gray-100 flex items-center gap-3">
-                            <svg class="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10a2 2 0 002 2h12a2 2 0 002-2V9.5L14.5 4H6a2 2 0 00-2 2v1zm4 12v-6h8v6M8 4v5h6V4"></path>
-                            </svg>
-                            <h3 class="font-semibold text-gray-800">本机数据</h3>
-                        </div>
-                        <div class="p-6 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <button type="button" @click="exportNativeBackup" :disabled="backupInProgress"
-                                class="min-h-[46px] inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
-                                <svg class="w-5 h-5" fill="none" stroke="currentColor"><use href="#icon-export"></use></svg>
-                                完整备份
-                            </button>
-                            <button type="button" @click="restoreNativeBackup" :disabled="backupInProgress"
-                                class="min-h-[46px] inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-white hover:bg-gray-50 border border-gray-200 text-gray-700 text-sm font-bold disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
-                                <svg class="w-5 h-5" fill="none" stroke="currentColor"><use href="#icon-import"></use></svg>
-                                恢复备份
-                            </button>
-                        </div>
                     </div>
 
                     <!-- 语音设置（TTS P0：Android 系统语音引擎） -->
@@ -2356,6 +2375,42 @@
                                             </div>
                                         </div>
                                     </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 本机数据（备份与恢复，置于设置页最底部） -->
+                    <div class="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden mb-6">
+                        <button type="button" @click="settingsSectionsOpen.localData = !settingsSectionsOpen.localData; settingsHelpTopic = ''"
+                            class="w-full px-6 py-4 border-b border-gray-100 flex items-center gap-3 cursor-pointer text-left"
+                            aria-expanded="settingsSectionsOpen.localData" aria-controls="local-data-panel">
+                            <svg class="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10a2 2 0 002 2h12a2 2 0 002-2V9.5L14.5 4H6a2 2 0 00-2 2v1zm4 12v-6h8v6M8 4v5h6V4"></path>
+                            </svg>
+                            <h3 class="font-semibold text-gray-800 flex-1">本机数据</h3>
+                            <svg :class="{'transform rotate-180': settingsSectionsOpen.localData}"
+                                class="settings-collapse-chevron w-5 h-5 text-gray-400" fill="none" stroke="currentColor"
+                                viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                            </svg>
+                        </button>
+                        <div id="local-data-panel" class="settings-collapse" :class="{'is-open': settingsSectionsOpen.localData}"
+                            :aria-hidden="!settingsSectionsOpen.localData" :inert="!settingsSectionsOpen.localData">
+                            <div class="settings-collapse__inner">
+                                <div class="settings-collapse__content">
+                        <div class="p-6 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <button type="button" @click="exportNativeBackup" :disabled="backupInProgress"
+                                class="min-h-[46px] inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor"><use href="#icon-export"></use></svg>
+                                完整备份
+                            </button>
+                            <button type="button" @click="restoreNativeBackup" :disabled="backupInProgress"
+                                class="min-h-[46px] inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-white hover:bg-gray-50 border border-gray-200 text-gray-700 text-sm font-bold disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor"><use href="#icon-import"></use></svg>
+                                恢复备份
+                            </button>
+                        </div>
                                 </div>
                             </div>
                         </div>

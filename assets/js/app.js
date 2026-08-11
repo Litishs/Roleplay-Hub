@@ -7316,6 +7316,12 @@ ${content}
         const ttsStatus = ref({ available: false, engineLabel: '', state: 'idle', error: '', checked: false });
         const ttsPlayingMessageId = ref(null);
         const ttsSettingsExpanded = ref(false);
+        const settingsSectionsOpen = reactive({
+            user: true,
+            api: true,
+            advanced: false,
+            localData: false
+        });
         const ttsServiceOptions = [
             { id: 'system', name: '系统语音', desc: 'Android 系统引擎，无需下载', available: true },
             { id: 'local', name: '本地模型', desc: '设备端神经 TTS（暂未接入）', available: false }
@@ -13682,7 +13688,7 @@ image###生成的提示词###
             localEmbeddingStatus, refreshLocalEmbeddingStatus, preloadLocalEmbedding, migrateClassicMemoriesToVectors,
             localEmbeddingModelOptions, localEmbeddingStatusLabel,
             ttsStatus, ttsStatusLabel, ttsPlayingMessageId, ttsSettingsExpanded, ttsServiceOptions, ttsReadMode,
-            selectTtsService, refreshTtsStatus, testTtsVoice, ttsSpeakTextFor, toggleSpeakMessage, stopSpeaking,
+            settingsSectionsOpen, selectTtsService, refreshTtsStatus, testTtsVoice, ttsSpeakTextFor, toggleSpeakMessage, stopSpeaking,
             requestDiagnosticsCount, exportRequestDiagnostics,
             isAnyMemoryProcessing: computed(() => isBatchExtracting.value || isClassicBatchExtracting.value),
             isActiveBatchExtracting: computed(() => memorySettings.mode === MEMORY_MODE_CLASSIC ? isClassicBatchExtracting.value : isBatchExtracting.value),
