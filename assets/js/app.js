@@ -5360,7 +5360,7 @@ ${content}
                                     method: 'POST',
                                     headers: {
                                         'Content-Type': 'application/json',
-                                        'Authorization': `Bearer ${apiKey}`
+                                        'Authorization': `Bearer ${chatProviderForAnalysis.apiKey}`
                                     },
                                     body: JSON.stringify({
                                         model,

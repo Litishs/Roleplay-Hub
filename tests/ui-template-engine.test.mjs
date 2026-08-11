@@ -182,3 +182,19 @@ test('card-utils.js and app.js no longer persist updateMode', async () => {
   assert.doesNotMatch(cardUtils, /updateMode/);
   assert.doesNotMatch(source, /updateMode: template\.updateMode/);
 });
+
+test('app.js: UI模板变量分析请求不使用未声明的裸 apiKey', async () => {
+  const app = await read('assets/js/app.js');
+  const start = app.indexOf('const chatProviderForAnalysis = getChatProvider();');
+  const end = app.indexOf('const filterMemoriesAsync');
+  assert.ok(start > 0 && end > start, '应能找到 UI 模板分析函数边界');
+  const section = app.slice(start, end);
+  assert.ok(
+    !section.includes('Bearer ${apiKey}'),
+    '单模板分析请求引用了未声明的 apiKey，会抛 ReferenceError: apiKey is not defined'
+  );
+  assert.ok(
+    section.includes('Bearer ${chatProviderForAnalysis.apiKey}'),
+    '批量与单模板分析请求都应使用 chatProviderForAnalysis.apiKey'
+  );
+});
