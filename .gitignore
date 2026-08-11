@@ -22,3 +22,9 @@ AGENTS.md
 # Phone app data safety backups (contains API keys / user data)
 .rphub-data-safety.*
 
+# 「🍊妈妈们」角色卡工作线（个人资源，不入库）
+scripts/build-mama-card-v3.mjs
+scripts/upgrade-mama-card-worldbook.mjs
+scripts/fix-mama-card-ui-template.mjs
+scripts/final-audit.mjs
+
