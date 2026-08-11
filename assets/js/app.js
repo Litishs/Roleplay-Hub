@@ -1443,6 +1443,7 @@ createApp({
         const classicMemoryPage = ref(1);
         // --- 滚动摘要（记忆重构 P0：原文真相源 + 派生摘要层） ---
         const memorySummaries = ref(null);
+        const memoryProfile = ref(null);
         const summaryProgress = ref(null); // {fromTurn,toTurn,status:'running'|'done'|'failed'}
         let _summaryInFlight = false;
         let _summaryDoneTimer = null;
@@ -1474,6 +1475,7 @@ createApp({
         const isVectorMemorySearching = ref(false);
         // --- Memory Graph State (P0) ---
         const memoryGraphView = ref('list');
+        const memoryRelationCanvas = ref(null);
         const memoryGraphKeyword = ref('');
         const memoryGraphSemanticThreshold = ref(0.55);
         const memoryGraphShowIsolated = ref(false);
@@ -8741,6 +8743,10 @@ ${content}
 
         const setMemoryGraphView = (view) => {
             memoryGraphView.value = view;
+            if (view === 'relations') {
+                nextTick(() => drawRelationView());
+                return;
+            }
             if (view === 'graph') {
                 if (_memoryGraphRebuildTimer) {
                     clearTimeout(_memoryGraphRebuildTimer);
@@ -9683,6 +9689,131 @@ ${content}
 
         // --- 滚动摘要（记忆重构 P0：原文真相源 + 派生摘要层） ---
         const summaryLib = () => globalThis.RPHMemorySummary;
+        const profileLib = () => globalThis.RPHMemoryProfile;
+
+        const getMemoryProfile = () => {
+            const lib = profileLib();
+            if (!memoryProfile.value) {
+                memoryProfile.value = lib ? lib.createEmptyProfile() : { characters: [], relations: [], openPlots: [], updatedAt: 0 };
+            }
+            return memoryProfile.value;
+        };
+
+        const saveMemoryProfileNow = async () => {
+            if (!currentCharacter.value?.uuid || !memoryProfile.value) return;
+            await setScopedStoredValue(
+                'memory_profile',
+                getCurrentChatStorageScopeId(),
+                cloneForStorage(memoryProfile.value),
+                { clone: false }
+            );
+        };
+
+        const loadMemoryProfile = async (characterId) => {
+            try {
+                const saved = await getScopedStoredValue('memory_profile', characterId);
+                const lib = profileLib();
+                memoryProfile.value = saved && typeof saved === 'object'
+                    ? (lib ? lib.normalizeProfile(saved) : saved)
+                    : null;
+            } catch (error) {
+                console.error('Error loading memory profile:', error);
+                memoryProfile.value = null;
+            }
+        };
+
+        const relationViewData = computed(() => {
+            const lib = profileLib();
+            if (!lib || !memoryProfile.value) return null;
+            return lib.buildRelationViewData(memoryProfile.value, { userRoleName: user.name || '我' });
+        });
+
+        const drawRelationView = () => {
+            const canvas = memoryRelationCanvas.value;
+            const data = relationViewData.value;
+            if (!canvas || !data || data.nodes.length === 0) return;
+            const rect = canvas.getBoundingClientRect();
+            const dpr = window.devicePixelRatio || 1;
+            const width = Math.max(1, Math.round(rect.width * dpr));
+            const height = Math.max(1, Math.round(rect.height * dpr));
+            if (canvas.width !== width || canvas.height !== height) {
+                canvas.width = width;
+                canvas.height = height;
+            }
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, width, height);
+            const cx = width / 2;
+            const cy = height / 2;
+            const baseRadius = Math.min(width, height) * 0.30;
+            const positions = new Map();
+            const nodeByRadius = new Map();
+            data.nodes.forEach(node => nodeByRadius.set(node.label, node.radius));
+            const byRadius = new Map();
+            data.nodes.forEach(node => {
+                if (!byRadius.has(node.radius)) byRadius.set(node.radius, []);
+                byRadius.get(node.radius).push(node);
+            });
+            byRadius.forEach((group, radius) => {
+                const ring = radius === 0 ? 0 : baseRadius * radius;
+                group.forEach((node, index) => {
+                    const angle = (index / group.length) * Math.PI * 2 - Math.PI / 2;
+                    positions.set(node.label, { x: cx + ring * Math.cos(angle), y: cy + ring * Math.sin(angle) });
+                });
+            });
+            data.edges.forEach(edge => {
+                const from = positions.get(edge.from);
+                const to = positions.get(edge.to);
+                if (!from || !to) return;
+                const dx = to.x - from.x;
+                const dy = to.y - from.y;
+                const dist = Math.max(1, Math.hypot(dx, dy));
+                const arrowSize = 8;
+                const headX = to.x - (dx / dist) * arrowSize;
+                const headY = to.y - (dy / dist) * arrowSize;
+                ctx.beginPath();
+                ctx.moveTo(from.x, from.y);
+                ctx.lineTo(headX, headY);
+                ctx.strokeStyle = 'rgba(245, 158, 11, 0.7)';
+                ctx.lineWidth = 1.5;
+                ctx.stroke();
+                const angle = Math.atan2(dy, dx);
+                ctx.beginPath();
+                ctx.moveTo(to.x, to.y);
+                ctx.lineTo(
+                    to.x - arrowSize * Math.cos(angle - Math.PI / 6),
+                    to.y - arrowSize * Math.sin(angle - Math.PI / 6)
+                );
+                ctx.lineTo(
+                    to.x - arrowSize * Math.cos(angle + Math.PI / 6),
+                    to.y - arrowSize * Math.sin(angle + Math.PI / 6)
+                );
+                ctx.closePath();
+                ctx.fillStyle = 'rgba(245, 158, 11, 0.8)';
+                ctx.fill();
+                const labelX = (from.x + to.x) / 2;
+                const labelY = (from.y + to.y) / 2 - 4;
+                ctx.font = `${Math.max(10, Math.round(width / 60))}px sans-serif`;
+                ctx.fillStyle = 'rgba(120, 80, 20, 0.9)';
+                ctx.textAlign = 'center';
+                ctx.fillText(edge.relation, labelX, labelY);
+            });
+            data.nodes.forEach(node => {
+                const pos = positions.get(node.label);
+                if (!pos) return;
+                const color = node.radius === 0 ? '#7c3aed' : node.radius === 1 ? '#14b8a6' : '#9ca3af';
+                ctx.beginPath();
+                ctx.arc(pos.x, pos.y, node.radius === 0 ? 10 : 8, 0, Math.PI * 2);
+                ctx.fillStyle = color;
+                ctx.fill();
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+                ctx.font = `${Math.max(10, Math.round(width / 55))}px sans-serif`;
+                ctx.fillStyle = '#374151';
+                ctx.textAlign = 'center';
+                ctx.fillText(node.label, pos.x, pos.y + (node.radius === 0 ? 24 : 20));
+            });
+        };
 
         const getMemorySummaries = () => {
             if (!memorySummaries.value) {
@@ -9756,10 +9887,15 @@ ${content}
             if (!memoryProvider.apiUrl || !memoryProvider.apiKey) throw new Error('请先配置记忆供应商的 API 地址和 Key');
             if (!model) throw new Error('请先选择记忆模型');
             const current = getMemorySummaries();
+            const profile = getMemoryProfile();
             const turns = collectTurnsForBatch(batch.fromTurn, batch.toTurn);
+            const profileText = profileLib()
+                ? profileLib().buildProfileContext(profile, { userRoleName: user.name || '用户' })
+                : '';
             const messages = lib.buildRewriteMessages({
                 shortSummary: current.short,
                 longSummary: current.long,
+                profileText,
                 batch,
                 turns,
                 characterName: currentCharacter.value?.name || '角色',
@@ -9811,6 +9947,20 @@ ${content}
                 current.batches = [...current.batches, { ...batch, status: 'done', at: Date.now() }];
                 current.updatedAt = Date.now();
                 await saveMemorySummariesNow();
+                if (parsed.profile && profileLib()) {
+                    const profile = getMemoryProfile();
+                    const mergedRelations = profileLib().mergeRelations(parsed.profile.relations, profile, batch.toTurn);
+                    const mergedCharacters = profileLib().mergeCharacters(parsed.profile.characters, profile, batch.toTurn);
+                    const mergedPlots = profileLib().mergeOpenPlots(parsed.profile.openPlots, profile, batch.toTurn);
+                    memoryProfile.value = {
+                        ...profile,
+                        relations: mergedRelations.relations,
+                        characters: mergedCharacters.characters,
+                        openPlots: mergedPlots.openPlots,
+                        updatedAt: Date.now()
+                    };
+                    await saveMemoryProfileNow();
+                }
                 setSummaryProgress({ ...batch, status: 'done' });
                 return true;
             } catch (error) {
@@ -9845,6 +9995,12 @@ ${content}
             const parts = [];
             if (current.long) parts.push(`<long_summary>\n${current.long}\n</long_summary>`);
             if (current.short) parts.push(`<short_summary>\n${current.short}\n</short_summary>`);
+            if (memoryProfile.value && profileLib()) {
+                const profileText = profileLib().buildProfileContext(memoryProfile.value, {
+                    userRoleName: user.name || '用户'
+                });
+                if (profileText) parts.push(profileText);
+            }
             if (parts.length === 0) return '';
             return [
                 '<role_memory>',
@@ -11699,6 +11855,7 @@ ${content}
                             deleteScopedStoredValue('memories', scopeId),
                             deleteScopedStoredValue('classic_memories', scopeId),
                             deleteScopedStoredValue('memory_summaries', scopeId),
+                            deleteScopedStoredValue('memory_profile', scopeId),
                             db.deleteFragments(scopeId)
                         ]));
                         await deleteScopedStoredValue('branches', char.uuid);
@@ -11768,6 +11925,7 @@ ${content}
                                 deleteScopedStoredValue('memories', scopeId),
                                 deleteScopedStoredValue('classic_memories', scopeId),
                                 deleteScopedStoredValue('memory_summaries', scopeId),
+                                deleteScopedStoredValue('memory_profile', scopeId),
                                 db.deleteFragments(scopeId)
                             ]));
                             await deleteScopedStoredValue('branches', char.uuid);
@@ -12038,6 +12196,7 @@ image###生成的提示词###
             memoryGraphHighlightIds.value = new Set();
             memoryGraphSelectedId.value = '';
             await loadMemorySummaries(characterId);
+            await loadMemoryProfile(characterId);
             try {
                 const savedMemories = await getScopedStoredValue('memories', characterId);
                 memories.value = savedMemories?.length
@@ -12290,16 +12449,18 @@ image###生成的提示词###
                 const branchNumber = storyBranches.value.filter(branch => branch.id !== 'main').length + 1;
                 const branchName = api ? api.defaultBranchName(branchNumber) : `分支 ${branchNumber}`;
                 const now = Date.now();
-                const [savedChat, savedMemories, savedClassicMemories, savedSummaries] = await Promise.all([
+                const [savedChat, savedMemories, savedClassicMemories, savedSummaries, savedProfile] = await Promise.all([
                     getStoredChatHistoryWithRetry(parentScopeId),
                     getScopedStoredValue('memories', parentScopeId),
                     getScopedStoredValue('classic_memories', parentScopeId),
-                    getScopedStoredValue('memory_summaries', parentScopeId)
+                    getScopedStoredValue('memory_summaries', parentScopeId),
+                    getScopedStoredValue('memory_profile', parentScopeId)
                 ]);
                 let branchChat = Array.isArray(savedChat) ? savedChat : [];
                 let branchMemories = Array.isArray(savedMemories) ? savedMemories : [];
                 let branchClassicMemories = Array.isArray(savedClassicMemories) ? savedClassicMemories : [];
                 let branchSummaries = savedSummaries && typeof savedSummaries === 'object' ? { ...savedSummaries } : null;
+                let branchProfile = savedProfile && typeof savedProfile === 'object' ? { ...savedProfile } : null;
                 let forkTurn = null;
                 if (forkFromMessage) {
                     const sourceIndex = forkMessageId
@@ -12324,6 +12485,9 @@ image###生成的提示词###
                 await setScopedStoredValue('classic_memories', branchScopeId, branchClassicMemories, { clone: false });
                 if (branchSummaries) {
                     await setScopedStoredValue('memory_summaries', branchScopeId, cloneForStorage(branchSummaries), { clone: false });
+                }
+                if (branchProfile) {
+                    await setScopedStoredValue('memory_profile', branchScopeId, cloneForStorage(branchProfile), { clone: false });
                 }
                 if (db) {
                     let parentFacts = [];
@@ -12431,6 +12595,7 @@ image###生成的提示词###
                     getScopedStoredValue('classic_memories', targetScopeId)
                 ]);
                 await loadMemorySummaries(targetScopeId);
+                await loadMemoryProfile(targetScopeId);
                 _isApplyingCharacterScopedData = true;
                 activeStoryBranchId.value = branchId;
                 resetChatRenderWindow();
@@ -12544,6 +12709,7 @@ image###生成的提示词###
                             deleteScopedStoredValue('memories', scopeId),
                             deleteScopedStoredValue('classic_memories', scopeId),
                             deleteScopedStoredValue('memory_summaries', scopeId),
+                            deleteScopedStoredValue('memory_profile', scopeId),
                             db.deleteFragments(scopeId)
                         ]));
                         scopeIds.forEach(scopeId => {
@@ -13879,7 +14045,8 @@ image###生成的提示词###
             processMainContent,
             currentView, showDescriptionPanel, showModelSelector, modelSelectionTarget, openModelSelector, showChatModelSelector, showCharacterEditor, showAddCharacterMenu, showPresetEditor, showUiTemplateEditor,
             memoryProviderSelectOptions, memoryProviderLabel,
-            memorySummaries, summaryProgress, retryRollingSummary, clearSummaryProgress,
+            memorySummaries, memoryProfile, summaryProgress, retryRollingSummary, clearSummaryProgress,
+            memoryRelationCanvas,
             chatBindingLabel, embeddingBindingLabel, providerTags, activeProviderTag, getProviderDisplayName,
             showActiveToolEditor,
             showExportModal, sysInstruction, showInstructionPanel, exportItems, selectedExportIndices, // Export Modal
@@ -14007,9 +14174,11 @@ image###生成的提示词###
                 confirmAction(`确定要清空${modeName}吗？${isClassicMode ? '' : '原文聊天记录会保留，摘要与索引将从原文重建。'}此操作无法撤销。`, async () => {
                     // 滚动摘要（新引擎）：清空派生摘要层，原文保留可重建
                     memorySummaries.value = null;
+                    memoryProfile.value = null;
                     clearSummaryProgress();
                     if (currentCharacter.value?.uuid) {
                         await deleteScopedStoredValue('memory_summaries', getCurrentChatStorageScopeId());
+                        await deleteScopedStoredValue('memory_profile', getCurrentChatStorageScopeId());
                     }
                     if (isClassicMode) {
                         abortClassicBatchExtraction();

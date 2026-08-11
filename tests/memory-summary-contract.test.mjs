@@ -34,6 +34,7 @@ test('滚动摘要:重写式消息包含旧摘要、批次原文与时间锚指�
     const messages = memorySummary.buildRewriteMessages({
         shortSummary: '旧摘要',
         longSummary: '旧长期',
+        profileText: '<relations>我→林夕瑶:恋人</relations>',
         batch: { fromTurn: 1, toTurn: 2 },
         turns: [
             { turn: 1, userContent: '第一轮用户', assistantContent: '第一轮AI' },
@@ -47,23 +48,34 @@ test('滚动摘要:重写式消息包含旧摘要、批次原文与时间锚指�
     const joined = messages.map(m => m.content).join('\n');
     assert.ok(system.includes('滚动记忆整理器'));
     assert.ok(system.includes('{"short"'));
+    assert.ok(system.includes('"profile"'));
     assert.ok(system.includes('禁止“几天前”“最近”这类模糊词'));
     assert.ok(joined.includes('旧摘要'));
     assert.ok(joined.includes('旧长期'));
+    assert.ok(joined.includes('旧固定信息卡'));
+    assert.ok(joined.includes('我→林夕瑶:恋人'));
     assert.ok(joined.includes('第一轮用户'));
     assert.ok(joined.includes('第二轮AI'));
     assert.ok(!joined.includes('不应出现的轮次'));
 });
 
-test('滚动摘要:解析 direct / 包裹 JSON / 纯文本降级', () => {
-    assert.deepEqual(memorySummary.parseSummaryJson('{"short":"s","long":"l"}'), { short: 's', long: 'l' });
+test('滚动摘要:解析 direct / 包裹 JSON / 纯文本降级（含 profile）', () => {
+    assert.deepEqual(
+        memorySummary.parseSummaryJson('{"short":"s","long":"l","profile":{"relations":[{"from":"A","to":"B","relation":"老师"}]}}'),
+        {
+            short: 's',
+            long: 'l',
+            profile: { relations: [{ from: 'A', to: 'B', relation: '老师' }] }
+        }
+    );
     assert.deepEqual(
         memorySummary.parseSummaryJson('```json\n{"short":"s2","long":"l2"}\n```'),
-        { short: 's2', long: 'l2' }
+        { short: 's2', long: 'l2', profile: null }
     );
     const fallback = memorySummary.parseSummaryJson('纯文本摘要');
     assert.equal(fallback.short, '纯文本摘要');
     assert.equal(fallback.long, '');
+    assert.equal(fallback.profile, null);
 });
 
 test('滚动摘要:进度提示文案三种状态', () => {
