@@ -9123,12 +9123,13 @@ ${content}
             return memoryProfile.value;
         };
 
-        const saveMemoryProfileNow = async () => {
-            if (!currentCharacter.value?.uuid || !memoryProfile.value) return;
+        const saveMemoryProfileNow = async (scopeId, data) => {
+            const target = data || memoryProfile.value;
+            if (!currentCharacter.value?.uuid || !target) return;
             await setScopedStoredValue(
                 'memory_profile',
-                getCurrentChatStorageScopeId(),
-                cloneForStorage(memoryProfile.value),
+                scopeId || getCurrentChatStorageScopeId(),
+                cloneForStorage(target),
                 { clone: false }
             );
         };
@@ -9246,12 +9247,13 @@ ${content}
             return memorySummaries.value;
         };
 
-        const saveMemorySummariesNow = async () => {
-            if (!currentCharacter.value?.uuid || !memorySummaries.value) return;
+        const saveMemorySummariesNow = async (scopeId, data) => {
+            const target = data || memorySummaries.value;
+            if (!currentCharacter.value?.uuid || !target) return;
             await setScopedStoredValue(
                 'memory_summaries',
-                getCurrentChatStorageScopeId(),
-                cloneForStorage(memorySummaries.value),
+                scopeId || getCurrentChatStorageScopeId(),
+                cloneForStorage(target),
                 { clone: false }
             );
         };
@@ -9367,6 +9369,8 @@ ${content}
                 }
                 return false;
             }
+            const scopeId = getCurrentChatStorageScopeId();
+            const profileSnapshot = profileLib() ? getMemoryProfile() : null;
             _summaryInFlight = true;
             setSummaryProgress({ ...batch, status: 'running' }, false);
             try {
@@ -9375,20 +9379,22 @@ ${content}
                 current.short = parsed.short;
                 current.batches = [...current.batches, { ...batch, status: 'done', at: Date.now() }];
                 current.updatedAt = Date.now();
-                await saveMemorySummariesNow();
-                if (parsed.profile && profileLib()) {
-                    const profile = getMemoryProfile();
-                    const mergedRelations = profileLib().mergeRelations(parsed.profile.relations, profile, batch.toTurn);
-                    const mergedCharacters = profileLib().mergeCharacters(parsed.profile.characters, profile, batch.toTurn);
-                    const mergedPlots = profileLib().mergeOpenPlots(parsed.profile.openPlots, profile, batch.toTurn);
-                    memoryProfile.value = {
-                        ...profile,
+                await saveMemorySummariesNow(scopeId, current);
+                if (parsed.profile && profileLib() && profileSnapshot) {
+                    const mergedRelations = profileLib().mergeRelations(parsed.profile.relations, profileSnapshot, batch.toTurn);
+                    const mergedCharacters = profileLib().mergeCharacters(parsed.profile.characters, profileSnapshot, batch.toTurn);
+                    const mergedPlots = profileLib().mergeOpenPlots(parsed.profile.openPlots, profileSnapshot, batch.toTurn);
+                    const mergedProfile = {
+                        ...profileSnapshot,
                         relations: mergedRelations.relations,
                         characters: mergedCharacters.characters,
                         openPlots: mergedPlots.openPlots,
                         updatedAt: Date.now()
                     };
-                    await saveMemoryProfileNow();
+                    if (getCurrentChatStorageScopeId() === scopeId) {
+                        memoryProfile.value = mergedProfile;
+                    }
+                    await saveMemoryProfileNow(scopeId, mergedProfile);
                 }
                 setSummaryProgress({ ...batch, status: 'done' });
                 return true;
@@ -13386,9 +13392,9 @@ image###生成的提示词###
                     memories.value = [];
                     await saveMemoriesNow();
                     showToast('记忆已清空，将从原文重建', 'success');
-                    // 清空并重建：原文仍在，若窗口外已有轮次则立即重新滚动
+                    // 清空并重建：原文仍在，重新生成向量分片索引并立即滚动总结
                     if (currentCharacter.value?.uuid && memorySettings.enabled) {
-                        nextTick(() => runRollingSummaryCheck());
+                        nextTick(() => startAutomaticMemoryPatrol());
                     }
                 });
             },
