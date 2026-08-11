@@ -821,6 +821,19 @@
                                                 </path>
                                             </svg>
                                         </button>
+                                        <button v-if="msg.role === 'assistant' && settings.ttsEnabled && ttsStatus.available && !isMessageThinkingOrRunning(msg) && ttsSpeakTextFor(msg)"
+                                            @click="toggleSpeakMessage(index)"
+                                            :disabled="ttsPlayingMessageId !== null && ttsPlayingMessageId !== msg.id"
+                                            class="message-action-button"
+                                            :class="{ 'message-action-button--active': ttsPlayingMessageId === msg.id }"
+                                            :title="ttsPlayingMessageId === msg.id ? '停止朗读' : '朗读'">
+                                            <svg v-if="ttsPlayingMessageId === msg.id" class="w-3.5 h-3.5 md:w-4 md:h-4" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                                <rect x="6" y="6" width="12" height="12" rx="2"></rect>
+                                            </svg>
+                                            <svg v-else class="w-3.5 h-3.5 md:w-4 md:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5L6 9H2v6h4l5 4V5zM15.54 8.46a5 5 0 010 7.07M19.07 4.93a10 10 0 010 14.14"></path>
+                                            </svg>
+                                        </button>
                                         <button v-if="msg.role === 'assistant'" @click="createStoryBranch(index)"
                                             :disabled="storyBranchSwitching"
                                             class="message-action-button"
@@ -2482,6 +2495,106 @@
                         </div>
                     </div>
                     </div>
+                    </div>
+                    <!-- 语音服务设置（TTS P0：Android 系统语音引擎） -->
+                    <div class="bg-white rounded-2xl border border-gray-200 shadow-sm" style="overflow: visible;">
+                        <div class="h-16 bg-gradient-to-r from-teal-500 to-emerald-600 relative overflow-hidden flex items-center px-6">
+                            <div class="absolute inset-0 opacity-10">
+                                <svg class="w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
+                                    <path d="M0 0 L100 0 L100 100 L0 100 Z" fill="transparent" />
+                                    <path d="M0 50 Q 50 100 100 50" stroke="white" stroke-width="2" fill="none" />
+                                </svg>
+                            </div>
+                            <div class="text-white font-semibold flex items-center text-lg relative z-10">
+                                <svg class="w-6 h-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5L6 9H2v6h4l5 4V5zM15.54 8.46a5 5 0 010 7.07M19.07 4.93a10 10 0 010 14.14"></path>
+                                </svg>
+                                语音服务设置
+                            </div>
+                        </div>
+                        <div class="p-6 space-y-5">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <div class="text-sm font-bold text-gray-700">启用语音朗读</div>
+                                    <div class="text-[10px] text-gray-400 mt-0.5">使用 Android 系统语音引擎朗读角色回复，本地运行，无需联网与密钥。</div>
+                                </div>
+                                <label class="relative inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" v-model="settings.ttsEnabled" class="settings-toggle-input sr-only">
+                                    <div class="settings-toggle settings-toggle--indigo"></div>
+                                </label>
+                            </div>
+                            <div v-if="settings.ttsEnabled" class="space-y-4 animate-fade-in">
+                                <div class="flex items-center justify-between">
+                                    <div>
+                                        <div class="text-sm font-bold text-gray-700">自动朗读</div>
+                                        <div class="text-[10px] text-gray-400 mt-0.5">角色回复生成完成后自动朗读，新发送消息时自动停止。</div>
+                                    </div>
+                                    <label class="relative inline-flex items-center cursor-pointer">
+                                        <input type="checkbox" v-model="settings.ttsAutoPlay" class="settings-toggle-input sr-only">
+                                        <div class="settings-toggle settings-toggle--indigo"></div>
+                                    </label>
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 ml-1">音色</label>
+                                    <select v-model="settings.ttsVoice"
+                                        class="w-full bg-gray-50/60 border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-teal-300 focus:bg-white transition-all">
+                                        <option value="">系统默认</option>
+                                        <option v-for="v in ttsVoiceOptions" :key="v.id" :value="v.id">{{ v.name }}（{{ v.locale }}）</option>
+                                    </select>
+                                    <button type="button" @click="refreshTtsVoiceOptions"
+                                        class="mt-2 text-[10px] px-2 py-1 rounded-lg bg-white border border-teal-200 text-teal-700 font-bold transition-all hover:bg-teal-50 active:scale-95">
+                                        刷新音色列表
+                                    </button>
+                                </div>
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <div class="flex justify-between items-center mb-1.5">
+                                            <label class="text-xs font-medium text-gray-500">语速</label>
+                                            <span class="text-xs font-mono text-teal-600 bg-teal-50 px-1.5 py-0.5 rounded border border-teal-100">{{ (Number(settings.ttsRate) || 1).toFixed(2) }}</span>
+                                        </div>
+                                        <input type="range" v-model.number="settings.ttsRate" min="0.5" max="2" step="0.05"
+                                            class="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-teal-500">
+                                    </div>
+                                    <div>
+                                        <div class="flex justify-between items-center mb-1.5">
+                                            <label class="text-xs font-medium text-gray-500">音调</label>
+                                            <span class="text-xs font-mono text-teal-600 bg-teal-50 px-1.5 py-0.5 rounded border border-teal-100">{{ (Number(settings.ttsPitch) || 1).toFixed(2) }}</span>
+                                        </div>
+                                        <input type="range" v-model.number="settings.ttsPitch" min="0.5" max="2" step="0.05"
+                                            class="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-teal-500">
+                                    </div>
+                                </div>
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 ml-1">朗读模式</label>
+                                        <select v-model="ttsReadMode"
+                                            class="w-full bg-gray-50/60 border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-teal-300 focus:bg-white transition-all">
+                                            <option value="full">全文朗读</option>
+                                            <option value="dialogue">只读台词（引号内容）</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 ml-1">最长朗读字数</label>
+                                        <div class="flex items-center gap-2">
+                                            <input type="number" v-model.number="settings.ttsMaxChars" min="100" max="5000" step="100"
+                                                class="w-full bg-gray-50/60 border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-teal-300 focus:bg-white transition-all">
+                                            <span class="text-[10px] text-gray-400">字</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <label class="flex items-center p-3 rounded-xl border-2 border-transparent hover:border-gray-100 hover:bg-gray-50 transition-all cursor-pointer group">
+                                    <input type="checkbox" v-model="settings.ttsSkipActions" class="rounded accent-teal-500 mr-2.5">
+                                    <span class="text-sm font-medium text-gray-600 group-hover:text-gray-900 transition-colors">跳过动作叙述（*…* 行）</span>
+                                </label>
+                                <div class="flex items-center justify-between p-3 rounded-xl bg-gray-50/60 border border-gray-100">
+                                    <span class="text-xs text-gray-500">{{ ttsStatusLabel }}</span>
+                                    <button type="button" @click="testTtsVoice"
+                                        class="px-3 py-1.5 text-xs font-bold text-white bg-teal-500 hover:bg-teal-600 rounded-lg shadow-sm transition-all active:scale-95">
+                                        测试朗读
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -5620,6 +5733,8 @@
     <script src="assets/js/memory-time.js"></script>
     <script src="assets/js/memory-graph.js"></script>
     <script src="assets/js/default-presets.js"></script>
+    <script src="assets/js/tts-text.js"></script>
+    <script src="assets/js/tts-engine.js"></script>
     <script src="assets/js/app.js"></script>
 </body>
 

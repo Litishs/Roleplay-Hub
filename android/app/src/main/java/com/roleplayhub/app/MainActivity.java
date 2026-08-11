@@ -20,6 +20,7 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(NativeStoragePlugin.class);
         registerPlugin(ThemeBridgePlugin.class);
+        registerPlugin(TTSSpeechPlugin.class);
         WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
         super.onCreate(savedInstanceState);
 

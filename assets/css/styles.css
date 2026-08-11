@@ -900,6 +900,17 @@
             background: rgba(254, 242, 242, 0.82);
         }
 
+        .message-action-button--active,
+        .message-action-button--active:hover {
+            color: #0d9488;
+            background: rgba(204, 251, 241, 0.72);
+        }
+
+        .message-action-button:disabled {
+            opacity: 0.38;
+            pointer-events: none;
+        }
+
         .settings-page-header {
             display: flex;
             align-items: center;

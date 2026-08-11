@@ -680,6 +680,14 @@ createApp({
             customImageArtists: '',
             imageSize: '竖图',
             imageGenCount: 2,
+            ttsEnabled: false,
+            ttsAutoPlay: false,
+            ttsVoice: '',
+            ttsRate: 1.0,
+            ttsPitch: 1.0,
+            ttsDialogueOnly: false,
+            ttsSkipActions: false,
+            ttsMaxChars: 2000,
             qualityModel: DEFAULT_API_CONFIG.qualityModel,
             balancedModel: DEFAULT_API_CONFIG.balancedModel,
             fastModel: DEFAULT_API_CONFIG.fastModel
@@ -4911,6 +4919,7 @@ ${content}
             chatInputComposing = false;
             const content = syncChatInputFromElement().trim();
             if (!content) return;
+            stopSpeaking();
             const startTime = Date.now(); // Record click time
             userInput.value = '';
             if (inputBox.value) {
@@ -7178,6 +7187,15 @@ ${content}
                         extractMemoryFromChat();
                     });
                 }
+
+                // TTS 自动朗读：正常完成生成时朗读角色回复（P0 系统 TTS）
+                if (!wasCancelled && !activeToolContinued && generatedAssistantMessageId
+                    && settings.ttsEnabled && settings.ttsAutoPlay) {
+                    const ttsTargetIndex = chatHistory.value.findIndex(m => m.id === generatedAssistantMessageId);
+                    if (ttsTargetIndex !== -1 && !chatHistory.value[ttsTargetIndex].isError) {
+                        nextTick(() => { toggleSpeakMessage(ttsTargetIndex); });
+                    }
+                }
             }
         };
 
@@ -7292,6 +7310,148 @@ ${content}
                 return added;
             }
         };
+
+        // --- TTS 语音朗读（P0：Android 系统语音引擎） ---
+        const ttsStatus = ref({ available: false, engineLabel: '', state: 'idle', error: '', checked: false });
+        const ttsPlayingMessageId = ref(null);
+        const ttsVoiceOptions = ref([]);
+        let ttsStateListener = null;
+
+        const refreshTtsStatus = async () => {
+            const engine = globalThis.RPHTts;
+            if (!engine) {
+                ttsStatus.value = { available: false, engineLabel: '', state: 'idle', error: '', checked: true };
+                return false;
+            }
+            try {
+                const info = await engine.refreshStatus();
+                ttsStatus.value = { ...info };
+                if (info.available) {
+                    if (!ttsVoiceOptions.value.length) refreshTtsVoiceOptions();
+                    if (!ttsStateListener) {
+                        ttsStateListener = (payload) => {
+                            if (payload && (payload.state === 'done' || payload.state === 'error' || payload.state === 'stop')) {
+                                if (ttsPlayingMessageId.value !== null) ttsPlayingMessageId.value = null;
+                            }
+                        };
+                        engine.onState(ttsStateListener);
+                    }
+                }
+                return !!info.available;
+            } catch (error) {
+                console.warn('[TTS] refresh status failed:', error);
+                ttsStatus.value = { available: false, engineLabel: '', state: 'idle', error: String(error?.message || error), checked: true };
+                return false;
+            }
+        };
+
+        const refreshTtsVoiceOptions = async () => {
+            const engine = globalThis.RPHTts;
+            if (!engine) return;
+            try {
+                const voices = await engine.getVoices(true);
+                ttsVoiceOptions.value = (Array.isArray(voices) ? voices : [])
+                    .map(v => ({ id: v.id, name: v.name, locale: v.locale }));
+            } catch (error) {
+                console.warn('[TTS] load voices failed:', error);
+            }
+        };
+
+        const ttsStatusLabel = computed(() => {
+            const info = ttsStatus.value;
+            if (!info.checked && !info.available) return '语音引擎检测中…';
+            if (!info.available) return '系统语音引擎不可用（仅 Android 设备支持）';
+            if (info.state === 'speaking') return '正在朗读…';
+            return '系统语音引擎已就绪';
+        });
+
+        const ttsReadMode = computed({
+            get: () => (settings.ttsDialogueOnly ? 'dialogue' : 'full'),
+            set: (value) => { settings.ttsDialogueOnly = value === 'dialogue'; }
+        });
+
+        const ttsSpeakTextFor = (msg) => {
+            const textModule = globalThis.RPHTtsText;
+            if (!msg || !textModule) return '';
+            try {
+                return textModule.extractSpeakText(msg.content || '', {
+                    dialogueOnly: !!settings.ttsDialogueOnly,
+                    skipActions: !!settings.ttsSkipActions,
+                    maxChars: Number(settings.ttsMaxChars) || 2000
+                });
+            } catch (_) {
+                return '';
+            }
+        };
+
+        const getCurrentTtsVoice = () => {
+            const characterVoice = currentCharacter.value?.ttsVoice;
+            return (typeof characterVoice === 'string' && characterVoice) ? characterVoice : (settings.ttsVoice || '');
+        };
+
+        const speakTtsText = async (text) => {
+            const engine = globalThis.RPHTts;
+            if (!engine) throw new Error('语音引擎不可用');
+            const ready = await refreshTtsStatus();
+            if (!ready) throw new Error('系统语音引擎不可用');
+            await engine.speak({
+                text,
+                voice: getCurrentTtsVoice(),
+                rate: Number(settings.ttsRate) || 1,
+                pitch: Number(settings.ttsPitch) || 1
+            });
+            return true;
+        };
+
+        const toggleSpeakMessage = async (index) => {
+            const msg = chatHistory.value[index];
+            if (!msg) return;
+            if (ttsPlayingMessageId.value === msg.id) {
+                await stopSpeaking();
+                return;
+            }
+            if (ttsPlayingMessageId.value !== null) await stopSpeaking();
+            if (!settings.ttsEnabled) {
+                showToast('请先在设置中开启语音朗读', 'info');
+                return;
+            }
+            const text = ttsSpeakTextFor(msg);
+            if (!text) {
+                showToast('这条回复没有可朗读的正文', 'info');
+                return;
+            }
+            try {
+                await speakTtsText(text);
+                ttsPlayingMessageId.value = msg.id;
+            } catch (error) {
+                console.warn('[TTS] speak failed:', error);
+                showToast('朗读失败: ' + String(error?.message || error), 'error');
+            }
+        };
+
+        const stopSpeaking = async () => {
+            const engine = globalThis.RPHTts;
+            ttsPlayingMessageId.value = null;
+            if (engine) {
+                try { await engine.stop(); } catch (_) { /* 忽略停止异常 */ }
+            }
+        };
+
+        const testTtsVoice = async () => {
+            if (!settings.ttsEnabled) {
+                showToast('请先开启语音朗读', 'info');
+                return;
+            }
+            try {
+                await speakTtsText('你好，这里是语音朗读测试。');
+                showToast('正在测试朗读…', 'info');
+            } catch (error) {
+                console.warn('[TTS] test speak failed:', error);
+                showToast('朗读失败: ' + String(error?.message || error), 'error');
+            }
+        };
+
+        nextTick(() => { refreshTtsStatus(); });
 
         const getOpenAICompatUrl = (endpoint) => getApiEndpoint(endpoint);
 
@@ -12219,6 +12379,7 @@ image###生成的提示词###
             }
             await flushPendingChatHistorySave();
             abortUiTemplateUpdate();
+            stopSpeaking();
             const previousCharacterIndex = currentCharacterIndex.value;
             const previousCharacter = currentCharacter.value;
             if (previousCharacterIndex !== index) {
@@ -13518,6 +13679,8 @@ image###生成的提示词###
             classicMemoryPage, classicMemoryPageCount, memorySettings,
             localEmbeddingStatus, refreshLocalEmbeddingStatus, preloadLocalEmbedding, migrateClassicMemoriesToVectors,
             localEmbeddingModelOptions, localEmbeddingStatusLabel,
+            ttsStatus, ttsStatusLabel, ttsPlayingMessageId, ttsVoiceOptions, ttsReadMode,
+            refreshTtsStatus, refreshTtsVoiceOptions, testTtsVoice, ttsSpeakTextFor, toggleSpeakMessage, stopSpeaking,
             requestDiagnosticsCount, exportRequestDiagnostics,
             isAnyMemoryProcessing: computed(() => isBatchExtracting.value || isClassicBatchExtracting.value),
             isActiveBatchExtracting: computed(() => memorySettings.mode === MEMORY_MODE_CLASSIC ? isClassicBatchExtracting.value : isBatchExtracting.value),
