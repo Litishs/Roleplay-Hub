@@ -1937,6 +1937,31 @@ createApp({
         const showInstructionPanel = ref(false);
         const currentHoverWorldInfo = ref(null);
         const showContextViewerModal = ref(false);
+        // --- 剧情分支状态 ---
+        const storyBranchApi = () => globalThis.RPHStoryBranch;
+        const storyBranches = ref([]);
+        const activeStoryBranchId = ref('main');
+        const selectedStoryBranchId = ref('main');
+        const showStoryBranchModal = ref(false);
+        const showStoryBranchNameEditor = ref(false);
+        const storyBranchNameDraft = ref('');
+        const storyBranchSwitching = ref(false);
+        const storyRouteMapDragging = ref(false);
+        let storyRouteDragState = null;
+        let suppressStoryRouteNodeClick = false;
+
+        const getStoryBranchScopeId = (characterId, branchId = activeStoryBranchId.value) => {
+            const api = storyBranchApi();
+            if (api) return api.getScopeId(characterId, branchId);
+            if (!characterId) return null;
+            return (!branchId || branchId === 'main') ? String(characterId) : `${characterId}__branch__${branchId}`;
+        };
+        const getCurrentStoryBranchScopeId = () => {
+            const char = currentCharacter.value;
+            if (!char?.uuid) return null;
+            return getStoryBranchScopeId(char.uuid, activeStoryBranchId.value);
+        };
+        const getCurrentChatStorageScopeId = () => getCurrentStoryBranchScopeId() || currentCharacter.value?.uuid || null;
         const lastContextMessages = ref([]);
         const lastTriggeredWorldInfos = ref([]);
         const lastContextTotalLength = computed(() => lastContextMessages.value.reduce(
@@ -2315,7 +2340,7 @@ createApp({
         };
 
         const persistSingleDraft = async message => {
-            const characterId = currentCharacter.value?.uuid;
+            const characterId = getCurrentChatStorageScopeId();
             if (!message || !characterId) return;
             if (!db) await initDB();
             const position = chatHistory.value.indexOf(message);
@@ -2357,7 +2382,7 @@ createApp({
                 clearTimeout(chatHistorySaveTimer);
                 chatHistorySaveTimer = null;
             }
-            const characterId = currentCharacter.value?.uuid;
+            const characterId = getCurrentChatStorageScopeId();
             if (currentCharacterIndex.value < 0 || !characterId) return Promise.resolve(false);
 
             try {
@@ -2431,13 +2456,13 @@ createApp({
         const saveMemoriesNow = async () => {
             if (!_memoriesLoaded || !currentCharacter.value?.uuid) return;
             if (!db) await initDB();
-            await setScopedStoredValue('memories', currentCharacter.value.uuid, await compactMemoriesForStorageAsync(memories.value), { clone: false });
+            await setScopedStoredValue('memories', getCurrentChatStorageScopeId(), await compactMemoriesForStorageAsync(memories.value), { clone: false });
         };
 
         const saveClassicMemoriesNow = async () => {
             if (!_classicMemoriesLoaded || !currentCharacter.value?.uuid) return;
             if (!db) await initDB();
-            await setScopedStoredValue('classic_memories', currentCharacter.value.uuid, cloneForStorage(classicMemories.value), { clone: false });
+            await setScopedStoredValue('classic_memories', getCurrentChatStorageScopeId(), cloneForStorage(classicMemories.value), { clone: false });
         };
 
         const persistAvatarMedia = async (target, field, preferredName) => {
@@ -3632,7 +3657,10 @@ ${content}
             markUiTemplateStatus('idle', '待命');
         };
 
-        const getUiTemplateRuntimeKey = (char = currentCharacter.value) => char?.uuid || null;
+        const getUiTemplateRuntimeKey = (char = currentCharacter.value) => {
+            if (!char?.uuid) return null;
+            return getStoryBranchScopeId(char.uuid, activeStoryBranchId.value);
+        };
 
         const saveGlobalUiTemplateRuntimeForCharacter = (char = currentCharacter.value) => {
             const key = getUiTemplateRuntimeKey(char);
@@ -5506,7 +5534,7 @@ ${content}
             // 该轮记忆被移除后，重置向量已提取标记，让后续巡逻重新提取该轮
             if (currentCharacter.value?.uuid) {
                 if (!memorySettings.vectorExtractedTurns) memorySettings.vectorExtractedTurns = {};
-                const key = getMemoryVectorExtractedKey(currentCharacter.value.uuid);
+                const key = getMemoryVectorExtractedKey(getCurrentChatStorageScopeId());
                 const current = Number(memorySettings.vectorExtractedTurns[key]) || 0;
                 if (current > 0) {
                     memorySettings.vectorExtractedTurns[key] = Math.min(current, Math.max(0, turn - 1));
@@ -6129,7 +6157,7 @@ ${content}
                             .filter(turn => turn > 0)
                     );
                     const emptyLog = memorySettings.emptyTurns?.[
-                        getMemoryEmptyTurnsKey(currentCharacter.value.uuid)
+                        getMemoryEmptyTurnsKey(getCurrentChatStorageScopeId())
                     ] || [];
                     const emptyTurnSet = new Set(emptyLog);
 
@@ -8868,7 +8896,7 @@ ${content}
                 const sep = key.indexOf(':');
                 return { kind: key.slice(0, sep), id: key.slice(sep + 1) };
             });
-            await db.applyFragments(currentCharacter.value.uuid, { upserts, deletes });
+            await db.applyFragments(getCurrentChatStorageScopeId(), { upserts, deletes });
             _factDirty.clear();
             _factRemoved.clear();
         };
@@ -10799,7 +10827,7 @@ ${content}
 
             try {
                 if (!memorySettings.emptyTurns) memorySettings.emptyTurns = {};
-                const uuid = currentCharacter.value.uuid;
+                const uuid = getCurrentChatStorageScopeId() || currentCharacter.value.uuid;
                 const emptyLogKey = getMemoryEmptyTurnsKey(uuid);
                 if (!memorySettings.emptyTurns[emptyLogKey]) memorySettings.emptyTurns[emptyLogKey] = [];
                 const emptyLog = memorySettings.emptyTurns[emptyLogKey];
@@ -11253,9 +11281,15 @@ ${content}
                 try {
                     const char = characters.value[index];
                     if (char && char.uuid) {
-                        await deleteScopedStoredValue('chat', char.uuid);
                         if (!db) await initDB();
-                        await db.deleteFragments(char.uuid);
+                        const scopeIds = await collectCharacterScopeIds(char);
+                        await Promise.all(scopeIds.flatMap(scopeId => [
+                            deleteScopedStoredValue('chat', scopeId),
+                            deleteScopedStoredValue('memories', scopeId),
+                            deleteScopedStoredValue('classic_memories', scopeId),
+                            db.deleteFragments(scopeId)
+                        ]));
+                        await deleteScopedStoredValue('branches', char.uuid);
                     }
 
                     characters.value.splice(index, 1);
@@ -11315,9 +11349,15 @@ ${content}
                     for (const index of indices) {
                         const char = characters.value[index];
                         if (char && char.uuid) {
-                            await deleteScopedStoredValue('chat', char.uuid);
                             if (!db) await initDB();
-                            await db.deleteFragments(char.uuid);
+                            const scopeIds = await collectCharacterScopeIds(char);
+                            await Promise.all(scopeIds.flatMap(scopeId => [
+                                deleteScopedStoredValue('chat', scopeId),
+                                deleteScopedStoredValue('memories', scopeId),
+                                deleteScopedStoredValue('classic_memories', scopeId),
+                                db.deleteFragments(scopeId)
+                            ]));
+                            await deleteScopedStoredValue('branches', char.uuid);
                         }
                         characters.value.splice(index, 1);
                     }
@@ -11525,14 +11565,15 @@ image###生成的提示词###
             throw lastError;
         };
 
-        const loadStoredChatHistory = async (char, fallbackIndex = null) => {
-            let savedChat = await getStoredChatHistoryWithRetry(char.uuid);
-            if (savedChat === undefined && Number.isInteger(fallbackIndex)) {
+        const loadStoredChatHistory = async (char, fallbackIndex = null, storyScopeId = getCurrentStoryBranchScopeId() || char?.uuid) => {
+            const scopeId = storyScopeId || char?.uuid;
+            let savedChat = await getStoredChatHistoryWithRetry(scopeId);
+            if (savedChat === undefined && scopeId === char?.uuid && Number.isInteger(fallbackIndex)) {
                 savedChat = await getStoredChatHistoryWithRetry(fallbackIndex);
             }
             if (savedChat === undefined) {
                 const initial = createInitialChatHistory(char);
-                resetPersistedChatBaseline(char.uuid, []);
+                resetPersistedChatBaseline(scopeId, []);
                 return initial;
             }
             if (!Array.isArray(savedChat)) {
@@ -11545,11 +11586,11 @@ image###生成的提示词###
             const loaded = savedChat.length > 0
                 ? prepareLoadedChatHistoryForDisplay(savedChat)
                 : createInitialChatHistory(char);
-            resetPersistedChatBaseline(char.uuid, recoveredDrafts ? savedChat : loaded);
+            resetPersistedChatBaseline(scopeId, recoveredDrafts ? savedChat : loaded);
             if (recoveredDrafts) {
                 const upserts = loaded.map((message, position) => ({ position, message: serializeChatMessage(message, 'final') }));
-                await db.applyChatChanges(char.uuid, upserts, []);
-                resetPersistedChatBaseline(char.uuid, loaded);
+                await db.applyChatChanges(scopeId, upserts, []);
+                resetPersistedChatBaseline(scopeId, loaded);
             }
             return loaded;
         };
@@ -11610,6 +11651,502 @@ image###生成的提示词###
             }
         };
 
+        // ===== 剧情分支（Story Branch）=====
+        const currentStoryBranch = computed(() => (
+            storyBranches.value.find(branch => branch.id === activeStoryBranchId.value) || null
+        ));
+
+        const storyRouteMap = computed(() => {
+            const api = storyBranchApi();
+            if (!api) return { nodes: [], links: [], width: 360, height: 170 };
+            return api.buildBranchTree(
+                storyBranches.value,
+                activeStoryBranchId.value,
+                selectedStoryBranchId.value,
+                {
+                    activeFloorCount: getPostprocessedChatMessages(chatHistory.value, { includeSystem: false }).length,
+                    activeWordCount: chatHistory.value.reduce((sum, message) => sum + String(message?.content || '').length, 0)
+                }
+            );
+        });
+        const selectedStoryRouteNode = computed(() => (
+            storyRouteMap.value.nodes.find(node => node.id === selectedStoryBranchId.value) || null
+        ));
+        const selectedStoryRouteCanDelete = computed(() => (
+            Boolean(selectedStoryRouteNode.value && selectedStoryRouteNode.value.id !== 'main')
+        ));
+
+        const selectStoryBranchNode = (branchId) => {
+            if (!storyBranches.value.some(branch => branch.id === branchId)) return;
+            selectedStoryBranchId.value = branchId;
+        };
+        const handleStoryRouteNodeClick = (branchId) => {
+            if (suppressStoryRouteNodeClick) return;
+            selectStoryBranchNode(branchId);
+        };
+        const startStoryRouteDrag = (event) => {
+            if (event.pointerType === 'mouse' && event.button !== 0) return;
+            const container = event.currentTarget;
+            storyRouteDragState = {
+                pointerId: event.pointerId,
+                startX: event.clientX,
+                startY: event.clientY,
+                scrollLeft: container.scrollLeft,
+                scrollTop: container.scrollTop,
+                moved: false
+            };
+        };
+        const moveStoryRouteDrag = (event) => {
+            const state = storyRouteDragState;
+            if (!state || state.pointerId !== event.pointerId) return;
+            const deltaX = event.clientX - state.startX;
+            const deltaY = event.clientY - state.startY;
+            if (!state.moved) {
+                if (Math.hypot(deltaX, deltaY) < 4) return;
+                state.moved = true;
+                storyRouteMapDragging.value = true;
+                event.currentTarget.setPointerCapture?.(event.pointerId);
+            }
+            event.currentTarget.scrollLeft = state.scrollLeft - deltaX;
+            event.currentTarget.scrollTop = state.scrollTop - deltaY;
+            event.preventDefault();
+        };
+        const endStoryRouteDrag = (event) => {
+            const state = storyRouteDragState;
+            if (!state || state.pointerId !== event.pointerId) return;
+            storyRouteDragState = null;
+            storyRouteMapDragging.value = false;
+            if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
+                event.currentTarget.releasePointerCapture(event.pointerId);
+            }
+            if (state.moved) {
+                suppressStoryRouteNodeClick = true;
+                setTimeout(() => { suppressStoryRouteNodeClick = false; }, 0);
+            }
+        };
+
+        const openStoryBranchModal = () => {
+            if (!currentCharacter.value) {
+                showToast('请先选择角色卡', 'warning');
+                return;
+            }
+            selectedStoryBranchId.value = activeStoryBranchId.value;
+            storyRouteDragState = null;
+            storyRouteMapDragging.value = false;
+            suppressStoryRouteNodeClick = false;
+            showStoryBranchModal.value = true;
+        };
+
+        const updateCurrentStoryBranchSummary = () => {
+            const branch = storyBranches.value.find(item => item.id === activeStoryBranchId.value);
+            if (!branch) return;
+            branch.updatedAt = Date.now();
+            branch.floorCount = getPostprocessedChatMessages(chatHistory.value, { includeSystem: false }).length;
+            branch.messageCount = chatHistory.value.filter(message => ['user', 'assistant'].includes(message?.role)).length;
+            branch.wordCount = chatHistory.value.reduce((sum, message) => sum + String(message?.content || '').length, 0);
+        };
+
+        const saveStoryBranchesForCharacter = async (char = currentCharacter.value, branchState = {}) => {
+            if (!char?.uuid) return;
+            if (!db) await initDB();
+            await setScopedStoredValue('branches', char.uuid, {
+                version: 1,
+                activeBranchId: branchState.activeBranchId ?? activeStoryBranchId.value,
+                branches: cloneForStorage(branchState.branches ?? storyBranches.value)
+            }, { clone: false });
+        };
+
+        const readStoryBranchesForCharacter = async (char) => {
+            if (!db) await initDB();
+            const api = storyBranchApi();
+            const saved = char?.uuid ? await getScopedStoredValue('branches', char.uuid) : null;
+            const branches = api
+                ? api.normalizeBranches(char, saved)
+                : [];
+            const requestedActiveId = String(saved?.activeBranchId || 'main');
+            const activeBranchId = branches.some(branch => branch.id === requestedActiveId)
+                ? requestedActiveId
+                : 'main';
+            const mainNameWasChanged = saved?.branches?.some(branch => (
+                String(branch?.id) === 'main' && branch?.name !== '主线'
+            ));
+            if (char?.uuid && (!saved || mainNameWasChanged)) {
+                await saveStoryBranchesForCharacter(char, { activeBranchId, branches });
+            }
+            return { activeBranchId, branches };
+        };
+
+        const loadStoryBranchesForCharacter = async (char) => {
+            const branchState = await readStoryBranchesForCharacter(char);
+            storyBranches.value = branchState.branches;
+            activeStoryBranchId.value = branchState.activeBranchId;
+            selectedStoryBranchId.value = branchState.activeBranchId;
+            return branchState;
+        };
+
+        const collectCharacterScopeIds = async (char) => {
+            if (!char?.uuid) return [];
+            const ids = [char.uuid];
+            try {
+                const state = await readStoryBranchesForCharacter(char);
+                state.branches.forEach(branch => {
+                    if (branch.id !== 'main') ids.push(getStoryBranchScopeId(char.uuid, branch.id));
+                });
+            } catch (_) {
+                // 分支数据损坏时只清理主线作用域
+            }
+            return ids;
+        };
+
+        const flushCurrentBranchState = async () => {
+            if (!currentCharacter.value?.uuid) return true;
+            if (isConversationBusy.value) {
+                stopGeneration();
+                const stopped = await waitForConversationIdle();
+                if (!stopped) {
+                    showToast('正在停止生成，请稍后再切换分支', 'warning');
+                    return false;
+                }
+            }
+            abortUiTemplateUpdate();
+            abortVectorBatchExtraction();
+            abortClassicBatchExtraction();
+            saveGlobalUiTemplateRuntimeForCharacter();
+            await flushPendingChatHistorySave();
+            await saveMemoriesNow();
+            await saveClassicMemoriesNow();
+            await saveMemoryFactsNow();
+            return true;
+        };
+
+        const copyUiTemplateRuntimeForBranch = (parentScopeId, branchScopeId, forkTurn) => {
+            ensureGlobalUiTemplates().forEach(template => {
+                if (!template.runtimeByCharacter || typeof template.runtimeByCharacter !== 'object') {
+                    template.runtimeByCharacter = {};
+                }
+                const sourceRuntime = template.runtimeByCharacter[parentScopeId] || {
+                    variableState: template.variableState || template.initialVariableState || {},
+                    changeLog: Array.isArray(template.changeLog) ? JSON.parse(JSON.stringify(template.changeLog)) : []
+                };
+                if (Number.isFinite(forkTurn)) {
+                    const changeLog = Array.isArray(sourceRuntime.changeLog) ? sourceRuntime.changeLog : [];
+                    template.runtimeByCharacter[branchScopeId] = {
+                        variableState: buildUiTemplateStateAtTurn({ ...template, changeLog }, forkTurn),
+                        changeLog: cloneForStorage(changeLog.filter(log => Number(log?.turn || 0) <= forkTurn))
+                    };
+                } else {
+                    template.runtimeByCharacter[branchScopeId] = {
+                        variableState: cloneUiObject(sourceRuntime.variableState),
+                        changeLog: Array.isArray(sourceRuntime.changeLog)
+                            ? JSON.parse(JSON.stringify(sourceRuntime.changeLog))
+                            : []
+                    };
+                }
+            });
+        };
+
+        const createStoryBranch = async (forkMessageIndex = null) => {
+            const char = currentCharacter.value;
+            if (!char?.uuid || storyBranchSwitching.value) return;
+            const forkFromMessage = Number.isInteger(forkMessageIndex);
+            const forkMessage = forkFromMessage ? chatHistory.value[forkMessageIndex] : null;
+            if (forkFromMessage && forkMessage?.role !== 'assistant') return;
+            const forkMessageId = forkMessage?.id;
+            const parent = forkFromMessage
+                ? currentStoryBranch.value
+                : storyBranches.value.find(branch => branch.id === selectedStoryBranchId.value)
+                || currentStoryBranch.value;
+            if (!parent) return;
+            storyBranchSwitching.value = true;
+            let createdBranch = null;
+            const previousState = {
+                activeId: activeStoryBranchId.value,
+                chatHistory: chatHistory.value,
+                memories: memories.value,
+                classicMemories: classicMemories.value
+            };
+            try {
+                if (!await flushCurrentBranchState()) return;
+                const parentId = parent.id;
+                const parentScopeId = getStoryBranchScopeId(char.uuid, parentId);
+                const api = storyBranchApi();
+                const branchId = api ? api.createId() : generateUUID();
+                const branchScopeId = getStoryBranchScopeId(char.uuid, branchId);
+                createdBranch = { branchId, branchScopeId, parentId };
+                const branchNumber = storyBranches.value.filter(branch => branch.id !== 'main').length + 1;
+                const branchName = api ? api.defaultBranchName(branchNumber) : `分支 ${branchNumber}`;
+                const now = Date.now();
+                const [savedChat, savedMemories, savedClassicMemories] = await Promise.all([
+                    getStoredChatHistoryWithRetry(parentScopeId),
+                    getScopedStoredValue('memories', parentScopeId),
+                    getScopedStoredValue('classic_memories', parentScopeId)
+                ]);
+                let branchChat = Array.isArray(savedChat) ? savedChat : [];
+                let branchMemories = Array.isArray(savedMemories) ? savedMemories : [];
+                let branchClassicMemories = Array.isArray(savedClassicMemories) ? savedClassicMemories : [];
+                let forkTurn = null;
+                if (forkFromMessage) {
+                    const sourceIndex = forkMessageId
+                        ? branchChat.findIndex(message => message?.id === forkMessageId)
+                        : forkMessageIndex;
+                    if (sourceIndex < 0 || branchChat[sourceIndex]?.role !== 'assistant') {
+                        throw new Error('目标消息已发生变化，请重试');
+                    }
+                    branchChat = branchChat.slice(0, sourceIndex + 1);
+                    forkTurn = buildConversationTurnSnapshot(
+                        prepareLoadedChatHistoryForDisplay(branchChat),
+                        { includeSystem: false }
+                    ).turns.length;
+                    branchMemories = branchMemories.filter(memory => Number(memory?.turn) <= forkTurn);
+                    branchClassicMemories = branchClassicMemories.filter(memory => Number(memory?.turn) <= forkTurn);
+                }
+                await setScopedStoredValue('chat', branchScopeId, branchChat, { clone: false });
+                await setScopedStoredValue('memories', branchScopeId, branchMemories, { clone: false });
+                await setScopedStoredValue('classic_memories', branchScopeId, branchClassicMemories, { clone: false });
+                if (db) {
+                    let parentFacts = [];
+                    try { parentFacts = await db.loadFragments(parentScopeId); } catch (_) { parentFacts = []; }
+                    const factsForBranch = forkFromMessage
+                        ? (Array.isArray(parentFacts) ? parentFacts.filter(f => Number(f?.turn) <= forkTurn) : [])
+                        : (Array.isArray(parentFacts) ? parentFacts : []);
+                    if (factsForBranch.length) {
+                        await db.applyFragments(branchScopeId, {
+                            upserts: factsForBranch.map(f => ({
+                                kind: f._kind || f.kind,
+                                id: f._fragmentId || f.fragment_id || f.id,
+                                data: f
+                            })),
+                            deletes: []
+                        });
+                    }
+                }
+                copyUiTemplateRuntimeForBranch(parentScopeId, branchScopeId, forkTurn);
+                const floorCount = getPostprocessedChatMessages(branchChat, { includeSystem: false }).length;
+                const wordCount = branchChat.reduce((sum, message) => sum + String(message?.content || '').length, 0);
+                storyBranches.value.push({
+                    id: branchId,
+                    name: branchName,
+                    parentId,
+                    createdAt: now,
+                    updatedAt: now,
+                    forkFloor: floorCount,
+                    floorCount,
+                    messageCount: branchChat.filter(message => ['user', 'assistant'].includes(message?.role)).length,
+                    wordCount
+                });
+                activeStoryBranchId.value = branchId;
+                selectedStoryBranchId.value = branchId;
+                await Promise.all([
+                    saveStoryBranchesForCharacter(char),
+                    saveMemorySettingsNow(),
+                    setStoredValue('global_ui_templates', globalUiTemplates.value)
+                ]);
+                loadGlobalUiTemplateRuntimeForCharacter(char);
+                _isApplyingCharacterScopedData = true;
+                resetChatRenderWindow();
+                chatHistory.value = branchChat.length
+                    ? prepareLoadedChatHistoryForDisplay(branchChat)
+                    : createInitialChatHistory(char);
+                memories.value = branchMemories.length ? prepareMemoriesForRuntime(branchMemories) : [];
+                classicMemories.value = prepareClassicMemoriesForRuntime(branchClassicMemories);
+                _memoriesLoaded = true;
+                _classicMemoriesLoaded = true;
+                _factFragmentsLoaded = false;
+                _factLoadedCharacterId = '';
+                memoryFacts.value = [];
+                finishApplyingCharacterScopedData();
+                await loadMemoryFacts(branchScopeId, ' (分支创建)');
+                showToast(`已创建并进入“${branchName}”`, 'success');
+                await scrollChatToBottom();
+            } catch (error) {
+                _isApplyingCharacterScopedData = false;
+                if (createdBranch) {
+                    storyBranches.value = storyBranches.value.filter(branch => branch.id !== createdBranch.branchId);
+                    activeStoryBranchId.value = previousState.activeId;
+                    selectedStoryBranchId.value = previousState.activeId;
+                    chatHistory.value = previousState.chatHistory;
+                    memories.value = previousState.memories;
+                    classicMemories.value = previousState.classicMemories;
+                    _factFragmentsLoaded = false;
+                    _factLoadedCharacterId = '';
+                    memoryFacts.value = [];
+                    if (memorySettings.emptyTurns) {
+                        delete memorySettings.emptyTurns[getMemoryEmptyTurnsKey(createdBranch.branchScopeId)];
+                    }
+                    ensureGlobalUiTemplates().forEach(template => {
+                        if (template.runtimeByCharacter) delete template.runtimeByCharacter[createdBranch.branchScopeId];
+                    });
+                    loadGlobalUiTemplateRuntimeForCharacter(char);
+                    await Promise.allSettled([
+                        deleteScopedStoredValue('chat', createdBranch.branchScopeId),
+                        deleteScopedStoredValue('memories', createdBranch.branchScopeId),
+                        deleteScopedStoredValue('classic_memories', createdBranch.branchScopeId),
+                        db ? db.deleteFragments(createdBranch.branchScopeId) : Promise.resolve(),
+                        saveStoryBranchesForCharacter(char),
+                        saveMemorySettingsNow(),
+                        setStoredValue('global_ui_templates', globalUiTemplates.value)
+                    ]);
+                }
+                console.error('Failed to create story branch:', error);
+                showToast(`创建分支失败：${error.message || '请稍后重试'}`, 'error');
+            } finally {
+                storyBranchSwitching.value = false;
+            }
+        };
+
+        const switchStoryBranch = async (branchId, options = {}) => {
+            const { closeModal = true, notify = true } = options;
+            const char = currentCharacter.value;
+            const target = storyBranches.value.find(branch => branch.id === branchId);
+            if (!char?.uuid || !target || branchId === activeStoryBranchId.value || storyBranchSwitching.value) return;
+            storyBranchSwitching.value = true;
+            try {
+                if (!await flushCurrentBranchState()) return;
+                const targetScopeId = getStoryBranchScopeId(char.uuid, branchId);
+                const [savedChat, savedMemories, savedClassicMemories] = await Promise.all([
+                    getStoredChatHistoryWithRetry(targetScopeId),
+                    getScopedStoredValue('memories', targetScopeId),
+                    getScopedStoredValue('classic_memories', targetScopeId)
+                ]);
+                _isApplyingCharacterScopedData = true;
+                activeStoryBranchId.value = branchId;
+                resetChatRenderWindow();
+                chatHistory.value = Array.isArray(savedChat) && savedChat.length
+                    ? prepareLoadedChatHistoryForDisplay(savedChat)
+                    : createInitialChatHistory(char);
+                memories.value = Array.isArray(savedMemories) && savedMemories.length
+                    ? prepareMemoriesForRuntime(savedMemories)
+                    : [];
+                classicMemories.value = prepareClassicMemoriesForRuntime(savedClassicMemories);
+                _memoriesLoaded = true;
+                _classicMemoriesLoaded = true;
+                _factFragmentsLoaded = false;
+                _factLoadedCharacterId = '';
+                memoryFacts.value = [];
+                loadGlobalUiTemplateRuntimeForCharacter(char);
+                finishApplyingCharacterScopedData();
+                await loadMemoryFacts(targetScopeId, ' (分支切换)');
+                updateCurrentStoryBranchSummary();
+                await saveStoryBranchesForCharacter(char);
+                currentView.value = 'chat';
+                await scrollChatToBottom();
+                selectedStoryBranchId.value = branchId;
+                if (closeModal) showStoryBranchModal.value = false;
+                if (notify) showToast(`已进入“${target.name}”`, 'success');
+            } catch (error) {
+                _isApplyingCharacterScopedData = false;
+                console.error('Failed to switch story branch:', error);
+                showToast(`切换分支失败：${error.message || '原分支未被覆盖'}`, 'error');
+            } finally {
+                storyBranchSwitching.value = false;
+            }
+        };
+
+        const openStoryBranchNameEditor = () => {
+            const target = storyBranches.value.find(branch => branch.id === selectedStoryBranchId.value);
+            if (!target || storyBranchSwitching.value) return;
+            if (target.id === 'main') {
+                showToast('主线名称不可修改', 'warning');
+                return;
+            }
+            storyBranchNameDraft.value = target.name;
+            showStoryBranchNameEditor.value = true;
+        };
+
+        const saveStoryBranchName = async () => {
+            const target = storyBranches.value.find(branch => branch.id === selectedStoryBranchId.value);
+            const name = storyBranchNameDraft.value.trim().replace(/\s+/g, ' ').slice(0, 30);
+            if (!target || storyBranchSwitching.value) return;
+            if (target.id === 'main') {
+                showStoryBranchNameEditor.value = false;
+                showToast('主线名称不可修改', 'warning');
+                return;
+            }
+            if (!name) {
+                showToast('分支名称不能为空', 'warning');
+                return;
+            }
+            if (name === target.name) {
+                showStoryBranchNameEditor.value = false;
+                return;
+            }
+            const previousName = target.name;
+            const previousUpdatedAt = target.updatedAt;
+            storyBranchSwitching.value = true;
+            try {
+                target.name = name;
+                target.updatedAt = Date.now();
+                await saveStoryBranchesForCharacter();
+                showStoryBranchNameEditor.value = false;
+                showToast(`已将“${previousName}”改名为“${name}”`, 'success');
+            } catch (error) {
+                target.name = previousName;
+                target.updatedAt = previousUpdatedAt;
+                console.error('Failed to rename story branch:', error);
+                showToast(`修改分支名称失败：${error.message || '请稍后重试'}`, 'error');
+            } finally {
+                storyBranchSwitching.value = false;
+            }
+        };
+
+        const deleteSelectedStoryBranch = () => {
+            const target = storyBranches.value.find(branch => branch.id === selectedStoryBranchId.value);
+            const char = currentCharacter.value;
+            if (!target || !char?.uuid) return;
+            if (!selectedStoryRouteCanDelete.value) {
+                showToast('请选择需要删除的分支，主线不能删除', 'warning');
+                return;
+            }
+            const api = storyBranchApi();
+            const deleteIds = api
+                ? api.collectSubtreeIds(storyBranches.value, target.id)
+                : [target.id];
+            const childCount = deleteIds.length - 1;
+            const childHint = childCount > 0 ? `及其 ${childCount} 条子分支` : '';
+            confirmAction(
+                `确定要删除“${target.name}”${childHint}吗？相关聊天、记忆和 UI 状态也会删除，此操作无法撤销。`,
+                async () => {
+                    try {
+                        if (deleteIds.includes(activeStoryBranchId.value)) {
+                            await switchStoryBranch('main', { closeModal: false, notify: false });
+                            if (activeStoryBranchId.value !== 'main') {
+                                throw new Error('无法切换到主线');
+                            }
+                        }
+                        storyBranchSwitching.value = true;
+                        if (!db) await initDB();
+                        const scopeIds = deleteIds.map(branchId => getStoryBranchScopeId(char.uuid, branchId));
+                        await Promise.all(scopeIds.flatMap(scopeId => [
+                            deleteScopedStoredValue('chat', scopeId),
+                            deleteScopedStoredValue('memories', scopeId),
+                            deleteScopedStoredValue('classic_memories', scopeId),
+                            db.deleteFragments(scopeId)
+                        ]));
+                        scopeIds.forEach(scopeId => {
+                            if (memorySettings.emptyTurns) delete memorySettings.emptyTurns[getMemoryEmptyTurnsKey(scopeId)];
+                        });
+                        ensureGlobalUiTemplates().forEach(template => {
+                            if (!template.runtimeByCharacter) return;
+                            scopeIds.forEach(scopeId => delete template.runtimeByCharacter[scopeId]);
+                        });
+                        storyBranches.value = storyBranches.value.filter(branch => !deleteIds.includes(branch.id));
+                        selectedStoryBranchId.value = activeStoryBranchId.value;
+                        await Promise.all([
+                            saveStoryBranchesForCharacter(char),
+                            saveMemorySettingsNow(),
+                            setStoredValue('global_ui_templates', globalUiTemplates.value)
+                        ]);
+                        showToast(`已删除“${target.name}”${childHint}`, 'success');
+                    } catch (error) {
+                        console.error('Failed to delete story branch:', error);
+                        showToast(`删除分支失败：${error.message || '请稍后重试'}`, 'error');
+                    } finally {
+                        storyBranchSwitching.value = false;
+                    }
+                }
+            );
+        };
+
         const selectCharacter = async (index, isNewImport = false) => {
             if (isConversationBusy.value) {
                 stopGeneration();
@@ -11635,13 +12172,16 @@ image###生成的提示词###
             }
 
             let loadedChatHistory;
+            let initialBranchScopeId = null;
             try {
                 if (!char.uuid) {
                     char.uuid = generateUUID();
                     if (!db) await initDB();
                     await setStoredValue('characters', characters.value);
                 }
-                loadedChatHistory = await loadStoredChatHistory(char, index);
+                await loadStoryBranchesForCharacter(char);
+                initialBranchScopeId = getStoryBranchScopeId(char.uuid, activeStoryBranchId.value);
+                loadedChatHistory = await loadStoredChatHistory(char, index, initialBranchScopeId);
             } catch (error) {
                 console.error('Error loading chat history:', error);
                 showToast('聊天记录读取失败，已保留当前会话且不会覆盖原记录，请稍后重试', 'error', 5000);
@@ -11688,7 +12228,7 @@ image###生成的提示词###
                 }
             }
 
-            await loadCharacterMemories(char.uuid);
+            await loadCharacterMemories(initialBranchScopeId);
 
             currentView.value = 'chat';
             await scrollChatToBottom();
@@ -12239,7 +12779,7 @@ image###生成的提示词###
                                         chatHistory.value = [...importedChat];
                                     }
                                     if (char.uuid) {
-                                        await setScopedStoredValue('chat', char.uuid, chatHistory.value);
+                                        await setScopedStoredValue('chat', getCurrentStoryBranchScopeId() || char.uuid, chatHistory.value);
                                     } else {
                                         await setScopedStoredValue('chat', currentCharacterIndex.value, chatHistory.value);
                                     }
@@ -12291,7 +12831,7 @@ image###生成的提示词###
             try {
                 let savedChat = null;
                 if (char.uuid) {
-                    savedChat = await getScopedStoredValue('chat', char.uuid);
+                    savedChat = await getScopedStoredValue('chat', getStoryBranchScopeId(char.uuid, activeStoryBranchId.value));
                 }
                 if (!savedChat) {
                     savedChat = await getScopedStoredValue('chat', index);
@@ -12582,12 +13122,15 @@ image###生成的提示词###
                 normalizeCharacterUiTemplates(char);
 
                 // Load Chat History for this character
+                let restoreScopeId = null;
                 try {
                     if (!char.uuid) {
                         char.uuid = generateUUID();
                         await setStoredValue('characters', characters.value);
                     }
-                    chatHistory.value = await loadStoredChatHistory(char, currentCharacterIndex.value);
+                    await loadStoryBranchesForCharacter(char);
+                    restoreScopeId = getStoryBranchScopeId(char.uuid, activeStoryBranchId.value);
+                    chatHistory.value = await loadStoredChatHistory(char, currentCharacterIndex.value, restoreScopeId);
                     resetChatRenderWindow();
                 } catch (error) {
                     console.error('Error loading chat history on restore:', error);
@@ -12607,7 +13150,7 @@ image###生成的提示词###
                 if (char.recentGenerationTimes) recentGenerationTimes.value = JSON.parse(JSON.stringify(char.recentGenerationTimes));
                 else recentGenerationTimes.value = [];
 
-                await loadCharacterMemories(char.uuid, ' on restore');
+                await loadCharacterMemories(restoreScopeId, ' on restore');
 
                 ensureDefaultUserRegex();
 
@@ -13019,7 +13562,7 @@ image###生成的提示词###
                         abortFactMaintenance();
                         if (currentCharacter.value?.uuid) {
                             if (!db) await initDB();
-                            await db.deleteFragments(currentCharacter.value.uuid);
+                            await db.deleteFragments(getCurrentChatStorageScopeId());
                         }
                         memoryFacts.value = [];
                         _factDirty.clear();
@@ -13172,6 +13715,14 @@ image###生成的提示词###
             isBatchDeleteMode, isSidebarCollapsed, isAdvancedNavOpen, toggleAdvancedNav, selectedCharacterIndices, toggleBatchDeleteMode, toggleCharacterSelection, batchDeleteCharacters,
             getCharacterWICount, getCharacterRegexCount,
             handleAvatarUpload, importCharacter,
+            // 剧情分支
+            storyBranches, activeStoryBranchId, currentStoryBranch, storyRouteMap,
+            selectedStoryRouteNode, selectedStoryRouteCanDelete,
+            showStoryBranchModal, showStoryBranchNameEditor, storyBranchNameDraft,
+            storyBranchSwitching, storyRouteMapDragging,
+            openStoryBranchModal, createStoryBranch, switchStoryBranch,
+            handleStoryRouteNodeClick, startStoryRouteDrag, moveStoryRouteDrag, endStoryRouteDrag,
+            openStoryBranchNameEditor, saveStoryBranchName, deleteSelectedStoryBranch,
             createPreset, editPreset, savePreset, deletePreset,
             renderMarkdown, messageUsesWideLayout, parseCot, closeCharacterEditor: () => showCharacterEditor.value = false,
             openExportModal: (type) => {

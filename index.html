@@ -54,6 +54,11 @@
         <symbol id="icon-arrow-down" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v14m0 0l-5-5m5 5l5-5"></path>
         </symbol>
+        <symbol id="icon-story-branch" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M3 3V13.2C3 14.8802 3 15.7202 3.32698 16.362C3.6146 16.9265 4.07354 17.3854 4.63803 17.673C5.27976 18 6.11984 18 7.8 18H15M15 18C15 19.6569 16.3431 21 18 21C19.6569 21 21 19.6569 21 18C21 16.3431 19.6569 15 18 15C16.3431 15 15 16.3431 15 18ZM3 8L15 8M15 8C15 9.65686 16.3431 11 18 11C19.6569 11 21 9.65685 21 8C21 6.34315 19.6569 5 18 5C16.3431 5 15 6.34315 15 8Z">
+            </path>
+        </symbol>
     </svg>
     <div class="entry-transition" aria-hidden="true">
         <div class="entry-transition-brand">
@@ -816,6 +821,15 @@
                                                 </path>
                                             </svg>
                                         </button>
+                                        <button v-if="msg.role === 'assistant'" @click="createStoryBranch(index)"
+                                            :disabled="storyBranchSwitching"
+                                            class="message-action-button"
+                                            title="从这里分支" aria-label="从这里创建分支">
+                                            <svg class="w-3.5 h-3.5 md:w-4 md:h-4" fill="none" stroke="currentColor"
+                                                viewBox="0 0 24 24" aria-hidden="true">
+                                                <use href="#icon-story-branch"></use>
+                                            </svg>
+                                        </button>
                                         <button v-if="msg.role === 'assistant' && msg.uiTemplateBlocks && (msg.uiTemplateBlocks.top?.length || msg.uiTemplateBlocks.bottom?.length) && settings.uiTemplateEnabled && uiTemplateUpdateStatus.state !== 'running'"
                                             @click="updateUiTemplatesFromChat({ manual: true, targetMessageId: msg.id })"
                                             class="message-action-button"
@@ -952,6 +966,14 @@
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                             d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z">
                                         </path>
+                                    </svg>
+                                </button>
+                                <!-- Story Branch Button -->
+                                <button @click="openStoryBranchModal"
+                                    class="relative rounded-full w-8 h-8 flex items-center justify-center border transition-all active:scale-95 bg-white text-gray-500 hover:text-blue-600 hover:bg-blue-50 border-gray-200 shadow-sm"
+                                    :title="'剧情分支：' + (currentStoryBranch?.name || '主线')">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <use href="#icon-story-branch"></use>
                                     </svg>
                                 </button>
                             </div>
@@ -3977,7 +3999,7 @@
         </div>
         <!-- Confirmation Modal -->
         <div v-if="showConfirmModal"
-            class="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fade-in">
+            class="fixed inset-0 z-[220] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fade-in">
             <div
                 class="bg-white rounded-xl border border-gray-200 w-full max-w-sm flex flex-col shadow-2xl transform transition-all scale-100">
                 <div class="p-6 text-center">
@@ -5420,6 +5442,132 @@
             </div>
         </transition>
 
+        <!-- Story Branch Modal -->
+        <transition enter-active-class="transition-opacity duration-300 ease-out" enter-from-class="opacity-0"
+            enter-to-class="opacity-100" leave-active-class="transition-opacity duration-200 ease-in"
+            leave-from-class="opacity-100" leave-to-class="opacity-0">
+            <div v-if="showStoryBranchModal"
+                class="fixed inset-0 z-[120] flex items-center justify-center bg-gray-900/40 backdrop-blur-sm p-4 sm:p-6"
+                @click.self="showStoryBranchModal = false">
+                <div
+                    class="w-full max-w-6xl h-[92vh] sm:h-[88vh] bg-white rounded-2xl shadow-2xl border border-gray-200/70 overflow-hidden flex flex-col">
+                    <div class="px-5 sm:px-6 py-4 border-b border-gray-100 bg-white flex items-center justify-between flex-shrink-0">
+                        <div class="min-w-0">
+                            <div class="flex items-center gap-2.5">
+                                <div class="w-9 h-9 rounded-xl bg-blue-50 border border-blue-100 text-blue-600 flex items-center justify-center flex-shrink-0">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <use href="#icon-story-branch"></use>
+                                    </svg>
+                                </div>
+                                <div class="min-w-0">
+                                    <h3 class="text-lg font-bold text-gray-800">剧情分支</h3>
+                                    <p class="text-xs text-gray-500 mt-0.5 truncate">
+                                        当前分支：{{ currentStoryBranch?.name || '主线' }}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                        <button @click="showStoryBranchModal = false"
+                            class="w-9 h-9 rounded-full bg-gray-50 hover:bg-red-50 text-gray-400 hover:text-red-500 flex items-center justify-center transition-colors flex-shrink-0">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M6 18L18 6M6 6l12 12"></path>
+                            </svg>
+                        </button>
+                    </div>
+
+                    <div class="story-route-modal-body custom-scrollbar">
+                        <section class="story-route-map-panel">
+                            <div class="story-route-map-scroll custom-scrollbar"
+                                :class="{ 'is-single-route': storyBranches.length === 1, 'is-dragging': storyRouteMapDragging }"
+                                @pointerdown="startStoryRouteDrag" @pointermove="moveStoryRouteDrag"
+                                @pointerup="endStoryRouteDrag" @pointercancel="endStoryRouteDrag"
+                                @lostpointercapture="endStoryRouteDrag" @dragstart.prevent>
+                                <div class="story-route-canvas"
+                                    :style="{ width: storyRouteMap.width + 'px', height: storyRouteMap.height + 'px' }">
+                                    <svg class="story-route-links" :width="storyRouteMap.width"
+                                        :height="storyRouteMap.height"
+                                        :viewBox="'0 0 ' + storyRouteMap.width + ' ' + storyRouteMap.height"
+                                        aria-hidden="true">
+                                        <path v-for="link in storyRouteMap.links" :key="link.id" :d="link.path"
+                                            class="story-route-link"
+                                            :class="{ 'is-active': link.isActive, 'is-selected': link.isSelected }">
+                                        </path>
+                                    </svg>
+                                    <button v-for="node in storyRouteMap.nodes" :key="node.id"
+                                        @click="handleStoryRouteNodeClick(node.id)"
+                                        class="story-route-node"
+                                        :class="{ 'is-current': node.isActive, 'is-selected': node.isSelected, 'is-on-route': node.isOnActiveRoute, 'is-on-selected-route': node.isOnSelectedRoute }"
+                                        :style="{ left: node.x + 'px', top: node.y + 'px' }"
+                                        :title="'选择分支：' + node.name">
+                                        <span class="story-route-node-checkpoint" aria-hidden="true"></span>
+                                        <span class="story-route-node-copy">
+                                            <span v-if="node.id === 'main'" class="story-route-node-type">起点</span>
+                                            <strong>{{ node.name }}</strong>
+                                            <small>{{ node.floorCount }} 楼 · {{ node.wordCountText }} 字</small>
+                                        </span>
+                                        <span v-if="node.isActive" class="story-route-node-current">当前</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </section>
+
+                        <div class="story-route-actions">
+                            <button
+                                @click="switchStoryBranch(selectedStoryRouteNode.id)"
+                                :disabled="storyBranchSwitching || !selectedStoryRouteNode || selectedStoryRouteNode.isActive"
+                                class="story-route-enter-button"
+                                :title="selectedStoryRouteNode?.isActive ? '已在当前分支' : '进入当前选中的分支'">
+                                {{ storyBranchSwitching ? '切换中' : '进入' }}
+                            </button>
+                            <button @click="openStoryBranchNameEditor"
+                                :disabled="storyBranchSwitching || !selectedStoryRouteNode || selectedStoryRouteNode.id === 'main'"
+                                class="story-route-edit-button"
+                                :title="!selectedStoryRouteNode ? '请先选择分支' : selectedStoryRouteNode.id === 'main' ? '主线名称不可修改' : '编辑当前选中的分支名称'">
+                                编辑
+                            </button>
+                            <button @click="deleteSelectedStoryBranch"
+                                :disabled="storyBranchSwitching || !selectedStoryRouteCanDelete"
+                                :title="selectedStoryRouteCanDelete ? '删除当前选中的分支' : '请选择可删除的分支（主线不可删除）'"
+                                class="story-route-delete-button">
+                                删除
+                            </button>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+
+        </transition>
+
+        <!-- Story Branch Name Editor -->
+        <transition enter-active-class="transition-opacity duration-200" enter-from-class="opacity-0"
+            enter-to-class="opacity-100" leave-active-class="transition-opacity duration-150"
+            leave-from-class="opacity-100" leave-to-class="opacity-0">
+            <div v-if="showStoryBranchNameEditor"
+                class="fixed inset-0 z-[180] flex items-center justify-center bg-gray-900/40 backdrop-blur-sm p-4"
+                @click.self="showStoryBranchNameEditor = false">
+                <div class="w-full max-w-sm rounded-2xl border border-gray-200 bg-white p-5 shadow-2xl">
+                    <h3 class="text-lg font-bold text-gray-800">编辑分支名称</h3>
+                    <p class="mt-1 text-sm text-gray-500">名称最多 30 个字。</p>
+                    <input v-model="storyBranchNameDraft" maxlength="30" autofocus
+                        @keyup.enter="saveStoryBranchName" @keyup.esc="showStoryBranchNameEditor = false"
+                        class="mt-4 w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm font-medium text-gray-800 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                        placeholder="输入分支名称">
+                    <div class="mt-5 flex justify-end gap-2">
+                        <button @click="showStoryBranchNameEditor = false"
+                            class="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-gray-600 transition hover:bg-gray-50">
+                            取消
+                        </button>
+                        <button @click="saveStoryBranchName" :disabled="storyBranchSwitching"
+                            class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50">
+                            保存
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </transition>
+
         <!-- Theme-compliant Global Confirm Modal -->
         <transition enter-active-class="transition duration-300 ease-modal-fade" enter-from-class="opacity-0"
             enter-to-class="opacity-100" leave-active-class="transition duration-200 ease-in"
@@ -5454,6 +5602,7 @@
     <script src="assets/js/storage-repository.js"></script>
     <script src="assets/js/html-frame-lifecycle.js"></script>
     <script src="assets/js/utils.js"></script>
+    <script src="assets/js/story-branch.js"></script>
     <script src="assets/js/card-utils.js"></script>
     <script src="assets/js/ui-select.js"></script>
     <script src="assets/js/ui-template-engine.js"></script>

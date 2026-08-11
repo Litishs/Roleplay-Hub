@@ -2623,3 +2623,318 @@ opacity: 0;
             background: rgba(249, 250, 251, 0.85);
             contain: strict;
         }
+
+/* ===== 剧情分支（Story Branch）===== */
+.story-route-modal-body {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+    padding: 20px 24px 24px;
+    flex-direction: column;
+    overflow: hidden;
+    background: #fff;
+}
+
+.story-route-map-panel {
+    display: flex;
+    min-height: 0;
+    flex: 1;
+    flex-direction: column;
+    overflow: hidden;
+    border: 1px solid #e3eaf3;
+    border-radius: 16px;
+    background: #fff;
+}
+
+.story-route-map-scroll {
+    display: flex;
+    min-height: 0;
+    flex: 1;
+    overflow: auto;
+    overscroll-behavior: contain;
+    background: #fbfdff;
+    cursor: grab;
+    touch-action: none;
+    user-select: none;
+}
+
+.story-route-map-scroll.is-dragging,
+.story-route-map-scroll.is-dragging * {
+    cursor: grabbing !important;
+}
+
+.story-route-map-scroll.is-single-route {
+    align-items: center;
+    justify-content: center;
+}
+
+.story-route-canvas {
+    position: relative;
+    flex: 0 0 auto;
+    margin: 0 auto;
+    background-color: #fbfdff;
+    background-image: radial-gradient(circle, rgba(148, 163, 184, 0.24) 1px, transparent 1px);
+    background-size: 20px 20px;
+}
+
+.story-route-links {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+}
+
+.story-route-link {
+    fill: none;
+    stroke: #dbe4ef;
+    stroke-width: 2;
+    stroke-linecap: round;
+    transition: stroke 180ms ease, stroke-width 180ms ease;
+}
+
+.story-route-link.is-active {
+    stroke: #93c5fd;
+    stroke-width: 2.5;
+}
+
+.story-route-link.is-selected {
+    stroke: #2563eb;
+    stroke-width: 3;
+}
+
+.story-route-node {
+    position: absolute;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 124px;
+    height: 64px;
+    padding: 9px 10px;
+    border: 1px solid #dbe4ef;
+    border-radius: 14px;
+    color: #334155;
+    background: rgba(255, 255, 255, 0.98);
+    box-shadow: 0 8px 20px rgba(15, 23, 42, 0.07);
+    text-align: center;
+    transition: transform 180ms ease, border-color 180ms ease, background 180ms ease, box-shadow 180ms ease;
+}
+
+.story-route-node:hover {
+    z-index: 2;
+    transform: translateY(-2px);
+    border-color: #93c5fd;
+    box-shadow: 0 12px 25px rgba(37, 99, 235, 0.12);
+}
+
+.story-route-node:focus-visible {
+    outline: 3px solid rgba(59, 130, 246, 0.22);
+    outline-offset: 3px;
+}
+
+.story-route-node.is-on-route {
+    border-color: #bfdbfe;
+}
+
+.story-route-node.is-selected {
+    z-index: 1;
+    border-color: #2563eb;
+    background: #eff6ff;
+    box-shadow: 0 12px 28px rgba(37, 99, 235, 0.16);
+}
+
+.story-route-node-checkpoint {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    width: 12px;
+    height: 12px;
+    border: 2px solid #fff;
+    border-radius: 3px;
+    background: #cbd5e1;
+    box-shadow: 0 0 0 1px #cbd5e1;
+    transform: translate(-50%, -50%) rotate(45deg);
+    transition: background 180ms ease, box-shadow 180ms ease;
+}
+
+.story-route-node.is-on-route .story-route-node-checkpoint {
+    background: #60a5fa;
+    box-shadow: 0 0 0 1px #60a5fa;
+}
+
+.story-route-node.is-on-selected-route .story-route-node-checkpoint {
+    background: #2563eb;
+    box-shadow: 0 0 0 1px #2563eb;
+}
+
+.story-route-node.is-selected .story-route-node-checkpoint {
+    background: #2563eb;
+    box-shadow: 0 0 0 1px #2563eb, 0 0 0 5px rgba(37, 99, 235, 0.12);
+}
+
+.story-route-node-copy {
+    display: flex;
+    width: 100%;
+    min-width: 0;
+    flex: 1;
+    align-items: center;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.story-route-node-type {
+    color: #94a3b8;
+    font-size: 9px;
+    line-height: 1;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+}
+
+.story-route-node-copy strong {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    margin-top: 0;
+    overflow: hidden;
+    color: #1e293b;
+    font-size: 14px;
+    line-height: 1.15;
+    font-weight: 800;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.story-route-node-type + strong {
+    margin-top: 4px;
+}
+
+.story-route-node-copy small {
+    margin-top: 4px;
+    overflow: hidden;
+    color: #64748b;
+    font-size: 10px;
+    line-height: 1;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.story-route-node-current {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    padding: 3px 6px;
+    border-radius: 999px;
+    color: #fff;
+    background: #2563eb;
+    font-size: 9px;
+    line-height: 1;
+    font-weight: 800;
+}
+
+.story-route-enter-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    gap: 5px;
+    height: 36px;
+    padding: 0 14px;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    color: #2563eb;
+    background: #fff;
+    font-size: 13px;
+    font-weight: 700;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+    transition: background 160ms ease, border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+.story-route-enter-button:hover {
+    border-color: #bfdbfe;
+    background: #eff6ff;
+}
+
+.story-route-enter-button:active {
+    transform: scale(0.97);
+}
+
+.story-route-enter-button:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+
+.story-route-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex-shrink: 0;
+    gap: 8px;
+    flex-wrap: nowrap;
+    padding-top: 14px;
+}
+
+.story-route-edit-button,
+.story-route-delete-button {
+    display: inline-flex;
+    height: 36px;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    padding: 0 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 700;
+    white-space: nowrap;
+    transition: background 160ms ease, border-color 160ms ease, color 160ms ease, transform 160ms ease;
+}
+
+.story-route-edit-button {
+    border: 1px solid transparent;
+    color: #2563eb;
+    background: #fff;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+}
+
+.story-route-edit-button:hover:not(:disabled) {
+    border-color: #bfdbfe;
+    background: #eff6ff;
+}
+
+.story-route-delete-button {
+    border: 1px solid transparent;
+    color: #dc2626;
+    background: #fff;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+}
+
+.story-route-delete-button:hover:not(:disabled) {
+    border-color: #fca5a5;
+    background: #fef2f2;
+}
+
+.story-route-edit-button:active:not(:disabled),
+.story-route-delete-button:active:not(:disabled) {
+    transform: scale(0.97);
+}
+
+.story-route-edit-button:disabled,
+.story-route-delete-button:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+}
+
+@media (max-width: 640px) {
+    .story-route-modal-body {
+        padding: 14px;
+    }
+
+    .story-route-actions {
+        width: 100%;
+    }
+
+    .story-route-actions button {
+        min-width: 0;
+        flex: 1;
+        height: 32px;
+        padding: 0 10px;
+        font-size: 12px;
+    }
+}
