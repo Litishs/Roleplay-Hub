@@ -1463,7 +1463,6 @@ createApp({
         const vectorMemorySearchSortMode = ref('time');
         const isVectorMemorySearching = ref(false);
         const memoryGraphView = ref('list');
-        const memoryRelationCanvas = ref(null);
         const isClassicBatchExtracting = ref(false);
         const classicBatchExtractProgress = ref({ current: 0, total: 0 });
         let _vectorMemorySearchAbort = null;
@@ -8538,10 +8537,6 @@ ${content}
 
         const setMemoryGraphView = (view) => {
             memoryGraphView.value = view;
-            if (view === 'relations') {
-                nextTick(() => drawRelationView());
-                return;
-            }
         };
 
         // --- 差异式事实层（P1：抽取 / P2：整理） ---
@@ -9147,99 +9142,6 @@ ${content}
             }
         };
 
-        const relationViewData = computed(() => {
-            const lib = profileLib();
-            if (!lib || !memoryProfile.value) return null;
-            return lib.buildRelationViewData(memoryProfile.value, { userRoleName: user.name || '我' });
-        });
-
-        const drawRelationView = () => {
-            const canvas = memoryRelationCanvas.value;
-            const data = relationViewData.value;
-            if (!canvas || !data || data.nodes.length === 0) return;
-            const rect = canvas.getBoundingClientRect();
-            const dpr = window.devicePixelRatio || 1;
-            const width = Math.max(1, Math.round(rect.width * dpr));
-            const height = Math.max(1, Math.round(rect.height * dpr));
-            if (canvas.width !== width || canvas.height !== height) {
-                canvas.width = width;
-                canvas.height = height;
-            }
-            const ctx = canvas.getContext('2d');
-            ctx.clearRect(0, 0, width, height);
-            const cx = width / 2;
-            const cy = height / 2;
-            const baseRadius = Math.min(width, height) * 0.30;
-            const positions = new Map();
-            const nodeByRadius = new Map();
-            data.nodes.forEach(node => nodeByRadius.set(node.label, node.radius));
-            const byRadius = new Map();
-            data.nodes.forEach(node => {
-                if (!byRadius.has(node.radius)) byRadius.set(node.radius, []);
-                byRadius.get(node.radius).push(node);
-            });
-            byRadius.forEach((group, radius) => {
-                const ring = radius === 0 ? 0 : baseRadius * radius;
-                group.forEach((node, index) => {
-                    const angle = (index / group.length) * Math.PI * 2 - Math.PI / 2;
-                    positions.set(node.label, { x: cx + ring * Math.cos(angle), y: cy + ring * Math.sin(angle) });
-                });
-            });
-            data.edges.forEach(edge => {
-                const from = positions.get(edge.from);
-                const to = positions.get(edge.to);
-                if (!from || !to) return;
-                const dx = to.x - from.x;
-                const dy = to.y - from.y;
-                const dist = Math.max(1, Math.hypot(dx, dy));
-                const arrowSize = 8;
-                const headX = to.x - (dx / dist) * arrowSize;
-                const headY = to.y - (dy / dist) * arrowSize;
-                ctx.beginPath();
-                ctx.moveTo(from.x, from.y);
-                ctx.lineTo(headX, headY);
-                ctx.strokeStyle = 'rgba(245, 158, 11, 0.7)';
-                ctx.lineWidth = 1.5;
-                ctx.stroke();
-                const angle = Math.atan2(dy, dx);
-                ctx.beginPath();
-                ctx.moveTo(to.x, to.y);
-                ctx.lineTo(
-                    to.x - arrowSize * Math.cos(angle - Math.PI / 6),
-                    to.y - arrowSize * Math.sin(angle - Math.PI / 6)
-                );
-                ctx.lineTo(
-                    to.x - arrowSize * Math.cos(angle + Math.PI / 6),
-                    to.y - arrowSize * Math.sin(angle + Math.PI / 6)
-                );
-                ctx.closePath();
-                ctx.fillStyle = 'rgba(245, 158, 11, 0.8)';
-                ctx.fill();
-                const labelX = (from.x + to.x) / 2;
-                const labelY = (from.y + to.y) / 2 - 4;
-                ctx.font = `${Math.max(10, Math.round(width / 60))}px sans-serif`;
-                ctx.fillStyle = 'rgba(120, 80, 20, 0.9)';
-                ctx.textAlign = 'center';
-                ctx.fillText(edge.relation, labelX, labelY);
-            });
-            data.nodes.forEach(node => {
-                const pos = positions.get(node.label);
-                if (!pos) return;
-                const color = node.radius === 0 ? '#7c3aed' : node.radius === 1 ? '#14b8a6' : '#9ca3af';
-                ctx.beginPath();
-                ctx.arc(pos.x, pos.y, node.radius === 0 ? 10 : 8, 0, Math.PI * 2);
-                ctx.fillStyle = color;
-                ctx.fill();
-                ctx.strokeStyle = '#ffffff';
-                ctx.lineWidth = 2;
-                ctx.stroke();
-                ctx.font = `${Math.max(10, Math.round(width / 55))}px sans-serif`;
-                ctx.fillStyle = '#374151';
-                ctx.textAlign = 'center';
-                ctx.fillText(node.label, pos.x, pos.y + (node.radius === 0 ? 24 : 20));
-            });
-        };
-
         const getMemorySummaries = () => {
             if (!memorySummaries.value) {
                 memorySummaries.value = { long: '', short: '', batches: [], updatedAt: 0 };
@@ -9339,7 +9241,7 @@ ${content}
                     stream: false,
                     messages
                 }),
-                signal: withTimeoutSignal(signal)
+                signal: withTimeoutSignal(signal, 180000)
             });
             const rawText = await response.text();
             if (!response.ok) {
@@ -9359,11 +9261,13 @@ ${content}
             if (_summaryInFlight) return false;
             const current = getMemorySummaries();
             const turnCount = buildConversationTurnSnapshot(chatHistory.value, { includeSystem: false }).turns.length;
-            const batch = lib.computePendingBatch(current.batches, turnCount, {
+            const state = {
                 keepFloors: memorySettings.keepFloors,
                 batchSize: lib.DEFAULTS.batchSize
-            }, { force: options.force === true });
-            if (!batch) {
+            };
+            const force = options.force === true;
+            const firstBatch = lib.computePendingBatch(current.batches, turnCount, state, { force });
+            if (!firstBatch) {
                 if (options.force === true) {
                     showToast(`当前对话 ${turnCount} 轮未超过保留窗口（${memorySettings.keepFloors} 轮），暂无需要总结的内容，继续聊天后会自动总结`, 'info');
                 }
@@ -9372,41 +9276,63 @@ ${content}
             const scopeId = getCurrentChatStorageScopeId();
             const profileSnapshot = profileLib() ? getMemoryProfile() : null;
             _summaryInFlight = true;
-            setSummaryProgress({ ...batch, status: 'running' }, false);
             try {
-                const parsed = await requestRollingSummary(batch, new AbortController().signal);
-                current.long = parsed.long || current.long;
-                current.short = parsed.short;
-                current.batches = [...current.batches, { ...batch, status: 'done', at: Date.now() }];
-                current.updatedAt = Date.now();
-                await saveMemorySummariesNow(scopeId, current);
-                if (parsed.profile && profileLib() && profileSnapshot) {
-                    const mergedRelations = profileLib().mergeRelations(parsed.profile.relations, profileSnapshot, batch.toTurn);
-                    const mergedCharacters = profileLib().mergeCharacters(parsed.profile.characters, profileSnapshot, batch.toTurn);
-                    const mergedPlots = profileLib().mergeOpenPlots(parsed.profile.openPlots, profileSnapshot, batch.toTurn);
-                    const mergedProfile = {
-                        ...profileSnapshot,
-                        relations: mergedRelations.relations,
-                        characters: mergedCharacters.characters,
-                        openPlots: mergedPlots.openPlots,
-                        updatedAt: Date.now()
-                    };
-                    if (getCurrentChatStorageScopeId() === scopeId) {
-                        memoryProfile.value = mergedProfile;
+                let processed = 0;
+                while (true) {
+                    const batch = lib.computePendingBatch(current.batches, turnCount, state, { force });
+                    if (!batch) break;
+                    setSummaryProgress({ ...batch, status: 'running' }, false);
+                    try {
+                        const parsed = await requestRollingSummary(batch, new AbortController().signal);
+                        current.long = parsed.long || current.long;
+                        current.short = parsed.short;
+                        current.batches = [...current.batches, { ...batch, status: 'done', at: Date.now() }];
+                        current.updatedAt = Date.now();
+                        await saveMemorySummariesNow(scopeId, current);
+                        if (parsed.profile && profileLib() && profileSnapshot) {
+                            const mergedCharacters = profileLib().mergeCharacters(parsed.profile.characters, profileSnapshot, batch.toTurn);
+                            const mergedPlots = profileLib().mergeOpenPlots(parsed.profile.openPlots, profileSnapshot, batch.toTurn);
+                            const mergedProfile = {
+                                ...profileSnapshot,
+                                characters: mergedCharacters.characters,
+                                openPlots: mergedPlots.openPlots,
+                                updatedAt: Date.now()
+                            };
+                            if (getCurrentChatStorageScopeId() === scopeId) {
+                                memoryProfile.value = mergedProfile;
+                            }
+                            await saveMemoryProfileNow(scopeId, mergedProfile);
+                        }
+                        processed++;
+                    } catch (error) {
+                        const failedEntry = {
+                            ...batch,
+                            status: 'failed',
+                            at: Date.now(),
+                            error: String(error?.message || error)
+                        };
+                        current.batches = [...current.batches, failedEntry];
+                        current.updatedAt = Date.now();
+                        await saveMemorySummariesNow(scopeId, current).catch(() => { });
+                        setSummaryProgress({ ...batch, status: 'failed' });
+                        console.error('Rolling summary failed:', error);
+                        break;
                     }
-                    await saveMemoryProfileNow(scopeId, mergedProfile);
+                    if (processed > 200) break; // 安全上限，防止异常死循环
                 }
-                setSummaryProgress({ ...batch, status: 'done' });
+                if (processed > 0) {
+                    setSummaryProgress({ fromTurn: firstBatch.fromTurn, toTurn: current.batches[current.batches.length - 1]?.toTurn || firstBatch.toTurn, status: 'done' });
+                }
                 return true;
             } catch (error) {
                 if (error.name !== 'AbortError') {
                     current.batches = [...current.batches, {
-                        ...batch,
+                        ...firstBatch,
                         status: 'failed',
                         at: Date.now(),
                         error: String(error.message || error)
                     }];
-                    setSummaryProgress({ ...batch, status: 'failed' });
+                    setSummaryProgress({ ...firstBatch, status: 'failed' });
                     console.error('Rolling summary failed:', error);
                 }
                 return false;
@@ -13271,7 +13197,6 @@ image###生成的提示词###
             currentView, showDescriptionPanel, showModelSelector, modelSelectionTarget, openModelSelector, showChatModelSelector, showCharacterEditor, showAddCharacterMenu, showPresetEditor, showUiTemplateEditor,
             memoryProviderSelectOptions, memoryProviderLabel,
             memorySummaries, memoryProfile, summaryProgress, retryRollingSummary, clearSummaryProgress, runRollingSummaryCheck,
-            memoryRelationCanvas,
             chatBindingLabel, embeddingBindingLabel, providerTags, activeProviderTag, getProviderDisplayName,
             showActiveToolEditor,
             showExportModal, sysInstruction, showInstructionPanel, exportItems, selectedExportIndices, // Export Modal

@@ -60,7 +60,7 @@ test('固定信息卡:角色状态与伏笔合并', () => {
     assert.equal(plots2.openPlots[0].status, 'closed');
 });
 
-test('固定信息卡:注入文本以 {{user}} 为中心且为有向边格式', () => {
+test('固定信息卡:注入文本只含动态状态与伏笔，不含关系', () => {
     const profile = {
         characters: [{ name: '林夕瑶', status: '剑修' }],
         relations: [
@@ -73,41 +73,20 @@ test('固定信息卡:注入文本以 {{user}} 为中心且为有向边格式', 
     };
     const text = memoryProfile.buildProfileContext(profile, { userRoleName: '我' });
     assert.ok(text.includes('<role_profile>'));
-    assert.ok(text.includes('我→林夕瑶:恋人'));
-    assert.ok(text.includes('林夕瑶→我:恋人'));
-    assert.ok(text.includes('我→师父:学生'));
-    assert.ok(!text.includes('旧友→我'));
+    assert.ok(!text.includes('恋人'));
+    assert.ok(!text.includes('→'));
     assert.ok(text.includes('林夕瑶:剑修'));
     assert.ok(text.includes('调查失踪案（三日后）'));
 });
 
-test('固定信息卡:关系视图数据以用户为中心分层', () => {
-    const profile = {
-        relations: [
-            { from: '我', to: '林夕瑶', relation: '恋人', status: 'active' },
-            { from: '我', to: '师父', relation: '学生', status: 'active' },
-            { from: '林夕瑶', to: '阿七', relation: '好友', status: 'active' }
-        ]
-    };
-    const data = memoryProfile.buildRelationViewData(profile, { userRoleName: '我' });
-    assert.equal(data.center, '我');
-    assert.equal(data.nodes.find(n => n.label === '我').radius, 0);
-    assert.equal(data.nodes.find(n => n.label === '林夕瑶').radius, 1);
-    assert.equal(data.nodes.find(n => n.label === '师父').radius, 1);
-    assert.equal(data.nodes.find(n => n.label === '阿七').radius, 2);
-    assert.equal(data.edges.length, 3);
-});
-
-test('固定信息卡:index.html 加载模块并提供关系视图', () => {
+test('固定信息卡:index.html 加载模块且不再有关系视图', () => {
     assert.ok(html.includes('assets/js/memory-profile.js'));
-    assert.ok(html.includes("setMemoryGraphView('relations')"));
-    assert.ok(html.includes('ref="memoryRelationCanvas"'));
-    assert.ok(html.includes('关系表（有向边）'));
+    assert.ok(!html.includes("setMemoryGraphView('relations')"));
+    assert.ok(!html.includes('memoryRelationCanvas'));
 });
 
-test('固定信息卡:app.js 接入存储、注入与渲染', () => {
+test('固定信息卡:app.js 接入存储与注入，移除关系渲染', () => {
     assert.ok(app.includes("'memory_profile'"));
-    assert.ok(app.includes('buildRelationViewData'));
-    assert.ok(app.includes('drawRelationView'));
-    assert.ok(app.includes('memoryRelationCanvas'));
+    assert.ok(!app.includes('drawRelationView'));
+    assert.ok(!app.includes('memoryRelationCanvas'));
 });

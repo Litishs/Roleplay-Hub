@@ -157,11 +157,6 @@
         const current = normalizeProfile(profile);
         const userRoleName = String(options.userRoleName || '我').trim();
         const parts = [];
-        const activeRelations = current.relations.filter(edge => edge.status !== 'ended');
-        if (activeRelations.length > 0) {
-            const lines = activeRelations.map(edge => `${edge.from}→${edge.to}:${edge.relation}`);
-            parts.push(`<relations>${lines.join('; ')}</relations>`);
-        }
         const activeCharacters = current.characters.filter(char => String(char.status || '').trim());
         if (activeCharacters.length > 0) {
             const lines = activeCharacters.map(char => `${char.name}:${char.status}`);
@@ -175,7 +170,7 @@
         if (parts.length === 0) return '';
         return [
             '<role_profile>',
-            `  <description>以下为固定信息卡：角色状态、关键关系与未决伏笔。关系为有向边（主体→对象），以 ${userRoleName} 为参照中心。</description>`,
+            `  <description>以下为记忆动态信息卡：剧情中变化的角色动态状态与未决伏笔；静态角色关系以世界书为准，不在此重复。</description>`,
             ...parts.map(part => indent(part, 2)),
             '</role_profile>'
         ].join('\n');

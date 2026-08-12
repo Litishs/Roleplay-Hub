@@ -18,10 +18,15 @@ test('滚动摘要:窗口外攒满一批时返回批次区间', () => {
     assert.deepEqual(pending, { fromTurn: 1, toTurn: 8 });
 });
 
-test('滚动摘要:手动强制模式忽略批次下限', () => {
-    const pending = memorySummary.computePendingBatch([], 20, { keepFloors: 16, batchSize: 8 }, { force: true });
-    assert.deepEqual(pending, { fromTurn: 1, toTurn: 4 });
+test('滚动摘要:强制模式按批推进，不足一批也处理', () => {
+    const first = memorySummary.computePendingBatch([], 30, { keepFloors: 16, batchSize: 8 }, { force: true });
+    assert.deepEqual(first, { fromTurn: 1, toTurn: 8 });
+    const done = [{ fromTurn: 1, toTurn: 8, status: 'done' }];
+    const second = memorySummary.computePendingBatch(done, 30, { keepFloors: 16, batchSize: 8 }, { force: true });
+    assert.deepEqual(second, { fromTurn: 9, toTurn: 14 });
     assert.equal(memorySummary.computePendingBatch([], 16, { keepFloors: 16, batchSize: 8 }, { force: true }), null);
+    // 自动模式不足一批不触发
+    assert.equal(memorySummary.computePendingBatch([], 22, { keepFloors: 16, batchSize: 8 }), null);
 });
 
 test('滚动摘要:已总结批次推进后再触发下一批', () => {
@@ -55,6 +60,8 @@ test('滚动摘要:重写式消息包含旧摘要、批次原文与时间锚指�
     assert.ok(system.includes('滚动记忆整理器'));
     assert.ok(system.includes('{"short"'));
     assert.ok(system.includes('"profile"'));
+    assert.ok(system.includes('角色动态状态'));
+    assert.ok(system.includes('不重复世界书里已有的静态设定'));
     assert.ok(system.includes('禁止“几天前”“最近”这类模糊词'));
     assert.ok(joined.includes('旧摘要'));
     assert.ok(joined.includes('旧长期'));
@@ -106,9 +113,9 @@ test('滚动摘要:app.js 接入注入、触发与存储键', () => {
 
 test('记忆重构:单一引擎且旧模式/事实层 UI 已移除', () => {
     assert.ok(html.includes("setMemoryGraphView('summary')"));
-    assert.ok(html.includes("setMemoryGraphView('relations')"));
     assert.ok(!html.includes("setMemoryGraphView('graph')"));
     assert.ok(!html.includes("setMemoryGraphView('facts')"));
+    assert.ok(!html.includes("setMemoryGraphView('relations')"));
     assert.ok(!html.includes('总结模式'));
     assert.ok(!html.includes('事实层抽取'));
     assert.ok(!html.includes('剧情时钟'));
@@ -118,5 +125,12 @@ test('记忆重构:单一引擎且旧模式/事实层 UI 已移除', () => {
 
 test('立即总结按钮使用强制模式', () => {
     assert.ok(html.includes("runRollingSummaryCheck({ force: true })"));
-    assert.ok(app.includes("force: options.force === true"));
+    assert.ok(app.includes('const force = options.force === true'));
+});
+
+test('滚动总结循环处理全部待总结批次', () => {
+    assert.ok(app.includes('while (true)'));
+    assert.ok(app.includes('processed > 200'));
+    assert.ok(app.includes('withTimeoutSignal(signal, 180000)'));
+    assert.ok(app.includes('status: \'failed\''));
 });
