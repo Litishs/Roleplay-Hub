@@ -1430,6 +1430,9 @@ createApp({
         const VECTOR_KEEP_FLOORS_MIN = 8;
         const VECTOR_KEEP_FLOORS_MAX = 40;
         const VECTOR_KEEP_FLOORS_DEFAULT = 16;
+        const SUMMARY_BATCH_SIZE_MIN = 4;
+        const SUMMARY_BATCH_SIZE_MAX = 24;
+        const SUMMARY_BATCH_SIZE_DEFAULT = 12;
         const MIN_CONTEXT_FLOORS = 6;          // 原文现场窗口下限（质量保底）
         const LIST_PAGE_SIZE = 10;
         const memories = ref([]);
@@ -1448,6 +1451,7 @@ createApp({
             embeddingModel: '',
             classicModel: '',
             keepFloors: VECTOR_KEEP_FLOORS_DEFAULT,
+            summaryBatchSize: SUMMARY_BATCH_SIZE_DEFAULT,
             vectorTopK: MEMORY_VECTOR_DEFAULT_TOP_K,
             similarityThreshold: MEMORY_VECTOR_DEFAULT_SIMILARITY,
             defaultDepth: MEMORY_VECTOR_DEFAULT_DEPTH,
@@ -1457,6 +1461,8 @@ createApp({
         });
         const isBatchExtracting = ref(false);
         const batchExtractProgress = ref({ current: 0, total: 0 });
+        // 分片生成状态（自动补录可见性）：idle | building | done | error
+        const sliceBuildStatus = ref({ status: 'idle', message: '' });
         const vectorMemorySearchQuery = ref('');
         const vectorMemorySearchResults = ref([]);
         const vectorMemorySearchError = ref('');
@@ -1596,6 +1602,12 @@ createApp({
                 VECTOR_KEEP_FLOORS_MIN,
                 VECTOR_KEEP_FLOORS_MAX,
                 VECTOR_KEEP_FLOORS_DEFAULT
+            );
+            memorySettings.summaryBatchSize = normalizeKeepFloors(
+                memorySettings.summaryBatchSize,
+                SUMMARY_BATCH_SIZE_MIN,
+                SUMMARY_BATCH_SIZE_MAX,
+                SUMMARY_BATCH_SIZE_DEFAULT
             );
             const vectorTopK = Number(memorySettings.vectorTopK);
             memorySettings.vectorTopK = Number.isFinite(vectorTopK)
@@ -6089,6 +6101,11 @@ ${content}
                 ...wiGroups.global_note
             ];
 
+            // 记忆背景（滚动摘要 + 动态信息卡）：固定注入前缀，不随历史楼层压缩裁剪
+            const timelineDigestText = memorySettings.enabled
+                ? buildMemoryContextForPrompt()
+                : '';
+
             // Base Messages
             let messages = [
                 {
@@ -6115,6 +6132,14 @@ ${content}
                         ...wiGroups.before_char,
                         ...wiGroups.after_char
                     ]
+                });
+                safeTargetLimit += 1;
+            }
+
+            if (timelineDigestText) {
+                messages.push({
+                    role: 'user',
+                    content: timelineDigestText
                 });
                 safeTargetLimit += 1;
             }
@@ -6210,11 +6235,6 @@ ${content}
                     }
                 }
             }
-
-            // 记忆背景（滚动摘要 + 固定信息卡）计入前缀预算
-            const timelineDigestText = memorySettings.enabled
-                ? buildMemoryContextForPrompt()
-                : '';
 
             // 添加聊天记录（按 token 预算保留最近楼层，至少保留现场窗口下限）
             const contextBudget = getContextTokenBudget();
@@ -6322,23 +6342,6 @@ ${content}
                             content,
                             _worldInfoEntries: [entry]
                         });
-                    });
-                }
-
-                // 时间线摘要注入（摘要为主，P4）
-                if (timelineDigestText) {
-                    const reversedForDigest = [...finalMessages].reverse();
-                    let digestTargetIndex = -1;
-                    for (let i = 0; i < reversedForDigest.length; i++) {
-                        if (reversedForDigest[i].role === 'user' || reversedForDigest[i].role === 'assistant') {
-                            digestTargetIndex = reversedForDigest.length - 1 - i;
-                            break;
-                        }
-                    }
-                    if (digestTargetIndex < safeTargetLimit) digestTargetIndex = safeTargetLimit;
-                    finalMessages.splice(digestTargetIndex, 0, {
-                        role: 'user',
-                        content: timelineDigestText
                     });
                 }
 
@@ -9263,7 +9266,7 @@ ${content}
             const turnCount = buildConversationTurnSnapshot(chatHistory.value, { includeSystem: false }).turns.length;
             const state = {
                 keepFloors: memorySettings.keepFloors,
-                batchSize: lib.DEFAULTS.batchSize
+                batchSize: memorySettings.summaryBatchSize
             };
             const force = options.force === true;
             const firstBatch = lib.computePendingBatch(current.batches, turnCount, state, { force });
@@ -9279,7 +9282,7 @@ ${content}
             try {
                 let processed = 0;
                 while (true) {
-                    const batch = lib.computePendingBatch(current.batches, turnCount, state, { force });
+            const batch = lib.computePendingBatch(current.batches, turnCount, state, { force });
                     if (!batch) break;
                     setSummaryProgress({ ...batch, status: 'running' }, false);
                     try {
@@ -10609,7 +10612,11 @@ ${content}
                 ? !!globalThis.RPHLocalEmbedding
                 : !!getMemoryEmbeddingModel();
             if (!embeddingReady) {
-                if (manual) showToast(isLocalBackend ? '本地嵌入模块不可用' : '请先选择向量嵌入模型', 'warning');
+                sliceBuildStatus.value = {
+                    status: 'error',
+                    message: isLocalBackend ? '本地嵌入模块不可用' : '请先选择向量嵌入模型'
+                };
+                if (manual) showToast(sliceBuildStatus.value.message, 'warning');
                 return;
             }
 
@@ -10617,6 +10624,7 @@ ${content}
             _batchExtractAbort = batchController;
             _vectorBatchRescanRequested = false;
             isBatchExtracting.value = true;
+            sliceBuildStatus.value = { status: 'building', message: '' };
             batchExtractProgress.value = { current: 0, total: 0 };
             let totalAdded = 0;
 
@@ -10669,14 +10677,20 @@ ${content}
 
                 if (_batchExtractAbort === batchController) {
                     if (totalAdded > 0) {
+                        sliceBuildStatus.value = { status: 'done', message: `已生成 ${totalAdded} 个分片` };
                         if (manual) showToast(`向量补录完成：新增 ${totalAdded} 个分片`, 'success');
                     } else {
+                        sliceBuildStatus.value = { status: 'done', message: '没有需要补录的分片' };
                         if (manual) showNoMemoryNeededModal.value = true;
                     }
                 }
             } catch (error) {
                 if (_batchExtractAbort !== batchController) return;
                 if (error.name !== 'AbortError') {
+                    sliceBuildStatus.value = {
+                        status: 'error',
+                        message: String(error?.message || error)
+                    };
                     console.error('Vector memory patrol failed:', error);
                 }
             } finally {
@@ -13125,6 +13139,17 @@ image###生成的提示词###
                 );
             }
         });
+        const summaryBatchSizeSlider = computed({
+            get: () => memorySettings.summaryBatchSize,
+            set: (value) => {
+                memorySettings.summaryBatchSize = normalizeKeepFloors(
+                    value,
+                    SUMMARY_BATCH_SIZE_MIN,
+                    SUMMARY_BATCH_SIZE_MAX,
+                    SUMMARY_BATCH_SIZE_DEFAULT
+                );
+            }
+        });
         const getTokenUsageCategory = (type) => {
             if (['summary', 'embedding'].includes(type)) return 'memory';
             if (type === 'ui_template') return 'variables';
@@ -13230,9 +13255,9 @@ image###生成的提示词###
             settingsSectionsOpen, selectTtsService, refreshTtsStatus, testTtsVoice, ttsSpeakTextFor, toggleSpeakMessage, stopSpeaking,
             requestDiagnosticsCount, exportRequestDiagnostics,
             vectorMemorySearchQuery, vectorMemorySearchResults, vectorMemorySearchError, vectorMemorySearchSortMode, isVectorMemorySearching,
-            searchVectorMemories, clearVectorMemorySearch,
+            searchVectorMemories, clearVectorMemorySearch, sliceBuildStatus, startVectorBatchMemoryExtraction,
             memoryGraphView, setMemoryGraphView,
-            activeKeepFloors, keepFloorsSlider, keepFloorsSliderMin, keepFloorsSliderMax,
+            activeKeepFloors, keepFloorsSlider, keepFloorsSliderMin, keepFloorsSliderMax, summaryBatchSizeSlider,
             // 滑块值映射：4-10 为变量分析消息层数。
             uiTemplateAnalysisDepthSlider: computed({
                 get: () => Math.max(4, Math.min(10, Number(settings.uiTemplateAnalysisDepth) || 4)),

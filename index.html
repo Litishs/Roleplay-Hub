@@ -3387,6 +3387,32 @@
                                 <div class="relative bg-gray-50/60 p-3 rounded-xl border border-gray-100 mt-2">
                                     <div class="flex justify-between items-center mb-2">
                                         <div class="relative flex items-center">
+                                            <label class="text-xs font-medium text-gray-500">总结批次大小</label>
+                                            <button type="button"
+                                                @click.stop="settingsHelpTopic = settingsHelpTopic === 'summaryBatch' ? '' : 'summaryBatch'"
+                                                class="settings-help-trigger"
+                                                :class="{ 'is-open': settingsHelpTopic === 'summaryBatch' }"
+                                                :aria-expanded="settingsHelpTopic === 'summaryBatch'"
+                                                aria-label="查看总结批次大小说明">
+                                                <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                        d="M9.1 9a3 3 0 115.8 1.1c-.6 1.1-1.9 1.3-2.5 2.2-.3.4-.4.8-.4 1.2M12 17h.01"></path>
+                                                </svg>
+                                            </button>
+                                            <div v-if="settingsHelpTopic === 'summaryBatch'" class="settings-help-popover is-above">
+                                                <span class="settings-help-popover-content">每攒满多少轮窗口外的旧对话就总结一批（4–24 轮）。数值越小总结越频繁、摘要更新越及时，但 API 调用成本越高；数值越大越省，单批内容也越多。</span>
+                                            </div>
+                                        </div>
+                                        <span class="text-xs font-mono text-primary-600 bg-primary-50 px-1.5 py-0.5 rounded border border-primary-100">
+                                            {{ memorySettings.summaryBatchSize }} 轮/批
+                                        </span>
+                                    </div>
+                                    <input type="range" v-model.number="summaryBatchSizeSlider" min="4" max="24" step="2"
+                                        class="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary-500">
+                                </div>
+                                <div class="relative bg-gray-50/60 p-3 rounded-xl border border-gray-100 mt-2">
+                                    <div class="flex justify-between items-center mb-2">
+                                        <div class="relative flex items-center">
                                             <label class="text-xs font-medium text-gray-500">上下文 Token 预算</label>
                                             <button type="button"
                                                 @click.stop="settingsHelpTopic = settingsHelpTopic === 'contextBudget' ? '' : 'contextBudget'"
@@ -3450,6 +3476,24 @@
 
                     <div class="px-4 pb-4 pt-3 border-t border-gray-100 space-y-4">
                         <div v-show="memoryGraphView === 'list'" class="space-y-4">
+                        <div v-if="sliceBuildStatus.status !== 'idle' && memoryStats.vector === 0"
+                            :class="['rounded-xl px-3 py-2.5 text-xs font-bold border flex items-center gap-2',
+                                sliceBuildStatus.status === 'building' ? 'bg-amber-50 border-amber-200 text-amber-700'
+                                : sliceBuildStatus.status === 'error' ? 'bg-rose-50 border-rose-200 text-rose-700'
+                                : 'bg-emerald-50 border-emerald-100 text-emerald-700']">
+                            <span v-if="sliceBuildStatus.status === 'building'"
+                                class="inline-block w-3 h-3 border-2 border-amber-400 border-t-transparent rounded-full animate-spin flex-shrink-0"></span>
+                            <span class="flex-1">
+                                <template v-if="sliceBuildStatus.status === 'building'">正在生成原文分片…</template>
+                                <template v-else-if="sliceBuildStatus.status === 'error'">分片生成失败：{{ sliceBuildStatus.message }}</template>
+                                <template v-else>{{ sliceBuildStatus.message }}</template>
+                            </span>
+                            <button v-if="sliceBuildStatus.status === 'error'" type="button"
+                                @click="startVectorBatchMemoryExtraction({ manual: true })"
+                                class="flex-shrink-0 px-2 py-1 rounded-lg bg-rose-100 text-rose-700 hover:bg-rose-200 transition-colors">
+                                重试
+                            </button>
+                        </div>
                         <div class="grid grid-cols-2 gap-2">
                             <div class="rounded-xl bg-gray-50 border border-gray-100 px-3 py-2">
                                 <div class="text-[10px] font-bold text-gray-400 mb-1">总分片</div>

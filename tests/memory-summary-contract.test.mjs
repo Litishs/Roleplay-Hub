@@ -134,3 +134,27 @@ test('滚动总结循环处理全部待总结批次', () => {
     assert.ok(app.includes('withTimeoutSignal(signal, 180000)'));
     assert.ok(app.includes('status: \'failed\''));
 });
+
+test('记忆摘要固定注入前缀且不参与楼层裁剪', () => {
+    assert.ok(app.includes("const timelineDigestText = memorySettings.enabled"));
+    assert.ok(app.includes("content: timelineDigestText"));
+    assert.ok(app.includes('safeTargetLimit += 1;'));
+    assert.ok(!app.includes('时间线摘要注入（摘要为主，P4）'));
+});
+
+test('分片生成状态可见并可重试', () => {
+    assert.ok(app.includes('sliceBuildStatus'));
+    assert.ok(html.includes('sliceBuildStatus.status'));
+    assert.ok(html.includes('startVectorBatchMemoryExtraction({ manual: true })'));
+    assert.ok(app.includes('status: \'building\''));
+});
+
+test('总结批次大小可配置', () => {
+    assert.ok(app.includes('summaryBatchSize: SUMMARY_BATCH_SIZE_DEFAULT'));
+    assert.ok(app.includes('batchSize: memorySettings.summaryBatchSize'));
+    assert.ok(app.includes('const summaryBatchSizeSlider'));
+    assert.ok(html.includes('summaryBatchSizeSlider'));
+    assert.ok(html.includes('总结批次大小'));
+    assert.equal(memorySummary.normalizeState({ batchSize: 5 }).batchSize, 5);
+    assert.equal(memorySummary.normalizeState({ batchSize: 0 }).batchSize, memorySummary.DEFAULTS.batchSize);
+});
