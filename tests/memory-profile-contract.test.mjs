@@ -79,6 +79,47 @@ test('固定信息卡:注入文本只含动态状态与伏笔，不含关系', (
     assert.ok(text.includes('调查失踪案（三日后）'));
 });
 
+test('固定信息卡:过期标注——lastSeenTurn 超阈值标「未再出现」，重复输出刷新（v4）', () => {
+    const profile = memoryProfile.createEmptyProfile();
+    const merged = memoryProfile.mergeCharacters(
+        [{ name: '安娜', status: '净化者' }],
+        profile,
+        10
+    );
+    // 距第 10 轮超过 40 轮未再出现 → 标注
+    const staleText = memoryProfile.buildProfileContext(
+        { characters: merged.characters },
+        { userRoleName: '我', currentTurn: 60 }
+    );
+    assert.ok(staleText.includes('安娜:净化者（第10轮后未再出现）'));
+    // 未超阈值不标注
+    const freshText = memoryProfile.buildProfileContext(
+        { characters: merged.characters },
+        { userRoleName: '我', currentTurn: 30 }
+    );
+    assert.ok(freshText.includes('安娜:净化者'));
+    assert.ok(!freshText.includes('未再出现'));
+    // 模型重复输出（状态未变）刷新 lastSeenTurn，解除过期
+    const remerged = memoryProfile.mergeCharacters(
+        [{ name: '安娜', status: '净化者' }],
+        { characters: merged.characters },
+        55
+    );
+    const refreshedText = memoryProfile.buildProfileContext(
+        { characters: remerged.characters },
+        { userRoleName: '我', currentTurn: 60 }
+    );
+    assert.ok(refreshedText.includes('安娜:净化者'));
+    assert.ok(!refreshedText.includes('未再出现'));
+    // 伏笔同样支持过期标注
+    const plots = memoryProfile.mergeOpenPlots([{ summary: '寻找至宝' }], profile, 5);
+    const plotText = memoryProfile.buildProfileContext(
+        { openPlots: plots.openPlots },
+        { userRoleName: '我', currentTurn: 60 }
+    );
+    assert.ok(plotText.includes('寻找至宝（第5轮后未再出现）'));
+});
+
 test('固定信息卡:index.html 加载模块且不再有关系视图', () => {
     assert.ok(html.includes('assets/js/memory-profile.js'));
     assert.ok(!html.includes("setMemoryGraphView('relations')"));

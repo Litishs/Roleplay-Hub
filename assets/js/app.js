@@ -1444,6 +1444,7 @@ createApp({
         const memoryProfile = ref(null);
         const summaryProgress = ref(null); // {fromTurn,toTurn,status:'running'|'done'|'failed'}
         let _summaryInFlight = false;
+        let _summaryAbortController = null;
         let _summaryDoneTimer = null;
         const memorySettings = reactive({
             enabled: false,
@@ -9199,8 +9200,8 @@ ${content}
             }
         };
 
-        const collectTurnsForBatch = (fromTurn, toTurn) => {
-            const snapshot = buildConversationTurnSnapshot(chatHistory.value, { includeSystem: false });
+        const collectTurnsForBatch = (historySnapshot, fromTurn, toTurn) => {
+            const snapshot = buildConversationTurnSnapshot(historySnapshot || chatHistory.value, { includeSystem: false });
             return snapshot.turns
                 .filter(turnInfo => Number(turnInfo.turn) >= fromTurn && Number(turnInfo.turn) <= toTurn)
                 .map(turnInfo => ({
@@ -9210,18 +9211,22 @@ ${content}
                 }));
         };
 
-        const requestRollingSummary = async (batch, signal) => {
+        // v4：链快照——批次请求只读链启动时捕获的数据，杜绝切换角色/分支后的混合写入
+        const requestRollingSummary = async (batch, signal, context) => {
             const lib = summaryLib();
             if (!lib) throw new Error('滚动摘要模块未加载');
             const model = String(memorySettings.classicModel || '').trim();
             const memoryProvider = getMemoryProvider();
             if (!memoryProvider.apiUrl || !memoryProvider.apiKey) throw new Error('请先配置记忆供应商的 API 地址和 Key');
             if (!model) throw new Error('请先选择记忆模型');
-            const current = getMemorySummaries();
-            const profile = getMemoryProfile();
-            const turns = collectTurnsForBatch(batch.fromTurn, batch.toTurn);
+            const current = context.summaries || getMemorySummaries();
+            const profile = context.profile || getMemoryProfile();
+            const turns = collectTurnsForBatch(context.historySnapshot, batch.fromTurn, batch.toTurn);
             const profileText = profileLib()
-                ? profileLib().buildProfileContext(profile, { userRoleName: user.name || '用户' })
+                ? profileLib().buildProfileContext(profile, {
+                    userRoleName: context.userRoleName || '用户',
+                    currentTurn: batch.toTurn
+                })
                 : '';
             const messages = lib.buildRewriteMessages({
                 shortSummary: current.short,
@@ -9229,8 +9234,8 @@ ${content}
                 profileText,
                 batch,
                 turns,
-                characterName: currentCharacter.value?.name || '角色',
-                userRoleName: user.name || '用户'
+                characterName: context.characterName || '角色',
+                userRoleName: context.userRoleName || '用户'
             });
             const response = await fetch(getMemoryApiEndpoint('chat/completions'), {
                 method: 'POST',
@@ -9263,7 +9268,8 @@ ${content}
             if (!lib || !memorySettings.enabled || !currentCharacter.value?.uuid) return false;
             if (_summaryInFlight) return false;
             const current = getMemorySummaries();
-            const turnCount = buildConversationTurnSnapshot(chatHistory.value, { includeSystem: false }).turns.length;
+            const historySnapshot = chatHistory.value;
+            const turnCount = buildConversationTurnSnapshot(historySnapshot, { includeSystem: false }).turns.length;
             const state = {
                 keepFloors: memorySettings.keepFloors,
                 batchSize: memorySettings.summaryBatchSize
@@ -9277,37 +9283,54 @@ ${content}
                 return false;
             }
             const scopeId = getCurrentChatStorageScopeId();
-            const profileSnapshot = profileLib() ? getMemoryProfile() : null;
+            // v4 链快照：链内每批只读这里捕获的数据，切换角色/分支由 abortRollingSummary 中止，杜绝混合写入
+            const chainContext = {
+                summaries: current,
+                profile: profileLib() ? getMemoryProfile() : null,
+                historySnapshot,
+                characterName: currentCharacter.value?.name || '角色',
+                userRoleName: user.name || '用户'
+            };
+            const abortController = new AbortController();
+            _summaryAbortController = abortController;
             _summaryInFlight = true;
             try {
                 let processed = 0;
+                let chainProfile = chainContext.profile;
                 while (true) {
-            const batch = lib.computePendingBatch(current.batches, turnCount, state, { force });
+                    // 双保险：作用域已切换（中止信号丢失时）立即停链，保留已完成批次
+                    if (getCurrentChatStorageScopeId() !== scopeId) break;
+                    const batch = lib.computePendingBatch(current.batches, turnCount, state, { force });
                     if (!batch) break;
                     setSummaryProgress({ ...batch, status: 'running' }, false);
                     try {
-                        const parsed = await requestRollingSummary(batch, new AbortController().signal);
+                        const parsed = await requestRollingSummary(batch, abortController.signal, chainContext);
                         current.long = parsed.long || current.long;
                         current.short = parsed.short;
-                        current.batches = [...current.batches, { ...batch, status: 'done', at: Date.now() }];
+                        current.batches = lib.pruneCoveredFailedBatches([...current.batches, { ...batch, status: 'done', at: Date.now() }]);
                         current.updatedAt = Date.now();
                         await saveMemorySummariesNow(scopeId, current);
-                        if (parsed.profile && profileLib() && profileSnapshot) {
-                            const mergedCharacters = profileLib().mergeCharacters(parsed.profile.characters, profileSnapshot, batch.toTurn);
-                            const mergedPlots = profileLib().mergeOpenPlots(parsed.profile.openPlots, profileSnapshot, batch.toTurn);
-                            const mergedProfile = {
-                                ...profileSnapshot,
+                        if (parsed.profile && profileLib() && chainProfile) {
+                            // 链内逐批累计合并（旧实现在快照上合并，同链多批时只保留最后一批的信息卡更新）
+                            const mergedCharacters = profileLib().mergeCharacters(parsed.profile.characters, chainProfile, batch.toTurn);
+                            const mergedPlots = profileLib().mergeOpenPlots(parsed.profile.openPlots, chainProfile, batch.toTurn);
+                            chainProfile = {
+                                ...chainProfile,
                                 characters: mergedCharacters.characters,
                                 openPlots: mergedPlots.openPlots,
                                 updatedAt: Date.now()
                             };
                             if (getCurrentChatStorageScopeId() === scopeId) {
-                                memoryProfile.value = mergedProfile;
+                                memoryProfile.value = chainProfile;
                             }
-                            await saveMemoryProfileNow(scopeId, mergedProfile);
+                            await saveMemoryProfileNow(scopeId, chainProfile);
                         }
                         processed++;
                     } catch (error) {
+                        if (error?.name === 'AbortError') {
+                            clearSummaryProgress();
+                            break;
+                        }
                         const failedEntry = {
                             ...batch,
                             status: 'failed',
@@ -9341,6 +9364,15 @@ ${content}
                 return false;
             } finally {
                 _summaryInFlight = false;
+                if (_summaryAbortController === abortController) _summaryAbortController = null;
+            }
+        };
+
+        // v4：切换角色 / 分支 / 清空重建前调用，中止进行中的摘要链（AbortError 在链内静默退出）
+        const abortRollingSummary = () => {
+            if (_summaryAbortController) {
+                _summaryAbortController.abort();
+                _summaryAbortController = null;
             }
         };
 
@@ -9360,8 +9392,10 @@ ${content}
             if (current.long) parts.push(`<long_summary>\n${current.long}\n</long_summary>`);
             if (current.short) parts.push(`<short_summary>\n${current.short}\n</short_summary>`);
             if (memoryProfile.value && profileLib()) {
+                const currentTurn = buildConversationTurnSnapshot(chatHistory.value, { includeSystem: false }).turns.length;
                 const profileText = profileLib().buildProfileContext(memoryProfile.value, {
-                    userRoleName: user.name || '用户'
+                    userRoleName: user.name || '用户',
+                    currentTurn
                 });
                 if (profileText) parts.push(profileText);
             }
@@ -11783,6 +11817,7 @@ image###生成的提示词###
             if (!char?.uuid || !target || branchId === activeStoryBranchId.value || storyBranchSwitching.value) return;
             storyBranchSwitching.value = true;
             try {
+                abortRollingSummary();
                 if (!await flushCurrentBranchState()) return;
                 const targetScopeId = getStoryBranchScopeId(char.uuid, branchId);
                 const [savedChat, savedMemories, savedClassicMemories] = await Promise.all([
@@ -11972,6 +12007,7 @@ image###生成的提示词###
             if (previousCharacterIndex !== index) {
                 abortVectorBatchExtraction();
                 abortClassicBatchExtraction();
+                abortRollingSummary();
             }
             const char = characters.value[index];
             if (!char) {
@@ -13330,7 +13366,8 @@ image###生成的提示词###
             }),
             clearAllMemories: () => {
                 confirmAction('确定要清空并重建记忆吗？原文聊天记录会保留，摘要、关系与索引将从原文重建。此操作无法撤销。', async () => {
-                    // 滚动摘要（新引擎）：清空派生摘要层，原文保留可重建
+                    // 滚动摘要（新引擎）：先中止进行中的摘要链，再清空派生摘要层，原文保留可重建
+                    abortRollingSummary();
                     memorySummaries.value = null;
                     memoryProfile.value = null;
                     clearSummaryProgress();

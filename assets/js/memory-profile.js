@@ -85,6 +85,7 @@
 
     /**
      * 合并角色状态：按名字去重，同名字则刷新状态文本。
+     * 每次输出（含未变化）都刷新 lastSeenTurn，供注入时做过期标注（v4）。
      * @param {Array} incoming
      * @param {Object} profile
      * @param {number} [turn]
@@ -101,13 +102,16 @@
             const normalized = {
                 name,
                 status: String(char.status || '').trim(),
-                updatedTurn: Number(char.updatedTurn) || turn
+                updatedTurn: Number(char.updatedTurn) || turn,
+                lastSeenTurn: turn
             };
             if (map.has(name)) {
                 const old = map.get(name);
                 if (old.status !== normalized.status) {
-                    map.set(name, { ...old, ...normalized });
+                    map.set(name, { ...old, ...normalized, lastSeenTurn: turn });
                     updated++;
+                } else {
+                    map.set(name, { ...old, lastSeenTurn: turn });
                 }
             } else {
                 map.set(name, normalized);
@@ -122,7 +126,7 @@
     };
 
     /**
-     * 合并未决伏笔：按 summary 去重；状态 closed 时保留但标记关闭。
+     * 合并未决伏笔：按 summary 去重；状态 closed 时保留但标记关闭；重复输出刷新 lastSeenTurn。
      */
     const mergeOpenPlots = (incoming, profile, turn = 0) => {
         const current = normalizeProfile(profile);
@@ -135,7 +139,8 @@
                 summary,
                 status: plot.status === 'closed' ? 'closed' : 'open',
                 deadline: String(plot.deadline || '').trim(),
-                updatedTurn: Number(plot.updatedTurn) || turn
+                updatedTurn: Number(plot.updatedTurn) || turn,
+                lastSeenTurn: turn
             };
             if (!map.has(summary)) {
                 map.set(summary, normalized);
@@ -143,7 +148,9 @@
             } else {
                 const old = map.get(summary);
                 if (old.status !== normalized.status || old.deadline !== normalized.deadline) {
-                    map.set(summary, { ...old, ...normalized });
+                    map.set(summary, { ...old, ...normalized, lastSeenTurn: turn });
+                } else {
+                    map.set(summary, { ...old, lastSeenTurn: turn });
                 }
             }
         });
@@ -152,19 +159,30 @@
 
     /**
      * 构建注入文本（{{user}} 为中心，紧凑格式）。
+     * v4：距 currentTurn 超过 staleAfter 轮未再出现（lastSeenTurn）的条目追加过期标注，不删除数据。
      */
     const buildProfileContext = (profile, options = {}) => {
         const current = normalizeProfile(profile);
         const userRoleName = String(options.userRoleName || '我').trim();
+        const currentTurn = Math.max(0, Math.floor(Number(options.currentTurn) || 0));
+        const staleAfter = Math.max(1, Math.floor(Number(options.staleAfter) || 40));
+        const staleNote = (entry) => {
+            const lastSeenTurn = Math.floor(Number(entry?.lastSeenTurn) || 0);
+            if (!currentTurn || !lastSeenTurn) return '';
+            return currentTurn - lastSeenTurn >= staleAfter ? `（第${lastSeenTurn}轮后未再出现）` : '';
+        };
         const parts = [];
         const activeCharacters = current.characters.filter(char => String(char.status || '').trim());
         if (activeCharacters.length > 0) {
-            const lines = activeCharacters.map(char => `${char.name}:${char.status}`);
+            const lines = activeCharacters.map(char => `${char.name}:${char.status}${staleNote(char)}`);
             parts.push(`<character_status>${lines.join('; ')}</character_status>`);
         }
         const open = current.openPlots.filter(plot => plot.status !== 'closed');
         if (open.length > 0) {
-            const lines = open.map(plot => plot.deadline ? `${plot.summary}（${plot.deadline}）` : plot.summary);
+            const lines = open.map(plot => {
+                const label = plot.deadline ? `${plot.summary}（${plot.deadline}）` : plot.summary;
+                return `${label}${staleNote(plot)}`;
+            });
             parts.push(`<open_plots>${lines.join('; ')}</open_plots>`);
         }
         if (parts.length === 0) return '';

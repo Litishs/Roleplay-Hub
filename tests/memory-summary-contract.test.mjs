@@ -41,6 +41,42 @@ test('滚动摘要:失败批次不阻塞重新触发同一批', () => {
     assert.deepEqual(pending, { fromTurn: 1, toTurn: 8 });
 });
 
+test('滚动摘要:失败空洞优先补，不被后续完成批次跨过（v4 真机场景）', () => {
+    // 真机数据形态：1-88 done、89-96 failed、97-120 done → 下一批必须回到 89
+    const batches = [
+        { fromTurn: 1, toTurn: 88, status: 'done' },
+        { fromTurn: 89, toTurn: 96, status: 'failed' },
+        { fromTurn: 97, toTurn: 120, status: 'done' }
+    ];
+    const pending = memorySummary.computePendingBatch(batches, 157, { keepFloors: 32, batchSize: 12 });
+    assert.deepEqual(pending, { fromTurn: 89, toTurn: 100 });
+    // 空洞补上后（89-100 done）继续从 121 推进：尾部 5 轮未攒满一批，自动模式不触发、force 处理
+    const repaired = [
+        { fromTurn: 1, toTurn: 88, status: 'done' },
+        { fromTurn: 89, toTurn: 100, status: 'done' },
+        { fromTurn: 97, toTurn: 120, status: 'done' }
+    ];
+    assert.equal(memorySummary.computePendingBatch(repaired, 157, { keepFloors: 32, batchSize: 12 }), null);
+    assert.deepEqual(
+        memorySummary.computePendingBatch(repaired, 157, { keepFloors: 32, batchSize: 12 }, { force: true }),
+        { fromTurn: 121, toTurn: 125 }
+    );
+});
+
+test('滚动摘要:被 done 覆盖的失败记录清理，部分覆盖的保留', () => {
+    const batches = [
+        { fromTurn: 1, toTurn: 88, status: 'done' },
+        { fromTurn: 89, toTurn: 96, status: 'failed' },
+        { fromTurn: 89, toTurn: 100, status: 'done' },
+        { fromTurn: 105, toTurn: 112, status: 'failed' },
+        { fromTurn: 113, toTurn: 120, status: 'done' }
+    ];
+    const pruned = memorySummary.pruneCoveredFailedBatches(batches);
+    assert.equal(pruned.filter(b => b.status === 'failed').length, 1);
+    assert.ok(pruned.some(b => b.status === 'failed' && b.fromTurn === 105));
+    assert.ok(!pruned.some(b => b.status === 'failed' && b.fromTurn === 89));
+});
+
 test('滚动摘要:重写式消息包含旧摘要、批次原文与时间锚指令', () => {
     const messages = memorySummary.buildRewriteMessages({
         shortSummary: '旧摘要',
@@ -63,6 +99,11 @@ test('滚动摘要:重写式消息包含旧摘要、批次原文与时间锚指�
     assert.ok(system.includes('角色动态状态'));
     assert.ok(system.includes('不重复世界书里已有的静态设定'));
     assert.ok(system.includes('禁止“几天前”“最近”这类模糊词'));
+    // v4：时间锚只能摘自原文时间表达，禁止提示词示例泄漏（承和年号来自旧提示词示例）
+    assert.ok(!system.includes('承和'));
+    assert.ok(system.includes('只能摘自原文中实际出现的时间表达'));
+    assert.ok(system.includes('禁止虚构原文中不存在的历法、年号或日期'));
+    assert.ok(system.includes('写“第 N 轮”'));
     assert.ok(joined.includes('旧摘要'));
     assert.ok(joined.includes('旧长期'));
     assert.ok(joined.includes('旧固定信息卡'));
@@ -133,6 +174,19 @@ test('滚动总结循环处理全部待总结批次', () => {
     assert.ok(app.includes('processed > 200'));
     assert.ok(app.includes('withTimeoutSignal(signal, 180000)'));
     assert.ok(app.includes('status: \'failed\''));
+});
+
+test('滚动摘要:链内使用快照且切换角色/分支/清空重建时中止（v4）', () => {
+    // 链快照：批次请求只读链启动捕获的数据，不逐批读共享 ref
+    assert.ok(app.includes('const chainContext = {'));
+    assert.ok(app.includes('historySnapshot,'));
+    assert.ok(app.includes('requestRollingSummary(batch, abortController.signal, chainContext)'));
+    // 中止接线与每批前 scope 校验双保险
+    assert.ok(app.includes('const abortRollingSummary = () => {'));
+    assert.ok(app.includes('_summaryAbortController'));
+    assert.ok(app.includes('getCurrentChatStorageScopeId() !== scopeId'));
+    // 失败批次补上后自动清理记录
+    assert.ok(app.includes('pruneCoveredFailedBatches'));
 });
 
 test('记忆摘要固定注入前缀且不参与楼层裁剪', () => {
