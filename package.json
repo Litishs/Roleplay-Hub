@@ -4,7 +4,8 @@
     "private":  true,
     "description":  "Android build for Roleplay Hub",
     "scripts":  {
-                    "prepare:vendor":  "node scripts/prepare-vendor.mjs \u0026\u0026 node scripts/prepare-local-embedding.mjs",
+                    "prepare:vendor":  "node scripts/prepare-vendor.mjs \u0026\u0026 node scripts/prepare-local-embedding.mjs \u0026\u0026 node scripts/prepare-local-tts.mjs",
+                    "prepare:local-tts":  "node scripts/prepare-local-tts.mjs",
                     "build:css":  "tailwindcss -c tailwind.main.config.cjs -i assets/css/tailwind.input.css -o assets/generated/tailwind.css --minify \u0026\u0026 tailwindcss -c tailwind.character.config.cjs -i assets/css/tailwind.input.css -o assets/generated/character.css --minify",
                     "build:web":  "npm run prepare:vendor \u0026\u0026 npm run build:css \u0026\u0026 node scripts/build-web.mjs",
                     "test":  "node --test tests/*.test.mjs",

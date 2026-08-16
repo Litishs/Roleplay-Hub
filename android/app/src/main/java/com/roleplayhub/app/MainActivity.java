@@ -21,6 +21,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(NativeStoragePlugin.class);
         registerPlugin(ThemeBridgePlugin.class);
         registerPlugin(TTSSpeechPlugin.class);
+        registerPlugin(LocalTTSPlugin.class);
         WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
         super.onCreate(savedInstanceState);
 

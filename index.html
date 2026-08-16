@@ -2294,7 +2294,7 @@
                                                 <button type="button" @click="selectTtsService('local')"
                                                     :class="['p-3 rounded-xl border-2 text-left transition-all', settings.ttsService === 'local' ? 'border-teal-400 bg-teal-50/60' : 'border-gray-100']">
                                                     <div class="text-sm font-bold text-gray-700">本地模型</div>
-                                                    <div class="text-[10px] text-gray-400 mt-0.5">设备端神经 TTS，暂未接入</div>
+                                                    <div class="text-[10px] text-gray-400 mt-0.5">On-device neural TTS, voices download on demand</div>
                                                 </button>
                                             </div>
                                         </div>
@@ -2308,8 +2308,52 @@
                                                     <span class="text-xs font-bold" :class="ttsStatus.available ? 'text-emerald-600' : 'text-red-500'">{{ ttsStatusLabel }}</span>
                                                 </div>
                                             </div>
-                                            <div v-else class="bg-gray-50/60 p-3 rounded-xl border border-gray-100">
-                                                <div class="text-xs text-gray-500">本地 TTS 模型暂未接入，请选择「系统语音」引擎。</div>
+                                            <div v-else class="bg-gray-50/60 p-3 rounded-xl border border-gray-100 space-y-3">
+                                                <div class="flex items-center justify-between">
+                                                    <span class="text-xs font-medium text-gray-500">Engine status</span>
+                                                    <span class="text-xs font-bold" :class="ttsStatus.available ? 'text-emerald-600' : 'text-red-500'">{{ ttsStatusLabel }}</span>
+                                                </div>
+                                                <div v-if="!localTtsStatus.checked" class="text-xs text-gray-400">Checking local engine...</div>
+                                                <div v-else-if="!localTtsStatus.available" class="text-xs text-gray-500">Local neural TTS is only available in the Android app.</div>
+                                                <template v-else>
+                                                    <div v-for="voice in localTtsVoices" :key="voice.id"
+                                                        class="flex items-center justify-between gap-2 p-2.5 rounded-lg border border-gray-100 bg-white/80">
+                                                        <div class="min-w-0">
+                                                            <div class="text-xs font-bold text-gray-700 truncate">
+                                                                {{ voice.name }}
+                                                                <span class="font-mono text-[10px] font-normal text-gray-400 ml-1">~{{ voice.sizeMb }}MB</span>
+                                                            </div>
+                                                            <div class="text-[10px] text-gray-400 truncate">{{ voice.desc }}</div>
+                                                        </div>
+                                                        <div class="flex items-center gap-1.5 flex-shrink-0">
+                                                            <span v-if="voice.installed" class="text-[10px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-100 px-1.5 py-0.5 rounded">Installed</span>
+                                                            <button v-if="voice.installed" type="button" @click="removeLocalTtsVoice(voice.id)"
+                                                                class="px-2 py-1 text-[10px] font-bold text-red-500 bg-red-50 border border-red-100 hover:bg-red-100 rounded-lg transition-all active:scale-95">Remove</button>
+                                                            <button v-else-if="localTtsInstall && localTtsInstall.voiceId === voice.id" type="button" @click="cancelLocalTtsInstall"
+                                                                class="px-2 py-1 text-[10px] font-bold text-gray-500 bg-gray-100 hover:bg-gray-200 rounded-lg transition-all active:scale-95">Cancel</button>
+                                                            <button v-else type="button" :disabled="!!localTtsInstall" @click="installLocalTtsVoice(voice.id)"
+                                class="px-2 py-1 text-[10px] font-bold text-white bg-teal-500 hover:bg-teal-600 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg shadow-sm transition-all active:scale-95">Install</button>
+                                                        </div>
+                                                    </div>
+                                                    <div v-if="localTtsInstall" class="space-y-1">
+                                                        <div class="flex items-center justify-between text-[10px] text-gray-500">
+                                                            <span class="font-bold">{{ localTtsInstall.phase === 'extract' ? 'Extracting...' : 'Downloading...' }}</span>
+                                                            <span class="font-mono">{{ localTtsInstallPercent }}%</span>
+                                                        </div>
+                                                        <div class="h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                                                            <div class="h-full bg-teal-500 transition-all" :style="{ width: localTtsInstallPercent + '%' }"></div>
+                                                        </div>
+                                                    </div>
+                                                    <div v-if="localTtsVoiceOptions.length" class="flex items-center justify-between gap-2">
+                                                        <span class="text-xs font-medium text-gray-500 flex-shrink-0">Default voice</span>
+                                                        <select v-model="settings.ttsLocalVoice"
+                                                            class="flex-1 max-w-[60%] bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-teal-300">
+                                                            <option value="">Auto (first installed)</option>
+                                                            <option v-for="voice in localTtsVoiceOptions" :key="voice.id" :value="voice.id">{{ voice.name }}</option>
+                                                        </select>
+                                                    </div>
+                                                    <div class="text-[10px] text-gray-400 leading-relaxed">Voice models download on demand and stay on this device. The pitch slider is only approximated during playback for neural voices.</div>
+                                                </template>
                                             </div>
                                         </div>
 
@@ -5827,6 +5871,7 @@
     <script src="assets/js/default-presets.js"></script>
     <script src="assets/js/tts-text.js"></script>
     <script src="assets/js/tts-engine.js"></script>
+    <script src="assets/js/tts-local-engine.js"></script>
     <script src="assets/js/app.js"></script>
 </body>
 

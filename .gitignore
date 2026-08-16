@@ -6,6 +6,7 @@ assets/generated/
 android/.gradle/
 android/build/
 android/app/build/
+android/app/libs/
 android/local.properties
 android/keystore.properties
 android/keystore/
