@@ -7212,6 +7212,21 @@ ${content}
             }
         };
 
+        // v4：本地模型默认自动加载（静默，不弹确认/成功提示），手动按钮保留作重试入口
+        const ensureLocalEmbeddingReady = () => {
+            const embedder = globalThis.RPHLocalEmbedding;
+            if (!embedder || memorySettings.embeddingBackend !== 'local' || !memorySettings.enabled) return;
+            const info = embedder.getStatus?.() || {};
+            if (info.status === 'ready' || info.status === 'loading') return;
+            refreshLocalEmbeddingStatus();
+            embedder.ensureReady(memorySettings.localEmbeddingModel)
+                .then(refreshLocalEmbeddingStatus)
+                .catch(error => {
+                    console.warn('[Memory] local embedding autoload failed:', error);
+                    refreshLocalEmbeddingStatus();
+                });
+        };
+
         const localEmbeddingModelOptions = computed(() => {
             const models = globalThis.RPHLocalEmbedding?.MODELS || {};
             return Object.keys(models)
@@ -7224,7 +7239,7 @@ ${content}
             if (info.status === 'loading') return '模型加载中 ' + Math.round(Number(info.progress) || 0) + '%';
             if (info.status === 'error') return '加载失败: ' + String(info.error || '未知错误').slice(0, 40);
             if (info.status === 'unavailable') return '本地嵌入不可用';
-            return '未加载(首次使用时加载模型)';
+            return '未加载(将自动加载)';
         });
         const migrateClassicMemoriesToVectors = async () => {
             if (!currentCharacter.value?.uuid) { showToast('请先选择一个角色', 'info'); return 0; }
@@ -10676,8 +10691,8 @@ ${content}
                     const snapshot = buildConversationTurnSnapshot(chatHistory.value, { includeSystem: false });
                     const safeTurns = isConversationBusy.value ? snapshot.turns.slice(0, -1) : snapshot.turns;
                     const emptyTurnSet = new Set(emptyLog);
-                    const lastExtracted = Number(memorySettings.vectorExtractedTurns[extractedKey]) || 0;
-                    const chunks = safeTurns
+                    let lastExtracted = Number(memorySettings.vectorExtractedTurns[extractedKey]) || 0;
+                    let chunks = safeTurns
                         .filter(turnInfo => {
                             const turn = Number(turnInfo.turn) || 0;
                             if (!manual && turn <= lastExtracted) return false;
@@ -10688,6 +10703,26 @@ ${content}
                             endIdx: turnInfo.endIndex,
                             turnValue: turnInfo.turn
                         }));
+                    // v4 自愈：分片为 0 但标记称已提取（清空重建漏清标记等历史脏状态）→ 重置标记全量重扫
+                    if (!manual
+                        && memories.value.length === 0
+                        && lastExtracted > 0
+                        && chunks.length === 0
+                        && safeTurns.some(turnInfo => {
+                            const turn = Number(turnInfo.turn) || 0;
+                            return turn <= lastExtracted && !emptyTurnSet.has(turn);
+                        })) {
+                        delete memorySettings.vectorExtractedTurns[extractedKey];
+                        await saveMemorySettingsNow().catch(() => { });
+                        lastExtracted = 0;
+                        chunks = safeTurns
+                            .filter(turnInfo => !emptyTurnSet.has(Number(turnInfo.turn) || 0))
+                            .map(turnInfo => ({
+                                data: turnInfo.messages,
+                                endIdx: turnInfo.endIndex,
+                                turnValue: turnInfo.turn
+                            }));
+                    }
                     const scannedTurnCount = safeTurns.length;
                     const added = chunks.length > 0
                         ? await _doBatchEmbedMemoryChunks(chunks, batchController.signal, emptyLog, { interactive: manual })
@@ -10869,6 +10904,11 @@ ${content}
             () => memorySettings.classicModel
         ], ([enabled]) => {
             if (enabled && _initComplete) nextTick(() => startAutomaticMemoryPatrol());
+        });
+
+        // v4：切到本地嵌入后端时自动加载模型（默认加载，无需手动预载）
+        watch(() => memorySettings.embeddingBackend, () => {
+            if (_initComplete) ensureLocalEmbeddingReady();
         });
 
         // Character Management
@@ -12956,6 +12996,9 @@ image###生成的提示词###
             // 初始化守卫解除：此后 saveData 才允许写入 user / memorySettings
             _initComplete = true;
 
+            // v4：本地嵌入模型默认自动加载（记忆开启 + 后端为本地时）
+            ensureLocalEmbeddingReady();
+
             // Restore Last Active Session
             if (lastActiveCharacterId.value !== null && characters.value[lastActiveCharacterId.value]) {
                 // Restore character selection without clearing chat history (we load it from DB)
@@ -13372,8 +13415,22 @@ image###生成的提示词###
                     memoryProfile.value = null;
                     clearSummaryProgress();
                     if (currentCharacter.value?.uuid) {
-                        await deleteScopedStoredValue('memory_summaries', getCurrentChatStorageScopeId());
-                        await deleteScopedStoredValue('memory_profile', getCurrentChatStorageScopeId());
+                        const scopeId = getCurrentChatStorageScopeId();
+                        await deleteScopedStoredValue('memory_summaries', scopeId);
+                        await deleteScopedStoredValue('memory_profile', scopeId);
+                        // v4：同步重置向量已提取标记与空转日志，否则自动补录认为全部已归档，分片永远为 0
+                        const extractedKey = getMemoryVectorExtractedKey(scopeId);
+                        const emptyKey = getMemoryEmptyTurnsKey(scopeId);
+                        let settingsTouched = false;
+                        if (memorySettings.vectorExtractedTurns && extractedKey in memorySettings.vectorExtractedTurns) {
+                            delete memorySettings.vectorExtractedTurns[extractedKey];
+                            settingsTouched = true;
+                        }
+                        if (memorySettings.emptyTurns && emptyKey in memorySettings.emptyTurns) {
+                            delete memorySettings.emptyTurns[emptyKey];
+                            settingsTouched = true;
+                        }
+                        if (settingsTouched) await saveMemorySettingsNow();
                     }
                     abortVectorBatchExtraction();
                     memories.value = [];

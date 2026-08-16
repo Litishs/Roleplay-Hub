@@ -203,6 +203,23 @@ test('分片生成状态可见并可重试', () => {
     assert.ok(app.includes('status: \'building\''));
 });
 
+test('分片标记：清空重建重置标记，自动补录对脏状态自愈（v4）', () => {
+    // 清空重建必须同步清 vectorExtractedTurns / emptyTurns，否则自动补录空转、分片永远为 0
+    assert.ok(app.includes('delete memorySettings.vectorExtractedTurns[extractedKey]'));
+    assert.ok(app.includes('delete memorySettings.emptyTurns[emptyKey]'));
+    // 自愈：分片为 0 但标记 > 0 → 重置标记全量重扫
+    assert.ok(app.includes('let lastExtracted = Number(memorySettings.vectorExtractedTurns[extractedKey]) || 0'));
+    assert.ok(app.includes('memories.value.length === 0'));
+});
+
+test('本地嵌入模型默认自动加载（v4）', () => {
+    assert.ok(app.includes('const ensureLocalEmbeddingReady = () => {'));
+    assert.ok(app.includes('ensureLocalEmbeddingReady();'));
+    assert.ok(app.includes("watch(() => memorySettings.embeddingBackend"));
+    assert.ok(app.includes('未加载(将自动加载)'));
+    assert.ok(!app.includes('未加载(首次使用时加载模型)'));
+});
+
 test('总结批次大小可配置', () => {
     assert.ok(app.includes('summaryBatchSize: SUMMARY_BATCH_SIZE_DEFAULT'));
     assert.ok(app.includes('batchSize: memorySettings.summaryBatchSize'));
