@@ -294,6 +294,9 @@ public class NativeStoragePlugin extends Plugin {
     public void mediaWriteDataUrl(PluginCall call) {
         String dataUrl = call.getString("dataUrl");
         String preferredName = call.getString("preferredName", "");
+        if (preferredName == null || preferredName.trim().isEmpty()) {
+            preferredName = call.getString("fileName", "");
+        }
         if (dataUrl == null || !dataUrl.startsWith("data:")) { call.reject("A data URL is required"); return; }
         try {
             int comma = dataUrl.indexOf(',');
@@ -774,6 +777,17 @@ public class NativeStoragePlugin extends Plugin {
         if ("image/webp".equalsIgnoreCase(mimeType)) return ".webp";
         if ("image/gif".equalsIgnoreCase(mimeType)) return ".gif";
         if ("image/jpeg".equalsIgnoreCase(mimeType)) return ".jpg";
+        // Audio extensions keep TTS reference clips recognizable for the native decoder
+        if ("audio/wav".equalsIgnoreCase(mimeType) || "audio/x-wav".equalsIgnoreCase(mimeType)
+                || "audio/wave".equalsIgnoreCase(mimeType)) return ".wav";
+        if ("audio/mp4".equalsIgnoreCase(mimeType) || "audio/m4a".equalsIgnoreCase(mimeType)
+                || "audio/x-m4a".equalsIgnoreCase(mimeType) || "audio/aac".equalsIgnoreCase(mimeType)
+                || "audio/x-aac".equalsIgnoreCase(mimeType) || "audio/3gpp".equalsIgnoreCase(mimeType)) return ".m4a";
+        if ("audio/webm".equalsIgnoreCase(mimeType)) return ".webm";
+        if ("audio/ogg".equalsIgnoreCase(mimeType) || "application/ogg".equalsIgnoreCase(mimeType)) return ".ogg";
+        if ("audio/mpeg".equalsIgnoreCase(mimeType) || "audio/mp3".equalsIgnoreCase(mimeType)) return ".mp3";
+        if ("audio/flac".equalsIgnoreCase(mimeType) || "audio/x-flac".equalsIgnoreCase(mimeType)) return ".flac";
+        if ("audio/amr".equalsIgnoreCase(mimeType) || "audio/amr-wb".equalsIgnoreCase(mimeType)) return ".amr";
         return ".bin";
     }
 

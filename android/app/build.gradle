@@ -42,6 +42,11 @@ android {
         versionCode appVersionCode
         versionName appVersionName
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        // Local neural TTS (sherpa-onnx) only ships arm64 native libs for now;
+        // add 'armeabi-v7a' here if an older device needs supporting.
+        ndk {
+            abiFilters 'arm64-v8a'
+        }
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
              // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
@@ -66,7 +71,12 @@ repositories {
 }
 
 dependencies {
-    implementation fileTree(include: ['*.jar'], dir: 'libs')
+    // sherpa-onnx.aar is fetched by scripts/prepare-local-tts.mjs (gitignored)
+    implementation fileTree(include: ['*.jar', '*.aar'], dir: 'libs')
+    // tar.bz2 extraction for runtime-downloaded TTS voice models
+    implementation "org.apache.commons:commons-compress:1.27.1"
+    // sherpa-onnx AAR exposes Kotlin types (Function1 callback)
+    implementation "org.jetbrains.kotlin:kotlin-stdlib:2.0.21"
     implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
     implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
     implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
