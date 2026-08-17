@@ -2328,7 +2328,7 @@
                                                         <div class="flex items-center gap-1.5 flex-shrink-0">
                                                             <span v-if="voice.installed" class="text-[10px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-100 px-1.5 py-0.5 rounded">Installed</span>
                                                             <button v-if="voice.installed" type="button" @click="removeLocalTtsVoice(voice.id)"
-                                                                class="px-2 py-1 text-[10px] font-bold text-red-500 bg-red-50 border border-red-100 hover:bg-red-100 rounded-lg transition-all active:scale-95">Remove</button>
+                                                                class="px-2 py-1 text-[10px] font-bold text-red-500 bg-red-50 border border-red-100 hover:bg-red-100 rounded-lg transition-all active:scale-95">Clear</button>
                                                             <button v-else-if="localTtsInstall && localTtsInstall.voiceId === voice.id" type="button" @click="cancelLocalTtsInstall"
                                                                 class="px-2 py-1 text-[10px] font-bold text-gray-500 bg-gray-100 hover:bg-gray-200 rounded-lg transition-all active:scale-95">Cancel</button>
                                                             <button v-else type="button" :disabled="!!localTtsInstall" @click="installLocalTtsVoice(voice.id)"
@@ -2351,6 +2351,21 @@
                                                             <option value="">Auto (first installed)</option>
                                                             <option v-for="voice in localTtsVoiceOptions" :key="voice.id" :value="voice.id">{{ voice.name }}</option>
                                                         </select>
+                                                    </div>
+                                                    <div v-if="localTtsSelectedVoiceIsClone" class="space-y-2 p-3 rounded-lg border border-purple-100 bg-purple-50/40">
+                                                        <div class="flex items-center justify-between">
+                                                            <span class="text-xs font-bold text-purple-700">Clone voice reference</span>
+                                                            <button v-if="settings.ttsCloneReferenceUri" type="button" @click="removeVoiceClip"
+                                                                class="px-2 py-1 text-[10px] font-bold text-purple-500 bg-purple-50 border border-purple-100 hover:bg-purple-100 rounded-lg transition-all active:scale-95">Remove</button>
+                                                        </div>
+                                                        <input type="file" accept="audio/*" @change="handleVoiceClipUpload"
+                                                            class="block w-full text-xs text-gray-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-purple-100 file:text-purple-700 hover:file:bg-purple-200 file:cursor-pointer">
+                                                        <textarea v-model="settings.ttsCloneReferenceText" rows="2" maxlength="500"
+                                                            placeholder="Reference transcript — the exact text spoken in the clip"
+                                                            class="w-full bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-purple-300"></textarea>
+                                                        <div class="text-[10px]" :class="cloneVoiceReady ? 'text-emerald-600' : 'text-gray-400'">
+                                                            {{ cloneVoiceReady ? 'Reference clip and transcript ready.' : 'Upload a clean 3-10s clip and type its exact transcript.' }}
+                                                        </div>
                                                     </div>
                                                     <div class="text-[10px] text-gray-400 leading-relaxed">Voice models download on demand and stay on this device. The pitch slider is only approximated during playback for neural voices.</div>
                                                 </template>

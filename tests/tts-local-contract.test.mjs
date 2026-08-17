@@ -32,11 +32,24 @@ test('voice catalog entries have https urls, mirrors, sizes and unique ids', () 
         assert.match(voice.id, /^[\w.-]+$/);
         assert.ok(!ids.has(voice.id), `duplicate voice id: ${voice.id}`);
         ids.add(voice.id);
-        assert.match(voice.url, /^https:\/\//);
-        assert.match(voice.url, /\.tar\.bz2$/);
-        assert.match(voice.mirrorUrl, /^https:\/\//);
         assert.equal(typeof voice.sizeMb, 'number');
         assert.ok(voice.sizeMb > 0);
+        if (Array.isArray(voice.files)) {
+            // Multi-file bundle (ZipVoice model archive + raw vocoder)
+            assert.equal(voice.type, 'zipvoice');
+            assert.ok(voice.files.length > 0);
+            for (const file of voice.files) {
+                assert.match(file.url, /^https:\/\//);
+                assert.equal(typeof file.kind, 'string');
+                assert.ok(file.kind === 'archive' || file.kind === 'raw');
+                if (file.kind === 'archive') assert.match(file.url, /\.tar\.bz2$/);
+                if (file.mirrorUrl) assert.match(file.mirrorUrl, /^https:\/\//);
+            }
+        } else {
+            assert.match(voice.url, /^https:\/\//);
+            assert.match(voice.url, /\.tar\.bz2$/);
+            assert.match(voice.mirrorUrl, /^https:\/\//);
+        }
     }
 });
 
@@ -66,6 +79,15 @@ test('index.html renders local voice management UI and drops the placeholder', (
     assert.doesNotMatch(html, /暂未接入/);
 });
 
+test('index.html renders clone voice reference controls for ZipVoice voices', () => {
+    assert.match(html, /localTtsSelectedVoiceIsClone/);
+    assert.match(html, /handleVoiceClipUpload/);
+    assert.match(html, /removeVoiceClip/);
+    assert.match(html, /v-model="settings\.ttsCloneReferenceText"/);
+    assert.match(html, /cloneVoiceReady/);
+    assert.match(html, /accept="audio\/\*"/);
+});
+
 test('app.js marks the local engine available and dispatches speak by service', () => {
     assert.match(app, /\{ id: 'local', name: '本地模型', desc: 'On-device neural TTS, voices download on demand', available: true \}/);
     assert.match(app, /ttsLocalVoice: ''/);
@@ -77,6 +99,10 @@ test('app.js marks the local engine available and dispatches speak by service', 
     assert.match(app, /const stopSpeaking = async \(\) => \{/);
     assert.match(app, /await localEngine\.stop\(\)/);
     assert.match(app, /localTtsStatus, localTtsVoices, localTtsInstall, localTtsInstallPercent, localTtsVoiceOptions,/);
+    assert.match(app, /localTtsSelectedVoiceIsClone/);
+    assert.match(app, /referenceUri = settings\.ttsCloneReferenceUri/);
+    assert.match(app, /referenceText = settings\.ttsCloneReferenceText/);
+    assert.match(app, /ttsLocalClearReference/);
 });
 
 test('MainActivity registers LocalTTSPlugin and the plugin exposes the method group', () => {
@@ -89,6 +115,7 @@ test('MainActivity registers LocalTTSPlugin and the plugin exposes the method gr
     assert.match(pluginSource, /public void ttsLocalDelete\(PluginCall call\)/);
     assert.match(pluginSource, /public void ttsLocalSpeak\(PluginCall call\)/);
     assert.match(pluginSource, /public void ttsLocalStop\(PluginCall call\)/);
+    assert.match(pluginSource, /public void ttsLocalClearReference\(PluginCall call\)/);
 });
 
 test('LocalTTSPlugin uses sherpa-onnx streaming synthesis and AudioTrack playback', () => {

@@ -685,6 +685,8 @@ createApp({
             ttsService: 'system',
             ttsVoice: '',
             ttsLocalVoice: '',
+            ttsCloneReferenceUri: '',
+            ttsCloneReferenceText: '',
             ttsRate: 1.0,
             ttsPitch: 1.0,
             ttsDialogueOnly: false,
@@ -7499,12 +7501,23 @@ ${content}
                     await refreshLocalTtsStatus();
                     if (engine.getStatus().installed.length) {
                         try {
-                            await engine.speak({
+                            const voiceId = getLocalTtsVoice();
+                            const isCloneVoice = isZipVoiceVoice(voiceId);
+                            const speakParams = {
                                 text,
-                                voice: getLocalTtsVoice(),
+                                voice: voiceId,
                                 rate: Number(settings.ttsRate) || 1,
                                 pitch: Number(settings.ttsPitch) || 1
-                            });
+                            };
+                            if (isCloneVoice) {
+                                if (!settings.ttsCloneReferenceUri || !settings.ttsCloneReferenceText) {
+                                    showToast('Clone voice needs a reference audio clip and transcript', 'info');
+                                    return speakTtsTextViaSystem(text);
+                                }
+                                speakParams.referenceUri = settings.ttsCloneReferenceUri;
+                                speakParams.referenceText = settings.ttsCloneReferenceText;
+                            }
+                            await engine.speak(speakParams);
                             return true;
                         } catch (error) {
                             console.warn('[TTS] local engine failed, falling back to system TTS:', error);
@@ -7611,6 +7624,58 @@ ${content}
                 showToast('Remove failed: ' + String(error?.message || error), 'error');
             }
         };
+
+        const isZipVoiceVoice = (voiceId) => {
+            const engine = globalThis.RPHLocalTts;
+            if (!engine || !engine.VOICES) return false;
+            const voice = engine.VOICES.find((v) => v.id === voiceId);
+            return voice != null && voice.type === 'zipvoice';
+        };
+
+        const handleVoiceClipUpload = async (event) => {
+            const file = event?.target?.files?.[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+                const dataUrl = e.target?.result;
+                if (!dataUrl || !dataUrl.startsWith('data:')) return;
+                try {
+                    const plugin = globalThis.Capacitor?.Plugins?.NativeStorage;
+                    if (!plugin?.mediaWriteDataUrl) {
+                        showToast('Storage plugin unavailable', 'error');
+                        return;
+                    }
+                    const result = await plugin.mediaWriteDataUrl({ dataUrl, preferredName: file.name });
+                    const uri = result?.uri || '';
+                    if (uri) {
+                        settings.ttsCloneReferenceUri = uri;
+                        showToast('Reference clip saved', 'info');
+                    } else {
+                        showToast('Failed to save reference clip', 'error');
+                    }
+                } catch (error) {
+                    console.warn('[TTS] voice clip save failed:', error);
+                    showToast('Save failed: ' + String(error?.message || error), 'error');
+                }
+            };
+            reader.readAsDataURL(file);
+            event.target.value = '';
+        };
+
+        const removeVoiceClip = () => {
+            settings.ttsCloneReferenceUri = '';
+            settings.ttsCloneReferenceText = '';
+            const plugin = globalThis.Capacitor?.Plugins?.LocalTTS;
+            if (plugin?.ttsLocalClearReference) {
+                plugin.ttsLocalClearReference().catch(() => { /* ignore */ });
+            }
+        };
+
+        const cloneVoiceReady = computed(() => {
+            return !!(settings.ttsCloneReferenceUri && settings.ttsCloneReferenceText.trim());
+        });
+
+        const localTtsSelectedVoiceIsClone = computed(() => isZipVoiceVoice(getLocalTtsVoice()));
 
         nextTick(() => {
             refreshTtsStatus();
@@ -13847,6 +13912,7 @@ image###生成的提示词###
             settingsSectionsOpen, selectTtsService, refreshTtsStatus, testTtsVoice, ttsSpeakTextFor, toggleSpeakMessage, stopSpeaking,
             localTtsStatus, localTtsVoices, localTtsInstall, localTtsInstallPercent, localTtsVoiceOptions,
             refreshLocalTtsStatus, installLocalTtsVoice, cancelLocalTtsInstall, removeLocalTtsVoice,
+            isZipVoiceVoice, localTtsSelectedVoiceIsClone, cloneVoiceReady, handleVoiceClipUpload, removeVoiceClip,
             requestDiagnosticsCount, exportRequestDiagnostics,
             isAnyMemoryProcessing: computed(() => isBatchExtracting.value || isClassicBatchExtracting.value),
             isActiveBatchExtracting: computed(() => memorySettings.mode === MEMORY_MODE_CLASSIC ? isClassicBatchExtracting.value : isBatchExtracting.value),

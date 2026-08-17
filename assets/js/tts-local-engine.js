@@ -23,6 +23,7 @@
                 id: 'vits-melo-tts-zh_en',
                 name: 'Melo',
                 desc: 'Natural female, Chinese + English',
+                type: 'vits',
                 sizeMb: 160,
                 url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-melo-tts-zh_en.tar.bz2',
                 mirrorUrl: 'https://hf-mirror.com/csukuangfj/vits-melo-tts-zh_en/resolve/main/vits-melo-tts-zh_en.tar.bz2'
@@ -31,9 +32,31 @@
                 id: 'vits-zh-hf-theresa',
                 name: 'Theresa',
                 desc: 'Light female, Chinese only',
+                type: 'vits',
                 sizeMb: 115,
                 url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-zh-hf-theresa.tar.bz2',
                 mirrorUrl: 'https://hf-mirror.com/csukuangfj/vits-zh-hf-theresa/resolve/main/vits-zh-hf-theresa.tar.bz2'
+            },
+            {
+                id: 'zipvoice-zh-en-emilia',
+                name: 'ZipVoice Clone',
+                desc: 'Zero-shot voice cloning, Chinese + English',
+                type: 'zipvoice',
+                sizeMb: 104,
+                files: [
+                    {
+                        url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/sherpa-onnx-zipvoice-distill-int8-zh-en-emilia.tar.bz2',
+                        mirrorUrl: 'https://hf-mirror.com/csukuangfj/sherpa-onnx-zipvoice-distill-int8-zh-en-emilia/resolve/main/sherpa-onnx-zipvoice-distill-int8-zh-en-emilia.tar.bz2',
+                        kind: 'archive',
+                        name: ''
+                    },
+                    {
+                        url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/vocoder-models/vocos_24khz.onnx',
+                        mirrorUrl: '',
+                        kind: 'raw',
+                        name: 'vocos_24khz.onnx'
+                    }
+                ]
             }
         ];
 
@@ -172,11 +195,16 @@
             state.error = '';
             state.install = { voiceId, phase: 'download', received: 0, total: 0 };
             try {
-                await plugin.ttsLocalDownload({
-                    voiceId: voice.id,
-                    url: voice.url,
-                    mirrorUrl: voice.mirrorUrl || ''
-                });
+                if (voice.files && voice.files.length > 0) {
+                    // Multi-file bundle (e.g. ZipVoice model archive + vocoder)
+                    await plugin.ttsLocalDownload({ voiceId: voice.id, files: voice.files });
+                } else {
+                    await plugin.ttsLocalDownload({
+                        voiceId: voice.id,
+                        url: voice.url,
+                        mirrorUrl: voice.mirrorUrl || ''
+                    });
+                }
             } catch (error) {
                 state.install = null;
                 throw error;
@@ -198,13 +226,13 @@
             state.ready = state.installed.length > 0;
         };
 
-        const speak = async ({ text, voice = '', rate = 1, pitch = 1 }) => {
+        const speak = async ({ text, voice = '', rate = 1, pitch = 1, referenceUri = '', referenceText = '' }) => {
             const plugin = getPlugin();
             if (!plugin?.ttsLocalSpeak) throw new Error('Local TTS plugin unavailable');
             const safeText = String(text || '').trim();
             if (!safeText) throw new Error('Nothing to speak');
             if (!state.installed.length) {
-                state.checked || await refreshStatus();
+                if (!state.checked) await refreshStatus();
                 if (!state.installed.length) throw new Error('No local voice installed');
             }
             await ensureStateListener();
@@ -212,13 +240,16 @@
             state.currentUtteranceId = utteranceId;
             state.status = 'speaking';
             try {
-                await plugin.ttsLocalSpeak({
+                const params = {
                     text: safeText,
                     voiceId: String(voice || ''),
                     speed: Number(rate) || 1,
                     pitch: Number(pitch) || 1,
                     utteranceId
-                });
+                };
+                if (referenceUri) params.referenceUri = String(referenceUri);
+                if (referenceText) params.referenceText = String(referenceText);
+                await plugin.ttsLocalSpeak(params);
             } catch (error) {
                 state.status = 'idle';
                 state.currentUtteranceId = null;
