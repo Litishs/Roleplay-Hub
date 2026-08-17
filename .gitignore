@@ -12,6 +12,10 @@ android/keystore/
 *.log
 *.apk
 .trae/
+.tmp-*.db
+.tmp-*.db-wal
+.tmp-*.db-shm
+.tmp-wc*/
 
 assets/backup/
 assets/character/
