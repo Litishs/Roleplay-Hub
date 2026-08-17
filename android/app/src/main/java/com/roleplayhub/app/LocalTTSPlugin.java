@@ -520,24 +520,24 @@ public class LocalTTSPlugin extends Plugin {
             }
 
             long timeoutUs = 10000L;
+            boolean inputDone = false;
             while (true) {
-                int inputIdx = codec.dequeueInputBuffer(timeoutUs);
-                if (inputIdx >= 0) {
-                    int sampleFlags = extractor.getSampleFlags();
-                    int size = (int) extractor.getSampleSize();
-                    if (size <= 0) {
-                        codec.queueInputBuffer(inputIdx, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM);
-                    } else {
+                if (!inputDone) {
+                    int inputIdx = codec.dequeueInputBuffer(timeoutUs);
+                    if (inputIdx >= 0) {
                         java.nio.ByteBuffer buf = codec.getInputBuffer(inputIdx);
                         if (buf != null) {
                             buf.clear();
                             int read = extractor.readSampleData(buf, 0);
-                            long pts = extractor.getSampleTime();
-                            codec.queueInputBuffer(inputIdx, 0, read, pts,
-                                    ((sampleFlags & MediaExtractor.SAMPLE_FLAG_LAST_SAMPLE) != 0
-                                            ? MediaCodec.BUFFER_FLAG_END_OF_STREAM : 0));
+                            if (read < 0) {
+                                codec.queueInputBuffer(inputIdx, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM);
+                                inputDone = true;
+                            } else {
+                                long pts = extractor.getSampleTime();
+                                codec.queueInputBuffer(inputIdx, 0, read, pts, 0);
+                                extractor.advance();
+                            }
                         }
-                        extractor.advance();
                     }
                 }
 
