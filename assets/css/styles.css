@@ -2260,6 +2260,10 @@ opacity: 0;
         [data-theme='dark'] .hover\:border-gray-300:hover { border-color: #4b5563 !important; }
 
         /* —— 关键组件类 —— */
+        [data-theme='dark'] .app-sidebar {
+            background: linear-gradient(180deg, #1f2937 0%, #171f2b 100%) !important;
+            border-color: var(--d-border) !important;
+        }
         [data-theme='dark'] .chat-input-box {
             caret-color: var(--d-text);
         }
@@ -2280,6 +2284,7 @@ opacity: 0;
         }
         [data-theme='dark'] .sidebar-nav-button.bg-primary-50 {
             background: linear-gradient(135deg, rgba(30, 58, 138, 0.45), rgba(30, 64, 175, 0.35));
+            color: #93c5fd !important;
             box-shadow:
                 inset 0 0 0 1px rgba(59, 130, 246, 0.2),
                 0 8px 22px -18px rgba(37, 99, 235, 0.5);

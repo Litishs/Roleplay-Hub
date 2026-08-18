@@ -66,6 +66,10 @@ test('styles.css has dark override rules driven by data-theme', async () => {
   // hover/focus 变体覆盖
   assert.match(css, /\.hover\\:bg-gray-50:hover/);
   assert.match(css, /\.focus\\:bg-white:focus/);
+  // 侧边栏自带浅色 background 渐变，深色模式必须覆盖整个简写属性，不能只改 background-color
+  assert.match(css, /\[data-theme='dark'\] \.app-sidebar\s*\{[\s\S]*?background:\s*linear-gradient[\s\S]*?!important/);
+  // 选中项在深蓝底上使用浅色文字，避免沿用 text-primary-700 导致对比度不足
+  assert.match(css, /\[data-theme='dark'\] \.sidebar-nav-button\.bg-primary-50\s*\{[\s\S]*?color:\s*#93c5fd\s*!important/);
   // 输入框光标色（深色下不可见需修正）
   assert.match(css, /\[data-theme='dark'\] \.chat-input-box[\s\S]*?caret-color/);
 
