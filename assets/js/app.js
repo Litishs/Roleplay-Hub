@@ -697,6 +697,20 @@ createApp({
             fastModel: DEFAULT_API_CONFIG.fastModel
         });
 
+        // 旧版 Web 端存储可能只保留了预设模型，未同步当前聊天模型。
+        // 解析时优先保留用户当前选择；为空时按预设顺序回退，避免请求提交空 model。
+        const resolveChatModel = () => [
+            settings.model,
+            settings.qualityModel,
+            settings.balancedModel,
+            settings.fastModel
+        ].map(model => String(model || '').trim()).find(Boolean) || '';
+        const syncChatModelFromPresets = () => {
+            const model = resolveChatModel();
+            if (model && settings.model !== model) settings.model = model;
+            return model;
+        };
+
         // --- 上下文 token 估算与预算（P0，本地启发式） ---
         const estimateTokens = (text) => {
             const source = String(text || '');
@@ -2699,6 +2713,7 @@ createApp({
                 settings.contextSize = MAX_CONTEXT_SIZE;
                 settings.stream = true;
                 normalizeActiveToolAggressivenessSettings();
+                syncChatModelFromPresets();
 
                 const savedPresets = await getStoredValue('presets');
                 if (savedPresets) presets.value = savedPresets.map(normalizePreset);
@@ -5807,7 +5822,12 @@ ${content}
             const activeToolDepth = Number(options.activeToolDepth) || 0;
             const continueAssistantMessageId = options.continueAssistantMessageId || null;
             const continuationToolCallId = options.continuationToolCallId || null;
-            const requestModel = settings.model;
+            const requestModel = syncChatModelFromPresets();
+
+            if (!requestModel) {
+                showToast('请先在设置中选择聊天模型', 'error');
+                return;
+            }
 
             if (!currentCharacter.value) {
                 showToast('请先选择一个角色', 'error');

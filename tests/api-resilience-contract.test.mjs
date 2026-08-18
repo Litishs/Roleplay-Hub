@@ -101,6 +101,15 @@ test('fetchModels has a 15s timeout', () => {
     assert.ok(app.includes('AbortSignal.timeout(15000)'));
 });
 
+test('chat model falls back to configured presets when legacy Web storage lacks settings.model', () => {
+    assert.ok(app.includes('const resolveChatModel = () => ['));
+    assert.ok(app.includes('settings.qualityModel,'));
+    assert.ok(app.includes('const syncChatModelFromPresets = () => {'));
+    assert.ok(app.includes('syncChatModelFromPresets();'));
+    assert.ok(app.includes('const requestModel = syncChatModelFromPresets();'));
+    assert.ok(app.includes("showToast('请先在设置中选择聊天模型', 'error');"));
+});
+
 test('release debug flag is disabled in capacitor config', () => {
     const config = JSON.parse(capConfig);
     assert.equal(config.android.webContentsDebuggingEnabled, false);
