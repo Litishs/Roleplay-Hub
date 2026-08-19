@@ -1,4 +1,4 @@
-import { cp, mkdir, rm } from 'node:fs/promises';
+﻿import { cp, mkdir, rm } from 'node:fs/promises';
 import path from 'node:path';
 
 const root = process.cwd();
@@ -11,6 +11,8 @@ for (const entry of ['index.html', 'character', 'assets', 'LICENSE']) {
   await cp(path.join(root, entry), path.join(output, entry), { recursive: true });
 }
 
-// 用户的备份 zip（assets/backup/，含聊天/媒体数据）只应在导出时产生，
+// 用户的备份 .zip（assets/backup/，含聊天/媒体数据）只应在导出时产生，
 // 绝不能打进发行包：dist 是 cap sync / APK 的输入源。
 await rm(path.join(output, 'assets', 'backup'), { recursive: true, force: true });
+// 角色卡资产图片仅供开发测试使用，不应打包进 APK。
+await rm(path.join(output, 'assets', 'character'), { recursive: true, force: true });

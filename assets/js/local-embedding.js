@@ -1,37 +1,35 @@
-(() => {
+﻿(() => {
     'use strict';
 
     /**
-     * RPHLocalEmbedding — 手机本地端侧向量 embedding 原型(方案 C1)
+     * RPHLocalEmbedding 鈥?鎵嬫満鏈湴绔晶鍚戦噺 embedding 鍘熷瀷(鏂规 C1)
      *
-     * 运行时: Transformers.js(v3, WASM 单线程) + onnxruntime-web jsep wasm。
-     * 依赖(已 vendored 到 assets/vendor/transformers/):
-     *   - transformers.min.js        (ESM, 浏览器构建)
-     *   - ort-wasm-simd-threaded.jsep.wasm / ort-wasm-simd-threaded.wasm
-     *   - models/<modelId>/          (config.json + tokenizer.json + model_quantized.onnx 等)
+     * 杩愯鏃? Transformers.js(v3, WASM 鍗曠嚎绋? + onnxruntime-web jsep wasm銆?     * 渚濊禆(宸?vendored 鍒?assets/vendor/transformers/):
+     *   - transformers.min.js        (ESM, 娴忚鍣ㄦ瀯寤?
+     *   - ort-wasm-simd-threaded.jsep.wasm
+     *   - models/<modelId>/          (config.json + tokenizer.json + model_quantized.onnx 绛?
      *
-     * 说明: 未使用 Web Worker(原型阶段, 主线程分批处理并在每批间让出事件循环);
-     *      若后续发现卡顿, 可整体迁入 DedicatedWorker。
-     */
+     * 璇存槑: 鏈娇鐢?Web Worker(鍘熷瀷闃舵, 涓荤嚎绋嬪垎鎵瑰鐞嗗苟鍦ㄦ瘡鎵归棿璁╁嚭浜嬩欢寰幆);
+     *      鑻ュ悗缁彂鐜板崱椤? 鍙暣浣撹縼鍏?DedicatedWorker銆?     */
 
     const MODELS = Object.freeze({
         'bge-small-zh-v1.5': {
             id: 'bge-small-zh-v1.5',
-            label: 'BGE Small (中文, 512 维)',
+            label: 'BGE Small (涓枃, 512 缁?',
             dims: 512,
             sizeMb: 24,
             bundled: true
         },
         'gte-small': {
             id: 'gte-small',
-            label: 'GTE Small (多语言, 384 维)',
+            label: 'GTE Small (澶氳瑷€, 384 缁?',
             dims: 384,
             sizeMb: 23,
             bundled: false
         },
         'multilingual-e5-small': {
             id: 'multilingual-e5-small',
-            label: 'multilingual-e5-small (100+ 语言, 384 维)',
+            label: 'multilingual-e5-small (100+ 璇█, 384 缁?',
             dims: 384,
             sizeMb: 140,
             bundled: false
@@ -68,7 +66,7 @@
         const module = await import(url);
         const lib = module.default || module;
         if (!lib || typeof lib.pipeline !== 'function') {
-            throw new Error('Transformers.js 加载失败: 未找到 pipeline 导出');
+            throw new Error('Transformers.js 鍔犺浇澶辫触: 鏈壘鍒?pipeline 瀵煎嚭');
         }
         globalThis.transformers = lib;
         return lib;
@@ -77,7 +75,7 @@
     const configureEnv = (lib, modelId) => {
         const env = lib.env;
         env.allowLocalModels = true;
-        env.allowRemoteModels = false;   // 全部走本地 assets, 避免回退 HF 远程被墙卡死
+        env.allowRemoteModels = false;   // 鍏ㄩ儴璧版湰鍦?assets, 閬垮厤鍥為€€ HF 杩滅▼琚鍗℃
         env.localModelPath = resolveUrl(MODELS_BASE);
         env.backends.onnx.wasm.wasmPaths = resolveUrl(VENDOR_BASE);
         if (env.backends.onnx.wasm) env.backends.onnx.wasm.numThreads = 1;
@@ -127,21 +125,20 @@
     const yieldToBrowser = () => new Promise(resolve => setTimeout(resolve, 0));
 
     /**
-     * 批量计算文本向量(均值池化 + L2 归一化)。
-     * @param {string[]} texts
+     * 鎵归噺璁＄畻鏂囨湰鍚戦噺(鍧囧€兼睜鍖?+ L2 褰掍竴鍖?銆?     * @param {string[]} texts
      * @param {AbortSignal} [signal]
-     * @returns {Promise<number[][]>} 每个输入一行 Float32 数组
+     * @returns {Promise<number[][]>} 姣忎釜杈撳叆涓€琛?Float32 鏁扮粍
      */
     const embedTexts = async (texts, signal) => {
         const input = (Array.isArray(texts) ? texts : [texts]).map(value => String(value || '').trim());
-        if (input.some(value => !value)) throw new Error('嵌入内容不能为空');
+        if (input.some(value => !value)) throw new Error('宓屽叆鍐呭涓嶈兘涓虹┖');
         const pipeline = await ensureReady();
         const vectors = [];
         for (let i = 0; i < input.length; i++) {
             if (signal && signal.aborted) throw createAbortError();
             const output = await pipeline(input[i], { pooling: 'mean', normalize: true });
             const data = output && output.data;
-            if (!data || !data.length) throw new Error('嵌入接口返回的数据不完整');
+            if (!data || !data.length) throw new Error('宓屽叆鎺ュ彛杩斿洖鐨勬暟鎹笉瀹屾暣');
             vectors.push(Array.from(data));
             if (i % 2 === 1) await yieldToBrowser();
         }
