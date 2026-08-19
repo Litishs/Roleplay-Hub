@@ -14,8 +14,8 @@ if (-not $env:JAVA_HOME) {
 }
 $env:GRADLE_USER_HOME = Join-Path $projectRoot '.toolchains\gradle-home'
 
-# --- Release version: round the current version up to the next multiple of 10 ---
-# e.g. 1.24 -> 1.30; if already a multiple of 10 (e.g. 1.30) it stays unchanged.
+# --- Release version: always advance to the next multiple of 10 ---
+# e.g. 1.24 -> 1.30; 1.90 -> 2.00. A release build must never reuse a version.
 $versionFile = Join-Path $projectRoot 'android\version.properties'
 $versionProps = @{}
 if (Test-Path -LiteralPath $versionFile) {
@@ -25,16 +25,11 @@ if (Test-Path -LiteralPath $versionFile) {
         }
     }
 }
-$currentVersionName = if ($versionProps.ContainsKey('versionName')) { $versionProps['versionName'] } else { '1.0' }
-$nameParts = $currentVersionName.Split('.')
-if ($nameParts.Length -lt 1 -or -not [int]::TryParse($nameParts[-1], [ref]$null)) {
-    throw "Unexpected versionName format: $currentVersionName"
-}
-$currentMinor = [int]$nameParts[-1]
-$releaseMinor = [math]::Ceiling($currentMinor / 10.0) * 10
-$nameParts[-1] = [string]$releaseMinor
-$releaseVersionName = $nameParts -join '.'
-$releaseVersionCode = $releaseMinor
+$currentVersionCode = if ($versionProps.ContainsKey('versionCode')) { [int]$versionProps['versionCode'] } else { 0 }
+$releaseVersionCode = [int](([math]::Floor($currentVersionCode / 10) + 1) * 10)
+$releaseMajor = [int]([math]::Floor($releaseVersionCode / 100) + 1)
+$releaseMinor = [int]($releaseVersionCode % 100)
+$releaseVersionName = '{0}.{1:D2}' -f $releaseMajor, $releaseMinor
 
 # --- Release signing config check ---
 $keystorePropsFile = Join-Path $projectRoot 'android\keystore.properties'
@@ -42,7 +37,7 @@ if (-not (Test-Path -LiteralPath $keystorePropsFile)) {
     throw 'android\keystore.properties is missing. Generate android\keystore\roleplay-hub-release.keystore and configure it first.'
 }
 
-$versionFileContent = "versionCode=$releaseVersionCode`nversionName=$releaseVersionName`n"
+$versionFileContent = "versionCode=$releaseVersionCode`nversionName=$releaseVersionName"
 Set-Content -LiteralPath $versionFile -Value $versionFileContent -Encoding ASCII
 Write-Host "Building release version $releaseVersionName (versionCode $releaseVersionCode)"
 

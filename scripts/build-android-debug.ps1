@@ -16,8 +16,8 @@ if (-not $env:JAVA_HOME) {
 $env:GRADLE_USER_HOME = Join-Path $projectRoot '.toolchains\gradle-home'
 
 # --- 版本号自动递增 (2026-08-05) ---
-# 每次构建前把 android/version.properties 的 versionCode/versionName +1：
-# 1.9 -> 1.10 -> 1.11 -> 1.12 ...，便于区分各次构建的 APK。
+# 每次构建前把 android/version.properties 的 versionCode +1，并据此生成 versionName：
+# 1.9 -> 1.10 -> 1.11 ... -> 1.99 -> 2.00，便于区分各次构建的 APK。
 $versionFile = Join-Path $projectRoot 'android\version.properties'
 $versionProps = @{}
 if (Test-Path -LiteralPath $versionFile) {
@@ -28,14 +28,11 @@ if (Test-Path -LiteralPath $versionFile) {
     }
 }
 $currentVersionCode = if ($versionProps.ContainsKey('versionCode')) { [int]$versionProps['versionCode'] } else { 9 }
-$currentVersionName = if ($versionProps.ContainsKey('versionName')) { $versionProps['versionName'] } else { '1.9' }
 $nextVersionCode = $currentVersionCode + 1
-$nameParts = $currentVersionName.Split('.')
-if ($nameParts.Length -gt 0 -and [int]::TryParse($nameParts[-1], [ref]$null)) {
-    $nameParts[-1] = [string]([int]$nameParts[-1] + 1)
-}
-$nextVersionName = $nameParts -join '.'
-$versionFileContent = "versionCode=$nextVersionCode`nversionName=$nextVersionName`n"
+$nextMajor = [int]([math]::Floor($nextVersionCode / 100) + 1)
+$nextMinor = [int]($nextVersionCode % 100)
+$nextVersionName = '{0}.{1:D2}' -f $nextMajor, $nextMinor
+$versionFileContent = "versionCode=$nextVersionCode`nversionName=$nextVersionName"
 Set-Content -LiteralPath $versionFile -Value $versionFileContent -Encoding ASCII
 Write-Host "Building version $nextVersionName (versionCode $nextVersionCode)"
 

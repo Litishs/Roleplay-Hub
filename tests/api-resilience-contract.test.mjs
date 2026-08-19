@@ -129,7 +129,13 @@ test('each debug build bumps version (1.9 -> 1.10 -> 1.11 ...) and exposes it in
 
     const script = readFileSync(new URL('../scripts/build-android-debug.ps1', import.meta.url), 'utf8');
     assert.ok(script.includes('$nextVersionCode = $currentVersionCode + 1'));
+    assert.ok(script.includes("$nextVersionName = '{0}.{1:D2}' -f $nextMajor, $nextMinor"));
     assert.ok(script.includes('Roleplay-Hub-$nextVersionName-debug.apk'));
+
+    const releaseScript = readFileSync(new URL('../scripts/build-android-release.ps1', import.meta.url), 'utf8');
+    assert.ok(releaseScript.includes('$releaseVersionCode = [int](([math]::Floor($currentVersionCode / 10) + 1) * 10)'));
+    assert.ok(releaseScript.includes("$releaseVersionName = '{0}.{1:D2}' -f $releaseMajor, $releaseMinor"));
+    assert.ok(releaseScript.includes('Roleplay-Hub-$releaseVersionName-release.apk'));
 
     // 设置页展示版本号
     const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
