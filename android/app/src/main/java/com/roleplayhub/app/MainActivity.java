@@ -5,9 +5,11 @@ import android.os.Bundle;
 import android.content.res.Configuration;
 import android.os.Build;
 import android.view.View;
+import android.view.Window;
 import android.view.WindowManager;
 
 import androidx.core.graphics.Insets;
+import androidx.appcompat.app.ActionBar;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsCompat;
@@ -18,12 +20,21 @@ import com.getcapacitor.BridgeActivity;
 public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
+        // Must be requested before setContentView() (which happens inside super.onCreate()),
+        // otherwise HarmonyOS and other OEM skins may still render a title bar.
+        supportRequestWindowFeature(Window.FEATURE_NO_TITLE);
         registerPlugin(NativeStoragePlugin.class);
         registerPlugin(ThemeBridgePlugin.class);
         registerPlugin(TTSSpeechPlugin.class);
         registerPlugin(LocalTTSPlugin.class);
         WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
         super.onCreate(savedInstanceState);
+
+        // Defensive: hide the support action bar so HarmonyOS and other OEM skins cannot render a persistent title bar.
+        ActionBar actionBar = getSupportActionBar();
+        if (actionBar != null) {
+            actionBar.hide();
+        }
 
         // 首屏初始主题：按系统夜间模式决定 DecorView/状态栏/导航栏颜色，
         // 避免 JS 启动前浅色闪烁；JS 启动后由 ThemeBridge 按用户偏好最终修正。

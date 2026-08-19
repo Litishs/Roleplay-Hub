@@ -30,7 +30,25 @@ public class ThemeBridgePlugin extends Plugin {
             getActivity().getWindow().setStatusBarColor(color);
             getActivity().getWindow().setNavigationBarColor(color);
             getActivity().getWindow().getDecorView().setBackgroundColor(color);
-            WindowInsetsControllerCompat controller = new WindowInsetsControllerCompat(
+            // Paint the WebView background to match the theme so the status-bar region
+            // (and any overscroll gap) never shows the WebView default white. Some
+            // systems (e.g. HarmonyOS) ignore Window.setStatusBarColor, so the app
+            // must paint this region itself instead of relying on the system bar color.
+            if (getBridge() != null) {
+                android.webkit.WebView webView = getBridge().getWebView();
+                if (webView != null) {
+                    webView.setBackgroundColor(color);
+                }
+            }
+            // Paint the content view (android.R.id.content) background so the status-bar
+            // inset gap above the WebView matches the theme. Some systems leave this
+            // padded region as the default white window background instead of the
+            // DecorView color, producing a visible white band at the top.
+            android.view.View contentView = getActivity().findViewById(android.R.id.content);
+            if (contentView != null) {
+                contentView.setBackgroundColor(color);
+            }
+WindowInsetsControllerCompat controller = new WindowInsetsControllerCompat(
                     getActivity().getWindow(), getActivity().getWindow().getDecorView());
             controller.setAppearanceLightStatusBars(!finalDark);
             controller.setAppearanceLightNavigationBars(!finalDark);

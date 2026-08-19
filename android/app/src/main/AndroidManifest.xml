@@ -10,7 +10,14 @@
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/AppTheme">
+        android:theme="@style/AppTheme.NoActionBar">
+
+        <!-- HarmonyOS (ArkUI) compat layer opt-out: without this metadata the system
+             auto-wraps Android APKs in an EMUI title bar showing the app label above
+             the WebView. This is a system-drawn bar, invisible to web debugging tools. -->
+        <meta-data
+            android:name="hwc-theme"
+            android:value="false" />
 
         <activity
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation"

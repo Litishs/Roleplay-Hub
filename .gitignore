@@ -13,6 +13,7 @@ android/keystore/
 *.log
 *.apk
 .trae/
+.zcode/
 .tmp-*.db
 .tmp-*.db-wal
 .tmp-*.db-shm
