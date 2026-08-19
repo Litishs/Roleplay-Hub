@@ -1428,278 +1428,172 @@
                     </h2>
                     <span class="ml-auto text-[10px] md:text-[11px] text-gray-400 font-medium select-none">原作者 STA1N · 二次开发 Litishs</span>
                 </div>
-                <div class="max-w-3xl mx-auto space-y-4 md:space-y-8">
+                <div class="settings-stack">
 
 
-                    <!-- User Settings - Optimized UI -->
-                    <div class="bg-white rounded-2xl border border-gray-200 shadow-sm mb-6" style="overflow: visible;">
-                        <!-- Header with Background Pattern -->
-                        <div class="h-24 bg-gradient-to-r from-blue-500 to-indigo-600 relative flex items-start justify-between rounded-t-2xl"
-                            style="overflow: visible;">
-                            <!-- Background Pattern -->
-                            <div class="absolute inset-0 opacity-10 pointer-events-none">
-                                <svg class="w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
-                                    <path d="M0 100 C 20 0 50 0 100 100 Z" fill="white" />
-                                </svg>
-                            </div>
-
-                            <button type="button" @click="settingsSectionsOpen.user = !settingsSectionsOpen.user; settingsHelpTopic = ''"
-                                class="mt-4 ml-6 text-white font-semibold flex items-center relative z-10 cursor-pointer select-none"
-                                aria-expanded="settingsSectionsOpen.user" aria-controls="user-settings-panel">
-                                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                        d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
-                                </svg>
-                                用户设置
-                                <svg :class="{'transform rotate-180': settingsSectionsOpen.user}"
-                                    class="settings-collapse-chevron w-4 h-4 ml-2" fill="none" stroke="currentColor"
-                                    viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
-                                </svg>
-                            </button>
-
-                            <!-- Profile Management Controls -->
-                            <div class="mt-3 mr-4 flex flex-wrap items-center gap-1.5 md:gap-2 relative"
-                                :class="showProfileDropdown ? 'z-[60]' : 'z-10'">
-                                <div class="relative profile-dropdown-container">
-                                    <!-- Trigger Button -->
-                                    <button @click.stop="showProfileDropdown = !showProfileDropdown"
-                                        class="bg-white/20 hover:bg-white/30 border border-white/40 text-white text-xs md:text-sm font-bold rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-white/50 focus:outline-none cursor-pointer backdrop-blur-md transition-all shadow-sm flex items-center gap-2 max-w-[140px] md:max-w-[180px] active:scale-95">
-                                        <div v-if="user?.avatar"
-                                            class="w-5 h-5 rounded-full overflow-hidden border border-white/50 flex-shrink-0">
-                                            <img :src="user.avatar" class="w-full h-full object-cover">
-                                        </div>
-                                        <div v-else
-                                            class="w-5 h-5 rounded-full bg-white/30 flex items-center justify-center text-[10px] font-black flex-shrink-0">
-                                            {{ (user.name || 'U').charAt(0).toUpperCase() }}
-                                        </div>
-                                        <span class="truncate">{{ user.name || '未命名' }}</span>
-                                        <svg class="w-3.5 h-3.5 flex-shrink-0 opacity-80 transition-transform duration-200"
-                                            :class="{'rotate-180': showProfileDropdown}" fill="none"
-                                            stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                                d="M19 9l-7 7-7-7"></path>
-                                        </svg>
-                                    </button>
-
-                                    <!-- Dropdown Panel -->
-                                    <transition enter-active-class="transition-all duration-150 ease-out"
-                                        enter-from-class="opacity-0 -translate-y-1 scale-95"
-                                        enter-to-class="opacity-100 translate-y-0 scale-100"
-                                        leave-active-class="transition-all duration-100 ease-in"
-                                        leave-from-class="opacity-100 translate-y-0 scale-100"
-                                        leave-to-class="opacity-0 -translate-y-1 scale-95">
-                                        <div v-if="showProfileDropdown"
-                                            class="absolute top-full right-0 mt-2 z-50 min-w-[220px] max-w-[280px] transform-gpu origin-top-right">
-                                            <div
-                                                class="bg-white/95 backdrop-blur-xl border border-gray-200 shadow-2xl rounded-xl p-1.5 flex flex-col gap-0.5 ring-1 ring-black/5 max-h-[260px] overflow-y-auto custom-scrollbar">
-                                                <div v-for="profile in userProfiles" :key="profile.uuid"
-                                                    @click="switchProfile(profile.uuid); showProfileDropdown = false"
-                                                    :class="['w-full px-3 py-2.5 rounded-lg text-xs transition-all duration-150 flex items-center gap-2.5 cursor-pointer active:scale-[0.98] group',
-                                                        activeProfileId === profile.uuid ? 'bg-indigo-50 text-indigo-700 shadow-sm' : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900']">
-                                                    <!-- Profile Avatar -->
-                                                    <div class="w-7 h-7 rounded-full overflow-hidden flex-shrink-0 border-2 transition-colors"
-                                                        :class="activeProfileId === profile.uuid ? 'border-indigo-400 shadow-sm' : 'border-gray-200 group-hover:border-gray-300'">
-                                                        <img v-if="profile.avatar" :src="profile.avatar"
-                                                            class="w-full h-full object-cover">
-                                                        <div v-else
-                                                            class="w-full h-full flex items-center justify-center text-[11px] font-black"
-                                                            :class="activeProfileId === profile.uuid ? 'bg-indigo-100 text-indigo-600' : 'bg-gray-100 text-gray-400'">
-                                                            {{ (profile.name || 'U').charAt(0).toUpperCase() }}
-                                                        </div>
-                                                    </div>
-                                                    <!-- Profile Info -->
-                                                    <div class="flex-1 min-w-0">
-                                                        <div class="font-bold truncate text-[13px]">{{ profile.name ||
-                                                            '未命名人设' }}</div>
-                                                        <div class="text-[10px] truncate mt-0.5"
-                                                            :class="activeProfileId === profile.uuid ? 'text-indigo-500' : 'text-gray-400'">
-                                                            {{ profile.person === 'second' ? '第二人称' : '第三人称' }}
-                                                            <span v-if="profile.description"> · {{
-                                                                profile.description.substring(0, 20) }}{{
-                                                                profile.description.length > 20 ? '...' : '' }}</span>
-                                                        </div>
-                                                    </div>
-                                                    <!-- Active Indicator -->
-                                                    <svg v-if="activeProfileId === profile.uuid"
-                                                        class="w-4 h-4 text-indigo-500 flex-shrink-0" fill="none"
-                                                        stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path stroke-linecap="round" stroke-linejoin="round"
-                                                            stroke-width="2.5" d="M5 13l4 4L19 7"></path>
-                                                    </svg>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </transition>
-                                </div>
-                                <button @click="createNewProfile"
-                                    class="p-1.5 bg-white/20 hover:bg-white text-white hover:text-indigo-600 backdrop-blur-md rounded-lg border border-white/40 transition-all shadow-sm active:scale-95"
-                                    title="新建人设">
-                                    <svg class="w-4 h-4 md:w-5 md:h-5" fill="none" stroke="currentColor"
-                                        viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                            d="M12 4v16m8-8H4"></path>
-                                    </svg>
-                                </button>
-
-                                <button @click="deleteProfile(activeProfileId)"
-                                    class="p-1.5 bg-white/20 hover:bg-red-500 text-white backdrop-blur-md rounded-lg border border-white/40 transition-all shadow-sm active:scale-95"
-                                    title="删除当前人设">
-                                    <svg class="w-4 h-4 md:w-5 md:h-5" fill="none" stroke="currentColor"
-                                        viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16">
-                                        </path>
-                                    </svg>
-                                </button>
-                            </div>
-                        </div>
+                    <!-- User Settings -->
+                    <section class="settings-accordion settings-accordion--user"
+                        :class="{'is-open': settingsSectionsOpen.user}">
+                        <button type="button"
+                            @click="settingsSectionsOpen.user = !settingsSectionsOpen.user; settingsHelpTopic = ''; showProfileDropdown = false"
+                            class="settings-accordion-trigger" :aria-expanded="settingsSectionsOpen.user"
+                            aria-controls="user-settings-panel">
+                            <span class="settings-accordion-icon settings-accordion-avatar">
+                                <img v-if="user?.avatar" :src="user.avatar" alt="" class="w-full h-full object-cover">
+                                <span v-else>{{ (user.name || 'U').charAt(0).toUpperCase() }}</span>
+                            </span>
+                            <span class="settings-accordion-copy">
+                                <span class="settings-accordion-title">用户设置</span>
+                                <span class="settings-accordion-description">人设、头像与叙事视角</span>
+                            </span>
+                            <span class="settings-accordion-summary">
+                                {{ user.name || '未命名' }} · {{ isSecondPerson ? '第二人称' : '第三人称' }}
+                            </span>
+                            <svg :class="{'rotate-180': settingsSectionsOpen.user}"
+                                class="settings-collapse-chevron settings-accordion-chevron" fill="none"
+                                stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                            </svg>
+                        </button>
 
                         <div id="user-settings-panel" class="settings-collapse" :class="{'is-open': settingsSectionsOpen.user}"
                             :aria-hidden="!settingsSectionsOpen.user" :inert="!settingsSectionsOpen.user">
                             <div class="settings-collapse__inner">
-                                <div class="settings-collapse__content">
-                        <div class="px-6 pb-6 relative">
-                            <!-- Avatar Section (Overlapping Header) -->
-                            <div class="flex flex-col md:flex-row gap-8 items-start -mt-10">
-                                <div class="relative group mx-auto md:mx-0 flex-shrink-0">
-                                    <div class="w-28 h-28 rounded-full border-4 border-white shadow-md overflow-hidden bg-white relative cursor-pointer group"
-                                        @click="$refs.userAvatarInput.click()">
-                                        <img v-if="user?.avatar" :src="user?.avatar"
-                                            class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105">
-                                        <div v-else
-                                            class="w-full h-full bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center text-gray-400 text-3xl font-bold">
-                                            {{ user.name ? user.name.charAt(0).toUpperCase() : 'U' }}
-                                        </div>
-                                        <!-- Overlay for upload -->
-                                        <div
-                                            class="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 backdrop-blur-[1px]">
-                                            <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor"
-                                                viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                                    d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z">
-                                                </path>
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                                    d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                                            </svg>
-                                        </div>
-                                    </div>
-                                    <!-- Camera Icon Badge -->
-                                    <div class="absolute bottom-1 right-1 bg-primary-600 text-white p-1.5 rounded-full border-2 border-white shadow-sm cursor-pointer hover:bg-primary-700 transition-colors z-10"
-                                        @click.stop="$refs.userAvatarInput.click()" title="更换头像">
-                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                                d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z">
-                                            </path>
-                                        </svg>
-                                    </div>
-                                    <input type="file" ref="userAvatarInput" accept="image/*"
-                                        @change="handleUserAvatarUpload" class="hidden">
-                                </div>
-
-                                <!-- Form Section -->
-                                <div class="flex-1 w-full space-y-5 pt-2 md:pt-10">
-
-                                    <!-- Name and Perspective Row -->
-                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
-                                        <!-- User Name -->
-                                        <div class="group">
-                                            <label
-                                                class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 ml-1">角色名</label>
-                                            <div class="relative">
-                                                <div
-                                                    class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-primary-500 transition-colors pointer-events-none">
-                                                    <svg class="w-5 h-5" fill="none" stroke="currentColor"
-                                                        viewBox="0 0 24 24">
-                                                        <path stroke-linecap="round" stroke-linejoin="round"
-                                                            stroke-width="2"
-                                                            d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z">
-                                                        </path>
-                                                    </svg>
-                                                </div>
-                                                <input v-model="user.name" type="text"
-                                                    class="w-full bg-gray-50/60 border-2 border-gray-100 rounded-xl pl-11 pr-4 py-2.5 text-gray-800 font-medium focus:bg-white focus:border-primary-500 focus:ring-4 focus:ring-primary-100 focus:outline-none transition-all placeholder-gray-400"
-                                                    placeholder="您的名字">
-                                            </div>
-                                        </div>
-
-                                        <!-- Perspective -->
-                                        <div>
-                                            <label
-                                                class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 ml-1">叙事视角</label>
-                                            <div class="segmented-switch">
-                                                <div class="segmented-switch__indicator"
-                                                    :class="{ 'is-right': !isSecondPerson }"></div>
-
-                                                <button @click="togglePerson('second')"
-                                                    class="segmented-switch__option"
-                                                    :class="{ 'is-active': isSecondPerson }">
-                                                    <span>第二人称</span>
-                                                    <span class="text-xs font-normal opacity-80">(你)</span>
-                                                </button>
-                                                <button @click="togglePerson('third')"
-                                                    class="segmented-switch__option"
-                                                    :class="{ 'is-active': !isSecondPerson }">
-                                                    <span>第三人称</span>
-                                                    <span class="text-xs font-normal opacity-80">({{ user.name || '他/她'
-                                                        }})</span>
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <!-- Description -->
-                                    <div class="group">
-                                        <label
-                                            class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 ml-1">详细设定</label>
-                                        <div class="relative">
-                                            <textarea v-model="user.description" rows="6"
-                                                placeholder="描述您的外貌、性格、背景故事等..."
-                                                class="w-full bg-gray-50/60 border-2 border-gray-100 rounded-xl px-4 py-3 text-gray-800 focus:bg-white focus:border-primary-500 focus:ring-4 focus:ring-primary-100 focus:outline-none transition-all resize-y"></textarea>
-                                            <div class="absolute right-3 bottom-3 text-gray-300 pointer-events-none">
-                                                <svg class="w-5 h-5" fill="none" stroke="currentColor"
-                                                    viewBox="0 0 24 24">
-                                                    <path stroke-linecap="round" stroke-linejoin="round"
-                                                        stroke-width="2"
-                                                        d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z">
-                                                    </path>
+                                <div class="settings-collapse__content settings-panel-body">
+                                    <div class="user-settings-toolbar">
+                                        <button type="button" class="user-settings-avatar" @click="$refs.userAvatarInput.click()"
+                                            title="更换头像" aria-label="更换头像">
+                                            <img v-if="user?.avatar" :src="user.avatar" alt="" class="w-full h-full object-cover">
+                                            <span v-else>{{ (user.name || 'U').charAt(0).toUpperCase() }}</span>
+                                            <span class="user-settings-avatar-edit" aria-hidden="true">
+                                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                        d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path>
                                                 </svg>
-                                            </div>
+                                            </span>
+                                        </button>
+                                        <input type="file" ref="userAvatarInput" accept="image/*"
+                                            @change="handleUserAvatarUpload" class="hidden">
+
+                                        <div class="relative profile-dropdown-container user-settings-profile-picker"
+                                            :class="showProfileDropdown ? 'z-[60]' : 'z-10'">
+                                            <button type="button" @click.stop="showProfileDropdown = !showProfileDropdown"
+                                                class="user-settings-profile-trigger">
+                                                <span class="min-w-0 text-left">
+                                                    <span class="block font-semibold truncate">{{ user.name || '未命名人设' }}</span>
+                                                    <span class="block text-xs text-gray-400 truncate mt-0.5">
+                                                        当前人设 · {{ isSecondPerson ? '第二人称' : '第三人称' }}
+                                                    </span>
+                                                </span>
+                                                <svg class="w-4 h-4 flex-shrink-0 text-gray-400 transition-transform"
+                                                    :class="{'rotate-180': showProfileDropdown}" fill="none"
+                                                    stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                                                </svg>
+                                            </button>
+
+                                            <transition enter-active-class="transition-all duration-150 ease-out"
+                                                enter-from-class="opacity-0 -translate-y-1 scale-95"
+                                                enter-to-class="opacity-100 translate-y-0 scale-100"
+                                                leave-active-class="transition-all duration-100 ease-in"
+                                                leave-from-class="opacity-100 translate-y-0 scale-100"
+                                                leave-to-class="opacity-0 -translate-y-1 scale-95">
+                                                <div v-if="showProfileDropdown" class="user-settings-profile-menu">
+                                                    <button v-for="profile in userProfiles" :key="profile.uuid" type="button"
+                                                        @click="switchProfile(profile.uuid); showProfileDropdown = false"
+                                                        class="user-settings-profile-option"
+                                                        :class="{'is-active': activeProfileId === profile.uuid}">
+                                                        <span class="user-settings-profile-option-avatar">
+                                                            <img v-if="profile.avatar" :src="profile.avatar" alt="" class="w-full h-full object-cover">
+                                                            <span v-else>{{ (profile.name || 'U').charAt(0).toUpperCase() }}</span>
+                                                        </span>
+                                                        <span class="min-w-0 flex-1 text-left">
+                                                            <span class="block font-semibold truncate">{{ profile.name || '未命名人设' }}</span>
+                                                            <span class="block text-[10px] text-gray-400 truncate mt-0.5">
+                                                                {{ profile.person === 'second' ? '第二人称' : '第三人称' }}
+                                                                <span v-if="profile.description"> · {{ profile.description.substring(0, 20) }}{{ profile.description.length > 20 ? '...' : '' }}</span>
+                                                            </span>
+                                                        </span>
+                                                        <svg v-if="activeProfileId === profile.uuid" class="w-4 h-4 text-primary-500 flex-shrink-0"
+                                                            fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path>
+                                                        </svg>
+                                                    </button>
+                                                </div>
+                                            </transition>
                                         </div>
+
+                                        <button type="button" @click="createNewProfile" class="settings-icon-button"
+                                            title="新建人设" aria-label="新建人设">
+                                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                                            </svg>
+                                        </button>
+                                        <button type="button" @click="deleteProfile(activeProfileId)"
+                                            class="settings-icon-button settings-icon-button--danger"
+                                            title="删除当前人设" aria-label="删除当前人设">
+                                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                            </svg>
+                                        </button>
                                     </div>
 
-
-
+                                    <div class="user-settings-form">
+                                        <div class="user-settings-form-grid">
+                                            <label class="settings-field">
+                                                <span class="settings-field-label">角色名</span>
+                                                <input v-model="user.name" type="text" class="settings-form-control"
+                                                    placeholder="您的名字">
+                                            </label>
+                                            <div class="settings-field">
+                                                <span class="settings-field-label">叙事视角</span>
+                                                <div class="segmented-switch">
+                                                    <div class="segmented-switch__indicator" :class="{ 'is-right': !isSecondPerson }"></div>
+                                                    <button type="button" @click="togglePerson('second')"
+                                                        class="segmented-switch__option" :class="{ 'is-active': isSecondPerson }">
+                                                        <span>第二人称</span><span class="text-xs font-normal opacity-80">（你）</span>
+                                                    </button>
+                                                    <button type="button" @click="togglePerson('third')"
+                                                        class="segmented-switch__option" :class="{ 'is-active': !isSecondPerson }">
+                                                        <span>第三人称</span><span class="text-xs font-normal opacity-80">（{{ user.name || '他/她' }}）</span>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <label class="settings-field">
+                                            <span class="settings-field-label">详细设定</span>
+                                            <textarea v-model="user.description" rows="4" class="settings-form-control settings-form-textarea"
+                                                placeholder="描述您的外貌、性格、背景故事等..."></textarea>
+                                        </label>
+                                    </div>
                                 </div>
                             </div>
                         </div>
-                        </div>
-                        </div>
-                    </div>
-                    </div>
+                    </section>
 
-                    <!-- API Settings - Optimized UI -->
-                    <div class="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden mb-6">
-                        <!-- Header -->
+                    <!-- API Settings -->
+                    <section class="settings-accordion settings-accordion--api"
+                        :class="{'is-open': settingsSectionsOpen.api}">
                         <button type="button" @click="settingsSectionsOpen.api = !settingsSectionsOpen.api; settingsHelpTopic = ''"
-                            class="h-16 bg-gradient-to-r from-teal-500 to-emerald-600 relative overflow-hidden flex items-center px-6 w-full text-left cursor-pointer"
-                            aria-expanded="settingsSectionsOpen.api" aria-controls="api-settings-panel">
-                            <div class="absolute inset-0 opacity-10">
-                                <svg class="w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
-                                    <path d="M0 0 L100 0 L100 100 L0 100 Z" fill="transparent" />
-                                    <path d="M0 50 Q 50 100 100 50" stroke="white" stroke-width="2" fill="none" />
-                                </svg>
-                            </div>
-                            <div class="text-white font-semibold flex items-center text-lg relative z-10 flex-1">
-                                <svg class="w-6 h-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            class="settings-accordion-trigger"
+                            :aria-expanded="settingsSectionsOpen.api" aria-controls="api-settings-panel">
+                            <span class="settings-accordion-icon">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                         d="M13 10V3L4 14h7v7l9-11h-7z"></path>
                                 </svg>
-                                API 连接与服务
-                            </div>
+                            </span>
+                            <span class="settings-accordion-copy">
+                                <span class="settings-accordion-title">API 连接与服务</span>
+                                <span class="settings-accordion-description">提供商、密钥与模型服务</span>
+                            </span>
+                            <span class="settings-accordion-summary">
+                                {{ selectedApiProvider.name }} · {{ apiStatus === 'connected' ? apiLatency + 'ms' : (apiStatus === 'checking' ? '检测中' : (apiStatus === 'error' ? '连接失败' : '未检测')) }}
+                            </span>
                             <svg :class="{'transform rotate-180': settingsSectionsOpen.api}"
-                                class="settings-collapse-chevron w-5 h-5 ml-3 text-white/80 relative z-10" fill="none"
-                                stroke="currentColor" viewBox="0 0 24 24">
+                                class="settings-collapse-chevron settings-accordion-chevron" fill="none"
+                                stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
                             </svg>
                         </button>
@@ -1707,8 +1601,8 @@
                         <div id="api-settings-panel" class="settings-collapse" :class="{'is-open': settingsSectionsOpen.api}"
                             :aria-hidden="!settingsSectionsOpen.api" :inert="!settingsSectionsOpen.api">
                             <div class="settings-collapse__inner">
-                                <div class="settings-collapse__content">
-                        <div class="p-6 space-y-6">
+                                <div class="settings-collapse__content settings-panel-body">
+                        <div class="settings-panel-content space-y-6">
                             <!-- Integrated Service Status Monitoring -->
                             <div class="mb-6 pb-6 border-b border-gray-100">
                                 <h4
@@ -1910,7 +1804,7 @@
                                 </div>
 
                                 <!-- 当前绑定（聊天/记忆供应商与模型） -->
-                                <div class="mt-4 rounded-xl border border-teal-100 bg-teal-50/50 px-3 py-2.5 text-[11px] text-gray-600 space-y-1">
+                                <div class="api-binding-summary mt-4 rounded-xl border border-teal-100 bg-teal-50/50 px-3 py-2.5 text-[11px] text-gray-600 space-y-1">
                                     <div class="flex items-center justify-between gap-2">
                                         <span class="font-bold text-gray-700">{{ chatBindingLabel }}</span>
                                         <button type="button" @click="openModelSelector('model')"
@@ -2130,27 +2024,27 @@
                         </div>
                         </div>
                     </div>
-                    </div>
+                    </section>
 
                     <!-- Advanced Settings -->
-                    <div class="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden mb-6">
-                        <!-- Header -->
+                    <section class="settings-accordion settings-accordion--advanced"
+                        :class="{'is-open': settingsSectionsOpen.advanced}">
                         <button type="button" @click="settingsSectionsOpen.advanced = !settingsSectionsOpen.advanced; settingsHelpTopic = ''"
-                            class="h-16 bg-gradient-to-r from-indigo-600 to-violet-700 relative overflow-hidden flex items-center px-6 w-full text-left cursor-pointer"
-                            aria-expanded="settingsSectionsOpen.advanced" aria-controls="advanced-settings-panel">
-                            <div class="absolute inset-0 opacity-10">
-                                <svg class="w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
-                                    <path d="M0 0 L100 0 L100 100 L0 100 Z" fill="transparent" />
-                                    <path d="M0 50 Q 50 100 100 50" stroke="white" stroke-width="2" fill="none" />
-                                </svg>
-                            </div>
-                            <div class="text-white font-semibold flex items-center text-lg relative z-10 flex-1">
-                                <svg class="w-6 h-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><use href="#icon-settings"></use></svg>
-                                高级设置
-                            </div>
+                            class="settings-accordion-trigger"
+                            :aria-expanded="settingsSectionsOpen.advanced" aria-controls="advanced-settings-panel">
+                            <span class="settings-accordion-icon">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><use href="#icon-settings"></use></svg>
+                            </span>
+                            <span class="settings-accordion-copy">
+                                <span class="settings-accordion-title">高级设置</span>
+                                <span class="settings-accordion-description">生成策略与界面外观</span>
+                            </span>
+                            <span class="settings-accordion-summary">
+                                {{ settings.themeMode === 'dark' ? '深色' : (settings.themeMode === 'light' ? '浅色' : '跟随系统') }} · {{ settings.fontSize }}px
+                            </span>
                             <svg :class="{'transform rotate-180': settingsSectionsOpen.advanced}"
-                                class="settings-collapse-chevron w-5 h-5 ml-3 text-white/80 relative z-10" fill="none"
-                                stroke="currentColor" viewBox="0 0 24 24">
+                                class="settings-collapse-chevron settings-accordion-chevron" fill="none"
+                                stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
                             </svg>
                         </button>
@@ -2158,8 +2052,8 @@
                         <div id="advanced-settings-panel" class="settings-collapse" :class="{'is-open': settingsSectionsOpen.advanced}"
                             :aria-hidden="!settingsSectionsOpen.advanced" :inert="!settingsSectionsOpen.advanced">
                             <div class="settings-collapse__inner">
-                                <div class="settings-collapse__content">
-                        <div class="p-6 space-y-6">
+                                <div class="settings-collapse__content settings-panel-body">
+                        <div class="settings-panel-content space-y-6">
                             <!-- Settings Toggles Grid -->
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                                 <label
@@ -2256,36 +2150,34 @@
                         </div>
                         </div>
                     </div>
-                    </div>
+                    </section>
 
                     <!-- 语音设置（TTS P0：Android 系统语音引擎） -->
-                    <div class="bg-white/70 backdrop-blur-sm p-1 rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-                        <button @click="ttsSettingsExpanded = !ttsSettingsExpanded; settingsHelpTopic = ''"
-                            class="settings-collapse-trigger" aria-controls="tts-settings-panel"
-                            :aria-expanded="ttsSettingsExpanded"
-                            :class="['w-full flex justify-between items-center px-4 py-3 rounded-xl font-bold', ttsSettingsExpanded ? 'bg-primary-50 text-primary-700' : 'text-gray-700 hover:bg-gray-50']">
-                            <span class="flex items-center min-w-0">
-                                <span :class="['p-1.5 rounded-lg mr-3 transition-colors', ttsSettingsExpanded ? 'bg-primary-100 text-primary-600' : 'bg-gray-100 text-gray-500']">
-                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5L6 9H2v6h4l5 4V5zM15.54 8.46a5 5 0 010 7.07M19.07 4.93a10 10 0 010 14.14"></path>
-                                    </svg>
-                                </span>
-                                <span class="truncate">语音设置</span>
-                            </span>
-                            <span class="flex items-center gap-3 flex-shrink-0">
-                                <span class="text-xs font-bold" :class="settings.ttsEnabled ? 'text-primary-600' : 'text-gray-400'">
-                                    {{ settings.ttsEnabled ? '已开启' : '已关闭' }}
-                                </span>
-                                <svg :class="{'transform rotate-180': ttsSettingsExpanded}"
-                                    class="settings-collapse-chevron w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                    <section class="settings-accordion settings-accordion--voice"
+                        :class="{'is-open': ttsSettingsExpanded}">
+                        <button type="button" @click="ttsSettingsExpanded = !ttsSettingsExpanded; settingsHelpTopic = ''"
+                            class="settings-accordion-trigger" aria-controls="tts-settings-panel"
+                            :aria-expanded="ttsSettingsExpanded">
+                            <span class="settings-accordion-icon">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5L6 9H2v6h4l5 4V5zM15.54 8.46a5 5 0 010 7.07M19.07 4.93a10 10 0 010 14.14"></path>
                                 </svg>
                             </span>
+                            <span class="settings-accordion-copy">
+                                <span class="settings-accordion-title">语音设置</span>
+                                <span class="settings-accordion-description">朗读引擎与播放偏好</span>
+                            </span>
+                            <span class="settings-accordion-summary">{{ settings.ttsEnabled ? '已开启' : '已关闭' }}</span>
+                            <svg :class="{'transform rotate-180': ttsSettingsExpanded}"
+                                class="settings-collapse-chevron settings-accordion-chevron" fill="none"
+                                stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                            </svg>
                         </button>
                         <div id="tts-settings-panel" class="settings-collapse" :class="{ 'is-open': ttsSettingsExpanded }"
                             :aria-hidden="!ttsSettingsExpanded" :inert="!ttsSettingsExpanded">
                             <div class="settings-collapse__inner">
-                                <div class="settings-collapse__content px-4 pb-4 pt-3 border-t border-gray-100">
+                                <div class="settings-collapse__content settings-panel-body">
                                     <div class="flex items-center justify-between mb-4">
                                         <div>
                                             <div class="text-sm font-bold text-gray-700">启用语音朗读</div>
@@ -2453,28 +2345,35 @@
                                 </div>
                             </div>
                         </div>
-                    </div>
+                    </section>
 
                     <!-- 本机数据（备份与恢复，置于设置页最底部） -->
-                    <div class="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden mb-6">
+                    <section class="settings-accordion settings-accordion--local"
+                        :class="{'is-open': settingsSectionsOpen.localData}">
                         <button type="button" @click="settingsSectionsOpen.localData = !settingsSectionsOpen.localData; settingsHelpTopic = ''"
-                            class="w-full px-6 py-4 border-b border-gray-100 flex items-center gap-3 cursor-pointer text-left"
-                            aria-expanded="settingsSectionsOpen.localData" aria-controls="local-data-panel">
-                            <svg class="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10a2 2 0 002 2h12a2 2 0 002-2V9.5L14.5 4H6a2 2 0 00-2 2v1zm4 12v-6h8v6M8 4v5h6V4"></path>
-                            </svg>
-                            <h3 class="font-semibold text-gray-800 flex-1">本机数据</h3>
+                            class="settings-accordion-trigger"
+                            :aria-expanded="settingsSectionsOpen.localData" aria-controls="local-data-panel">
+                            <span class="settings-accordion-icon">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10a2 2 0 002 2h12a2 2 0 002-2V9.5L14.5 4H6a2 2 0 00-2 2v1zm4 12v-6h8v6M8 4v5h6V4"></path>
+                                </svg>
+                            </span>
+                            <span class="settings-accordion-copy">
+                                <span class="settings-accordion-title">本机数据</span>
+                                <span class="settings-accordion-description">完整备份与恢复</span>
+                            </span>
+                            <span class="settings-accordion-summary">备份与恢复</span>
                             <svg :class="{'transform rotate-180': settingsSectionsOpen.localData}"
-                                class="settings-collapse-chevron w-5 h-5 text-gray-400" fill="none" stroke="currentColor"
-                                viewBox="0 0 24 24">
+                                class="settings-collapse-chevron settings-accordion-chevron" fill="none"
+                                stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
                             </svg>
                         </button>
                         <div id="local-data-panel" class="settings-collapse" :class="{'is-open': settingsSectionsOpen.localData}"
                             :aria-hidden="!settingsSectionsOpen.localData" :inert="!settingsSectionsOpen.localData">
                             <div class="settings-collapse__inner">
-                                <div class="settings-collapse__content">
-                        <div class="p-6 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div class="settings-collapse__content settings-panel-body">
+                        <div class="settings-panel-content grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <button type="button" @click="exportNativeBackup" :disabled="backupInProgress"
                                 class="min-h-[46px] inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor"><use href="#icon-export"></use></svg>
@@ -2489,7 +2388,7 @@
                                 </div>
                             </div>
                         </div>
-                    </div>
+                    </section>
                 </div>
                 <div class="flex items-center justify-center gap-1.5 text-xs text-gray-400 pb-4 select-none">
                     <span>Roleplay Hub</span>

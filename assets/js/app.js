@@ -7322,8 +7322,8 @@ ${content}
         const ttsPlayingMessageId = ref(null);
         const ttsSettingsExpanded = ref(false);
         const settingsSectionsOpen = reactive({
-            user: true,
-            api: true,
+            user: false,
+            api: false,
             advanced: false,
             localData: false
         });
