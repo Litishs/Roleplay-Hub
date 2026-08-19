@@ -3,8 +3,10 @@ import { readFile } from 'node:fs/promises';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
-const [app, capConfig, java] = await Promise.all([
+const [app, chatGuardSource, memoryFallbackSource, capConfig, java] = await Promise.all([
     readFile(new URL('../assets/js/app.js', import.meta.url), 'utf8'),
+    readFile(new URL('../assets/js/chat-request-guard.js', import.meta.url), 'utf8'),
+    readFile(new URL('../assets/js/memory-recall-fallback.js', import.meta.url), 'utf8'),
     readFile(new URL('../capacitor.config.json', import.meta.url), 'utf8'),
     readFile(new URL('../android/app/src/main/java/com/roleplayhub/app/NativeStoragePlugin.java', import.meta.url), 'utf8')
 ]);
@@ -16,15 +18,19 @@ test('API URL normalization is unified and handles trailing slashes', () => {
     assert.ok(app.includes('const getOpenAICompatUrl = (endpoint) => getApiEndpoint(endpoint);'));
 });
 
-test('chat request has first-byte and stream-idle timeouts', () => {
+test('聊天请求按首包、首有效 token、有效流空闲和总时长超时', () => {
     assert.ok(app.includes('CHAT_FIRST_BYTE_TIMEOUT_MS = 60000'));
+    assert.ok(app.includes('CHAT_FIRST_TOKEN_TIMEOUT_MS = 60000'));
     assert.ok(app.includes('CHAT_STREAM_IDLE_TIMEOUT_MS = 120000'));
+    assert.ok(app.includes('CHAT_TOTAL_TIMEOUT_MS = 600000'));
     // watchdog 必须提升到函数作用域声明(finally 才能清理), 不能只在 try 块内 const 声明
     assert.ok(app.includes('let chatWatchdog = null;'));
     assert.ok(app.includes('chatWatchdog = setInterval'));
     assert.ok(!app.includes('const chatWatchdog = setInterval'));
-    assert.ok(app.includes("abortSafely(abortController.value, 'Generation timed out')"));
-    assert.ok(app.includes('lastChatActivityMs = Date.now();'));
+    assert.ok(app.includes('const chatRequestGuard = window.RPHChatRequestGuard;'));
+    assert.ok(app.includes('const chatGuard = chatRequestGuard.create({'));
+    assert.ok(app.includes('const markMeaningfulChatActivity = (content, reasoning) => {'));
+    assert.ok(!app.includes('lastChatActivityMs = Date.now();'));
     assert.ok(app.includes('clearInterval(chatWatchdog);'));
     assert.ok(app.includes('chatWatchdog = null;'));
     // Android WebView 偶尔不会在 abort 后及时结束 fetch/reader Promise，必须主动 race 超时。
@@ -32,19 +38,44 @@ test('chat request has first-byte and stream-idle timeouts', () => {
     assert.ok(app.includes('response = await raceWithTimeout('));
     assert.ok(app.includes('reader.read(),'));
     assert.ok(app.includes('response.text(),'));
-    assert.ok(app.includes('throw abortController.value.signal.reason || error;'));
+    assert.ok(app.includes('throw generationController.signal.reason || error;'));
+    assert.ok(app.includes("if (trimmedLine.startsWith('data:'))"));
+    assert.ok(app.includes("throw new Error('模型结束了流式响应，但没有返回正文或思维内容')"));
+    assert.ok(chatGuardSource.includes("stage: 'timed_out_waiting_first_token'"));
+    assert.ok(chatGuardSource.includes("stage: 'timed_out_streaming'"));
+    const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+    assert.ok(html.indexOf('assets/js/chat-request-guard.js') < html.indexOf('assets/js/app.js'));
 });
 
-test('聊天生成的可选向量召回超时后会降级继续', () => {
-    assert.ok(app.includes('MEMORY_CONTEXT_RECALL_TIMEOUT_MS = 15000'));
-    assert.ok(app.includes('const selectVectorMemoriesForChatContext = async (options = {}) => {'));
+test('聊天向量召回超时后仍通过关键词与最近轮次注入记忆', () => {
+    assert.ok(app.includes('MEMORY_CONTEXT_RECALL_TIMEOUT_MS = 20000'));
+    assert.ok(app.includes('MEMORY_CONTEXT_RECALL_RETRY_DELAY_MS = 60000'));
+    assert.ok(app.includes('const selectVectorMemoriesForChatContext = async (options = {}, generationSignal = null, diagnostic = null) => {'));
     assert.ok(app.includes("abortSafely(recallController, 'Memory recall timed out')"));
-    assert.ok(app.includes('selectedVectorMemories = await selectVectorMemoriesForChatContext({'));
-    assert.ok(app.includes("console.warn('[Memory] context recall timed out, continuing without vector recall')"));
+    assert.ok(app.includes('const selectVectorMemoriesLexicalFallback = (options = {}) => {'));
+    assert.ok(app.includes('const memoryRecallFallback = window.RPHMemoryRecallFallback;'));
+    assert.ok(app.includes('return memoryRecallFallback.select(vectorMemories, {'));
+    assert.ok(memoryFallbackSource.includes("vectorRecallMode: 'lexical-fallback'"));
+    assert.ok(app.includes("diagnostic?.stage('memory_recall_lexical_fallback')"));
+    assert.ok(app.includes("diagnostic?.stage('memory_recall_circuit_fallback')"));
+    assert.ok(app.includes('memoryRecallRetryAfter.set(recallBackendKey'));
+    assert.ok(app.includes('return selectVectorMemoriesLexicalFallback(options);'));
+    assert.ok(app.includes("m.vectorRecallMode === 'lexical-fallback'"));
+    const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+    assert.ok(html.indexOf('assets/js/memory-recall-fallback.js') < html.indexOf('assets/js/app.js'));
+});
+
+test('SSE 网络心跳不会刷新有效 token 活跃时间', () => {
+    const streamStart = app.indexOf('while (true) {', app.indexOf('const reader = response.body.getReader();'));
+    const streamEnd = app.indexOf('flushNativeReasoning();', streamStart);
+    const streamLoop = app.slice(streamStart, streamEnd);
+    assert.ok(streamLoop.includes('requestDiagnostic?.networkChunk(value?.byteLength || 0);'));
+    assert.ok(streamLoop.includes('markMeaningfulChatActivity(rawContent, reasoning);'));
+    assert.ok(!streamLoop.includes('lastMeaningfulChatActivityMs = Date.now();'));
 });
 
 test('聊天保存卡顿不会占住生成状态和读秒计时器', () => {
-    const generateStart = app.indexOf('const generateResponse = async');
+    const generateStart = app.indexOf('const generateResponseCore = async');
     const finallyStart = app.indexOf('            } finally {', generateStart);
     const finallyEnd = app.indexOf('                const needsPostGenerationTurns', finallyStart);
     const finalizer = app.slice(finallyStart, finallyEnd);
@@ -52,6 +83,9 @@ test('聊天保存卡顿不会占住生成状态和读秒计时器', () => {
     assert.ok(finalizer.includes("saveChatHistoryNow().catch(error => console.error('Final chat save failed:', error));"));
     assert.ok(!finalizer.includes('await saveChatHistoryNow();'));
     assert.ok(finalizer.indexOf('clearInterval(waitTimer);') < finalizer.indexOf('isGenerating.value = false;'));
+    assert.ok(app.includes('const generateResponse = async (startTime = null, options = {}) => {'));
+    assert.ok(app.includes("console.error('Unhandled generation failure:', error);"));
+    assert.ok(app.includes('if (!isGenerating.value) return;'));
 });
 
 test('chat errors render as character replies and are excluded from model context', () => {

@@ -116,6 +116,8 @@ createApp({
     },
     setup() {
         const cardUtils = window.RPHubCardUtils;
+        const chatRequestGuard = window.RPHChatRequestGuard;
+        const memoryRecallFallback = window.RPHMemoryRecallFallback;
 
         // Default Avatar (Simple Gray Background)
         const defaultAvatar = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0iI2U1ZTdlYiIvPjwvc3ZnPg==';
@@ -4757,8 +4759,9 @@ ${content}
 
         // WebView 的 fetch/ReadableStream 偶尔不会在 AbortSignal 触发后及时 settle，
         // 因此超时必须同时打断底层任务并主动结束当前 await。
-        const raceWithTimeout = async (operation, timeoutMs, onTimeout, timeoutMessage = 'Operation timed out') => {
+        const raceWithTimeout = async (operation, timeoutMs, onTimeout, timeoutMessage = 'Operation timed out', signal = null) => {
             let timeoutId = null;
+            let abortHandler = null;
             const timeout = new Promise((_, reject) => {
                 timeoutId = setTimeout(() => {
                     const error = createAbortReason(timeoutMessage);
@@ -4769,16 +4772,25 @@ ${content}
                     }
                 }, timeoutMs);
             });
+            const aborted = new Promise((_, reject) => {
+                if (!signal) return;
+                abortHandler = () => reject(signal.reason || createAbortReason());
+                if (signal.aborted) abortHandler();
+                else signal.addEventListener('abort', abortHandler, { once: true });
+            });
             try {
-                return await Promise.race([Promise.resolve(operation), timeout]);
+                return await Promise.race([Promise.resolve(operation), timeout, aborted]);
             } finally {
-                if (timeoutId) clearTimeout(timeoutId);
+                if (timeoutId !== null) clearTimeout(timeoutId);
+                if (abortHandler) signal?.removeEventListener('abort', abortHandler);
             }
         };
 
         // --- Chat request resilience (timeout / retry / friendly errors) ---
         const CHAT_FIRST_BYTE_TIMEOUT_MS = 60000;
+        const CHAT_FIRST_TOKEN_TIMEOUT_MS = 60000;
         const CHAT_STREAM_IDLE_TIMEOUT_MS = 120000;
+        const CHAT_TOTAL_TIMEOUT_MS = 600000;
         const CHAT_MAX_ATTEMPTS = 3;
         const CHAT_RETRY_BASE_DELAY_MS = 800;
         const sleepChatRetry = (attempt) => new Promise(resolve => setTimeout(resolve, CHAT_RETRY_BASE_DELAY_MS * attempt));
@@ -4813,7 +4825,9 @@ ${content}
         };
 
         const MEMORY_API_TIMEOUT_MS = 60000;
-        const MEMORY_CONTEXT_RECALL_TIMEOUT_MS = 15000;
+        const MEMORY_CONTEXT_RECALL_TIMEOUT_MS = 20000;
+        const MEMORY_CONTEXT_RECALL_RETRY_DELAY_MS = 60000;
+        const memoryRecallRetryAfter = new Map();
         const withTimeoutSignal = (signal, ms = MEMORY_API_TIMEOUT_MS) => {
             if (typeof AbortSignal.any === 'function' && typeof AbortSignal.timeout === 'function') {
                 return AbortSignal.any([signal, AbortSignal.timeout(ms)]);
@@ -5837,8 +5851,7 @@ ${content}
         };
 
         // Refactored generation logic
-        let _wasCancelled = false;
-        const generateResponse = async (startTime = null, options = {}) => {
+        const generateResponseCore = async (startTime = null, options = {}) => {
             const reuseGeneratingState = options.reuseGeneratingState === true;
             if (isGenerating.value && !reuseGeneratingState) return;
             const activeToolDepth = Number(options.activeToolDepth) || 0;
@@ -5871,11 +5884,24 @@ ${content}
             activeToolContinuationMessageId.value = continuationTargetMessage?.id || null;
             activeToolContinuationToolCallId.value = continuationTargetMessage ? continuationToolCallId : null;
             activeToolContinuationHasResponse.value = false;
-            abortController.value = new AbortController();
+            const generationController = new AbortController();
+            abortController.value = generationController;
             let generationStartTime = startTime || Date.now();
+            let wasCancelled = false;
             // 修复 2026-08-05 真机回归: watchdog 曾以 const 声明在 try 块内,
             // finally 块引用时抛 ReferenceError; 提升到函数作用域并统一清理。
             let chatWatchdog = null;
+            const chatUrl = getChatProviderEndpoint('chat/completions');
+            let requestDiagnostic = window.RPHRequestDiagnostics?.start({
+                url: chatUrl,
+                payload: {
+                    model: requestModel,
+                    messages: [],
+                    temperature: settings.temperature,
+                    stream: settings.stream
+                },
+                requestType: activeToolDepth > 0 ? 'tool_continuation' : 'chat'
+            }) || null;
 
             // Start Timer
             const startTimer = () => {
@@ -6337,9 +6363,15 @@ ${content}
                 && memorySettings.mode === MEMORY_MODE_VECTOR
                 && memories.value.length > 0
                 && !shouldSuppressStandardVectorMemoryRecall()) {
-                selectedVectorMemories = await selectVectorMemoriesForChatContext({
-                    excludedTurns: getRetainedRecentMemoryTurns(postprocessedChatHistory)
-                });
+                requestDiagnostic?.stage('memory_recall');
+                selectedVectorMemories = await selectVectorMemoriesForChatContext(
+                    {
+                        excludedTurns: getRetainedRecentMemoryTurns(postprocessedChatHistory)
+                    },
+                    generationController.signal,
+                    requestDiagnostic
+                );
+                requestDiagnostic?.stage('building_prompt');
             }
             if (contextBudget > 0 && selectedVectorMemories.length > 0) {
                 const remainingBudget = Math.max(0, contextBudget - estimateMessagesTokens(messages) - estimateTokens(timelineDigestText));
@@ -6400,9 +6432,9 @@ ${content}
                     if (enabledMemories.length > 0) {
                         const formatMemoryLine = (m) => {
                             const turnValue = escapeXmlAttribute(m.turn || '?');
-                            const scoreValue = escapeXmlAttribute(Number.isFinite(m.vectorScore)
-                                ? `${(m.vectorScore * 100).toFixed(1)}%`
-                                : 'unknown');
+                            const scoreValue = escapeXmlAttribute(m.vectorRecallMode === 'lexical-fallback'
+                                ? 'lexical-fallback'
+                                : (Number.isFinite(m.vectorScore) ? `${(m.vectorScore * 100).toFixed(1)}%` : 'unknown'));
                             const fragmentText = indentXmlText(m.paragraph || m.summary || '', 4);
                             const fragmentTag = `<memory_fragment turn="${turnValue}" similarity="${scoreValue}">`;
                             return [
@@ -6657,7 +6689,6 @@ ${content}
             let rawAssistantContentForLog = '';
             let nativeReasoningForLog = '';
             let responseUsage = null;
-            let requestDiagnostic = null;
 
             if (continuingAssistantMessage && continuationToolCallId && Array.isArray(continuingAssistantMessage.toolCalls)) {
                 continuationToolCall = continuingAssistantMessage.toolCalls.find(call => call && call.id === continuationToolCallId) || null;
@@ -6781,11 +6812,6 @@ ${content}
                 return assistantMessage;
             };
 
-            // 2026-08-05 真机回归: 端点变量若只在 try 块内用 const 声明，catch 里引用时会抛
-            // ReferenceError（url is not defined），导致断网/报错时角色回复气泡无法写入。
-            // 提升到函数作用域，与 chatWatchdog 同理。
-            const chatUrl = getChatProviderEndpoint('chat/completions');
-
             try {
                         const requestPayload = {
                             model: requestModel,
@@ -6794,27 +6820,36 @@ ${content}
                             stream: settings.stream,
                             ...(settings.stream ? { stream_options: { include_usage: true } } : {})
                         };
-                        requestDiagnostic = window.RPHRequestDiagnostics?.start({
-                            url: chatUrl,
-                            payload: requestPayload,
-                            promptBuildMs: Date.now() - generationStartTime,
-                            requestType: activeToolDepth > 0 ? 'tool_continuation' : 'chat'
-                        }) || null;
+                        requestDiagnostic?.request(requestPayload, Date.now() - generationStartTime);
+                        requestDiagnostic?.stage('waiting_headers');
                         let response = null;
-                        let chatHeadersReceived = false;
-                        let lastChatActivityMs = Date.now();
-                        chatWatchdog = setInterval(() => {
-                            if (abortController.value?.signal?.aborted) return;
-                            const idleMs = Date.now() - lastChatActivityMs;
-                            const limit = chatHeadersReceived ? CHAT_STREAM_IDLE_TIMEOUT_MS : CHAT_FIRST_BYTE_TIMEOUT_MS;
-                            if (idleMs > limit) {
-                                abortSafely(abortController.value, 'Generation timed out');
+                        const chatGuard = chatRequestGuard.create({
+                            firstByteMs: CHAT_FIRST_BYTE_TIMEOUT_MS,
+                            firstTokenMs: CHAT_FIRST_TOKEN_TIMEOUT_MS,
+                            streamIdleMs: CHAT_STREAM_IDLE_TIMEOUT_MS,
+                            totalMs: CHAT_TOTAL_TIMEOUT_MS
+                        });
+                        const abortForChatTimeout = (timeout) => {
+                            if (!timeout) return;
+                            requestDiagnostic?.stage(timeout.stage);
+                            abortSafely(generationController, timeout.message);
+                        };
+                        const markMeaningfulChatActivity = (content, reasoning) => {
+                            const wasMeaningful = chatGuard.hasMeaningful();
+                            const marked = chatGuard.markMeaningful(content, reasoning);
+                            if (marked && !wasMeaningful) {
+                                requestDiagnostic?.stage('streaming');
                             }
-                        }, 5000);
+                            return marked;
+                        };
+                        chatWatchdog = setInterval(() => {
+                            if (generationController.signal.aborted) return;
+                            abortForChatTimeout(chatGuard.getTimeout());
+                        }, 1000);
 
                         for (let chatAttempt = 1; chatAttempt <= CHAT_MAX_ATTEMPTS; chatAttempt++) {
-                            lastChatActivityMs = Date.now();
-                            chatHeadersReceived = false;
+                            chatGuard.resetHeaders();
+                            requestDiagnostic?.stage('waiting_headers');
                             try {
                                 response = await raceWithTimeout(
                                     fetch(chatUrl, {
@@ -6824,15 +6859,19 @@ ${content}
                                             'Authorization': `Bearer ${getChatProvider().apiKey}`
                                         },
                                         body: JSON.stringify(requestPayload),
-                                        signal: abortController.value.signal
+                                        signal: generationController.signal
                                     }),
-                                    CHAT_FIRST_BYTE_TIMEOUT_MS,
-                                    () => abortSafely(abortController.value, 'Generation timed out'),
-                                    'Generation timed out'
+                                    chatGuard.getRemainingMs(),
+                                    () => abortForChatTimeout({
+                                        message: 'Generation first byte timed out',
+                                        stage: 'timed_out_waiting_headers'
+                                    }),
+                                    'Generation first byte timed out',
+                                    generationController.signal
                                 );
-                                lastChatActivityMs = Date.now();
-                                chatHeadersReceived = true;
+                                chatGuard.markHeaders();
                                 requestDiagnostic?.responseHeaders(response.status, response.headers.get('content-type') || '');
+                                requestDiagnostic?.stage(response.ok ? 'waiting_first_token' : 'reading_error_response');
 
                                 if (response.ok) break;
 
@@ -6840,9 +6879,13 @@ ${content}
                                 try {
                                     const errorText = await raceWithTimeout(
                                         response.text(),
-                                        CHAT_STREAM_IDLE_TIMEOUT_MS,
-                                        () => abortSafely(abortController.value, 'Generation timed out'),
-                                        'Generation timed out'
+                                        Math.min(30000, chatGuard.getRemainingMs()),
+                                        () => abortForChatTimeout({
+                                            message: 'Generation error response timed out',
+                                            stage: 'timed_out_error_response'
+                                        }),
+                                        'Generation error response timed out',
+                                        generationController.signal
                                     );
                                     try {
                                         const errorJson = JSON.parse(errorText);
@@ -6869,8 +6912,8 @@ ${content}
                                 throw new Error(detailText);
                             } catch (error) {
                                 if (error?.isApiError) throw error;
-                                if (abortController.value?.signal?.aborted) {
-                                    throw abortController.value.signal.reason || error;
+                                if (generationController.signal.aborted) {
+                                    throw generationController.signal.reason || error;
                                 }
                                 if (isUserAbortError(error)) throw error;
                                 if (isRetryableChatNetworkError(error) && chatAttempt < CHAT_MAX_ATTEMPTS) {
@@ -6918,15 +6961,20 @@ ${content}
                             while (true) {
                                 const { done, value } = await raceWithTimeout(
                                     reader.read(),
-                                    CHAT_STREAM_IDLE_TIMEOUT_MS,
+                                    chatGuard.getRemainingMs(),
                                     () => {
-                                        abortSafely(abortController.value, 'Generation timed out');
+                                        abortForChatTimeout(chatGuard.getTimeout(Date.now() + 5) || {
+                                            message: 'Generation stream timed out',
+                                            stage: chatGuard.hasMeaningful() ? 'timed_out_streaming' : 'timed_out_waiting_first_token'
+                                        });
                                         reader.cancel?.().catch?.(() => { });
                                     },
-                                    'Generation timed out'
+                                    chatGuard.hasMeaningful()
+                                        ? 'Generation stream idle timed out'
+                                        : 'Generation first token timed out',
+                                    generationController.signal
                                 );
                                 if (done) break;
-                                lastChatActivityMs = Date.now();
                                 requestDiagnostic?.networkChunk(value?.byteLength || 0);
 
                                 buffer += decoder.decode(value, { stream: true });
@@ -6937,8 +6985,8 @@ ${content}
                                     const trimmedLine = line.trim();
                                     if (!trimmedLine) continue;
 
-                                    if (trimmedLine.startsWith('data: ')) {
-                                        const dataStr = trimmedLine.slice(6);
+                                    if (trimmedLine.startsWith('data:')) {
+                                        const dataStr = trimmedLine.slice(5).trimStart();
                                         if (dataStr === '[DONE]') continue;
 
                                         try {
@@ -6955,6 +7003,7 @@ ${content}
                                             if (rawContent) rawAssistantContentForLog += rawContent;
                                             const content = (!assistantMessage && !String(rawContent).trim()) ? '' : rawContent;
                                             const reasoning = extractNativeReasoning(delta) || extractNativeReasoning(choice);
+                                            markMeaningfulChatActivity(rawContent, reasoning);
                                             if (reasoning) nativeReasoningForLog += reasoning;
                                             requestDiagnostic?.reasoning(reasoning);
                                             requestDiagnostic?.content(rawContent);
@@ -6999,15 +7048,22 @@ ${content}
                                 }
                             }
                             flushNativeReasoning();
+                            if (!chatGuard.hasMeaningful()) {
+                                throw new Error('模型结束了流式响应，但没有返回正文或思维内容');
+                            }
                         } else {
                             // Non-streaming response handling
                             // Compatibility Fix: Some APIs force return SSE format even if stream=false
                             // We read as text first to handle both valid JSON and "forced stream" text
                             const rawText = await raceWithTimeout(
                                 response.text(),
-                                CHAT_STREAM_IDLE_TIMEOUT_MS,
-                                () => abortSafely(abortController.value, 'Generation timed out'),
-                                'Generation timed out'
+                                chatGuard.getRemainingMs(),
+                                () => abortForChatTimeout(chatGuard.getTimeout(Date.now() + 5) || {
+                                    message: 'Generation first token timed out',
+                                    stage: 'timed_out_waiting_first_token'
+                                }),
+                                'Generation first token timed out',
+                                generationController.signal
                             );
                             requestDiagnostic?.networkChunk(new TextEncoder().encode(rawText).byteLength);
                             let content = '';
@@ -7022,6 +7078,7 @@ ${content}
                                 const msg = data.choices?.[0]?.message || {};
                                 content = msg.content || '';
                                 const reasoning = extractNativeReasoning(msg) || extractNativeReasoning(data.choices?.[0]);
+                                markMeaningfulChatActivity(content, reasoning);
                                 if (content) rawAssistantContentForLog += content;
                                 if (reasoning) nativeReasoningForLog += reasoning;
                                 requestDiagnostic?.reasoning(reasoning);
@@ -7066,6 +7123,7 @@ ${content}
                                             const delta = choice.delta || choice.message || {};
                                             const chunkContent = delta.content || '';
                                             const chunkReasoning = extractNativeReasoning(delta) || extractNativeReasoning(choice);
+                                            markMeaningfulChatActivity(chunkContent, chunkReasoning);
 
                                             if (chunkContent) {
                                                 content += chunkContent;
@@ -7095,6 +7153,9 @@ ${content}
                                     }
 
                                 }
+                            }
+                            if (!chatGuard.hasMeaningful() || !assistantMessage) {
+                                throw new Error('模型返回了空响应，没有正文或思维内容');
                             }
                         }
 
@@ -7142,7 +7203,7 @@ ${content}
                 if (error.name === 'AbortError') {
                     const timedOut = /timed out/i.test(String(error.message || ''));
                     const interruptLabel = timedOut ? '*-- 生成超时 --*' : '*-- 生成已中止 --*';
-                    _wasCancelled = true;
+                    wasCancelled = true;
                     const wasReceiving = isReceiving.value;
                     isGenerating.value = false;
                     isRemoteGenerating.value = false;
@@ -7191,9 +7252,9 @@ ${content}
                     activeToolContinuationToolCallId.value = null;
                     activeToolContinuationHasResponse.value = false;
                 }
-                abortController.value = null;
-                const wasCancelled = _wasCancelled;
-                _wasCancelled = false;
+                if (abortController.value === generationController) {
+                    abortController.value = null;
+                }
                 if (chatWatchdog) {
                     clearInterval(chatWatchdog);
                     chatWatchdog = null;
@@ -7238,6 +7299,35 @@ ${content}
                         nextTick(() => { toggleSpeakMessage(ttsTargetIndex); });
                     }
                 }
+            }
+        };
+
+        // generateResponseCore 的网络阶段有完整 catch/finally；这一层兜住更早的上下文构建异常，
+        // 确保任何未预期错误都不能把全局生成锁永久留在 true。
+        const generateResponse = async (startTime = null, options = {}) => {
+            try {
+                return await generateResponseCore(startTime, options);
+            } catch (error) {
+                console.error('Unhandled generation failure:', error);
+                if (!isGenerating.value) return;
+                stopDraftPersistence();
+                if (waitTimer) {
+                    clearInterval(waitTimer);
+                    waitTimer = null;
+                }
+                if (abortController.value) {
+                    abortSafely(abortController.value, 'Generation failed');
+                    abortController.value = null;
+                }
+                isGenerating.value = false;
+                isReceiving.value = false;
+                isThinking.value = false;
+                activeToolContinuationMessageId.value = null;
+                activeToolContinuationToolCallId.value = null;
+                activeToolContinuationHasResponse.value = false;
+                const message = truncateErrorMessage(error?.message || error) || '生成失败';
+                chatHistory.value.push(createCharacterErrorReply(message));
+                saveChatHistoryNow().catch(saveError => console.error('Recovery chat save failed:', saveError));
             }
         };
 
@@ -8718,16 +8808,45 @@ ${content}
             vectorScore: scored.vectorScore
         });
 
-        const selectVectorMemoriesForContext = async (signal, options = {}) => {
+        const getContextVectorMemories = (options = {}) => {
             const excludedTurns = options.excludedTurns instanceof Set
                 ? options.excludedTurns
                 : new Set(Array.isArray(options.excludedTurns) ? options.excludedTurns : []);
-            const vectorMemories = memories.value
+            return memories.value
                 .filter(isEnabledVectorMemory)
                 .filter(memory => {
                     const turn = Number(memory.turn) || 0;
                     return turn <= 0 || !excludedTurns.has(turn);
                 });
+        };
+
+        const selectUniqueVectorMemories = (scoredMemories, topK) => {
+            const selected = [];
+            const seen = new Set();
+            for (const scored of scoredMemories) {
+                const memory = scored.memory ? toScoredVectorMemory(scored) : scored;
+                const fingerprint = getVectorMemoryFingerprint(memory);
+                if (!fingerprint || seen.has(fingerprint)) continue;
+                seen.add(fingerprint);
+                selected.push(memory);
+                if (selected.length >= topK) break;
+            }
+            return selected;
+        };
+
+        // 嵌入服务不可用时仍使用已有分片：关键词命中优先，其次按最近轮次补足。
+        const selectVectorMemoriesLexicalFallback = (options = {}) => {
+            const vectorMemories = getContextVectorMemories(options);
+            const queryTerms = extractVectorQueryTerms(getLatestUserMemoryQuery());
+            return memoryRecallFallback.select(vectorMemories, {
+                queryTerms,
+                topK: getVectorMemoryTopK(),
+                getFingerprint: getVectorMemoryFingerprint
+            });
+        };
+
+        const selectVectorMemoriesForContext = async (signal, options = {}) => {
+            const vectorMemories = getContextVectorMemories(options);
 
             if (vectorMemories.length === 0) return [];
 
@@ -8736,29 +8855,21 @@ ${content}
             const queryTerms = extractVectorQueryTerms(getLatestUserMemoryQuery());
             if (!queryText) return [];
 
-            try {
-                const [queryVector] = await requestMemoryEmbeddings([queryText], signal);
-                if (signal?.aborted || !isEmbeddingLike(queryVector)) return [];
-                const scoredMemories = await scoreVectorMemories(vectorMemories, queryVector, queryTerms, signal);
-
-                const selected = [];
-                const seen = new Set();
-                for (const scored of scoredMemories) {
-                    const fingerprint = getVectorMemoryFingerprint(scored.memory);
-                    if (!fingerprint || seen.has(fingerprint)) continue;
-                    seen.add(fingerprint);
-                    selected.push(toScoredVectorMemory(scored));
-                    if (selected.length >= topK) break;
-                }
-                return selected;
-            } catch (err) {
-                if (err.name === 'AbortError') return [];
-                return [];
-            }
+            const [queryVector] = await requestMemoryEmbeddings([queryText], signal);
+            if (signal?.aborted) throw signal.reason || createAbortReason();
+            if (!isEmbeddingLike(queryVector)) throw new Error('向量召回没有返回有效查询向量');
+            const scoredMemories = await scoreVectorMemories(vectorMemories, queryVector, queryTerms, signal);
+            return selectUniqueVectorMemories(scoredMemories, topK);
         };
 
-        const selectVectorMemoriesForChatContext = async (options = {}) => {
-            const generationSignal = abortController.value?.signal;
+        const selectVectorMemoriesForChatContext = async (options = {}, generationSignal = null, diagnostic = null) => {
+            const recallBackendKey = memorySettings.embeddingBackend === 'local'
+                ? `local:${memorySettings.localEmbeddingModel || 'default'}`
+                : `api:${memorySettings.memoryProviderId || getChatProvider().providerId}:${getMemoryEmbeddingModel()}`;
+            if ((memoryRecallRetryAfter.get(recallBackendKey) || 0) > Date.now()) {
+                diagnostic?.stage('memory_recall_circuit_fallback');
+                return selectVectorMemoriesLexicalFallback(options);
+            }
             const recallController = new AbortController();
             const forwardGenerationAbort = () => {
                 const message = generationSignal?.reason?.message || 'Generation cancelled by user';
@@ -8772,17 +8883,21 @@ ${content}
             }
 
             try {
-                return await raceWithTimeout(
+                const selected = await raceWithTimeout(
                     selectVectorMemoriesForContext(recallController.signal, options),
                     MEMORY_CONTEXT_RECALL_TIMEOUT_MS,
                     () => abortSafely(recallController, 'Memory recall timed out'),
-                    'Memory recall timed out'
+                    'Memory recall timed out',
+                    recallController.signal
                 );
+                memoryRecallRetryAfter.delete(recallBackendKey);
+                return selected;
             } catch (error) {
-                if (!generationSignal?.aborted) {
-                    console.warn('[Memory] context recall timed out, continuing without vector recall');
-                }
-                return [];
+                if (generationSignal?.aborted) return [];
+                memoryRecallRetryAfter.set(recallBackendKey, Date.now() + MEMORY_CONTEXT_RECALL_RETRY_DELAY_MS);
+                diagnostic?.stage('memory_recall_lexical_fallback');
+                console.warn('[Memory] vector recall failed, using lexical fallback:', error?.message || error);
+                return selectVectorMemoriesLexicalFallback(options);
             } finally {
                 generationSignal?.removeEventListener('abort', forwardGenerationAbort);
             }

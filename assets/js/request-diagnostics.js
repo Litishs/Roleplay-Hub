@@ -3,6 +3,7 @@
     const MAX_RECORDS = 10;
     const records = [];
     const clocks = new WeakMap();
+    const fingerprintVersions = new WeakMap();
 
     const clone = (value) => JSON.parse(JSON.stringify(value));
     const now = () => (globalThis.performance?.now?.() ?? Date.now());
@@ -33,6 +34,54 @@
         }
         return false;
     };
+    const createRequestSnapshot = (payload, promptBuildMs = null) => {
+        const messages = Array.isArray(payload?.messages) ? payload.messages : [];
+        return {
+            model: String(payload?.model || ''),
+            temperature: Number.isFinite(Number(payload?.temperature)) ? Number(payload.temperature) : null,
+            stream: payload?.stream === true,
+            messageCount: messages.length,
+            totalCharacters: messages.reduce((total, message) => total + String(message?.content || '').length, 0),
+            payloadSha256: null,
+            fingerprintReady: false,
+            promptBuildMs: promptBuildMs !== null && promptBuildMs !== undefined && Number.isFinite(Number(promptBuildMs))
+                ? Math.max(0, Math.round(promptBuildMs))
+                : null,
+            messages: messages.map(message => ({
+                role: String(message?.role || ''),
+                hasName: !!message?.name,
+                characters: String(message?.content || '').length,
+                sha256: null
+            }))
+        };
+    };
+    const updateRequest = (record, payload, promptBuildMs = null) => {
+        const messages = Array.isArray(payload?.messages) ? payload.messages : [];
+        const version = (fingerprintVersions.get(record) || 0) + 1;
+        fingerprintVersions.set(record, version);
+        record.request = createRequestSnapshot(payload, promptBuildMs);
+        if (record.timings.promptBuildMs === null && record.request.promptBuildMs !== null) {
+            record.timings.promptBuildMs = record.request.promptBuildMs;
+        }
+        persist();
+
+        Promise.all([
+            sha256(JSON.stringify(payload || {})),
+            ...messages.map(message => sha256(String(message?.content || '')))
+        ]).then(([payloadHash, ...messageHashes]) => {
+            if (fingerprintVersions.get(record) !== version) return;
+            record.request.payloadSha256 = payloadHash;
+            record.request.messages.forEach((message, index) => {
+                message.sha256 = messageHashes[index] || null;
+            });
+            record.request.fingerprintReady = true;
+            persist();
+        }).catch(() => {
+            if (fingerprintVersions.get(record) !== version) return;
+            record.request.fingerprintReady = true;
+            persist();
+        });
+    };
 
     try {
         const saved = JSON.parse(globalThis.sessionStorage?.getItem(STORAGE_KEY) || '[]');
@@ -40,28 +89,15 @@
     } catch (_) { }
 
     const start = ({ url, payload, promptBuildMs = null, requestType = 'chat' }) => {
-        const messages = Array.isArray(payload?.messages) ? payload.messages : [];
         const record = {
             id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
             startedAt: new Date().toISOString(),
             status: 'pending',
+            stage: 'preparing',
+            stageHistory: [{ stage: 'preparing', elapsedMs: 0 }],
             requestType,
             endpoint: endpointLabel(url),
-            request: {
-                model: String(payload?.model || ''),
-                temperature: Number.isFinite(Number(payload?.temperature)) ? Number(payload.temperature) : null,
-                stream: payload?.stream === true,
-                messageCount: messages.length,
-                totalCharacters: messages.reduce((total, message) => total + String(message?.content || '').length, 0),
-                payloadSha256: null,
-                fingerprintReady: false,
-                messages: messages.map(message => ({
-                    role: String(message?.role || ''),
-                    hasName: !!message?.name,
-                    characters: String(message?.content || '').length,
-                    sha256: null
-                }))
-            },
+            request: createRequestSnapshot(payload, promptBuildMs),
             response: {
                 httpStatus: null,
                 contentType: '',
@@ -72,7 +108,9 @@
                 errorName: ''
             },
             timings: {
-                promptBuildMs: Number.isFinite(Number(promptBuildMs)) ? Math.max(0, Math.round(promptBuildMs)) : null,
+                promptBuildMs: promptBuildMs !== null && promptBuildMs !== undefined && Number.isFinite(Number(promptBuildMs))
+                    ? Math.max(0, Math.round(promptBuildMs))
+                    : null,
                 responseHeadersMs: null,
                 firstNetworkChunkMs: null,
                 firstReasoningMs: null,
@@ -84,25 +122,21 @@
         clocks.set(record, now());
         records.push(record);
         if (records.length > MAX_RECORDS) records.splice(0, records.length - MAX_RECORDS);
-        persist();
-
-        Promise.all([
-            sha256(JSON.stringify(payload || {})),
-            ...messages.map(message => sha256(String(message?.content || '')))
-        ]).then(([payloadHash, ...messageHashes]) => {
-            record.request.payloadSha256 = payloadHash;
-            record.request.messages.forEach((message, index) => {
-                message.sha256 = messageHashes[index] || null;
-            });
-            record.request.fingerprintReady = true;
-            persist();
-        }).catch(() => {
-            record.request.fingerprintReady = true;
-            persist();
-        });
+        updateRequest(record, payload, promptBuildMs);
 
         let finished = false;
         return {
+            request(nextPayload, nextPromptBuildMs = null) {
+                updateRequest(record, nextPayload, nextPromptBuildMs);
+            },
+            stage(name) {
+                const stage = String(name || '').trim();
+                if (!stage || record.stage === stage) return;
+                record.stage = stage;
+                record.stageHistory.push({ stage, elapsedMs: elapsed(record) });
+                if (record.stageHistory.length > 20) record.stageHistory.shift();
+                persist();
+            },
             responseHeaders(status, contentType = '') {
                 record.response.httpStatus = Number(status) || null;
                 record.response.contentType = String(contentType || '').split(';')[0];
@@ -129,6 +163,8 @@
                 if (finished) return;
                 finished = true;
                 record.status = 'completed';
+                record.stage = 'completed';
+                record.stageHistory.push({ stage: 'completed', elapsedMs: elapsed(record) });
                 record.response.usage = usage ? clone(usage) : null;
                 record.timings.completedMs = elapsed(record);
                 persist();
@@ -136,7 +172,10 @@
             fail(error) {
                 if (finished) return;
                 finished = true;
-                record.status = error?.name === 'AbortError' ? 'cancelled' : 'failed';
+                const timedOut = /timed out/i.test(String(error?.message || ''));
+                record.status = timedOut ? 'timed_out' : (error?.name === 'AbortError' ? 'cancelled' : 'failed');
+                record.stage = record.status;
+                record.stageHistory.push({ stage: record.status, elapsedMs: elapsed(record) });
                 record.response.errorName = String(error?.name || 'Error');
                 record.timings.completedMs = elapsed(record);
                 persist();
