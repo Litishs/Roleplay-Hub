@@ -4744,6 +4744,38 @@ ${content}
             }
         };
 
+        const createAbortReason = (message = 'Operation aborted') => {
+            if (typeof DOMException === 'function') return new DOMException(message, 'AbortError');
+            const error = new Error(message);
+            error.name = 'AbortError';
+            return error;
+        };
+        const abortSafely = (controller, message) => {
+            if (!controller || controller.signal?.aborted) return;
+            controller.abort(createAbortReason(message));
+        };
+
+        // WebView 的 fetch/ReadableStream 偶尔不会在 AbortSignal 触发后及时 settle，
+        // 因此超时必须同时打断底层任务并主动结束当前 await。
+        const raceWithTimeout = async (operation, timeoutMs, onTimeout, timeoutMessage = 'Operation timed out') => {
+            let timeoutId = null;
+            const timeout = new Promise((_, reject) => {
+                timeoutId = setTimeout(() => {
+                    const error = createAbortReason(timeoutMessage);
+                    try {
+                        onTimeout?.(error);
+                    } finally {
+                        reject(error);
+                    }
+                }, timeoutMs);
+            });
+            try {
+                return await Promise.race([Promise.resolve(operation), timeout]);
+            } finally {
+                if (timeoutId) clearTimeout(timeoutId);
+            }
+        };
+
         // --- Chat request resilience (timeout / retry / friendly errors) ---
         const CHAT_FIRST_BYTE_TIMEOUT_MS = 60000;
         const CHAT_STREAM_IDLE_TIMEOUT_MS = 120000;
@@ -4781,6 +4813,7 @@ ${content}
         };
 
         const MEMORY_API_TIMEOUT_MS = 60000;
+        const MEMORY_CONTEXT_RECALL_TIMEOUT_MS = 15000;
         const withTimeoutSignal = (signal, ms = MEMORY_API_TIMEOUT_MS) => {
             if (typeof AbortSignal.any === 'function' && typeof AbortSignal.timeout === 'function') {
                 return AbortSignal.any([signal, AbortSignal.timeout(ms)]);
@@ -4850,17 +4883,6 @@ ${content}
             checkApiStatus();
             checkImageGenStatus();
             fetchQuota();
-        };
-
-        const createAbortReason = (message = 'Operation aborted') => {
-            if (typeof DOMException === 'function') return new DOMException(message, 'AbortError');
-            const error = new Error(message);
-            error.name = 'AbortError';
-            return error;
-        };
-        const abortSafely = (controller, message) => {
-            if (!controller || controller.signal?.aborted) return;
-            controller.abort(createAbortReason(message));
         };
 
         // Chat Logic
@@ -6315,7 +6337,7 @@ ${content}
                 && memorySettings.mode === MEMORY_MODE_VECTOR
                 && memories.value.length > 0
                 && !shouldSuppressStandardVectorMemoryRecall()) {
-                selectedVectorMemories = await selectVectorMemoriesForContext(abortController.value.signal, {
+                selectedVectorMemories = await selectVectorMemoriesForChatContext({
                     excludedTurns: getRetainedRecentMemoryTurns(postprocessedChatHistory)
                 });
             }
@@ -6792,16 +6814,22 @@ ${content}
 
                         for (let chatAttempt = 1; chatAttempt <= CHAT_MAX_ATTEMPTS; chatAttempt++) {
                             lastChatActivityMs = Date.now();
+                            chatHeadersReceived = false;
                             try {
-                                response = await fetch(chatUrl, {
-                                    method: 'POST',
-                                    headers: {
-                                        'Content-Type': 'application/json',
-                                        'Authorization': `Bearer ${getChatProvider().apiKey}`
-                                    },
-                                    body: JSON.stringify(requestPayload),
-                                    signal: abortController.value.signal
-                                });
+                                response = await raceWithTimeout(
+                                    fetch(chatUrl, {
+                                        method: 'POST',
+                                        headers: {
+                                            'Content-Type': 'application/json',
+                                            'Authorization': `Bearer ${getChatProvider().apiKey}`
+                                        },
+                                        body: JSON.stringify(requestPayload),
+                                        signal: abortController.value.signal
+                                    }),
+                                    CHAT_FIRST_BYTE_TIMEOUT_MS,
+                                    () => abortSafely(abortController.value, 'Generation timed out'),
+                                    'Generation timed out'
+                                );
                                 lastChatActivityMs = Date.now();
                                 chatHeadersReceived = true;
                                 requestDiagnostic?.responseHeaders(response.status, response.headers.get('content-type') || '');
@@ -6810,7 +6838,12 @@ ${content}
 
                                 let errorDetail = '';
                                 try {
-                                    const errorText = await response.text();
+                                    const errorText = await raceWithTimeout(
+                                        response.text(),
+                                        CHAT_STREAM_IDLE_TIMEOUT_MS,
+                                        () => abortSafely(abortController.value, 'Generation timed out'),
+                                        'Generation timed out'
+                                    );
                                     try {
                                         const errorJson = JSON.parse(errorText);
                                         const apiError = extractApiErrorMessage(errorJson, response.status);
@@ -6836,6 +6869,9 @@ ${content}
                                 throw new Error(detailText);
                             } catch (error) {
                                 if (error?.isApiError) throw error;
+                                if (abortController.value?.signal?.aborted) {
+                                    throw abortController.value.signal.reason || error;
+                                }
                                 if (isUserAbortError(error)) throw error;
                                 if (isRetryableChatNetworkError(error) && chatAttempt < CHAT_MAX_ATTEMPTS) {
                                     await sleepChatRetry(chatAttempt);
@@ -6880,7 +6916,15 @@ ${content}
                             };
 
                             while (true) {
-                                const { done, value } = await reader.read();
+                                const { done, value } = await raceWithTimeout(
+                                    reader.read(),
+                                    CHAT_STREAM_IDLE_TIMEOUT_MS,
+                                    () => {
+                                        abortSafely(abortController.value, 'Generation timed out');
+                                        reader.cancel?.().catch?.(() => { });
+                                    },
+                                    'Generation timed out'
+                                );
                                 if (done) break;
                                 lastChatActivityMs = Date.now();
                                 requestDiagnostic?.networkChunk(value?.byteLength || 0);
@@ -6959,7 +7003,12 @@ ${content}
                             // Non-streaming response handling
                             // Compatibility Fix: Some APIs force return SSE format even if stream=false
                             // We read as text first to handle both valid JSON and "forced stream" text
-                            const rawText = await response.text();
+                            const rawText = await raceWithTimeout(
+                                response.text(),
+                                CHAT_STREAM_IDLE_TIMEOUT_MS,
+                                () => abortSafely(abortController.value, 'Generation timed out'),
+                                'Generation timed out'
+                            );
                             requestDiagnostic?.networkChunk(new TextEncoder().encode(rawText).byteLength);
                             let content = '';
 
@@ -7134,10 +7183,9 @@ ${content}
                     continuationToolCall.status = 'done';
                 }
                 collapseActiveNativeReasoning();
-                await saveChatHistoryNow();
-                isGenerating.value = false;
-                isReceiving.value = false;
-                isThinking.value = false;
+                // 存储写入可能被原生事务长期挂起，不能让它继续占住生成锁和读秒 UI。
+                // saveChatHistoryNow 自身按队列保证顺序，后续保存仍会排在本次最终快照之后。
+                saveChatHistoryNow().catch(error => console.error('Final chat save failed:', error));
                 if (!continueAssistantMessageId || activeToolContinuationMessageId.value === continueAssistantMessageId) {
                     activeToolContinuationMessageId.value = null;
                     activeToolContinuationToolCallId.value = null;
@@ -7154,6 +7202,9 @@ ${content}
                     clearInterval(waitTimer);
                     waitTimer = null;
                 }
+                isGenerating.value = false;
+                isReceiving.value = false;
+                isThinking.value = false;
 
                 const needsPostGenerationTurns = !wasCancelled
                     && ((settings.uiTemplateEnabled && generatedAssistantMessageId)
@@ -8703,6 +8754,37 @@ ${content}
             } catch (err) {
                 if (err.name === 'AbortError') return [];
                 return [];
+            }
+        };
+
+        const selectVectorMemoriesForChatContext = async (options = {}) => {
+            const generationSignal = abortController.value?.signal;
+            const recallController = new AbortController();
+            const forwardGenerationAbort = () => {
+                const message = generationSignal?.reason?.message || 'Generation cancelled by user';
+                abortSafely(recallController, message);
+            };
+
+            if (generationSignal?.aborted) {
+                forwardGenerationAbort();
+            } else {
+                generationSignal?.addEventListener('abort', forwardGenerationAbort, { once: true });
+            }
+
+            try {
+                return await raceWithTimeout(
+                    selectVectorMemoriesForContext(recallController.signal, options),
+                    MEMORY_CONTEXT_RECALL_TIMEOUT_MS,
+                    () => abortSafely(recallController, 'Memory recall timed out'),
+                    'Memory recall timed out'
+                );
+            } catch (error) {
+                if (!generationSignal?.aborted) {
+                    console.warn('[Memory] context recall timed out, continuing without vector recall');
+                }
+                return [];
+            } finally {
+                generationSignal?.removeEventListener('abort', forwardGenerationAbort);
             }
         };
 

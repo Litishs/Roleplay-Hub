@@ -27,6 +27,31 @@ test('chat request has first-byte and stream-idle timeouts', () => {
     assert.ok(app.includes('lastChatActivityMs = Date.now();'));
     assert.ok(app.includes('clearInterval(chatWatchdog);'));
     assert.ok(app.includes('chatWatchdog = null;'));
+    // Android WebView 偶尔不会在 abort 后及时结束 fetch/reader Promise，必须主动 race 超时。
+    assert.ok(app.includes('const raceWithTimeout = async (operation, timeoutMs, onTimeout'));
+    assert.ok(app.includes('response = await raceWithTimeout('));
+    assert.ok(app.includes('reader.read(),'));
+    assert.ok(app.includes('response.text(),'));
+    assert.ok(app.includes('throw abortController.value.signal.reason || error;'));
+});
+
+test('聊天生成的可选向量召回超时后会降级继续', () => {
+    assert.ok(app.includes('MEMORY_CONTEXT_RECALL_TIMEOUT_MS = 15000'));
+    assert.ok(app.includes('const selectVectorMemoriesForChatContext = async (options = {}) => {'));
+    assert.ok(app.includes("abortSafely(recallController, 'Memory recall timed out')"));
+    assert.ok(app.includes('selectedVectorMemories = await selectVectorMemoriesForChatContext({'));
+    assert.ok(app.includes("console.warn('[Memory] context recall timed out, continuing without vector recall')"));
+});
+
+test('聊天保存卡顿不会占住生成状态和读秒计时器', () => {
+    const generateStart = app.indexOf('const generateResponse = async');
+    const finallyStart = app.indexOf('            } finally {', generateStart);
+    const finallyEnd = app.indexOf('                const needsPostGenerationTurns', finallyStart);
+    const finalizer = app.slice(finallyStart, finallyEnd);
+
+    assert.ok(finalizer.includes("saveChatHistoryNow().catch(error => console.error('Final chat save failed:', error));"));
+    assert.ok(!finalizer.includes('await saveChatHistoryNow();'));
+    assert.ok(finalizer.indexOf('clearInterval(waitTimer);') < finalizer.indexOf('isGenerating.value = false;'));
 });
 
 test('chat errors render as character replies and are excluded from model context', () => {
