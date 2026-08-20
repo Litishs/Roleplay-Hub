@@ -176,11 +176,12 @@
          * 屏蔽后模板只读自身 shadowRoot（快），行为其余保持不变（triggerSlash 桥接宿主）。
          */
         const shimWindow = new Proxy(window, {
-            get(target, prop, receiver) {
+            get(target, prop) {
                 if (prop === 'parent' || prop === 'top') return null;
                 if (prop === 'triggerSlash') {
                     return typeof target.triggerSlash === 'function' ? target.triggerSlash.bind(target) : null;
                 }
+                if (prop === 'document') return docShim;
                 if (prop === 'setInterval' || prop === 'setTimeout') {
                     return (fn, ms, ...args) => {
                         const id = target[prop](fn, ms, ...args);
@@ -204,7 +205,13 @@
                         }
                     };
                 }
-                const value = Reflect.get(target, prop, receiver);
+                /* Native accessor properties (document/location/...) run their
+                 * getter with `this` = receiver; passing the Proxy as receiver
+                 * throws "Illegal invocation" (DOM getters demand a real Window),
+                 * which aborts the whole template script. Resolve against the
+                 * real window instead. `document` is special-cased above to the
+                 * template's own docShim. */
+                const value = Reflect.get(target, prop, target);
                 return typeof value === 'function' ? value.bind(target) : value;
             }
         });
