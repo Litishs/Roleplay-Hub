@@ -103,5 +103,3 @@
 export default __exports;
 
 
-globalThis.RPHTtsText = __exports;
-if (typeof window !== "undefined") window.RPHTtsText = __exports;

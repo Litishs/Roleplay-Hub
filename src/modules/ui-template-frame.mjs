@@ -369,5 +369,3 @@
 export { UiTemplateFrame, UiTemplateFrameUtil };
 
 
-globalThis.RPHUiTemplateFrame = UiTemplateFrame;
-globalThis.RPHUiTemplateFrameUtil = UiTemplateFrameUtil;

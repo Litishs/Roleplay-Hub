@@ -170,4 +170,3 @@
 export { compareVersions, checkForUpdate, fetchLatestRelease, downloadApk, saveAndInstallApk, GITHUB_REPO, RELEASES_PAGE_URL };
 
 
-globalThis.RPHUpdateChecker = Object.freeze({ compareVersions: compareVersions, checkForUpdate: checkForUpdate, fetchLatestRelease: fetchLatestRelease, downloadApk: downloadApk, saveAndInstallApk: saveAndInstallApk, GITHUB_REPO: GITHUB_REPO, RELEASES_PAGE_URL: RELEASES_PAGE_URL });

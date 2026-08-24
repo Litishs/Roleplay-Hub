@@ -43,5 +43,3 @@
 export { RPHChatPersistence };
 
 
-globalThis.RPHChatPersistence = RPHChatPersistence;
-if (typeof window !== "undefined") window.RPHChatPersistence = RPHChatPersistence;

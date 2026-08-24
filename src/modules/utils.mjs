@@ -56,4 +56,3 @@ const parseCot = (text) => {
 export { generateUUID, parseCot };
 globalThis.generateUUID = generateUUID;
 globalThis.parseCot = parseCot;
-if (typeof window !== "undefined") { window.generateUUID = generateUUID; window.parseCot = parseCot; }

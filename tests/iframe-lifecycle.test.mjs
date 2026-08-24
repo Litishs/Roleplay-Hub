@@ -50,7 +50,9 @@ test('HTML card lifecycle keeps at most three iframes active', async () => {
 
   for (const path of ['src/modules/runtime-policy.mjs', 'src/modules/html-frame-lifecycle.mjs']) {
     const source = await readFile(new URL(`../${path}`, import.meta.url), 'utf8');
-    const cleanSource = source.replace(/^export\s*\{[^}]*\};\s*$/m, '').replace(/^export default\s+\S+;\s*$/m, '');
+    const cleanSource = source.replace(/^export\s*\{([^}]*)\};\s*$/m, (_, exports) => {
+    return exports.split(',').map(s => { const n = s.trim(); return 'window.' + n + ' = ' + n + ';\nglobalThis.' + n + ' = ' + n + ';'; }).join('\\n');
+  }).replace(/^export default\s+(\S+);\s*$/m, (_, name) => { return 'window.' + name + ' = ' + name + ';\nglobalThis.' + name + ' = ' + name + ';'; });
     vm.runInContext(cleanSource, context, { filename: path });
   }
 

@@ -225,5 +225,3 @@
 export { createEmptyProfile, normalizeProfile, relationKey, mergeRelations, mergeCharacters, mergeOpenPlots, buildProfileContext, buildRelationViewData };
 
 
-globalThis.RPHMemoryProfile = Object.freeze({ createEmptyProfile: createEmptyProfile, normalizeProfile: normalizeProfile, relationKey: relationKey, mergeRelations: mergeRelations, mergeCharacters: mergeCharacters, mergeOpenPlots: mergeOpenPlots, buildProfileContext: buildProfileContext, buildRelationViewData: buildRelationViewData });
-if (typeof window !== "undefined") window.RPHMemoryProfile = globalThis.RPHMemoryProfile;

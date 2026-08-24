@@ -280,5 +280,3 @@
 export default __exports;
 
 
-globalThis.RPHLocalTts = __exports;
-if (typeof window !== "undefined") window.RPHLocalTts = __exports;

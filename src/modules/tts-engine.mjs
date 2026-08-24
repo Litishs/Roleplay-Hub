@@ -138,5 +138,3 @@
 export default __exports;
 
 
-globalThis.RPHTts = __exports;
-if (typeof window !== "undefined") window.RPHTts = __exports;

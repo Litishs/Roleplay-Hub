@@ -189,5 +189,3 @@
 export { DEFAULTS, normalizeState, estimateTokens, computePendingBatch, pruneCoveredFailedBatches, buildRewriteMessages, parseSummaryJson, formatProgress };
 
 
-globalThis.RPHMemorySummary = Object.freeze({ DEFAULTS: DEFAULTS, normalizeState: normalizeState, estimateTokens: estimateTokens, computePendingBatch: computePendingBatch, pruneCoveredFailedBatches: pruneCoveredFailedBatches, buildRewriteMessages: buildRewriteMessages, parseSummaryJson: parseSummaryJson, formatProgress: formatProgress });
-if (typeof window !== "undefined") window.RPHMemorySummary = globalThis.RPHMemorySummary;

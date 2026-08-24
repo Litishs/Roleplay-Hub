@@ -223,5 +223,3 @@
 export { MAIN_ID, SCOPE_SEPARATOR, createId, getScopeId, getOwnerId, isBranchScopeId, defaultBranchName, createMainBranch, normalizeBranches, collectSubtreeIds, buildBranchTree, formatWordCount };
 
 
-globalThis.RPHStoryBranch = Object.freeze({ MAIN_ID: MAIN_ID, SCOPE_SEPARATOR: SCOPE_SEPARATOR, createId: createId, getScopeId: getScopeId, getOwnerId: getOwnerId, isBranchScopeId: isBranchScopeId, defaultBranchName: defaultBranchName, createMainBranch: createMainBranch, normalizeBranches: normalizeBranches, collectSubtreeIds: collectSubtreeIds, buildBranchTree: buildBranchTree, formatWordCount: formatWordCount });
-if (typeof window !== "undefined") window.RPHStoryBranch = globalThis.RPHStoryBranch;

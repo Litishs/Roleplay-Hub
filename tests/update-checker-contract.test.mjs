@@ -15,7 +15,7 @@ test("index.html uses Vite module entry point", () => {
 
 test("update-checker.js exports UMD interface", () => {
     assert.match(checker, /export { compareVersions, checkForUpdate/);
-    assert.match(checker, /globalThis\.RPHUpdateChecker/);
+    assert.match(checker, /export { compareVersions, checkForUpdate/);
     assert.match(checker, /checkForUpdate/);
     assert.match(checker, /downloadApk/);
     assert.match(checker, /saveAndInstallApk/);

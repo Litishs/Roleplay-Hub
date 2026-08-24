@@ -20,8 +20,7 @@ const read = (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
 test('engine loads and exposes RPHUiTemplateEngine', () => {
   assert.equal(typeof engine.renderUiTemplateString, 'function');
   assert.equal(typeof engine.applyUiTemplateUpdateListToTemplate, 'function');
-  assert.equal(globalThis.RPHUiTemplateEngine, engine);
-});
+  });
 
 test('renderUiTemplateString: basic replacement and HTML escaping', () => {
   assert.equal(renderUiTemplateString('你好 {{name}}', { name: '世界' }), '你好 世界');

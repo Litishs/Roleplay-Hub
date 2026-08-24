@@ -59,5 +59,3 @@
 export { RPHRuntimePolicy };
 
 
-globalThis.RPHRuntimePolicy = RPHRuntimePolicy;
-if (typeof window !== "undefined") window.RPHRuntimePolicy = RPHRuntimePolicy;

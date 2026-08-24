@@ -405,4 +405,3 @@ export default engine;
 
 
 
-globalThis.RPHUiTemplateEngine = engine;

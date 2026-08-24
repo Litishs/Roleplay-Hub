@@ -198,4 +198,3 @@
 export { RPHRequestDiagnostics };
 
 
-globalThis.RPHRequestDiagnostics = RPHRequestDiagnostics;

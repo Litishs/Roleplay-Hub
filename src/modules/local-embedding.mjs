@@ -181,5 +181,3 @@
 export { RPHLocalEmbedding };
 
 
-globalThis.RPHLocalEmbedding = RPHLocalEmbedding;
-if (typeof window !== "undefined") window.RPHLocalEmbedding = RPHLocalEmbedding;

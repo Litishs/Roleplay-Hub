@@ -10,7 +10,7 @@ const loadDiagnostics = async () => {
     getItem: key => values.get(key) ?? null,
     setItem: (key, value) => values.set(key, value)
   };
-  const context = vm.createContext({
+  const context = vm.createContext({ window: {},
     crypto: webcrypto,
     TextEncoder,
     URL,
@@ -23,7 +23,9 @@ const loadDiagnostics = async () => {
   });
   context.globalThis = context;
   const source = await readFile(new URL('../src/modules/request-diagnostics.mjs', import.meta.url), 'utf8');
-  const cleanSource = source.replace(/^export\s*\{[^}]*\};\s*$/m, '').replace(/^export default\s+\S+;\s*$/m, '');
+  const cleanSource = source.replace(/^export\s*\{([^}]*)\};\s*$/m, (_, exports) => {
+    return exports.split(',').map(s => { const n = s.trim(); return 'window.' + n + ' = ' + n + ';\nglobalThis.' + n + ' = ' + n + ';'; }).join('\\n');
+  }).replace(/^export default\s+(\S+);\s*$/m, (_, name) => { return 'window.' + name + ' = ' + name + ';\nglobalThis.' + name + ' = ' + name + ';'; });
   vm.runInContext(cleanSource, context, { filename: 'request-diagnostics.mjs' });
   return context.RPHRequestDiagnostics;
 };

@@ -214,5 +214,3 @@
 export { RPHStorage };
 
 
-globalThis.RPHStorage = RPHStorage;
-if (typeof window !== "undefined") window.RPHStorage = RPHStorage;
