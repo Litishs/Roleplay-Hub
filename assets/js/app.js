@@ -328,28 +328,48 @@ createApp({
             }
         };
 
-        const downloadAndInstallUpdate = async () => {
+        const downloadAndInstallUpdate = async (maxRetries = 2) => {
             if (downloadingUpdate.value) return;
             downloadingUpdate.value = true;
             downloadProgress.value = 0;
+            let lastError = '';
             try {
                 const checker = window.RPHUpdateChecker;
                 if (!checker) { showToast('\u66f4\u65b0\u6a21\u5757\u672a\u52a0\u8f7d', 'error'); return; }
-                showToast('\u6b63\u5728\u4e0b\u8f7d\u66f4\u65b0...', 'info', 0);
-                const dlResult = await checker.downloadApk(function(pct) {
-                    downloadProgress.value = pct;
-                });
-                if (dlResult.error) {
-                    showToast('\u4e0b\u8f7d\u5931\u8d25: ' + dlResult.error, 'error', 5000);
+                for (let attempt = 1; attempt <= maxRetries; attempt++) {
+                    if (attempt > 1) {
+                        showToast('\u91cd\u8bd5\u4e0b\u8f7d\u7b2c ' + attempt + ' / ' + maxRetries + ' \u6b21...', 'info', 2000);
+                    }
+                    showToast('\u6b63\u5728\u4e0b\u8f7d\u66f4\u65b0...', 'info', 0);
+                    const dlResult = await checker.downloadApk(function(pct) {
+                        downloadProgress.value = pct;
+                    });
+                    if (dlResult.error) {
+                        lastError = dlResult.error;
+                        if (attempt < maxRetries) {
+                            continue;
+                        }
+                        showToast('\u4e0b\u8f7d\u5931\u8d25: ' + dlResult.error, 'error', 5000);
+                        return;
+                    }
+                    showToast('\u6b63\u5728\u5b89\u88c5...', 'info', 0);
+                    const installResult = await checker.saveAndInstallApk(dlResult.data, dlResult.tag);
+                    if (installResult.error) {
+                        showToast('\u5b89\u88c5\u5931\u8d25: ' + installResult.error, 'error', 5000);
+                        return;
+                    }
+                    // Clean up cached APK after successful handoff to installer
+                    try {
+                        const Capacitor = window.Capacitor;
+                        if (Capacitor && Capacitor.Plugins.Filesystem) {
+                            const fileName = 'Roleplay-Hub-' + dlResult.tag + '-release.apk';
+                            await Capacitor.Plugins.Filesystem.deleteFile({ path: fileName, directory: 'CACHE' });
+                        }
+                    } catch (e) {}
+                    showToast('\u5df2\u5f00\u59cb\u5b89\u88c5\u66f4\u65b0', 'success');
                     return;
                 }
-                showToast('\u6b63\u5728\u5b89\u88c5...', 'info', 0);
-                const installResult = await checker.saveAndInstallApk(dlResult.data, dlResult.tag);
-                if (installResult.error) {
-                    showToast('\u5b89\u88c5\u5931\u8d25: ' + installResult.error, 'error', 5000);
-                    return;
-                }
-                showToast('\u5df2\u5f00\u59cb\u5b89\u88c5\u66f4\u65b0', 'success');
+                showToast('\u4e0b\u8f7d\u5931\u8d25\uff08\u5df2\u91cd\u8bd5 ' + maxRetries + ' \u6b21\uff09: ' + lastError, 'error', 5000);
             } catch (e) {
                 showToast('\u66f4\u65b0\u5931\u8d25: ' + e.message, 'error', 5000);
             } finally {

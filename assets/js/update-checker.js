@@ -10,6 +10,8 @@
     var GITHUB_REPO = "Litishs/Roleplay-Hub";
     var API_URL = "https://api.github.com/repos/" + GITHUB_REPO + "/releases/latest";
     var RELEASES_PAGE_URL = "https://github.com/" + GITHUB_REPO + "/releases/latest";
+    var DOWNLOAD_TIMEOUT_MS = 120000;
+    var MIN_APK_SIZE = 5 * 1024 * 1024;
 
     function compareVersions(a, b) {
         var partsA = String(a).split(".").map(Number);
@@ -58,13 +60,25 @@
         var tag = release.tag_name.replace(/^v/i, "");
         var downloadUrl = "https://github.com/" + GITHUB_REPO + "/releases/download/v" + tag + "/Roleplay-Hub-" + tag + "-release.apk";
 
+        var controller = new AbortController();
+        var timeoutId = setTimeout(function () { controller.abort(); }, DOWNLOAD_TIMEOUT_MS);
+
         try {
-            var response = await fetch(downloadUrl);
-            if (!response.ok) return { error: "Download failed: HTTP " + response.status };
-            var reader = response.body.getReader();
+            var response = await fetch(downloadUrl, { signal: controller.signal });
+            clearTimeout(timeoutId);
+            if (!response.ok) {
+                var hint = response.status === 404 ? "APK not found for this version" : "HTTP " + response.status;
+                return { error: hint };
+            }
             var contentLength = Number(response.headers.get("Content-Length")) || 0;
+            if (contentLength > 0 && contentLength < MIN_APK_SIZE) {
+                return { error: "Server response too small (" + Math.round(contentLength / 1024) + "KB), aborting" };
+            }
+
+            var reader = response.body.getReader();
             var receivedLength = 0;
             var chunks = [];
+
             while (true) {
                 var result = await reader.read();
                 if (result.done) break;
@@ -74,6 +88,14 @@
                     progressCallback(receivedLength / contentLength);
                 }
             }
+
+            if (contentLength > 0 && receivedLength !== contentLength) {
+                return { error: "Download incomplete: " + Math.round(receivedLength / 1024) + "KB of " + Math.round(contentLength / 1024) + "KB" };
+            }
+            if (receivedLength < MIN_APK_SIZE) {
+                return { error: "Downloaded file too small (" + Math.round(receivedLength / 1024) + "KB)" };
+            }
+
             var allChunks = new Uint8Array(receivedLength);
             var position = 0;
             for (var i = 0; i < chunks.length; i++) {
@@ -82,7 +104,11 @@
             }
             return { data: allChunks, tag: tag, error: null };
         } catch (e) {
-            return { error: "Download failed: " + e.message };
+            clearTimeout(timeoutId);
+            if (e.name === "AbortError") {
+                return { error: "Download timed out after " + (DOWNLOAD_TIMEOUT_MS / 1000) + "s" };
+            }
+            return { error: "Download failed: " + (e.message || "unknown error") };
         }
     }
 
@@ -93,6 +119,20 @@
             binary += String.fromCharCode(bytes[i]);
         }
         return btoa(binary);
+    }
+
+    async function cleanOldApkFiles(Filesystem) {
+        try {
+            var result = await Filesystem.readdir({ path: "", directory: "CACHE" });
+            var files = result.files || [];
+            for (var i = 0; i < files.length; i++) {
+                if (files[i].name && files[i].name.indexOf("Roleplay-Hub-") === 0 && files[i].name.indexOf("-release.apk") > 0) {
+                    await Filesystem.deleteFile({ path: files[i].name, directory: "CACHE" });
+                }
+            }
+        } catch (e) {
+            // Silently ignore cleanup errors
+        }
     }
 
     async function saveAndInstallApk(bytes, tag) {
@@ -107,6 +147,9 @@
         var fileName = "Roleplay-Hub-" + tag + "-release.apk";
 
         try {
+            // Clean up any stale APK files before writing new one
+            await cleanOldApkFiles(Filesystem);
+
             var result = await Filesystem.writeFile({
                 path: fileName,
                 data: b64,
@@ -120,7 +163,11 @@
             await NativeStorage.installApk({ filePath: filePath });
             return { error: null };
         } catch (e) {
-            return { error: "Installation failed: " + e.message };
+            // Clean up the partial file on failure
+            try {
+                await Filesystem.deleteFile({ path: fileName, directory: "CACHE" });
+            } catch (cleanupErr) {}
+            return { error: "Installation failed: " + (e.message || "unknown error") };
         }
     }
 
