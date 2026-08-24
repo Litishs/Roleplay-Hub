@@ -1,4 +1,4 @@
-import { cp, rm } from 'node:fs/promises';
+import { cp, mkdir, rm } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 
@@ -8,12 +8,25 @@ const output = path.join(root, 'dist');
 // Vite has already created dist/ with index.html + assets/xxx.js + assets/xxx.css.
 // We only need to copy assets that Vite doesn't handle.
 
+// Helper: copy a directory from source to dist if it exists
+const copyToDist = async (relativePath) => {
+  const src = path.join(root, relativePath);
+  const dst = path.join(output, relativePath);
+  if (existsSync(src)) {
+    await mkdir(path.dirname(dst), { recursive: true });
+    await cp(src, dst, { recursive: true });
+  }
+};
+
 // Copy vendor scripts (Vue, marked, purify, Sortable) referenced by index.html
-const vendorSrc = path.join(root, 'assets', 'vendor');
-const vendorDst = path.join(output, 'assets', 'vendor');
-if (existsSync(vendorSrc)) {
-  await cp(vendorSrc, vendorDst, { recursive: true });
-}
+await copyToDist('assets/vendor');
+
+// Copy UMD fallback JS (card-utils.js, ui-select.js) needed by character workshop iframe
+await copyToDist('assets/js');
+
+// Copy CSS assets needed by character workshop page (fonts.css, character.css)
+await copyToDist('assets/css');
+await copyToDist('assets/generated');
 
 // Copy character workshop page (separate entry, not processed by Vite)
 const charSrc = path.join(root, 'character');

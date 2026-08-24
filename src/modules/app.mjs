@@ -35,10 +35,10 @@ import { MAIN_ID, SCOPE_SEPARATOR, createId, getScopeId, getOwnerId, isBranchSco
 import * as RPHMemorySummary from './memory-summary.mjs';
 import * as RPHMemoryProfile from './memory-profile.mjs';
 const RPHStoryBranch = { MAIN_ID, SCOPE_SEPARATOR, createId, getScopeId, getOwnerId, isBranchScopeId, defaultBranchName, createMainBranch, normalizeBranches, collectSubtreeIds, buildBranchTree, formatWordCount };
-import UiTemplatePending from './components/UiTemplatePending.vue';
-import EmbeddedViewContent from './components/EmbeddedViewContent.vue';
-import GenerationTimer from './components/GenerationTimer.vue';
-import SettingsPageHeader from './components/SettingsPageHeader.vue';
+import UiTemplatePending from '../components/UiTemplatePending.vue';
+import EmbeddedViewContent from '../components/EmbeddedViewContent.vue';
+import GenerationTimer from '../components/GenerationTimer.vue';
+import SettingsPageHeader from '../components/SettingsPageHeader.vue';
 import { generateUUID, parseCot } from './utils.mjs';
 
 createApp({
