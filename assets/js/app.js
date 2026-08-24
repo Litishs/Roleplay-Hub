@@ -284,7 +284,86 @@ createApp({
             quotaValue.value = 0;
             quotaError.value = false;
         };
+        // Update check state
+        const updateAvailable = ref(false);
+        const updateInfo = ref(null);
+        const checkingUpdate = ref(false);
+        const lastUpdateCheck = ref(null);
+        const latestVersionName = ref('');
+        const downloadingUpdate = ref(false);
+        const downloadProgress = ref(0);
 
+        const checkForUpdates = async (showResult = true) => {
+            if (checkingUpdate.value) return;
+            checkingUpdate.value = true;
+            try {
+                const checker = window.RPHUpdateChecker;
+                if (!checker) {
+                    if (showResult) showToast('\u66f4\u65b0\u68c0\u67e5\u6a21\u5757\u672a\u52a0\u8f7d', 'error');
+                    return;
+                }
+                const currentVer = appVersionName.value || '0.0';
+                const result = await checker.checkForUpdate(currentVer);
+                lastUpdateCheck.value = Date.now();
+                if (result.release) {
+                    latestVersionName.value = result.release.tag_name.replace(/^v/i, '');
+                }
+                if (result.hasUpdate && result.release) {
+                    updateAvailable.value = true;
+                    updateInfo.value = result.release;
+                    if (showResult) {
+                        const doUpdate = await showVueConfirmModal(
+                            '\u53d1\u73b0\u65b0\u7248\u672c',
+                            'v' + currentVer + ' \u2192 v' + latestVersionName.value + '\n\n\u662f\u5426\u4e0b\u8f7d\u5e76\u66f4\u65b0\uff1f'
+                        );
+                        if (doUpdate) await downloadAndInstallUpdate();
+                    }
+                } else if (showResult) {
+                    showToast('\u5f53\u524d\u5df2\u662f\u6700\u65b0\u7248\u672c', 'success');
+                }
+            } catch (error) {
+                if (showResult) showToast('\u68c0\u67e5\u66f4\u65b0\u5931\u8d25', 'error');
+            } finally {
+                checkingUpdate.value = false;
+            }
+        };
+
+        const downloadAndInstallUpdate = async () => {
+            if (downloadingUpdate.value) return;
+            downloadingUpdate.value = true;
+            downloadProgress.value = 0;
+            try {
+                const checker = window.RPHUpdateChecker;
+                if (!checker) { showToast('\u66f4\u65b0\u6a21\u5757\u672a\u52a0\u8f7d', 'error'); return; }
+                showToast('\u6b63\u5728\u4e0b\u8f7d\u66f4\u65b0...', 'info', 0);
+                const dlResult = await checker.downloadApk(function(pct) {
+                    downloadProgress.value = pct;
+                });
+                if (dlResult.error) {
+                    showToast('\u4e0b\u8f7d\u5931\u8d25: ' + dlResult.error, 'error', 5000);
+                    return;
+                }
+                showToast('\u6b63\u5728\u5b89\u88c5...', 'info', 0);
+                const installResult = await checker.saveAndInstallApk(dlResult.data, dlResult.tag);
+                if (installResult.error) {
+                    showToast('\u5b89\u88c5\u5931\u8d25: ' + installResult.error, 'error', 5000);
+                    return;
+                }
+                showToast('\u5df2\u5f00\u59cb\u5b89\u88c5\u66f4\u65b0', 'success');
+            } catch (e) {
+                showToast('\u66f4\u65b0\u5931\u8d25: ' + e.message, 'error', 5000);
+            } finally {
+                downloadingUpdate.value = false;
+                downloadProgress.value = 0;
+            }
+        };
+
+        // Silent auto-check on startup
+        setTimeout(function() {
+            if (window.RPHUpdateChecker && appVersionName.value) {
+                checkForUpdates(false);
+            }
+        }, 5000);
         // Author Notice Modal (首次启动的作者致谢公告)
         const showAuthorNoticeModal = ref(false);
         const closeAuthorNoticeModal = () => {
@@ -14327,7 +14406,7 @@ image###生成的提示词###
 
             showRegexEditor, showWorldInfoEditor, editingRegex, editingWorldInfo, worldInfoKeysText, updateEditingWorldInfoKeys,
             worldInfoSettings, showWorldInfoSettings, showMemorySettings, settingsHelpTopic, showActiveToolSettings, showUiTemplateSettings, estimatedGenerationTime, currentWaitTime,
-            appVersionName, appVersionCode,
+            appVersionName, appVersionCode, checkForUpdates, checkingUpdate, updateAvailable, updateInfo, latestVersionName, downloadingUpdate, downloadProgress, downloadAndInstallUpdate,
             globalConfirmModal,
             togglePlacement: (val) => {
                 if (!editingRegex.data.placement) editingRegex.data.placement = [];

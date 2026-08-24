@@ -10,6 +10,7 @@ import android.content.SharedPreferences;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.net.Uri;
+import androidx.core.content.FileProvider;
 import android.provider.Settings;
 import android.security.keystore.KeyGenParameterSpec;
 import android.security.keystore.KeyProperties;
@@ -806,6 +807,29 @@ public class NativeStoragePlugin extends Plugin {
                 .trim();
         if (sanitized.isEmpty()) sanitized = "roleplay-hub-export";
         return sanitized.length() > 160 ? sanitized.substring(0, 160) : sanitized;
+    }
+
+    @PluginMethod
+    public void installApk(PluginCall call) {
+        String filePath = call.getString("filePath");
+        if (filePath == null) { call.reject("filePath is required"); return; }
+        try {
+            File file = new File(filePath);
+            if (!file.exists()) { call.reject("APK file not found: " + filePath); return; }
+            Uri apkUri = FileProvider.getUriForFile(
+                getContext(),
+                getContext().getPackageName() + ".fileprovider",
+                file
+            );
+            Intent intent = new Intent(Intent.ACTION_VIEW);
+            intent.setDataAndType(apkUri, "application/vnd.android.package-archive");
+            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            getContext().startActivity(intent);
+            call.resolve();
+        } catch (Exception error) {
+            call.reject("Unable to install APK", error);
+        }
     }
 
     private static String sanitizeFileName(String value) {
