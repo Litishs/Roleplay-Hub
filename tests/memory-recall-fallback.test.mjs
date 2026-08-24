@@ -1,9 +1,6 @@
 import assert from 'node:assert/strict';
-import { createRequire } from 'node:module';
 import test from 'node:test';
-
-const require = createRequire(import.meta.url);
-const { select } = require('../assets/js/memory-recall-fallback.js');
+import { select } from '../src/modules/memory-recall-fallback.mjs';
 
 test('嵌入召回失败时优先选择关键词命中的记忆', () => {
   const memories = [

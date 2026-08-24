@@ -1,12 +1,13 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
-import memorySummary from '../assets/js/memory-summary.js';
+import * as memorySummary from '../src/modules/memory-summary.mjs';
 
 const [html, app] = await Promise.all([
     readFile(new URL('../index.html', import.meta.url), 'utf8'),
-    readFile(new URL('../assets/js/app.js', import.meta.url), 'utf8')
+    readFile(new URL('../src/modules/app.mjs', import.meta.url), 'utf8')
 ]);
+    const mainJs = await readFile(new URL("../src/main.js", import.meta.url), "utf8");
 
 test('滚动摘要:窗口外未攒满一批时不触发', () => {
     const pending = memorySummary.computePendingBatch([], 20, { keepFloors: 16, batchSize: 8 });
@@ -139,7 +140,7 @@ test('滚动摘要:进度提示文案三种状态', () => {
 });
 
 test('滚动摘要:index.html 加载模块并渲染进度提示', () => {
-    assert.ok(html.includes('assets/js/memory-summary.js'));
+    assert.ok(app.includes('./memory-summary.mjs'));
     assert.ok(html.includes('summaryProgress'));
     assert.ok(html.includes('retryRollingSummary'));
     assert.ok(html.includes('正在总结 第'));

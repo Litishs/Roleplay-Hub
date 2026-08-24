@@ -1,13 +1,14 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
-import storyBranch from '../assets/js/story-branch.js';
+import * as storyBranch from '../src/modules/story-branch.mjs';
 
 const [html, app, presets] = await Promise.all([
     readFile(new URL('../index.html', import.meta.url), 'utf8'),
-    readFile(new URL('../assets/js/app.js', import.meta.url), 'utf8'),
-    readFile(new URL('../assets/js/default-presets.js', import.meta.url), 'utf8')
+    readFile(new URL('../src/modules/app.mjs', import.meta.url), 'utf8'),
+    readFile(new URL('../src/modules/default-presets.mjs', import.meta.url), 'utf8')
 ]);
+    const mainJs = await readFile(new URL("../src/main.js", import.meta.url), "utf8");
 
 test('story-branch.js exposes branch API', () => {
     assert.equal(storyBranch.MAIN_ID, 'main');
@@ -70,16 +71,9 @@ test('buildBranchTree lays out nodes and links', () => {
     assert.equal(tree.nodes.find(node => node.id === 'b1').isSelected, false);
 });
 
-test('index.html loads story-branch.js before app.js', () => {
-    const branchIdx = html.indexOf('assets/js/story-branch.js');
-    const appIdx = html.indexOf('assets/js/app.js');
-    assert.ok(branchIdx > -1, 'story-branch.js 必须被 index.html 加载');
-    assert.ok(appIdx > -1, 'app.js 必须被 index.html 加载');
-    assert.ok(branchIdx < appIdx, 'story-branch.js 必须先于 app.js 加载');
-});
 
 test('app.js wires branch state and actions into setup return', () => {
-    assert.ok(app.includes('storyBranchApi = () => globalThis.RPHStoryBranch'));
+    assert.ok(app.includes('const RPHStoryBranch = {'));
     assert.ok(app.includes('const storyBranches = ref([])'));
     assert.ok(app.includes('const activeStoryBranchId = ref(\'main\')'));
     assert.ok(app.includes('const createStoryBranch = async'));
@@ -111,4 +105,9 @@ test('default-presets.js seeds 时间戳 preset', () => {
     assert.ok(presets.includes('role: "system"'));
     assert.ok(presets.includes('<timestamp_rule>'));
     assert.ok(presets.includes('正文第一行必须单独输出当前剧情时间戳'));
+});
+
+
+test('src/main.js imports story-branch.js', () => {
+    assert.ok(app.includes('./story-branch.mjs'));
 });

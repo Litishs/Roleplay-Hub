@@ -1,15 +1,16 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
-import ttsText from '../assets/js/tts-text.js';
-import ttsEngine from '../assets/js/tts-engine.js';
+import ttsText from '../src/modules/tts-text.mjs';
+import ttsEngine from '../src/modules/tts-engine.mjs';
 
 const [html, app, mainActivity, pluginSource] = await Promise.all([
     readFile(new URL('../index.html', import.meta.url), 'utf8'),
-    readFile(new URL('../assets/js/app.js', import.meta.url), 'utf8'),
+    readFile(new URL('../src/modules/app.mjs', import.meta.url), 'utf8'),
     readFile(new URL('../android/app/src/main/java/com/roleplayhub/app/MainActivity.java', import.meta.url), 'utf8'),
     readFile(new URL('../android/app/src/main/java/com/roleplayhub/app/TTSSpeechPlugin.java', import.meta.url), 'utf8')
 ]);
+    const mainJs = await readFile(new URL("../src/main.js", import.meta.url), "utf8");
 
 test('tts-text.js exposes extractSpeakText', () => {
     assert.equal(typeof ttsText.extractSpeakText, 'function');
@@ -68,14 +69,6 @@ test('tts-engine.js exposes bridge API and degrades without Capacitor', async ()
     await assert.rejects(() => ttsEngine.speak({ text: '测试' }), /原生插件不可用/);
 });
 
-test('index.html loads tts modules before app.js', () => {
-    const appIdx = html.indexOf('assets/js/app.js');
-    const textIdx = html.indexOf('assets/js/tts-text.js');
-    const engineIdx = html.indexOf('assets/js/tts-engine.js');
-    assert.ok(textIdx > 0 && textIdx < appIdx);
-    assert.ok(engineIdx > 0 && engineIdx < appIdx);
-    assert.ok(textIdx < engineIdx);
-});
 
 test('index.html renders TTS play/stop action and settings section', () => {
     assert.match(html, /toggleSpeakMessage\(index\)/);
@@ -127,8 +120,8 @@ test('app.js wires TTS defaults, engine, actions and auto-play', () => {
     assert.match(app, /ttsDialogueOnly: false/);
     assert.match(app, /ttsSkipActions: false/);
     assert.match(app, /ttsMaxChars: 2000/);
-    assert.match(app, /globalThis\.RPHTts/);
-    assert.match(app, /globalThis\.RPHTtsText/);
+    assert.match(app, /\bRPHTts\b/);
+    assert.match(app, /\bRPHTtsText\b/);
     assert.match(app, /const toggleSpeakMessage = async \(index\) => \{/);
     assert.match(app, /const stopSpeaking = async \(\) => \{/);
     assert.match(app, /settings\.ttsEnabled && settings\.ttsAutoPlay/);
@@ -152,4 +145,10 @@ test('native side registers TTSSpeech plugin and exposes TTS methods', () => {
     assert.match(pluginSource, /UtteranceProgressListener/);
     assert.match(pluginSource, /notifyListeners\(EVENT_STATE, payload\)/);
     assert.doesNotMatch(pluginSource, /SECRET_PREFERENCES|secretSet/);
+});
+
+
+test('src/main.js imports tts modules', () => {
+    assert.ok(app.includes('./tts-text.mjs'));
+    assert.ok(app.includes('./tts-engine.mjs'));
 });

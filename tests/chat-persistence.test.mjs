@@ -5,8 +5,9 @@ import vm from 'node:vm';
 
 const loadPersistence = async () => {
   const context = vm.createContext({ window: {} });
-  const source = await readFile(new URL('../assets/js/chat-persistence.js', import.meta.url), 'utf8');
-  vm.runInContext(source, context);
+  const source = await readFile(new URL('../src/modules/chat-persistence.mjs', import.meta.url), 'utf8');
+  const cleanSource = source.replace(/^export\s*\{[^}]*\};\s*$/m, '').replace(/^export default\s+\S+;\s*$/m, '');
+  vm.runInContext(cleanSource, context);
   return context.window.RPHChatPersistence;
 };
 

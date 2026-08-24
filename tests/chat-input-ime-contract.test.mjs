@@ -5,7 +5,7 @@ import test from 'node:test';
 test('chat input uses a textarea with IME-safe handlers', async () => {
   const [html, source] = await Promise.all([
     readFile(new URL('../index.html', import.meta.url), 'utf8'),
-    readFile(new URL('../assets/js/app.js', import.meta.url), 'utf8')
+    readFile(new URL('../src/modules/app.mjs', import.meta.url), 'utf8')
   ]);
 
   const chatInput = html.match(/<textarea[\s\S]*?ref="inputBox"><\/textarea>/)?.[0] || '';
@@ -31,7 +31,7 @@ test('chat input uses a textarea with IME-safe handlers', async () => {
 });
 
 test('chat input reads textarea value, pastes plain text, and auto-resizes', async () => {
-  const source = await readFile(new URL('../assets/js/app.js', import.meta.url), 'utf8');
+  const source = await readFile(new URL('../src/modules/app.mjs', import.meta.url), 'utf8');
 
   assert.match(source, /const syncChatInputFromElement = \(element = inputBox\.value\) => \{[\s\S]*?typeof element\.value === 'string' \? element\.value/);
   assert.match(source, /const handleChatInputPaste = \(event\) => \{[\s\S]*?getData\('text\/plain'\)[\s\S]*?document\.execCommand\('insertText', false, text\)/);
@@ -47,7 +47,7 @@ test('chat input reads textarea value, pastes plain text, and auto-resizes', asy
 
 
 test('chat input Enter inserts newline, Ctrl/Cmd+Enter sends', async () => {
-  const source = await readFile(new URL('../assets/js/app.js', import.meta.url), 'utf8');
+  const source = await readFile(new URL('../src/modules/app.mjs', import.meta.url), 'utf8');
 
   // 回车不再触发发送：不再有 shiftKey 短路后直接 preventDefault + sendMessage 的旧逻辑
   assert.doesNotMatch(source, /if \(event\.shiftKey\) return;[\s\S]*?event\.preventDefault\(\);[\s\S]*?sendMessage\(\);/);

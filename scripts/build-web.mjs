@@ -1,18 +1,34 @@
-﻿import { cp, mkdir, rm } from 'node:fs/promises';
+import { cp, rm } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import path from 'node:path';
 
 const root = process.cwd();
 const output = path.join(root, 'dist');
 
-await rm(output, { recursive: true, force: true });
-await mkdir(output, { recursive: true });
+// Vite has already created dist/ with index.html + assets/xxx.js + assets/xxx.css.
+// We only need to copy assets that Vite doesn't handle.
 
-for (const entry of ['index.html', 'character', 'assets', 'LICENSE']) {
-  await cp(path.join(root, entry), path.join(output, entry), { recursive: true });
+// Copy vendor scripts (Vue, marked, purify, Sortable) referenced by index.html
+const vendorSrc = path.join(root, 'assets', 'vendor');
+const vendorDst = path.join(output, 'assets', 'vendor');
+if (existsSync(vendorSrc)) {
+  await cp(vendorSrc, vendorDst, { recursive: true });
 }
 
-// 用户的备份 .zip（assets/backup/，含聊天/媒体数据）只应在导出时产生，
-// 绝不能打进发行包：dist 是 cap sync / APK 的输入源。
+// Copy character workshop page (separate entry, not processed by Vite)
+const charSrc = path.join(root, 'character');
+const charDst = path.join(output, 'character');
+if (existsSync(charSrc)) {
+  await cp(charSrc, charDst, { recursive: true });
+}
+
+// Copy LICENSE
+const licenseSrc = path.join(root, 'LICENSE');
+const licenseDst = path.join(output, 'LICENSE');
+if (existsSync(licenseSrc)) {
+  await cp(licenseSrc, licenseDst);
+}
+
+// Clean up assets that shouldn't be in the APK
 await rm(path.join(output, 'assets', 'backup'), { recursive: true, force: true });
-// 角色卡资产图片仅供开发测试使用，不应打包进 APK。
 await rm(path.join(output, 'assets', 'character'), { recursive: true, force: true });

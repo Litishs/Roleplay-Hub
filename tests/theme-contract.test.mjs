@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 test('dark mode theme state machine is wired in app.js', async () => {
-  const source = await readFile(new URL('../assets/js/app.js', import.meta.url), 'utf8');
+  const source = await readFile(new URL('../src/modules/app.mjs', import.meta.url), 'utf8');
 
   // 默认值煎０鏄庯紙loadData 鍙悎骞?settings 涓凡瀛樺湪鐨?key锛屽繀椤诲厛澹版槑锛?
   assert.match(source, /themeMode:\s*'system'/);

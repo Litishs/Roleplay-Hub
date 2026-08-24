@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
-import engine from '../assets/js/ui-template-engine.js';
+import engine from '../src/modules/ui-template-engine.mjs';
 
 const {
   renderUiTemplateString,
@@ -134,18 +134,14 @@ test('analyzeUiTemplateScriptRisk / hasUiTemplateScripts', () => {
   assert.equal(hasUiTemplateScripts('<button data-only="1">x</button>'), false, '非事件属性不误报');
 });
 
-test('index.html loads ui-template-engine.js before app.js', async () => {
+test('index.html uses Vite module entry point', async () => {
   const html = await read('index.html');
-  const loadOrder = html.match(/<script src="assets\/js\/([^"]+\.js)"><\/script>/g) || [];
-  const indexOfEngine = loadOrder.findIndex(line => line.includes('ui-template-engine.js'));
-  const indexOfApp = loadOrder.findIndex(line => line.includes('app.js'));
-  assert.ok(indexOfEngine !== -1, 'ui-template-engine.js should be referenced');
-  assert.ok(indexOfEngine < indexOfApp, 'ui-template-engine.js must load before app.js');
+  assert.ok(html.includes('<script type="module" src="/src/main.js">'), 'Vite module entry should be present');
 });
 
 test('app.js reuses engine functions instead of redefining them', async () => {
-  const source = await read('assets/js/app.js');
-  assert.match(source, /window\.RPHUiTemplateEngine/);
+  const source = await read('src/modules/app.mjs');
+  assert.match(source, /import engine from/);
   assert.doesNotMatch(source, /const renderUiTemplateString = \(templateText/);
   assert.doesNotMatch(source, /const normalizeUiTemplateUpdateList = \(parsed\) =>/);
   assert.doesNotMatch(source, /const applyUiTemplateUpdateListToTemplate = \(template, updates/);
@@ -153,13 +149,13 @@ test('app.js reuses engine functions instead of redefining them', async () => {
 });
 
 test('app.js: applyMainModelUiTemplateUpdates renders panel before early returns and marks needsFallback', async () => {
-  const source = await read('assets/js/app.js');
+  const source = await read('src/modules/app.mjs');
   const block = source.match(/const applyMainModelUiTemplateUpdates = \(targetMessage, model = settings\.model\) => \{[\s\S]*?attachUiTemplateBlocksToLastAssistant\(\{ targetMessageId: targetMessage\.id \}\);\s*\n\s*const match = String\(targetMessage\.content[\s\S]*?needsFallback: true/);
   assert.ok(block, '主模型路径先渲染面板，未返回块时返回 needsFallback');
 });
 
 test('app.js: D1 batch mode / C1 json mode / D2 model required markers', async () => {
-  const source = await read('assets/js/app.js');
+  const source = await read('src/modules/app.mjs');
   assert.match(source, /uiTemplateBatchMode: true/);
   assert.match(source, /uiTemplateJsonMode: true/);
   assert.match(source, /UI_TEMPLATE_BATCH_MAX_TEMPLATES = 5/);
@@ -170,21 +166,21 @@ test('app.js: D1 batch mode / C1 json mode / D2 model required markers', async (
 });
 
 test('app.js: B1 appends UI template instruction at end of messages', async () => {
-  const source = await read('assets/js/app.js');
+  const source = await read('src/modules/app.mjs');
   assert.match(source, /mainModelUiTemplatePrompt[\s\S]*?finalMessages\.push\(\{[\s\S]*?Instructions for next message[\s\S]*?mainModelUiTemplatePrompt/);
   assert.doesNotMatch(source, /insertUserMessageAtDepth\(mainModelUiTemplatePrompt, 1\)/);
   assert.match(source, /不要写进思考过程（reasoning\/CoT）里/);
 });
 
 test('card-utils.js and app.js no longer persist updateMode', async () => {
-  const cardUtils = await read('assets/js/card-utils.js');
-  const source = await read('assets/js/app.js');
+  const cardUtils = await read('src/modules/card-utils.mjs');
+  const source = await read('src/modules/app.mjs');
   assert.doesNotMatch(cardUtils, /updateMode/);
   assert.doesNotMatch(source, /updateMode: template\.updateMode/);
 });
 
 test('app.js: UI模板变量分析请求不使用未声明的裸 apiKey', async () => {
-  const app = await read('assets/js/app.js');
+  const app = await read('src/modules/app.mjs');
   const start = app.indexOf('const chatProviderForAnalysis = getChatProvider();');
   const end = app.indexOf('const filterMemoriesAsync');
   assert.ok(start > 0 && end > start, '应能找到 UI 模板分析函数边界');

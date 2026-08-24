@@ -7,12 +7,13 @@ const loadScript = async (relativePath, contextValues = {}) => {
   const context = vm.createContext({ console, ...contextValues });
   context.window ||= {};
   const source = await readFile(new URL(`../${relativePath}`, import.meta.url), 'utf8');
-  vm.runInContext(source, context, { filename: relativePath });
+  const cleanSource = source.replace(/^export\s*\{[^}]*\};\s*$/m, '').replace(/^export default\s+\S+;\s*$/m, '');
+  vm.runInContext(cleanSource, context, { filename: relativePath });
   return context;
 };
 
 test('chat window never mounts more than 40 of 1000 messages', async () => {
-  const context = await loadScript('assets/js/runtime-policy.js');
+  const context = await loadScript('src/modules/runtime-policy.mjs');
   const policy = context.window.RPHRuntimePolicy;
   const start = policy.getChatWindow(1000, 0, 1000);
   const middle = policy.getChatWindow(1000, 475, 1000);
@@ -26,7 +27,7 @@ test('chat window never mounts more than 40 of 1000 messages', async () => {
 });
 
 test('render cache is a true LRU capped at 100 entries', async () => {
-  const context = await loadScript('assets/js/runtime-policy.js');
+  const context = await loadScript('src/modules/runtime-policy.mjs');
   const { LruCache } = context.window.RPHRuntimePolicy;
   const cache = new LruCache(100);
 
@@ -40,7 +41,7 @@ test('render cache is a true LRU capped at 100 entries', async () => {
 });
 
 test('runtime limits match the APK performance contract', async () => {
-  const context = await loadScript('assets/js/runtime-policy.js');
+  const context = await loadScript('src/modules/runtime-policy.mjs');
   assert.deepEqual(
     JSON.parse(JSON.stringify(context.window.RPHRuntimePolicy.limits)),
     {

@@ -1,9 +1,6 @@
 import assert from 'node:assert/strict';
-import { createRequire } from 'node:module';
 import test from 'node:test';
-
-const require = createRequire(import.meta.url);
-const { create } = require('../assets/js/chat-request-guard.js');
+import { create } from '../src/modules/chat-request-guard.mjs';
 
 const createClockedGuard = () => {
   let clock = 0;
@@ -17,7 +14,7 @@ const createClockedGuard = () => {
   return { guard, setClock: value => { clock = value; } };
 };
 
-test('SSE 空心跳不能延长首个有效 token 的截止时间', () => {
+test('SSE empty heartbeat cannot extend first token deadline', () => {
   const { guard, setClock } = createClockedGuard();
   guard.markHeaders(1_000);
 
@@ -30,11 +27,11 @@ test('SSE 空心跳不能延长首个有效 token 的截止时间', () => {
   assert.equal(guard.getTimeout()?.stage, 'timed_out_waiting_first_token');
 });
 
-test('只有有效正文或思维内容才能刷新流空闲期限', () => {
+test('Only meaningful content or reasoning can refresh stream idle', () => {
   const { guard, setClock } = createClockedGuard();
   guard.markHeaders(0);
   setClock(10_000);
-  assert.equal(guard.markMeaningful('第一段正文', ''), true);
+  assert.equal(guard.markMeaningful('first text', ''), true);
 
   setClock(100_000);
   assert.equal(guard.markMeaningful('   ', '\n'), false);
@@ -44,7 +41,7 @@ test('只有有效正文或思维内容才能刷新流空闲期限', () => {
   assert.equal(guard.getTimeout()?.stage, 'timed_out_streaming');
 });
 
-test('持续输出也不能突破生成总时限', () => {
+test('Continuous output cannot exceed total timeout', () => {
   const { guard, setClock } = createClockedGuard();
   guard.markHeaders(0);
   for (let clock = 10_000; clock < 600_000; clock += 10_000) {
@@ -57,7 +54,7 @@ test('持续输出也不能突破生成总时限', () => {
   assert.equal(guard.getTimeout()?.stage, 'timed_out_total');
 });
 
-test('首包等待有独立截止时间', () => {
+test('First byte wait has independent deadline', () => {
   const { guard, setClock } = createClockedGuard();
   setClock(59_999);
   assert.equal(guard.getTimeout(), null);

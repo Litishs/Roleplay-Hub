@@ -22,8 +22,9 @@ const loadDiagnostics = async () => {
     setTimeout
   });
   context.globalThis = context;
-  const source = await readFile(new URL('../assets/js/request-diagnostics.js', import.meta.url), 'utf8');
-  vm.runInContext(source, context, { filename: 'request-diagnostics.js' });
+  const source = await readFile(new URL('../src/modules/request-diagnostics.mjs', import.meta.url), 'utf8');
+  const cleanSource = source.replace(/^export\s*\{[^}]*\};\s*$/m, '').replace(/^export default\s+\S+;\s*$/m, '');
+  vm.runInContext(cleanSource, context, { filename: 'request-diagnostics.mjs' });
   return context.RPHRequestDiagnostics;
 };
 

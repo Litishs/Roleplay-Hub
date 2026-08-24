@@ -48,9 +48,10 @@ test('HTML card lifecycle keeps at most three iframes active', async () => {
   });
   window.IntersectionObserver = FakeIntersectionObserver;
 
-  for (const path of ['assets/js/runtime-policy.js', 'assets/js/html-frame-lifecycle.js']) {
+  for (const path of ['src/modules/runtime-policy.mjs', 'src/modules/html-frame-lifecycle.mjs']) {
     const source = await readFile(new URL(`../${path}`, import.meta.url), 'utf8');
-    vm.runInContext(source, context, { filename: path });
+    const cleanSource = source.replace(/^export\s*\{[^}]*\};\s*$/m, '').replace(/^export default\s+\S+;\s*$/m, '');
+    vm.runInContext(cleanSource, context, { filename: path });
   }
 
   for (const frame of frames) intersectionCallback([{ target: frame, isIntersecting: true }]);

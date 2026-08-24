@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 test('regex-generated srcdoc frames are rebuilt as controlled executable frames', async () => {
-  const source = await readFile(new URL('../assets/js/app.js', import.meta.url), 'utf8');
+  const source = await readFile(new URL('../src/modules/app.mjs', import.meta.url), 'utf8');
 
   assert.match(source, /const sanitizeWithControlledSrcdocFrames = \(rawMarkup\) =>/);
   assert.match(source, /querySelectorAll\('iframe\[srcdoc\]'\)/);
@@ -17,7 +17,7 @@ test('regex-generated srcdoc frames are rebuilt as controlled executable frames'
 });
 
 test('controlled frames retain the app sandbox and lifecycle class', async () => {
-  const source = await readFile(new URL('../assets/js/app.js', import.meta.url), 'utf8');
+  const source = await readFile(new URL('../src/modules/app.mjs', import.meta.url), 'utf8');
 
   assert.match(source, /iframe\.className = `w-full bg-white block executable-html-frame/);
   assert.match(source, /iframe\.setAttribute\('sandbox', htmlIframeSandbox\)/);
@@ -29,7 +29,7 @@ test('controlled frames retain the app sandbox and lifecycle class', async () =>
 });
 
 test('HTML card detection covers common block tags in fenced code blocks', async () => {
-  const source = await readFile(new URL('../assets/js/app.js', import.meta.url), 'utf8');
+  const source = await readFile(new URL('../src/modules/app.mjs', import.meta.url), 'utf8');
 
   assert.match(source, /const htmlBlockStartPattern = /);
   assert.match(source, /section\|article\|aside\|header\|footer\|nav\|main\|form\|fieldset\|ul\|ol\|li/);

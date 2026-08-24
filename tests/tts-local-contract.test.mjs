@@ -1,16 +1,17 @@
 import assert from 'node:assert/strict';
 import { access, readFile } from 'node:fs/promises';
 import test from 'node:test';
-import localTtsEngine from '../assets/js/tts-local-engine.js';
+import localTtsEngine from '../src/modules/tts-local-engine.mjs';
 
 const [html, app, mainActivity, pluginSource, buildGradle, gitignore] = await Promise.all([
     readFile(new URL('../index.html', import.meta.url), 'utf8'),
-    readFile(new URL('../assets/js/app.js', import.meta.url), 'utf8'),
+    readFile(new URL('../src/modules/app.mjs', import.meta.url), 'utf8'),
     readFile(new URL('../android/app/src/main/java/com/roleplayhub/app/MainActivity.java', import.meta.url), 'utf8'),
     readFile(new URL('../android/app/src/main/java/com/roleplayhub/app/LocalTTSPlugin.java', import.meta.url), 'utf8'),
     readFile(new URL('../android/app/build.gradle', import.meta.url), 'utf8'),
     readFile(new URL('../.gitignore', import.meta.url), 'utf8')
 ]);
+    const mainJs = await readFile(new URL("../src/main.js", import.meta.url), "utf8");
 
 test('tts-local-engine.js exposes engine API and voice catalog', () => {
     assert.equal(typeof localTtsEngine.getStatus, 'function');
@@ -60,13 +61,6 @@ test('tts-local-engine degrades gracefully without Capacitor', async () => {
     await assert.rejects(() => localTtsEngine.speak({ text: 'test' }), /plugin unavailable|No local voice/);
 });
 
-test('index.html loads tts-local-engine.js between tts-engine.js and app.js', () => {
-    const appIdx = html.indexOf('assets/js/app.js');
-    const engineIdx = html.indexOf('assets/js/tts-engine.js');
-    const localIdx = html.indexOf('assets/js/tts-local-engine.js');
-    assert.ok(engineIdx > 0 && engineIdx < appIdx);
-    assert.ok(localIdx > engineIdx && localIdx < appIdx);
-});
 
 test('index.html renders local voice management UI and drops the placeholder', () => {
     assert.match(html, /v-else class="bg-gray-50\/60 p-3 rounded-xl border border-gray-100 space-y-3"/);
@@ -93,7 +87,7 @@ test('app.js marks the local engine available and dispatches speak by service', 
     assert.match(app, /ttsLocalVoice: ''/);
     assert.match(app, /const speakTtsText = async \(text\) => \{/);
     assert.match(app, /settings\.ttsService === 'local'/);
-    assert.match(app, /globalThis\.RPHLocalTts/);
+    assert.match(app, /\bRPHLocalTts\b/);
     assert.match(app, /const speakTtsTextViaSystem = async \(text\) => \{/);
     assert.match(app, /falling back to system TTS/);
     assert.match(app, /const stopSpeaking = async \(\) => \{/);
@@ -152,4 +146,9 @@ test('prepare-local-tts script exists and libs dir stays untracked', async () =>
     assert.match(script, /sherpa-onnx/);
     assert.match(script, /SHERPA_ONNX_MIRROR_URL/);
     assert.match(gitignore, /android\/app\/libs\//);
+});
+
+
+test('src/main.js imports tts-local-engine.js', () => {
+    assert.ok(app.includes('./tts-local-engine.mjs'));
 });

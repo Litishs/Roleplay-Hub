@@ -13,16 +13,44 @@ marked.use({
 });
 
 
+import { create as createChatRequestGuard } from './chat-request-guard.mjs';
+import { select as recallFallbackSelect } from './memory-recall-fallback.mjs';
+import engine from './ui-template-engine.mjs';
+import { UiTemplateFrame } from './ui-template-frame.mjs';
+import { RPHubCardUtils } from './card-utils.mjs';
+import { RPHubCustomSelect } from './ui-select.mjs';
+import { RPHRequestDiagnostics } from './request-diagnostics.mjs';
+
+import { compareVersions, checkForUpdate, fetchLatestRelease, downloadApk, saveAndInstallApk, GITHUB_REPO, RELEASES_PAGE_URL } from './update-checker.mjs';
+const RPHUpdateChecker = { compareVersions, checkForUpdate, fetchLatestRelease, downloadApk, saveAndInstallApk, GITHUB_REPO, RELEASES_PAGE_URL };
+import { RPHChatPersistence } from './chat-persistence.mjs';
+import { DEFAULT_PRESET_DEFINITIONS } from './default-presets.mjs';
+import { RPHStorage } from './storage-repository.mjs';
+import { RPHRuntimePolicy } from './runtime-policy.mjs';
+import { RPHLocalEmbedding } from './local-embedding.mjs';
+import RPHTts from './tts-engine.mjs';
+import RPHLocalTts from './tts-local-engine.mjs';
+import RPHTtsText from './tts-text.mjs';
+import { MAIN_ID, SCOPE_SEPARATOR, createId, getScopeId, getOwnerId, isBranchScopeId, defaultBranchName, createMainBranch, normalizeBranches, collectSubtreeIds, buildBranchTree, formatWordCount } from './story-branch.mjs';
+import * as RPHMemorySummary from './memory-summary.mjs';
+import * as RPHMemoryProfile from './memory-profile.mjs';
+const RPHStoryBranch = { MAIN_ID, SCOPE_SEPARATOR, createId, getScopeId, getOwnerId, isBranchScopeId, defaultBranchName, createMainBranch, normalizeBranches, collectSubtreeIds, buildBranchTree, formatWordCount };
+import UiTemplatePending from './components/UiTemplatePending.vue';
+import EmbeddedViewContent from './components/EmbeddedViewContent.vue';
+import GenerationTimer from './components/GenerationTimer.vue';
+import SettingsPageHeader from './components/SettingsPageHeader.vue';
+import { generateUUID, parseCot } from './utils.mjs';
+
 createApp({
     components: {
-        ...window.RPHComponents,
-        CustomSelect: window.RPHubCustomSelect,
-        UiTemplateFrame: window.RPHUiTemplateFrame
+        UiTemplatePending, EmbeddedViewContent, GenerationTimer, SettingsPageHeader,
+        CustomSelect: RPHubCustomSelect,
+        UiTemplateFrame: UiTemplateFrame
     },
     setup() {
-        const cardUtils = window.RPHubCardUtils;
-        const chatRequestGuard = window.RPHChatRequestGuard;
-        const memoryRecallFallback = window.RPHMemoryRecallFallback;
+        const cardUtils = RPHubCardUtils;
+        const chatRequestGuard = createChatRequestGuard;
+        const memoryRecallFallback = recallFallbackSelect;
 
         // Default Avatar (Simple Gray Background)
         const defaultAvatar = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0iI2U1ZTdlYiIvPjwvc3ZnPg==';
@@ -202,7 +230,7 @@ createApp({
             if (checkingUpdate.value) return;
             checkingUpdate.value = true;
             try {
-                const checker = window.RPHUpdateChecker;
+                const checker = RPHUpdateChecker;
                 if (!checker) {
                     if (showResult) showToast('\u66f4\u65b0\u68c0\u67e5\u6a21\u5757\u672a\u52a0\u8f7d', 'error');
                     return;
@@ -239,7 +267,7 @@ createApp({
             downloadProgress.value = 0;
             let lastError = '';
             try {
-                const checker = window.RPHUpdateChecker;
+                const checker = RPHUpdateChecker;
                 if (!checker) { showToast('\u66f4\u65b0\u6a21\u5757\u672a\u52a0\u8f7d', 'error'); return; }
                 for (let attempt = 1; attempt <= maxRetries; attempt++) {
                     if (attempt > 1) {
@@ -285,7 +313,7 @@ createApp({
 
         // Silent auto-check on startup
         setTimeout(function() {
-            if (window.RPHUpdateChecker && appVersionName.value) {
+            if (RPHUpdateChecker && appVersionName.value) {
                 checkForUpdates(false);
             }
         }, 5000);
@@ -1110,9 +1138,9 @@ createApp({
         const currentCharacterIndex = ref(-1);
 
         const chatHistory = ref([]);
-        const CHAT_RENDER_INITIAL_LIMIT = window.RPHRuntimePolicy?.limits?.chatInitial || 20;
-        const CHAT_RENDER_BATCH_SIZE = window.RPHRuntimePolicy?.limits?.chatBatch || 10;
-        const CHAT_RENDER_MAX_LIMIT = window.RPHRuntimePolicy?.limits?.chatMaximum || 40;
+        const CHAT_RENDER_INITIAL_LIMIT = RPHRuntimePolicy?.limits?.chatInitial || 20;
+        const CHAT_RENDER_BATCH_SIZE = RPHRuntimePolicy?.limits?.chatBatch || 10;
+        const CHAT_RENDER_MAX_LIMIT = RPHRuntimePolicy?.limits?.chatMaximum || 40;
         const CHAT_ESTIMATED_MESSAGE_HEIGHT = 180;
         const chatRenderLimit = ref(CHAT_RENDER_INITIAL_LIMIT);
         const chatRenderStart = ref(0);
@@ -1648,7 +1676,7 @@ createApp({
                 && (getApiProviderById(memoryProviderId) || isCustomApiProviderId(memoryProviderId))
                 ? memoryProviderId
                 : '';
-            const localModelOptions = (globalThis.RPHLocalEmbedding?.MODELS && Object.keys(globalThis.RPHLocalEmbedding.MODELS)) || ['bge-small-zh-v1.5'];
+            const localModelOptions = (RPHLocalEmbedding?.MODELS && Object.keys(RPHLocalEmbedding.MODELS)) || ['bge-small-zh-v1.5'];
             memorySettings.localEmbeddingModel = localModelOptions.includes(memorySettings.localEmbeddingModel)
                 ? memorySettings.localEmbeddingModel
                 : 'bge-small-zh-v1.5';
@@ -1979,7 +2007,7 @@ createApp({
         const currentHoverWorldInfo = ref(null);
         const showContextViewerModal = ref(false);
         // --- 剧情分支状态 ---
-        const storyBranchApi = () => globalThis.RPHStoryBranch;
+        const storyBranchApi = () => RPHStoryBranch;
         const storyBranches = ref([]);
         const activeStoryBranchId = ref('main');
         const selectedStoryBranchId = ref('main');
@@ -2164,9 +2192,9 @@ createApp({
         let db = null;
 
         const initDB = async () => {
-            if (!window.RPHStorage) throw new Error('StorageRepository is unavailable');
-            await window.RPHStorage.init();
-            db = window.RPHStorage;
+            if (!RPHStorage) throw new Error('StorageRepository is unavailable');
+            await RPHStorage.init();
+            db = RPHStorage;
             return db;
         };
 
@@ -2368,11 +2396,11 @@ createApp({
             return plain;
         };
 
-        const getChatMessageSignature = (message, position) => window.RPHChatPersistence.signature(message, position);
+        const getChatMessageSignature = (message, position) => RPHChatPersistence.signature(message, position);
 
         const resetPersistedChatBaseline = (characterId, messages) => {
             persistedChatCharacterId = characterId ? String(characterId) : null;
-            persistedChatSignatures = window.RPHChatPersistence.createBaseline(messages, serializeChatMessage);
+            persistedChatSignatures = RPHChatPersistence.createBaseline(messages, serializeChatMessage);
         };
 
         const stopDraftPersistence = () => {
@@ -2398,7 +2426,7 @@ createApp({
             persistSingleDraft(message).catch(error => console.error('Initial draft save failed:', error));
             draftPersistenceTimer = setInterval(() => {
                 persistSingleDraft(message).catch(error => console.error('Draft save failed:', error));
-            }, window.RPHRuntimePolicy?.limits?.draftSaveMs || 2000);
+            }, RPHRuntimePolicy?.limits?.draftSaveMs || 2000);
         };
 
         const isRetryableChatStorageError = (error) => {
@@ -2432,7 +2460,7 @@ createApp({
                     const baseline = persistedChatCharacterId === String(characterId)
                         ? persistedChatSignatures
                         : new Map();
-                    const { upserts, deletes } = window.RPHChatPersistence.createChanges(
+                    const { upserts, deletes } = RPHChatPersistence.createChanges(
                         snapshot,
                         baseline,
                         message => message
@@ -2508,12 +2536,12 @@ createApp({
 
         const persistAvatarMedia = async (target, field, preferredName) => {
             const value = target?.[field];
-            if (!window.RPHStorage?.isNative || typeof value !== 'string' || !value.startsWith('data:image/')) return;
-            target[field] = await window.RPHStorage.writeMediaDataUrl(value, preferredName);
+            if (!RPHStorage?.isNative || typeof value !== 'string' || !value.startsWith('data:image/')) return;
+            target[field] = await RPHStorage.writeMediaDataUrl(value, preferredName);
         };
 
         const persistNativeMediaAssets = async () => {
-            if (!window.RPHStorage?.isNative) return;
+            if (!RPHStorage?.isNative) return;
             await Promise.all(characters.value.map((character, index) => (
                 persistAvatarMedia(character, 'avatar', `character-${character.uuid || index}`)
             )));
@@ -2601,7 +2629,7 @@ createApp({
             try {
                 await saveData();
                 await flushPendingChatHistorySave();
-                await window.RPHStorage.exportBackup();
+                await RPHStorage.exportBackup();
                 showToast('完整备份已保存', 'success');
             } catch (error) {
                 if (!/cancel/i.test(String(error?.message || error || ''))) {
@@ -2619,7 +2647,7 @@ createApp({
             if (!confirmed) return;
             backupInProgress.value = true;
             try {
-                await window.RPHStorage.restoreBackup();
+                await RPHStorage.restoreBackup();
                 window.location.reload();
             } catch (error) {
                 if (!/cancel/i.test(String(error?.message || error || ''))) {
@@ -3091,7 +3119,7 @@ createApp({
         /* UI 模板纯函数自 ui-template-engine.js 解构（H1 抽取）：
          * 该文件必须在 app.js 之前加载（index.html 已保证顺序）。
          */
-        const uiTemplateEngine = window.RPHUiTemplateEngine;
+        const uiTemplateEngine = engine;
         if (!uiTemplateEngine) {
             console.error('[UI模板] ui-template-engine.js 未加载，模板渲染/变量更新将不可用');
         }
@@ -3783,7 +3811,7 @@ ${content}
         const chatBottomSpacerHeight = computed(() => hiddenChatMessageCountAfter.value * CHAT_ESTIMATED_MESSAGE_HEIGHT);
 
         const displayedChatMessages = computed(() => {
-            const windowRange = window.RPHRuntimePolicy.getChatWindow(
+            const windowRange = RPHRuntimePolicy.getChatWindow(
                 chatHistory.value.length,
                 chatRenderStart.value,
                 chatRenderLimit.value
@@ -4224,16 +4252,16 @@ ${content}
         // Markdown Rendering
         /* extracted parseCot */
 
-        const renderMarkdownCache = new window.RPHRuntimePolicy.LruCache(
-            window.RPHRuntimePolicy.limits.renderCache
+        const renderMarkdownCache = new RPHRuntimePolicy.LruCache(
+            RPHRuntimePolicy.limits.renderCache
         );
         const cacheRenderedMarkdown = (key, value, cacheable = true) => {
             if (!cacheable) return value;
             renderMarkdownCache.set(key, value);
             return value;
         };
-        const htmlFrameDetectionCache = new window.RPHRuntimePolicy.LruCache(
-            window.RPHRuntimePolicy.limits.renderCache
+        const htmlFrameDetectionCache = new RPHRuntimePolicy.LruCache(
+            RPHRuntimePolicy.limits.renderCache
         );
         watch(() => [settings.disableImages, regexScripts.value], () => {
             renderMarkdownCache.clear();
@@ -4841,7 +4869,7 @@ ${content}
 
         // --- Request diagnostics export (P3-11) ---
         const requestDiagnosticsCount = computed(() => {
-            const diagnostics = globalThis.RPHRequestDiagnostics;
+            const diagnostics = RPHRequestDiagnostics;
             return diagnostics ? diagnostics.getAll().length : 0;
         });
         const writeClipboardText = async (text) => {
@@ -4857,7 +4885,7 @@ ${content}
             return false;
         };
         const exportRequestDiagnostics = async () => {
-            const diagnostics = globalThis.RPHRequestDiagnostics;
+            const diagnostics = RPHRequestDiagnostics;
             if (!diagnostics) { showToast('请求诊断不可用', 'error'); return; }
             const records = diagnostics.getAll();
             if (!records.length) { showToast('暂无诊断记录', 'info'); return; }
@@ -5896,7 +5924,7 @@ ${content}
             // finally 块引用时抛 ReferenceError; 提升到函数作用域并统一清理。
             let chatWatchdog = null;
             const chatUrl = getChatProviderEndpoint('chat/completions');
-            let requestDiagnostic = window.RPHRequestDiagnostics?.start({
+            let requestDiagnostic = RPHRequestDiagnostics?.start({
                 url: chatUrl,
                 payload: {
                     model: requestModel,
@@ -6769,7 +6797,7 @@ ${content}
                 else pendingStreamAppends.set(key, { message, field, text });
                 if (!streamAppendTimer) streamAppendTimer = setTimeout(
                     flushStreamAppends,
-                    window.RPHRuntimePolicy?.limits?.streamFlushMs || 50
+                    RPHRuntimePolicy?.limits?.streamFlushMs || 50
                 );
             };
 
@@ -7358,7 +7386,7 @@ ${content}
         const localEmbeddingStatus = ref({ status: 'idle', error: '', progress: 0, modelId: '', ready: false });
         let localEmbeddingStatusTimer = null;
         const refreshLocalEmbeddingStatus = () => {
-            const info = globalThis.RPHLocalEmbedding?.getStatus?.() || { status: 'idle', error: '', progress: 0, modelId: '' };
+            const info = RPHLocalEmbedding?.getStatus?.() || { status: 'idle', error: '', progress: 0, modelId: '' };
             localEmbeddingStatus.value = { ...info, ready: info.status === 'ready' };
             clearTimeout(localEmbeddingStatusTimer);
             if (info.status === 'loading' || info.status === 'idle') {
@@ -7366,7 +7394,7 @@ ${content}
             }
         };
         const preloadLocalEmbedding = async () => {
-            const embedder = globalThis.RPHLocalEmbedding;
+            const embedder = RPHLocalEmbedding;
             if (!embedder) { showToast('本地嵌入模块不可用', 'error'); return; }
             refreshLocalEmbeddingStatus();
             try {
@@ -7382,7 +7410,7 @@ ${content}
 
         // v4：本地模型默认自动加载（静默，不弹确认/成功提示），手动按钮保留作重试入口
         const ensureLocalEmbeddingReady = () => {
-            const embedder = globalThis.RPHLocalEmbedding;
+            const embedder = RPHLocalEmbedding;
             if (!embedder || memorySettings.embeddingBackend !== 'local' || !memorySettings.enabled) return;
             const info = embedder.getStatus?.() || {};
             if (info.status === 'ready' || info.status === 'loading') return;
@@ -7396,7 +7424,7 @@ ${content}
         };
 
         const localEmbeddingModelOptions = computed(() => {
-            const models = globalThis.RPHLocalEmbedding?.MODELS || {};
+            const models = RPHLocalEmbedding?.MODELS || {};
             return Object.keys(models)
                 .filter(id => models[id]?.bundled === true)
                 .map(id => ({ value: id, label: models[id].label || id }));
@@ -7489,12 +7517,12 @@ ${content}
                     if (ttsPlayingMessageId.value !== null) ttsPlayingMessageId.value = null;
                 }
             };
-            const systemEngine = globalThis.RPHTts;
+            const systemEngine = RPHTts;
             if (!ttsStateListener && systemEngine?.onState) {
                 ttsStateListener = handleEnd;
                 systemEngine.onState(ttsStateListener);
             }
-            const localEngine = globalThis.RPHLocalTts;
+            const localEngine = RPHLocalTts;
             if (!localTtsStateListener && localEngine?.onState) {
                 localTtsStateListener = handleEnd;
                 localEngine.onState(localTtsStateListener);
@@ -7513,7 +7541,7 @@ ${content}
         };
 
         const refreshLocalTtsStatus = async () => {
-            const engine = globalThis.RPHLocalTts;
+            const engine = RPHLocalTts;
             if (!engine) {
                 localTtsStatus.value = { available: false, ready: false, engineLabel: '', state: 'idle', error: '', checked: true, installed: [] };
                 localTtsVoices.value = [];
@@ -7533,7 +7561,7 @@ ${content}
         };
 
         const refreshSystemTtsStatus = async () => {
-            const engine = globalThis.RPHTts;
+            const engine = RPHTts;
             if (!engine) return false;
             try {
                 const info = await engine.refreshStatus();
@@ -7559,7 +7587,7 @@ ${content}
                 };
                 return localReady;
             }
-            const engine = globalThis.RPHTts;
+            const engine = RPHTts;
             if (!engine) {
                 ttsStatus.value = { available: false, engineLabel: '', state: 'idle', error: '', checked: true };
                 return false;
@@ -7601,7 +7629,7 @@ ${content}
         });
 
         const ttsSpeakTextFor = (msg) => {
-            const textModule = globalThis.RPHTtsText;
+            const textModule = RPHTtsText;
             if (!msg || !textModule) return '';
             try {
                 return textModule.extractSpeakText(msg.content || '', {
@@ -7628,7 +7656,7 @@ ${content}
         };
 
         const speakTtsTextViaSystem = async (text) => {
-            const engine = globalThis.RPHTts;
+            const engine = RPHTts;
             if (!engine) throw new Error('语音引擎不可用');
             const ready = await refreshSystemTtsStatus();
             if (!ready) throw new Error('系统语音引擎不可用');
@@ -7643,7 +7671,7 @@ ${content}
 
         const speakTtsText = async (text) => {
             if (settings.ttsService === 'local') {
-                const engine = globalThis.RPHLocalTts;
+                const engine = RPHLocalTts;
                 if (engine) {
                     await refreshLocalTtsStatus();
                     if (engine.getStatus().installed.length) {
@@ -7706,11 +7734,11 @@ ${content}
 
         const stopSpeaking = async () => {
             ttsPlayingMessageId.value = null;
-            const systemEngine = globalThis.RPHTts;
+            const systemEngine = RPHTts;
             if (systemEngine) {
                 try { await systemEngine.stop(); } catch (_) { /* 忽略停止异常 */ }
             }
-            const localEngine = globalThis.RPHLocalTts;
+            const localEngine = RPHLocalTts;
             if (localEngine) {
                 try { await localEngine.stop(); } catch (_) { /* ignore stop errors */ }
             }
@@ -7739,7 +7767,7 @@ ${content}
         const localTtsVoiceOptions = computed(() => localTtsVoices.value.filter((voice) => voice.installed));
 
         const installLocalTtsVoice = async (voiceId) => {
-            const engine = globalThis.RPHLocalTts;
+            const engine = RPHLocalTts;
             if (!engine) {
                 showToast('Local TTS plugin unavailable', 'error');
                 return;
@@ -7754,12 +7782,12 @@ ${content}
         };
 
         const cancelLocalTtsInstall = () => {
-            const engine = globalThis.RPHLocalTts;
+            const engine = RPHLocalTts;
             if (engine?.cancelInstall) engine.cancelInstall();
         };
 
         const removeLocalTtsVoice = async (voiceId) => {
-            const engine = globalThis.RPHLocalTts;
+            const engine = RPHLocalTts;
             if (!engine) return;
             try {
                 await engine.remove(voiceId);
@@ -7773,7 +7801,7 @@ ${content}
         };
 
         const isZipVoiceVoice = (voiceId) => {
-            const engine = globalThis.RPHLocalTts;
+            const engine = RPHLocalTts;
             if (!engine || !engine.VOICES) return false;
             const voice = engine.VOICES.find((v) => v.id === voiceId);
             return voice != null && voice.type === 'zipvoice';
@@ -8309,7 +8337,7 @@ ${content}
 
             if (memorySettings.embeddingBackend === 'local') {
                 refreshLocalEmbeddingStatus();
-                const localEmbedder = globalThis.RPHLocalEmbedding;
+                const localEmbedder = RPHLocalEmbedding;
                 if (!localEmbedder) throw new Error('本地嵌入模块未加载');
                 const vectors = await localEmbedder.embedTexts(normalizedInputs, signal);
                 if (signal?.aborted) {
@@ -9568,8 +9596,8 @@ ${content}
         };
 
         // --- 滚动摘要（记忆重构 P0：原文真相源 + 派生摘要层） ---
-        const summaryLib = () => globalThis.RPHMemorySummary;
-        const profileLib = () => globalThis.RPHMemoryProfile;
+        const summaryLib = () => RPHMemorySummary;
+        const profileLib = () => RPHMemoryProfile;
 
         const getMemoryProfile = () => {
             const lib = profileLib();
@@ -11100,7 +11128,7 @@ ${content}
             if (isBatchExtracting.value || !currentCharacter.value || chatHistory.value.length === 0) return;
             const isLocalBackend = memorySettings.embeddingBackend === 'local';
             const embeddingReady = isLocalBackend
-                ? !!globalThis.RPHLocalEmbedding
+                ? !!RPHLocalEmbedding
                 : !!getMemoryEmbeddingModel();
             if (!embeddingReady) {
                 sliceBuildStatus.value = {
@@ -11838,7 +11866,7 @@ image###生成的提示词###
                 }
                 if (msg.storageStatus === 'draft') {
                     const marker = '*-- App 异常退出，生成已中断 --*';
-                    window.RPHChatPersistence.recoverInterruptedDraft(msg, marker);
+                    RPHChatPersistence.recoverInterruptedDraft(msg, marker);
                 }
                 if (msg.role === 'user' || msg.role === 'assistant') {
                     delete msg.skipReveal;
@@ -13223,8 +13251,8 @@ image###生成的提示词###
         const deletePreset = (index) => {
             confirmAction('确定要删除这个预设吗？此操作无法撤销。', () => {
                 const preset = presets.value[index];
-                if (preset && Array.isArray(window.DEFAULT_PRESET_DEFINITIONS)) {
-                    const def = window.DEFAULT_PRESET_DEFINITIONS.find(d => d.name === preset.name);
+                if (preset && Array.isArray(DEFAULT_PRESET_DEFINITIONS)) {
+                    const def = DEFAULT_PRESET_DEFINITIONS.find(d => d.name === preset.name);
                     // 第二/第三人称是功能预设，不记录删除，启动时仍会重建
                     if (def && !def.systemManaged && !deletedDefaultPresetNames.value.includes(preset.name)) {
                         deletedDefaultPresetNames.value.push(preset.name);
@@ -13394,7 +13422,7 @@ image###生成的提示词###
             // 启动时只在“缺失”时创建一次；已存在的预设保留用户的编辑内容、开关和顺序，
             // 删除后不会复活（第二/第三人称除外：二者是功能预设，开关跟随人称设置）。
 
-            const presetDefinitions = Array.isArray(window.DEFAULT_PRESET_DEFINITIONS) ? window.DEFAULT_PRESET_DEFINITIONS : [];
+            const presetDefinitions = Array.isArray(DEFAULT_PRESET_DEFINITIONS) ? DEFAULT_PRESET_DEFINITIONS : [];
             const preludePresetNames = ['破限预注入 · User 1', '破限预注入 · AI 1', '破限预注入 · User 2', '破限预注入 · AI 2'];
 
             // 破限预注入的默认启用状态跟随「破限」（兼容旧数据迁移）

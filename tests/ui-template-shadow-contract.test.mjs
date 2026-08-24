@@ -13,19 +13,13 @@ test('UI template blocks render via <ui-template-frame> instead of raw v-html', 
   assert.doesNotMatch(html, /ui-template-preview[\s\S]*?v-html="renderEditingUiTemplatePreview\(\)"/);
 });
 
-test('ui-template-frame.js loads before app.js', async () => {
+test('index.html loads Vite module entry point', async () => {
   const html = await read('index.html');
-
-  const loadOrder = html.match(/<script src="assets\/js\/([^"]+\.js)"><\/script>/g) || [];
-  const indexOfFrame = loadOrder.findIndex((line) => line.includes('ui-template-frame.js'));
-  const indexOfApp = loadOrder.findIndex((line) => line.includes('app.js'));
-  assert.ok(indexOfFrame !== -1, 'ui-template-frame.js should be referenced');
-  assert.ok(indexOfApp !== -1, 'app.js should be referenced');
-  assert.ok(indexOfFrame < indexOfApp, 'ui-template-frame.js must load before app.js');
+  assert.ok(html.includes('<script type="module" src="/src/main.js">'), 'Vite module entry should be present');
 });
 
 test('renderUiTemplateHtml returns plain template HTML, no iframe wrapper', async () => {
-  const source = await read('assets/js/app.js');
+  const source = await read('src/modules/app.mjs');
 
   assert.match(source, /const renderUiTemplateHtml = \(template\) => \{\s*if \(!template \|\| !template\.htmlTemplate\) return '';\s*const variables = template\.variableState \|\| \{\};\s*return renderUiTemplateString\(stripUiTemplateCodeFence\(template\.htmlTemplate\), variables\);/);
   assert.doesNotMatch(source, /renderUiTemplateHtml = \(template\) => \{[\s\S]*?renderExecutableHtmlFrame\(/);
@@ -33,21 +27,21 @@ test('renderUiTemplateHtml returns plain template HTML, no iframe wrapper', asyn
 });
 
 test('handleUiTemplateClick walks composedPath for data-slash inside shadow DOM', async () => {
-  const source = await read('assets/js/app.js');
+  const source = await read('src/modules/app.mjs');
 
   assert.match(source, /const handleUiTemplateClick = \(event\) => \{[\s\S]*?event\.composedPath \? event\.composedPath\(\) : \[event\.target\][\s\S]*?path\.find\(node => node\?\.getAttribute\?\.\('data-slash'\)\)/);
 });
 
 test('app.js registers UiTemplateFrame from window.RPHUiTemplateFrame', async () => {
-  const source = await read('assets/js/app.js');
+  const source = await read('src/modules/app.mjs');
 
-  assert.match(source, /UiTemplateFrame: window\.RPHUiTemplateFrame/);
+  assert.match(source, /UiTemplateFrame: UiTemplateFrame/);
 });
 
 test('ui-template-frame.js provides shadow render utilities', async () => {
-  const source = await read('assets/js/ui-template-frame.js');
+  const source = await read('src/modules/ui-template-frame.mjs');
 
-  assert.match(source, /window\.RPHUiTemplateFrame = UiTemplateFrame;/);
+  assert.match(source, /export { UiTemplateFrame, UiTemplateFrameUtil };/);
   assert.match(source, /const splitUiTemplateHtml = \(html\) =>/);
   assert.match(source, /const createUiTemplateDocShim = \(shadowRoot, bodyWrap\) =>/);
   assert.match(source, /const runUiTemplateScripts = \(docShim, scripts, shadowRoot\) =>/);
@@ -61,7 +55,7 @@ test('ui-template-frame.js provides shadow render utilities', async () => {
 });
 
 test('ui-template-frame.js wires inline event delegation to instance scope', async () => {
-  const source = await read('assets/js/ui-template-frame.js');
+  const source = await read('src/modules/ui-template-frame.mjs');
 
   assert.match(source, /const instanceScopes = new WeakMap\(\);/);
   assert.match(source, /const extractTopLevelNames = \(code\) =>/);
@@ -82,7 +76,7 @@ test('ui-template-frame.js wires inline event delegation to instance scope', asy
 });
 
 test('ui-template-frame.js cleans up template timers and observers on rebuild/unmount', async () => {
-  const source = await read('assets/js/ui-template-frame.js');
+  const source = await read('src/modules/ui-template-frame.mjs');
 
   assert.match(source, /const shadowCleanup = new WeakMap\(\);/);
   assert.match(source, /const cleanupShadowRoot = \(shadowRoot\) => \{/);
@@ -96,7 +90,7 @@ test('ui-template-frame.js cleans up template timers and observers on rebuild/un
 });
 
 test('app.js tracks card iframe/shadow focus without IME proxy', async () => {
-  const source = await read('assets/js/app.js');
+  const source = await read('src/modules/app.mjs');
 
   assert.match(source, /const ensureIframeFocusTracker = \(iframe\) =>/);
   assert.match(source, /const computeExternalFocus = \(\) =>/);

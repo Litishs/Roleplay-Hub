@@ -1,12 +1,13 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
-import memoryProfile from '../assets/js/memory-profile.js';
+import * as memoryProfile from '../src/modules/memory-profile.mjs';
 
 const [html, app] = await Promise.all([
     readFile(new URL('../index.html', import.meta.url), 'utf8'),
-    readFile(new URL('../assets/js/app.js', import.meta.url), 'utf8')
+    readFile(new URL('../src/modules/app.mjs', import.meta.url), 'utf8')
 ]);
+    const mainJs = await readFile(new URL("../src/main.js", import.meta.url), "utf8");
 
 test('固定信息卡:关系有向边去重与更新', () => {
     const profile = memoryProfile.createEmptyProfile();
@@ -121,7 +122,7 @@ test('固定信息卡:过期标注——lastSeenTurn 超阈值标「未再出现
 });
 
 test('固定信息卡:index.html 加载模块且不再有关系视图', () => {
-    assert.ok(html.includes('assets/js/memory-profile.js'));
+    assert.ok(app.includes('./memory-profile.mjs'));
     assert.ok(!html.includes("setMemoryGraphView('relations')"));
     assert.ok(!html.includes('memoryRelationCanvas'));
 });

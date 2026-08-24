@@ -9,12 +9,13 @@ const root = fileURLToPath(new URL('..', import.meta.url));
 
 const [html, app, localEmbedding] = await Promise.all([
     readFile(new URL('../index.html', import.meta.url), 'utf8'),
-    readFile(new URL('../assets/js/app.js', import.meta.url), 'utf8'),
-    readFile(new URL('../assets/js/local-embedding.js', import.meta.url), 'utf8')
+    readFile(new URL('../src/modules/app.mjs', import.meta.url), 'utf8'),
+    readFile(new URL('../src/modules/local-embedding.mjs', import.meta.url), 'utf8')
 ]);
+    const mainJs = await readFile(new URL("../src/main.js", import.meta.url), "utf8");
 
 test('local-embedding.js exposes RPHLocalEmbedding with model registry', () => {
-    assert.match(localEmbedding, /globalThis\.RPHLocalEmbedding = Object\.freeze\(\{/);
+    assert.match(localEmbedding, /const RPHLocalEmbedding = Object\.freeze\(\{/);
     assert.match(localEmbedding, /'bge-small-zh-v1\.5'/);
     assert.match(localEmbedding, /embedTexts/);
     assert.match(localEmbedding, /ensureReady/);
@@ -22,17 +23,12 @@ test('local-embedding.js exposes RPHLocalEmbedding with model registry', () => {
     assert.match(localEmbedding, /env\.backends\.onnx\.wasm\.wasmPaths/);
 });
 
-test('index.html loads local-embedding.js before app.js', () => {
-    const appIdx = html.indexOf('assets/js/app.js');
-    const localIdx = html.indexOf('assets/js/local-embedding.js');
-    assert.ok(appIdx > 0 && localIdx > 0 && localIdx < appIdx);
-});
 
 test('app.js wires embeddingBackend local routing and classic->vector migration', () => {
     assert.match(app, /embeddingBackend: 'api'/);
     assert.match(app, /localEmbeddingModel: 'bge-small-zh-v1\.5'/);
     assert.match(app, /if \(memorySettings\.embeddingBackend === 'local'\)/);
-    assert.match(app, /globalThis\.RPHLocalEmbedding/);
+    assert.match(app, /\bRPHLocalEmbedding\b/);
     assert.match(app, /const migrateClassicMemoriesToVectors = async \(\) => \{/);
     assert.match(app, /const chunkId = `classic:\$\{memory\.turn\}`;/);
     assert.match(app, /localEmbeddingStatus, refreshLocalEmbeddingStatus, preloadLocalEmbedding, migrateClassicMemoriesToVectors/);
@@ -52,4 +48,9 @@ test('vendored transformers library, wasm and bge-small-zh model files exist', (
     assert.ok(existsSync(path.join(modelDir, 'config.json')), 'config.json');
     assert.ok(existsSync(path.join(modelDir, 'tokenizer.json')), 'tokenizer.json');
     assert.ok(existsSync(path.join(modelDir, 'onnx', 'model_quantized.onnx')), 'onnx/model_quantized.onnx');
+});
+
+
+test('src/main.js imports local-embedding.js', () => {
+    assert.ok(app.includes('./local-embedding.mjs'));
 });

@@ -5,7 +5,7 @@ import test from 'node:test';
 const read = (p) => readFile(new URL(p, import.meta.url), 'utf8');
 
 test('main interface import preserves external card fields for lossless round-trip', async () => {
-  const source = await read('../assets/js/app.js');
+  const source = await read('../src/modules/app.mjs');
   const importRegion = source.slice(
     source.indexOf('const importCharacter = (event) => {'),
     source.indexOf('const buildCharacterExportData')
@@ -37,7 +37,7 @@ test('main interface import preserves external card fields for lossless round-tr
 });
 
 test('card export writes preserved fields and foreign extensions back', async () => {
-  const source = await read('../assets/js/card-utils.js');
+  const source = await read('../src/modules/card-utils.mjs');
   const builder = source.slice(
     source.indexOf('const buildCharacterCardData'),
     source.indexOf('const crc32Table')
@@ -54,7 +54,7 @@ test('card export writes preserved fields and foreign extensions back', async ()
 });
 
 test('main interface accepts .json files even when the provider returns an empty MIME', async () => {
-  const source = await read('../assets/js/app.js');
+  const source = await read('../src/modules/app.mjs');
   const importRegion = source.slice(
     source.indexOf('const importCharacter = (event) => {'),
     source.indexOf('const buildCharacterExportData')
@@ -64,7 +64,7 @@ test('main interface accepts .json files even when the provider returns an empty
 });
 
 test('chat jsonl import validates messages and asks before overwrite/append', async () => {
-  const source = await read('../assets/js/app.js');
+  const source = await read('../src/modules/app.mjs');
   const importRegion = source.slice(
     source.indexOf('const importCharacter = (event) => {'),
     source.indexOf('const buildCharacterExportData')
@@ -79,7 +79,7 @@ test('chat jsonl import validates messages and asks before overwrite/append', as
 });
 
 test('chat import dialog is exposed to the template with overwrite/append/cancel handlers', async () => {
-  const source = await read('../assets/js/app.js');
+  const source = await read('../src/modules/app.mjs');
   assert.match(source, /const showChatImportDialog = ref\(false\);/);
   assert.match(source, /const confirmChatImportOverwrite = async \(\) =>/);
   assert.match(source, /const confirmChatImportAppend = async \(\) =>/);
@@ -88,7 +88,7 @@ test('chat import dialog is exposed to the template with overwrite/append/cancel
 });
 
 test('preset/regex/worldbook imports dedupe by content fingerprint and show a preview', async () => {
-  const source = await read('../assets/js/app.js');
+  const source = await read('../src/modules/app.mjs');
   assert.match(source, /const stableJsonStringify = \(value\) =>/);
   assert.match(source, /const importItemFingerprint = \(item, fields\) =>/);
   assert.match(source, /importItemFingerprint\(p, \['role', 'content'\]\)/);
@@ -150,7 +150,7 @@ test('native plugin streams large exports in chunks (exportFileStart/Write/End)'
 });
 
 test('web bridge prefers chunked export and falls back to whole-file base64', async () => {
-  const source = await read('../assets/js/card-utils.js');
+  const source = await read('../src/modules/card-utils.mjs');
   const downloadMethod = source.slice(
     source.indexOf('const safeExportName = (filename)'),
     source.indexOf('window.RPHubCardUtils')

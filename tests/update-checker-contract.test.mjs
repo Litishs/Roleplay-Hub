@@ -1,23 +1,21 @@
-﻿import assert from "node:assert/strict";
+import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 const [html, app, checker, java] = await Promise.all([
     readFile(new URL("../index.html", import.meta.url), "utf8"),
-    readFile(new URL("../assets/js/app.js", import.meta.url), "utf8"),
-    readFile(new URL("../assets/js/update-checker.js", import.meta.url), "utf8"),
+    readFile(new URL("../src/modules/app.mjs", import.meta.url), "utf8"),
+    readFile(new URL("../src/modules/update-checker.mjs", import.meta.url), "utf8"),
     readFile(new URL("../android/app/src/main/java/com/roleplayhub/app/NativeStoragePlugin.java", import.meta.url), "utf8"),
 ]);
 
-test("update-checker.js loads before app.js", () => {
-    const appIdx = html.indexOf("assets/js/app.js");
-    const checkerIdx = html.indexOf("assets/js/update-checker.js");
-    assert.ok(checkerIdx > 0 && appIdx > checkerIdx);
+test("index.html uses Vite module entry point", () => {
+    assert.ok(html.includes('<script type="module" src="/src/main.js">'), "Vite module entry should be present");
 });
 
 test("update-checker.js exports UMD interface", () => {
-    assert.match(checker, /module\.exports\s*=\s*factory\(\)/);
-    assert.match(checker, /root\.RPHUpdateChecker\s*=\s*factory\(\)/);
+    assert.match(checker, /export { compareVersions, checkForUpdate/);
+    assert.match(checker, /globalThis\.RPHUpdateChecker/);
     assert.match(checker, /checkForUpdate/);
     assert.match(checker, /downloadApk/);
     assert.match(checker, /saveAndInstallApk/);
@@ -27,7 +25,7 @@ test("update-checker.js exports UMD interface", () => {
 test("app.js wires checkForUpdates and exposes state", () => {
     assert.match(app, /const checkForUpdates = async/);
     assert.match(app, /const downloadAndInstallUpdate = async/);
-    assert.match(app, /window\.RPHUpdateChecker/);
+    assert.match(app, /RPHUpdateChecker/);
     assert.match(app, /const latestVersionName = ref/);
     assert.match(app, /const downloadingUpdate = ref/);
     assert.match(app, /const downloadProgress = ref/);

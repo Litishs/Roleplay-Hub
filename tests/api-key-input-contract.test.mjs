@@ -4,7 +4,7 @@ import test from 'node:test';
 
 const [html, app] = await Promise.all([
     readFile(new URL('../index.html', import.meta.url), 'utf8'),
-    readFile(new URL('../assets/js/app.js', import.meta.url), 'utf8'),
+    readFile(new URL('../src/modules/app.mjs', import.meta.url), 'utf8'),
 ]);
 
 test('API Key input explicitly synchronizes WebView password and paste events', () => {

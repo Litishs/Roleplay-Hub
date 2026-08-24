@@ -19,7 +19,7 @@ test('Android exports use the system create-document picker', async () => {
 });
 
 test('regular exports no longer write to the app cache or open the share sheet', async () => {
-  const source = await readFile(new URL('../assets/js/card-utils.js', import.meta.url), 'utf8');
+  const source = await readFile(new URL('../src/modules/card-utils.mjs', import.meta.url), 'utf8');
   const downloadMethod = source.slice(
     source.indexOf('const downloadBlob = async'),
     source.indexOf('window.RPHubCardUtils')
@@ -30,7 +30,7 @@ test('regular exports no longer write to the app cache or open the share sheet',
 });
 
 test('export success messages wait for a confirmed save result', async () => {
-  const source = await readFile(new URL('../assets/js/app.js', import.meta.url), 'utf8');
+  const source = await readFile(new URL('../src/modules/app.mjs', import.meta.url), 'utf8');
 
   assert.match(source, /const result = await cardUtils\.downloadBlob\(blob, \(char\.name \|\| 'character'\) \+ '\.json'\)/);
   assert.match(source, /if \(result\.saved\) showToast\('角色卡 JSON 导出成功'/);

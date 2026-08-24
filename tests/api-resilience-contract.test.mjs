@@ -4,12 +4,13 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 const [app, chatGuardSource, memoryFallbackSource, capConfig, java] = await Promise.all([
-    readFile(new URL('../assets/js/app.js', import.meta.url), 'utf8'),
-    readFile(new URL('../assets/js/chat-request-guard.js', import.meta.url), 'utf8'),
-    readFile(new URL('../assets/js/memory-recall-fallback.js', import.meta.url), 'utf8'),
+    readFile(new URL('../src/modules/app.mjs', import.meta.url), 'utf8'),
+    readFile(new URL('../src/modules/chat-request-guard.mjs', import.meta.url), 'utf8'),
+    readFile(new URL('../src/modules/memory-recall-fallback.mjs', import.meta.url), 'utf8'),
     readFile(new URL('../capacitor.config.json', import.meta.url), 'utf8'),
     readFile(new URL('../android/app/src/main/java/com/roleplayhub/app/NativeStoragePlugin.java', import.meta.url), 'utf8')
 ]);
+    const appJs = readFileSync(new URL("../src/modules/app.mjs", import.meta.url), "utf8");
 
 test('API URL normalization is unified and handles trailing slashes', () => {
     assert.ok(app.includes('const getApiEndpoint = (path) => {'));
@@ -27,7 +28,7 @@ test('聊天请求按首包、首有效 token、有效流空闲和总时长超�
     assert.ok(app.includes('let chatWatchdog = null;'));
     assert.ok(app.includes('chatWatchdog = setInterval'));
     assert.ok(!app.includes('const chatWatchdog = setInterval'));
-    assert.ok(app.includes('const chatRequestGuard = window.RPHChatRequestGuard;'));
+    assert.ok(app.includes('const chatRequestGuard = createChatRequestGuard;'));
     assert.ok(app.includes('const chatGuard = chatRequestGuard.create({'));
     assert.ok(app.includes('const markMeaningfulChatActivity = (content, reasoning) => {'));
     assert.ok(!app.includes('lastChatActivityMs = Date.now();'));
@@ -44,7 +45,7 @@ test('聊天请求按首包、首有效 token、有效流空闲和总时长超�
     assert.ok(chatGuardSource.includes("stage: 'timed_out_waiting_first_token'"));
     assert.ok(chatGuardSource.includes("stage: 'timed_out_streaming'"));
     const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
-    assert.ok(html.indexOf('assets/js/chat-request-guard.js') < html.indexOf('assets/js/app.js'));
+    assert.ok(appJs.includes('./chat-request-guard.mjs'));
 });
 
 test('聊天向量召回超时后仍通过关键词与最近轮次注入记忆', () => {
@@ -53,7 +54,7 @@ test('聊天向量召回超时后仍通过关键词与最近轮次注入记忆',
     assert.ok(app.includes('const selectVectorMemoriesForChatContext = async (options = {}, generationSignal = null, diagnostic = null) => {'));
     assert.ok(app.includes("abortSafely(recallController, 'Memory recall timed out')"));
     assert.ok(app.includes('const selectVectorMemoriesLexicalFallback = (options = {}) => {'));
-    assert.ok(app.includes('const memoryRecallFallback = window.RPHMemoryRecallFallback;'));
+    assert.ok(app.includes('const memoryRecallFallback = recallFallbackSelect;'));
     assert.ok(app.includes('return memoryRecallFallback.select(vectorMemories, {'));
     assert.ok(memoryFallbackSource.includes("vectorRecallMode: 'lexical-fallback'"));
     assert.ok(app.includes("diagnostic?.stage('memory_recall_lexical_fallback')"));
@@ -62,7 +63,7 @@ test('聊天向量召回超时后仍通过关键词与最近轮次注入记忆',
     assert.ok(app.includes('return selectVectorMemoriesLexicalFallback(options);'));
     assert.ok(app.includes("m.vectorRecallMode === 'lexical-fallback'"));
     const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
-    assert.ok(html.indexOf('assets/js/memory-recall-fallback.js') < html.indexOf('assets/js/app.js'));
+    assert.ok(appJs.includes('./memory-recall-fallback.mjs'));
 });
 
 test('SSE 网络心跳不会刷新有效 token 活跃时间', () => {
