@@ -11,6 +11,12 @@ const [app, chatGuardSource, memoryFallbackSource, capConfig, java] = await Prom
     readFile(new URL('../android/app/src/main/java/com/roleplayhub/app/NativeStoragePlugin.java', import.meta.url), 'utf8')
 ]);
     const appJs = readFileSync(new URL("../src/modules/app.mjs", import.meta.url), "utf8");
+const [settingsHtml, usagePanelHtml, worldInfoHtml] = await Promise.all([
+        readFile(new URL("../src/components/views/SettingsPanel.vue", import.meta.url), "utf8"),
+        readFile(new URL("../src/components/views/UsageStatsPanel.vue", import.meta.url), "utf8"),
+        readFile(new URL("../src/components/views/WorldInfoPanel.vue", import.meta.url), "utf8")
+    ]);
+
 
 test('API URL normalization is unified and handles trailing slashes', () => {
     assert.ok(app.includes('const getApiEndpoint = (path) => {'));
@@ -112,8 +118,8 @@ test('offline chat flow no longer pops toasts (UI template analysis + auto model
     // 自动拉取模型失败保持静默，只有手动拉取才弹 toast
     assert.ok(app.includes("if (isManual) showToast('\u83b7\u53d6\u6a21\u578b\u5931\u8d25: ' + error.message, 'error');"));
     // 变量分析失败提示以内联红条展示在设置页
-    const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
-    assert.ok(html.includes("uiTemplateUpdateStatus.state === 'error'"));
+    const uiHtml = readFileSync(new URL('../src/components/views/UiTemplatePanel.vue', import.meta.url), 'utf8');
+    assert.ok(uiHtml.includes("uiTemplateUpdateStatus.state === 'error'"));
 });
 
 test('each debug build bumps version (1.9 -> 1.10 -> 1.11 ...) and exposes it in-app', () => {
@@ -139,8 +145,8 @@ test('each debug build bumps version (1.9 -> 1.10 -> 1.11 ...) and exposes it in
     assert.ok(releaseScript.includes('Roleplay-Hub-$releaseVersionName-release.apk'));
 
     // 设置页展示版本号
-    const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
-    assert.ok(html.includes('v{{ appVersionName }}'));
+
+    assert.ok(settingsHtml.includes('v{{ appVersionName }}'));
     assert.ok(app.includes('const appVersionName = ref'));
     assert.ok(app.includes('await nativeApp.getInfo?.();'));
 });
@@ -209,8 +215,8 @@ test('request diagnostics export copies JSON to clipboard', () => {
 });
 
 test('usage view exposes a diagnostics export button', async () => {
-    const html = await readFile(new URL('../index.html', import.meta.url), 'utf8');
-    assert.ok(html.includes('requestDiagnosticsCount'));
-    assert.ok(html.includes('exportRequestDiagnostics()'));
-    assert.ok(html.includes('\u590d\u5236\u8bca\u65ad\u4fe1\u606f')); // ??????
+
+    assert.ok(usagePanelHtml.includes('requestDiagnosticsCount'));
+    assert.ok(usagePanelHtml.includes('exportRequestDiagnostics()'));
+    assert.ok(usagePanelHtml.includes('\u590d\u5236\u8bca\u65ad\u4fe1\u606f')); // ??????
 });

@@ -3,17 +3,17 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 const [html, app, styles] = await Promise.all([
-    readFile(new URL('../index.html', import.meta.url), 'utf8'),
+    readFile(new URL('../src/components/views/SettingsPanel.vue', import.meta.url), 'utf8'),
     readFile(new URL('../src/modules/app.mjs', import.meta.url), 'utf8'),
     readFile(new URL('../assets/css/styles.css', import.meta.url), 'utf8')
 ]);
 
-const settingsStart = html.indexOf(`v-if="currentView === 'settings'"`);
-const settingsEnd = html.indexOf(`v-if="currentView === 'presets'"`);
-const settingsView = html.slice(settingsStart, settingsEnd);
+const settingsStart = 0;
+const settingsEnd = html.length;
+const settingsView = html;
 
 test('设置页五个区块使用统一折叠卡片并保持原有顺序', () => {
-    assert.ok(settingsStart > 0 && settingsEnd > settingsStart);
+    assert.ok(settingsEnd > settingsStart);
     assert.equal((settingsView.match(/class="settings-accordion-trigger"/g) || []).length, 5);
 
     for (const modifier of ['user', 'api', 'advanced', 'voice', 'local']) {

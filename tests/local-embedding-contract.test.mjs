@@ -8,7 +8,7 @@ import test from 'node:test';
 const root = fileURLToPath(new URL('..', import.meta.url));
 
 const [html, app, localEmbedding] = await Promise.all([
-    readFile(new URL('../index.html', import.meta.url), 'utf8'),
+    readFile(new URL('../src/components/views/MemoryPanel.vue', import.meta.url), 'utf8'),
     readFile(new URL('../src/modules/app.mjs', import.meta.url), 'utf8'),
     readFile(new URL('../src/modules/local-embedding.mjs', import.meta.url), 'utf8')
 ]);

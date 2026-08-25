@@ -6,11 +6,12 @@ const read = (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
 
 test('UI template blocks render via <ui-template-frame> instead of raw v-html', async () => {
   const html = await read('index.html');
+  const worldInfoHtml = await read('src/components/views/WorldInfoPanel.vue');
 
   assert.match(html, /<ui-template-frame :html="html"><\/ui-template-frame>/);
-  assert.match(html, /<ui-template-frame :html="renderEditingUiTemplatePreview\(\)"><\/ui-template-frame>/);
+  assert.match(worldInfoHtml, /<ui-template-frame :html="renderEditingUiTemplatePreview\(\)"><\/ui-template-frame>/);
   assert.doesNotMatch(html, /ui-template-render" @click="handleUiTemplateClick"\s*v-html="html"/);
-  assert.doesNotMatch(html, /ui-template-preview[\s\S]*?v-html="renderEditingUiTemplatePreview\(\)"/);
+  assert.doesNotMatch(worldInfoHtml, /ui-template-preview[\s\S]*?v-html="renderEditingUiTemplatePreview\(\)"/);
 });
 
 test('index.html loads Vite module entry point', async () => {

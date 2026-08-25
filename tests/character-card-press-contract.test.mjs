@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 const [html, app, css] = await Promise.all([
-    readFile(new URL('../index.html', import.meta.url), 'utf8'),
+    readFile(new URL('../src/components/views/CharacterPanel.vue', import.meta.url), 'utf8'),
     readFile(new URL('../src/modules/app.mjs', import.meta.url), 'utf8'),
     readFile(new URL('../assets/css/styles.css', import.meta.url), 'utf8')
 ]);

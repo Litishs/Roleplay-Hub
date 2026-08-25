@@ -4,11 +4,12 @@ import test from 'node:test';
 import ttsText from '../src/modules/tts-text.mjs';
 import ttsEngine from '../src/modules/tts-engine.mjs';
 
-const [html, app, mainActivity, pluginSource] = await Promise.all([
-    readFile(new URL('../index.html', import.meta.url), 'utf8'),
+const [html, app, mainActivity, pluginSource, indexHtml] = await Promise.all([
+    readFile(new URL('../src/components/views/SettingsPanel.vue', import.meta.url), 'utf8'),
     readFile(new URL('../src/modules/app.mjs', import.meta.url), 'utf8'),
     readFile(new URL('../android/app/src/main/java/com/roleplayhub/app/MainActivity.java', import.meta.url), 'utf8'),
-    readFile(new URL('../android/app/src/main/java/com/roleplayhub/app/TTSSpeechPlugin.java', import.meta.url), 'utf8')
+    readFile(new URL('../android/app/src/main/java/com/roleplayhub/app/TTSSpeechPlugin.java', import.meta.url), 'utf8'),
+    readFile(new URL('../index.html', import.meta.url), 'utf8')
 ]);
     const mainJs = await readFile(new URL("../src/main.js", import.meta.url), "utf8");
 
@@ -70,9 +71,9 @@ test('tts-engine.js exposes bridge API and degrades without Capacitor', async ()
 });
 
 
-test('index.html renders TTS play/stop action and settings section', () => {
-    assert.match(html, /toggleSpeakMessage\(index\)/);
-    assert.match(html, /settings\.ttsEnabled && ttsStatus\.available/);
+test('SettingsPanel.vue renders TTS play/stop action and settings section', () => {
+    assert.match(indexHtml, /toggleSpeakMessage\(index\)/);
+    assert.match(indexHtml, /settings\.ttsEnabled && ttsStatus\.available/);
     assert.match(html, /语音设置/);
     assert.match(html, /v-model="settings\.ttsEnabled"/);
     assert.match(html, /settings\.ttsService === 'system'/);
@@ -87,14 +88,9 @@ test('index.html renders TTS play/stop action and settings section', () => {
     assert.doesNotMatch(html, /v-model="settings\.ttsVoice"/);
 });
 
-test('voice settings section is placed inside the settings view, not the uitemplates view', () => {
-    const settingsView = html.indexOf(`v-if="currentView === 'settings'"`);
-    const presetsView = html.indexOf(`v-if="currentView === 'presets'"`);
-    const uitemplatesView = html.indexOf(`v-if="currentView === 'uitemplates'"`);
+test('voice settings section is inside the settings view', () => {
     const voiceSection = html.indexOf('语音设置');
-    assert.ok(settingsView > 0 && presetsView > settingsView && uitemplatesView > presetsView);
-    assert.ok(voiceSection > settingsView && voiceSection < presetsView);
-    assert.ok(voiceSection < uitemplatesView);
+    assert.ok(voiceSection > 0);
 });
 
 test('settings sections are collapsible and local-data sits at the bottom', () => {

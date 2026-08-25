@@ -4,7 +4,7 @@ import test from 'node:test';
 import localTtsEngine from '../src/modules/tts-local-engine.mjs';
 
 const [html, app, mainActivity, pluginSource, buildGradle, gitignore] = await Promise.all([
-    readFile(new URL('../index.html', import.meta.url), 'utf8'),
+    readFile(new URL('../src/components/views/SettingsPanel.vue', import.meta.url), 'utf8'),
     readFile(new URL('../src/modules/app.mjs', import.meta.url), 'utf8'),
     readFile(new URL('../android/app/src/main/java/com/roleplayhub/app/MainActivity.java', import.meta.url), 'utf8'),
     readFile(new URL('../android/app/src/main/java/com/roleplayhub/app/LocalTTSPlugin.java', import.meta.url), 'utf8'),
@@ -62,7 +62,7 @@ test('tts-local-engine degrades gracefully without Capacitor', async () => {
 });
 
 
-test('index.html renders local voice management UI and drops the placeholder', () => {
+test('SettingsPanel.vue renders local voice management UI and drops the placeholder', () => {
     assert.match(html, /v-else class="bg-gray-50\/60 p-3 rounded-xl border border-gray-100 space-y-3"/);
     assert.match(html, /installLocalTtsVoice\(voice\.id\)/);
     assert.match(html, /removeLocalTtsVoice\(voice\.id\)/);
@@ -73,7 +73,7 @@ test('index.html renders local voice management UI and drops the placeholder', (
     assert.doesNotMatch(html, /暂未接入/);
 });
 
-test('index.html renders clone voice reference controls for ZipVoice voices', () => {
+test('SettingsPanel.vue renders clone voice reference controls for ZipVoice voices', () => {
     assert.match(html, /localTtsSelectedVoiceIsClone/);
     assert.match(html, /handleVoiceClipUpload/);
     assert.match(html, /removeVoiceClip/);

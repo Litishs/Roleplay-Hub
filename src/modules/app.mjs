@@ -39,10 +39,22 @@ import UiTemplatePending from '../components/UiTemplatePending.vue';
 import EmbeddedViewContent from '../components/EmbeddedViewContent.vue';
 import GenerationTimer from '../components/GenerationTimer.vue';
 import SettingsPageHeader from '../components/SettingsPageHeader.vue';
+import CharacterPanel from '../components/views/CharacterPanel.vue';
+import GeneratorPanel from '../components/views/GeneratorPanel.vue';
+import SquarePanel from '../components/views/SquarePanel.vue';
+import SettingsPanel from '../components/views/SettingsPanel.vue';
+import PresetsPanel from '../components/views/PresetsPanel.vue';
+import UiTemplatePanel from '../components/views/UiTemplatePanel.vue';
+import RegexPanel from '../components/views/RegexPanel.vue';
+import ToolsPanel from '../components/views/ToolsPanel.vue';
+import UsageStatsPanel from '../components/views/UsageStatsPanel.vue';
+import MemoryPanel from '../components/views/MemoryPanel.vue';
+import WorldInfoPanel from '../components/views/WorldInfoPanel.vue';
 import { generateUUID, parseCot } from './utils.mjs';
 
 createApp({
     components: {
+        CharacterPanel, GeneratorPanel, SquarePanel, SettingsPanel, PresetsPanel, UiTemplatePanel, RegexPanel, ToolsPanel, UsageStatsPanel, MemoryPanel, WorldInfoPanel,
         UiTemplatePending, EmbeddedViewContent, GenerationTimer, SettingsPageHeader,
         CustomSelect: RPHubCustomSelect,
         UiTemplateFrame: UiTemplateFrame
@@ -13764,7 +13776,7 @@ image###生成的提示词###
             });
         };
 
-        return {
+        const __ctx = {
             switchProfile, createNewProfile, deleteProfile, userProfiles, activeProfileId, showProfileDropdown,
             backupInProgress, exportNativeBackup, restoreNativeBackup,
             processMainContent,
@@ -14451,6 +14463,6 @@ image###生成的提示词###
                 showAutoImageGenModal.value = false;
                 saveData();
             }
-        };
+        }; provide("appContext", __ctx); return __ctx;
     }
 }).mount('#app');

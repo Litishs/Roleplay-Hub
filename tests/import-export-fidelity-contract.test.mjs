@@ -1,4 +1,4 @@
-﻿import assert from 'node:assert/strict';
+import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
@@ -125,8 +125,8 @@ test('Android full backup picker suggests a .rphub-backup.zip filename', async (
   assert.match(backupMethod, /"roleplay-hub-" \+ timestamp \+ "\.rphub-backup\.zip"/);
 });
 
-test('chat import and import preview modals exist in the main template', async () => {
-  const source = await read('../index.html');
+test('chat import and import preview modals exist in main template', async () => {
+  const source = await read('../src/components/views/WorldInfoPanel.vue');
   assert.match(source, /v-if="showChatImportDialog"/);
   assert.match(source, /@click="confirmChatImportOverwrite"/);
   assert.match(source, /@click="confirmChatImportAppend"/);
