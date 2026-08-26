@@ -219,7 +219,7 @@
                                     </span>
                                     <span v-if="hasUiTemplateScripts(template.htmlTemplate)"
                                         class="text-[10px] px-2 py-0.5 rounded-full border bg-red-50 text-red-600 border-red-200"
-                                        title="模板含可执行脚本（<script>/内联事件/iframe），仅在信任来源时使用">
+                                        title="模板含可执行脚本（&lt;script&gt;/内联事件/iframe），仅在信任来源时使用">
                                         含脚本
                                     </span>
                                 </div>

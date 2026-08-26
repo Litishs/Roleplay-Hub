@@ -13,7 +13,8 @@
         "android:open": "cap open android",
         "android:debug": "npm run android:sync && powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-android-debug.ps1",
         "android:release": "npm run android:sync && powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-android-release.ps1",
-        "build:js": "vite build"
+        "build:js": "vite build",
+        "dev": "vite"
     },
     "dependencies": {
         "@capacitor/android": "^7.4.0",
