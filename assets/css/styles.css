@@ -1358,6 +1358,19 @@
             box-shadow: 0 0 0 2px #93c5fd;
         }
 
+        .settings-toggle-input {
+            appearance: none;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            width: 0;
+            height: 0;
+            min-width: 0;
+            min-height: 0;
+            opacity: 0;
+            pointer-events: none;
+            position: absolute;
+        }
+
         .settings-toggle-input:checked + .settings-toggle {
             background: #2563eb;
         }

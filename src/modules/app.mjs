@@ -14471,7 +14471,7 @@ image###生成的提示词###
                 showAutoImageGenModal.value = false;
                 saveData();
             }
-        }; provide("appContext", __ctx); if (typeof window !== "undefined") window.__RPH__ = __ctx; return __ctx;
+        }; provide("appContext", __ctx); if (typeof window !== "undefined") { window.__RPH__ = __ctx; window.RPHStorage = RPHStorage; } return __ctx;
     }
 });
 
