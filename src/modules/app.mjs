@@ -1,4 +1,5 @@
-const { createApp, ref, reactive, computed, onMounted, onBeforeUnmount, watch, nextTick } = Vue;
+import * as Vue from 'vue';
+const { createApp, ref, reactive, computed, onMounted, onBeforeUnmount, watch, nextTick, provide, h, markRaw, toRaw, isRef, watchEffect, shallowRef, triggerRef, defineComponent, withScopeId, Suspense, Teleport, Transition, TransitionGroup, KeepAlive } = Vue;
 
 // Configure marked to disable indented code blocks
 // This allows indented HTML (like details/summary) to be rendered as HTML instead of code
@@ -52,12 +53,18 @@ import MemoryPanel from '../components/views/MemoryPanel.vue';
 import WorldInfoPanel from '../components/views/WorldInfoPanel.vue';
 import { generateUUID, parseCot } from './utils.mjs';
 
-createApp({
+const __app = createApp({
     components: {
         CharacterPanel, GeneratorPanel, SquarePanel, SettingsPanel, PresetsPanel, UiTemplatePanel, RegexPanel, ToolsPanel, UsageStatsPanel, MemoryPanel, WorldInfoPanel,
         UiTemplatePending, EmbeddedViewContent, GenerationTimer, SettingsPageHeader,
         CustomSelect: RPHubCustomSelect,
-        UiTemplateFrame: UiTemplateFrame
+        UiTemplateFrame: UiTemplateFrame,
+        'settings-page-header': SettingsPageHeader,
+        'generation-timer': GenerationTimer,
+        'ui-template-pending': UiTemplatePending,
+        'embedded-view-content': EmbeddedViewContent,
+        'custom-select': RPHubCustomSelect,
+        'ui-template-frame': UiTemplateFrame
     },
     setup() {
         const cardUtils = RPHubCardUtils;
@@ -13316,6 +13323,7 @@ image###生成的提示词###
         };
 
         // Lifecycle
+        // Lifecycle
         onMounted(async () => {
             document.addEventListener('fullscreenchange', syncChatFullscreenState);
             document.addEventListener('webkitfullscreenchange', syncChatFullscreenState);
@@ -14463,6 +14471,36 @@ image###生成的提示词###
                 showAutoImageGenModal.value = false;
                 saveData();
             }
-        }; provide("appContext", __ctx); return __ctx;
+        }; provide("appContext", __ctx); if (typeof window !== "undefined") window.__RPH__ = __ctx; return __ctx;
     }
-}).mount('#app');
+});
+
+// Register globally so compiled SFCs (MemoryPanel, UsageStatsPanel, etc.) can resolve
+// <settings-page-header> / <custom-select> / <ui-template-frame> etc. via app-level lookup.
+[
+    ['CharacterPanel', CharacterPanel],
+    ['GeneratorPanel', GeneratorPanel],
+    ['SquarePanel', SquarePanel],
+    ['SettingsPanel', SettingsPanel],
+    ['PresetsPanel', PresetsPanel],
+    ['UiTemplatePanel', UiTemplatePanel],
+    ['RegexPanel', RegexPanel],
+    ['ToolsPanel', ToolsPanel],
+    ['UsageStatsPanel', UsageStatsPanel],
+    ['MemoryPanel', MemoryPanel],
+    ['WorldInfoPanel', WorldInfoPanel],
+    ['UiTemplatePending', UiTemplatePending],
+    ['ui-template-pending', UiTemplatePending],
+    ['EmbeddedViewContent', EmbeddedViewContent],
+    ['embedded-view-content', EmbeddedViewContent],
+    ['GenerationTimer', GenerationTimer],
+    ['generation-timer', GenerationTimer],
+    ['SettingsPageHeader', SettingsPageHeader],
+    ['settings-page-header', SettingsPageHeader],
+    ['CustomSelect', RPHubCustomSelect],
+    ['custom-select', RPHubCustomSelect],
+    ['UiTemplateFrame', UiTemplateFrame],
+    ['ui-template-frame', UiTemplateFrame],
+].forEach(([name, comp]) => __app.component(name, comp));
+
+__app.mount('#app');

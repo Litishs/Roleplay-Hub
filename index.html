@@ -1047,27 +1047,27 @@
             </div>
 
             <!-- Characters Management -->
-            <character-panel v-if="currentView === 'characters'" />
+            <character-panel v-if="currentView === 'characters'"></character-panel>
 
-            <generator-panel v-if="currentView === 'generator'" />
+            <generator-panel v-if="currentView === 'generator'"></generator-panel>
 
-            <square-panel v-if="currentView === 'square'" />
+            <square-panel v-if="currentView === 'square'"></square-panel>
 
-            <settings-panel v-if="currentView === 'settings'" />
+            <settings-panel v-if="currentView === 'settings'"></settings-panel>
 
-            <presets-panel v-if="currentView === 'presets'" />
+            <presets-panel v-if="currentView === 'presets'"></presets-panel>
 
-            <ui-template-panel v-if="currentView === 'uitemplates'" />
+            <ui-template-panel v-if="currentView === 'uitemplates'"></ui-template-panel>
 
-            <regex-panel v-if="currentView === 'regex'" />
+            <regex-panel v-if="currentView === 'regex'"></regex-panel>
 
-            <tools-panel v-if="currentView === 'tools'" />
+            <tools-panel v-if="currentView === 'tools'"></tools-panel>
 
-            <usage-stats-panel v-if="currentView === 'usage'" />
+            <usage-stats-panel v-if="currentView === 'usage'"></usage-stats-panel>
 
-            <memory-panel v-if="currentView === 'memory'" />
+            <memory-panel v-if="currentView === 'memory'"></memory-panel>
 
-            <world-info-panel v-if="currentView === 'worldinfo'" />
+            <world-info-panel v-if="currentView === 'worldinfo'"></world-info-panel>
 
         <!-- Theme-compliant Global Confirm Modal -->
         <transition enter-active-class="transition duration-300 ease-modal-fade" enter-from-class="opacity-0"
@@ -1095,9 +1095,92 @@
             </div>
         </transition>
 
+        <!-- Author Notice Modal (首次启动致谢) -->
+        <div v-if="showAuthorNoticeModal"
+            class="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fade-in">
+            <div
+                class="bg-white rounded-xl border border-gray-200 w-full max-w-md flex flex-col shadow-2xl transform transition-all scale-100 overflow-hidden relative">
+                <div class="bg-gradient-to-r from-primary-50 to-purple-50 p-5 border-b border-gray-100">
+                    <h3 class="text-xl font-bold text-gray-900">致谢与来源</h3>
+                    <p class="text-xs text-gray-500 mt-1">本项目基于 STA1N 的开源项目二次开发</p>
+                </div>
+                <div class="p-5 space-y-3 text-sm text-gray-600">
+                    <p>本项目最初由 <b>STA1N</b> 创作并开源（<span class="font-mono text-xs text-gray-500">github.com/STA1N156/RP-Hub</span>），遵循 <b>CC BY-NC 4.0</b> 许可协议。</p>
+                    <p>由 <b>Litishs</b> 二次开发，封装为 Android 应用，并持续维护。</p>
+                    <p class="text-xs text-gray-400">请保留署名、禁止商用；如需商业授权，请联系原作者 STA1N。</p>
+                </div>
+                <div class="p-4 flex justify-end border-t border-gray-100">
+                    <button @click="closeAuthorNoticeModal"
+                        class="px-8 py-2.5 bg-primary-600 hover:bg-primary-700 text-white font-medium rounded-lg shadow-sm hover:shadow transition-all active:scale-95">
+                        知道了
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- User Setup Modal -->
+        <div v-if="showUserSetupModal"
+            class="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fade-in">
+            <div
+                class="bg-white rounded-xl border border-gray-200 w-full max-w-md flex flex-col shadow-2xl transform transition-all scale-100">
+                <div class="p-6">
+                    <div
+                        class="flex items-center justify-center w-12 h-12 rounded-full bg-primary-100 text-primary-600 mb-4 mx-auto">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+                        </svg>
+                    </div>
+                    <h3 class="text-xl font-bold text-gray-900 mb-2 text-center">欢迎使用 RolePlay Hub</h3>
+                    <p class="text-sm text-gray-500 mb-6 text-center">为了获得更好的沉浸式体验，请先进行个性化设置。</p>
+
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">您的称呼 <span
+                                    class="text-red-500">*</span></label>
+                            <input ref="userSetupNameInput" v-model="tempUserSetup.name" type="text"
+                                @input="syncUserSetupName" @change="syncUserSetupName"
+                                @compositionend="syncUserSetupName"
+                                class="w-full bg-gray-50/60 border border-gray-300 rounded-lg px-4 py-2 text-gray-800 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:outline-none transition-all"
+                                placeholder="角色对您的称呼">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">旁白叙事视角</label>
+                            <div class="segmented-switch">
+                                <div class="segmented-switch__indicator"
+                                    :class="{ 'is-right': tempUserSetup.person === 'third' }"></div>
+                                <button @click="tempUserSetup.person = 'second'"
+                                    class="segmented-switch__option"
+                                    :class="{ 'is-active': tempUserSetup.person === 'second' }">
+                                    第二人称 (你)
+                                </button>
+                                <button @click="tempUserSetup.person = 'third'"
+                                    class="segmented-switch__option"
+                                    :class="{ 'is-active': tempUserSetup.person === 'third' }">
+                                    第三人称 ({{ tempUserSetup.name || '您的称呼' }})
+                                </button>
+                            </div>
+                            <p class="mt-1.5 text-[11px] text-gray-400 px-1"></p>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">详细设定 (可选)</label>
+                            <textarea v-model="tempUserSetup.description" rows="6"
+                                class="w-full bg-gray-50/60 border border-gray-300 rounded-lg px-4 py-2 text-gray-800 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:outline-none transition-all resize-y"
+                                placeholder="例如：您的外貌、性格、人设等..."></textarea>
+                        </div>
+
+                    </div>
+                </div>
+                <div class="bg-gray-50 px-4 py-3 sm:px-6 flex flex-row-reverse rounded-b-xl">
+                    <button @pointerdown="syncUserSetupName" @click="saveUserSetup" type="button"
+                        class="w-full inline-flex justify-center rounded-lg border border-transparent shadow-sm px-4 py-2 bg-primary-600 text-base font-medium text-white hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 sm:ml-3 sm:w-auto sm:text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                        保存并开始
+                    </button>
+                </div>
+            </div>
+        </div>
+
     </div>
-
 </body>
-
 </html>
 
