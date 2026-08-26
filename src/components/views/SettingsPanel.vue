@@ -325,8 +325,8 @@
                                     </div>
                                     <div v-if="isCustomApiProvider" class="relative">
                                         <div
-                                            class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-teal-500 transition-colors pointer-events-none">
-                                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            class="absolute left-4 top-0 bottom-0 flex items-center text-gray-400 group-focus-within:text-teal-500 transition-colors pointer-events-none">
+                                            <svg class="w-5 h-5" style="display:block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                                     d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z">
                                                 </path>
@@ -343,8 +343,8 @@
                                         Key</label>
                                     <div class="relative">
                                         <div
-                                            class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-teal-500 transition-colors pointer-events-none">
-                                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            class="absolute left-4 top-0 bottom-0 flex items-center text-gray-400 group-focus-within:text-teal-500 transition-colors pointer-events-none">
+                                            <svg class="w-5 h-5" style="display:block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                                     d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z">
                                                 </path>
@@ -358,12 +358,12 @@
                                             class="w-full h-12 bg-gray-50/60 border-2 border-gray-100 rounded-xl pl-11 pr-24 py-0 text-gray-800 font-medium focus:bg-white focus:border-teal-500 focus:ring-4 focus:ring-teal-100 focus:outline-none transition-all placeholder-gray-400 font-mono text-sm"
                                             placeholder="sk-...">
                                         <div
-                                            class="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                                            class="absolute right-1.5 top-0 bottom-0 flex items-center gap-1">
                                             <button type="button" @click="pasteApiKeyFromClipboard"
                                                 title="从剪贴板粘贴 API Key"
                                                 class="h-9 px-2 rounded-lg bg-teal-50 hover:bg-teal-100 text-teal-700 text-xs font-bold border border-teal-100 transition-all active:scale-95 flex items-center gap-1 leading-none"
                                                 style="line-height: 1;">
-                                                <svg class="w-3.5 h-3.5 flex-shrink-0" style="display:block;vertical-align:middle" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <svg class="flex-shrink-0" style="display:block;width:1em;height:1em" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                                         d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path>
                                                 </svg>
@@ -372,13 +372,13 @@
                                             <button type="button" @click="toggleApiKeyVisibility"
                                                 :title="apiKeyVisible ? '隐藏 API Key' : '显示 API Key'"
                                                 class="w-9 h-9 rounded-lg bg-gray-50 hover:bg-gray-100 text-gray-500 border border-gray-200 flex items-center justify-center transition-all active:scale-95 flex-shrink-0">
-                                                <svg v-if="!apiKeyVisible" class="w-4 h-4" style="display:block;vertical-align:middle" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <svg v-if="!apiKeyVisible" class="w-4 h-4" style="display:block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                                         d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
                                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                                         d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
                                                 </svg>
-                                                <svg v-else class="w-4 h-4" style="display:block;vertical-align:middle" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <svg v-else class="w-4 h-4" style="display:block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                                         d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"></path>
                                                 </svg>
@@ -421,8 +421,8 @@
                                         <div class="relative flex-1 group"
                                             @click="openModelSelector('qualityModel')">
                                             <div
-                                                class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-hover:text-teal-500 transition-colors pointer-events-none z-10">
-                                                <svg class="w-5 h-5" fill="none" stroke="currentColor"
+                                                class="absolute left-4 top-0 bottom-0 flex items-center text-gray-400 group-hover:text-teal-500 transition-colors pointer-events-none z-10">
+                                                <svg class="w-5 h-5" style="display:block" fill="none" stroke="currentColor"
                                                     viewBox="0 0 24 24">
                                                     <path stroke-linecap="round" stroke-linejoin="round"
                                                         stroke-width="2"
@@ -448,8 +448,8 @@
                                         <div class="relative flex-1 group"
                                             @click="openModelSelector('balancedModel')">
                                             <div
-                                                class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-hover:text-teal-500 transition-colors pointer-events-none z-10">
-                                                <svg class="w-5 h-5" fill="none" stroke="currentColor"
+                                                class="absolute left-4 top-0 bottom-0 flex items-center text-gray-400 group-hover:text-teal-500 transition-colors pointer-events-none z-10">
+                                                <svg class="w-5 h-5" style="display:block" fill="none" stroke="currentColor"
                                                     viewBox="0 0 24 24">
                                                     <path stroke-linecap="round" stroke-linejoin="round"
                                                         stroke-width="2"
@@ -475,8 +475,8 @@
                                         <div class="relative flex-1 group"
                                             @click="openModelSelector('fastModel')">
                                             <div
-                                                class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-hover:text-teal-500 transition-colors pointer-events-none z-10">
-                                                <svg class="w-5 h-5" fill="none" stroke="currentColor"
+                                                class="absolute left-4 top-0 bottom-0 flex items-center text-gray-400 group-hover:text-teal-500 transition-colors pointer-events-none z-10">
+                                                <svg class="w-5 h-5" style="display:block" fill="none" stroke="currentColor"
                                                     viewBox="0 0 24 24">
                                                     <path stroke-linecap="round" stroke-linejoin="round"
                                                         stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
