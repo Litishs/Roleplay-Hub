@@ -396,10 +396,6 @@
                             <div class="flex items-center justify-between gap-3 text-[11px] font-bold text-gray-500">
                                 <span class="flex items-center gap-2 flex-wrap">
                                     <span>记忆分片 · {{ vectorMemorySearchResults.length }} / 20</span>
-                                    <button type="button" @click="showSearchResultsInGraph()"
-                                        class="text-[11px] px-2 py-1 rounded-lg bg-primary-50 hover:bg-primary-100 text-primary-700 font-bold border border-primary-100 transition-all">
-                                        在图谱中查看
-                                    </button>
                                 </span>
                                 <div class="grid grid-cols-2 gap-1 bg-gray-50 border border-gray-200 rounded-lg p-0.5">
                                     <button type="button" @click="vectorMemorySearchSortMode = 'time'"
