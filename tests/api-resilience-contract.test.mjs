@@ -106,8 +106,8 @@ test('chat errors render as character replies and are excluded from model contex
     assert.ok(app.includes("const chatUrl = getChatProviderEndpoint('chat/completions');"));
     assert.ok(app.includes('friendlyNetworkErrorMessage(error, chatUrl)'));
     assert.ok(!app.includes('friendlyNetworkErrorMessage(error, url)'));
-    const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
-    assert.ok(html.includes("msg.isError ? 'bg-red-50/80 text-red-800 border border-red-300/50'"));
+    const messageList = readFileSync(new URL('../src/components/chat/MessageList.vue', import.meta.url), 'utf8');
+    assert.ok(messageList.includes("msg.isError ? 'bg-red-50/80 text-red-800 border border-red-300/50'"));
 });
 
 test('offline chat flow no longer pops toasts (UI template analysis + auto model fetch)', () => {

@@ -6,11 +6,14 @@ const read = (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
 
 test('UI template blocks render via <ui-template-frame> instead of raw v-html', async () => {
   const html = await read('index.html');
+  const messageList = await read('src/components/chat/MessageList.vue');
   const worldInfoHtml = await read('src/components/views/WorldInfoPanel.vue');
 
-  assert.match(html, /<ui-template-frame :html="html"><\/ui-template-frame>/);
+  assert.match(html, /<message-list><\/message-list>/);
+  assert.match(messageList, /<ui-template-frame :html="html"><\/ui-template-frame>/);
   assert.match(worldInfoHtml, /<ui-template-frame :html="renderEditingUiTemplatePreview\(\)"><\/ui-template-frame>/);
   assert.doesNotMatch(html, /ui-template-render" @click="handleUiTemplateClick"\s*v-html="html"/);
+  assert.doesNotMatch(messageList, /ui-template-render" @click="handleUiTemplateClick"\s*v-html="html"/);
   assert.doesNotMatch(worldInfoHtml, /ui-template-preview[\s\S]*?v-html="renderEditingUiTemplatePreview\(\)"/);
 });
 

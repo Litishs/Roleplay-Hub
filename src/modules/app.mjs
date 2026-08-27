@@ -51,12 +51,16 @@ import ToolsPanel from '../components/views/ToolsPanel.vue';
 import UsageStatsPanel from '../components/views/UsageStatsPanel.vue';
 import MemoryPanel from '../components/views/MemoryPanel.vue';
 import WorldInfoPanel from '../components/views/WorldInfoPanel.vue';
+import CharacterInfo from '../components/chat/CharacterInfo.vue';
+import MessageList from '../components/chat/MessageList.vue';
+import MessageInput from '../components/chat/MessageInput.vue';
 import { generateUUID, parseCot } from './utils.mjs';
 
 const __app = createApp({
     components: {
         CharacterPanel, GeneratorPanel, SquarePanel, SettingsPanel, PresetsPanel, UiTemplatePanel, RegexPanel, ToolsPanel, UsageStatsPanel, MemoryPanel, WorldInfoPanel,
         UiTemplatePending, EmbeddedViewContent, GenerationTimer, SettingsPageHeader,
+        CharacterInfo, MessageList, MessageInput,
         CustomSelect: RPHubCustomSelect,
         UiTemplateFrame: UiTemplateFrame,
         'settings-page-header': SettingsPageHeader,
@@ -64,7 +68,10 @@ const __app = createApp({
         'ui-template-pending': UiTemplatePending,
         'embedded-view-content': EmbeddedViewContent,
         'custom-select': RPHubCustomSelect,
-        'ui-template-frame': UiTemplateFrame
+        'ui-template-frame': UiTemplateFrame,
+        'character-info': CharacterInfo,
+        'message-list': MessageList,
+        'message-input': MessageInput
     },
     setup() {
         const cardUtils = RPHubCardUtils;

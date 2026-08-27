@@ -4,12 +4,12 @@ import test from 'node:test';
 import ttsText from '../src/modules/tts-text.mjs';
 import ttsEngine from '../src/modules/tts-engine.mjs';
 
-const [html, app, mainActivity, pluginSource, indexHtml] = await Promise.all([
+const [html, app, mainActivity, pluginSource, messageList] = await Promise.all([
     readFile(new URL('../src/components/views/SettingsPanel.vue', import.meta.url), 'utf8'),
     readFile(new URL('../src/modules/app.mjs', import.meta.url), 'utf8'),
     readFile(new URL('../android/app/src/main/java/com/roleplayhub/app/MainActivity.java', import.meta.url), 'utf8'),
     readFile(new URL('../android/app/src/main/java/com/roleplayhub/app/TTSSpeechPlugin.java', import.meta.url), 'utf8'),
-    readFile(new URL('../index.html', import.meta.url), 'utf8')
+    readFile(new URL('../src/components/chat/MessageList.vue', import.meta.url), 'utf8')
 ]);
     const mainJs = await readFile(new URL("../src/main.js", import.meta.url), "utf8");
 
@@ -72,8 +72,8 @@ test('tts-engine.js exposes bridge API and degrades without Capacitor', async ()
 
 
 test('SettingsPanel.vue renders TTS play/stop action and settings section', () => {
-    assert.match(indexHtml, /toggleSpeakMessage\(index\)/);
-    assert.match(indexHtml, /settings\.ttsEnabled && ttsStatus\.available/);
+    assert.match(messageList, /toggleSpeakMessage\(index\)/);
+    assert.match(messageList, /settings\.ttsEnabled && ttsStatus\.available/);
     assert.match(html, /语音设置/);
     assert.match(html, /v-model="settings\.ttsEnabled"/);
     assert.match(html, /settings\.ttsService === 'system'/);

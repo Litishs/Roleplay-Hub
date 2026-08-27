@@ -3,10 +3,10 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import * as memorySummary from '../src/modules/memory-summary.mjs';
 
-const [html, app, indexHtml] = await Promise.all([
+const [html, app, messageList] = await Promise.all([
     readFile(new URL('../src/components/views/MemoryPanel.vue', import.meta.url), 'utf8'),
     readFile(new URL('../src/modules/app.mjs', import.meta.url), 'utf8'),
-    readFile(new URL('../index.html', import.meta.url), 'utf8')
+    readFile(new URL('../src/components/chat/MessageList.vue', import.meta.url), 'utf8')
 ]);
     const mainJs = await readFile(new URL("../src/main.js", import.meta.url), "utf8");
 
@@ -142,9 +142,9 @@ test('滚动摘要:进度提示文案三种状态', () => {
 
 test('滚动摘要:MemoryPanel.vue 加载模块并渲染进度提示', () => {
     assert.ok(app.includes('./memory-summary.mjs'));
-    assert.ok(indexHtml.includes('summaryProgress'));
-    assert.ok(indexHtml.includes('retryRollingSummary'));
-    assert.ok(indexHtml.includes('正在总结 第'));
+    assert.ok(messageList.includes('summaryProgress'));
+    assert.ok(messageList.includes('retryRollingSummary'));
+    assert.ok(messageList.includes('正在总结 第'));
 });
 
 test('滚动摘要:app.js 接入注入、触发与存储键', () => {

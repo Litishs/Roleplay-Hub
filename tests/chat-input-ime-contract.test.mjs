@@ -3,12 +3,13 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 test('chat input uses a textarea with IME-safe handlers', async () => {
-  const [html, source] = await Promise.all([
+  const [html, source, messageInput] = await Promise.all([
     readFile(new URL('../index.html', import.meta.url), 'utf8'),
-    readFile(new URL('../src/modules/app.mjs', import.meta.url), 'utf8')
+    readFile(new URL('../src/modules/app.mjs', import.meta.url), 'utf8'),
+    readFile(new URL('../src/components/chat/MessageInput.vue', import.meta.url), 'utf8')
   ]);
 
-  const chatInput = html.match(/<textarea[\s\S]*?ref="inputBox"><\/textarea>/)?.[0] || '';
+  const chatInput = messageInput.match(/<textarea[\s\S]*?ref="inputBox"><\/textarea>/)?.[0] || '';
   assert.ok(chatInput, 'chat input should be a textarea for reliable IME composition on Android WebView');
   assert.doesNotMatch(chatInput, /<div contenteditable="plaintext-only"/);
   assert.match(chatInput, /@compositionstart="handleChatCompositionStart"/);
@@ -26,8 +27,8 @@ test('chat input uses a textarea with IME-safe handlers', async () => {
   assert.match(source, /if \(inputBox\.value\) \{\s*if \(typeof inputBox\.value\.value === 'string'\) inputBox\.value\.value = '';/);
   assert.doesNotMatch(source, /watch\(userInput, \(\) =>/);
   assert.match(source, /handleChatInputPaste, prepareChatInputSend/);
-  assert.match(html, /@pointerdown="prepareChatInputSend" @click="sendMessage"/);
-  assert.doesNotMatch(html, /:disabled="!userInput\.trim\(\)"/);
+  assert.match(messageInput, /@pointerdown="prepareChatInputSend" @click="sendMessage"/);
+  assert.doesNotMatch(messageInput, /:disabled="!userInput\.trim\(\)"/);
 });
 
 test('chat input reads textarea value, pastes plain text, and auto-resizes', async () => {
