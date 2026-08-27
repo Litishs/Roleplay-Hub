@@ -43,15 +43,15 @@ test('dark mode theme state machine is wired in app.js', async () => {
 
 test('index.html has head anti-flicker script and settings dropdown', async () => {
   const html = await readFile(new URL('../index.html', import.meta.url), 'utf8');
-  const settingsHtml = await readFile(new URL('../src/components/views/SettingsPanel.vue', import.meta.url), 'utf8');
+  const advancedSettingsHtml = await readFile(new URL('../src/components/settings/AdvancedSettings.vue', import.meta.url), 'utf8');
 
   // head 内联防闪脚本（Vue 加载前同步设 data-theme）?
   assert.match(html, /localStorage\.getItem\('rph_theme_mode'\)/);
   assert.match(html, /document\.documentElement\.dataset\.theme = dark \? 'dark' : 'light'/);
 
   // 设置页外观主题下拉?
-  assert.match(settingsHtml, /v-model="settings\.themeMode" :options="themeModeOptions"/);
-  assert.match(settingsHtml, /外观主题/);
+  assert.match(advancedSettingsHtml, /v-model="settings\.themeMode" :options="themeModeOptions"/);
+  assert.match(advancedSettingsHtml, /外观主题/);
 });
 
 test('styles.css has dark override rules driven by data-theme', async () => {

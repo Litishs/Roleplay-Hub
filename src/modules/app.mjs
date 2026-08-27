@@ -44,6 +44,12 @@ import CharacterPanel from '../components/views/CharacterPanel.vue';
 import GeneratorPanel from '../components/views/GeneratorPanel.vue';
 import SquarePanel from '../components/views/SquarePanel.vue';
 import SettingsPanel from '../components/views/SettingsPanel.vue';
+import UpdateChecker from '../components/settings/UpdateChecker.vue';
+import DataManager from '../components/settings/DataManager.vue';
+import PresetManager from '../components/settings/PresetManager.vue';
+import ApiConfig from '../components/settings/ApiConfig.vue';
+import AdvancedSettings from '../components/settings/AdvancedSettings.vue';
+import TtsSettings from '../components/settings/TtsSettings.vue';
 import PresetsPanel from '../components/views/PresetsPanel.vue';
 import UiTemplatePanel from '../components/views/UiTemplatePanel.vue';
 import RegexPanel from '../components/views/RegexPanel.vue';
@@ -14489,6 +14495,12 @@ image###生成的提示词###
     ['GeneratorPanel', GeneratorPanel],
     ['SquarePanel', SquarePanel],
     ['SettingsPanel', SettingsPanel],
+    ['UpdateChecker', UpdateChecker],
+    ['DataManager', DataManager],
+    ['PresetManager', PresetManager],
+    ['ApiConfig', ApiConfig],
+    ['AdvancedSettings', AdvancedSettings],
+['TtsSettings', TtsSettings],
     ['PresetsPanel', PresetsPanel],
     ['UiTemplatePanel', UiTemplatePanel],
     ['RegexPanel', RegexPanel],

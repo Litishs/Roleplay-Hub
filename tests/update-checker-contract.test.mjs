@@ -2,9 +2,9 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-const [html, settingsHtml, app, checker, java] = await Promise.all([
+const [html, updateCheckerHtml, app, checker, java] = await Promise.all([
     readFile(new URL("../index.html", import.meta.url), "utf8"),
-    readFile(new URL("../src/components/views/SettingsPanel.vue", import.meta.url), "utf8"),
+    readFile(new URL("../src/components/settings/UpdateChecker.vue", import.meta.url), "utf8"),
     readFile(new URL("../src/modules/app.mjs", import.meta.url), "utf8"),
     readFile(new URL("../src/modules/update-checker.mjs", import.meta.url), "utf8"),
     readFile(new URL("../android/app/src/main/java/com/roleplayhub/app/NativeStoragePlugin.java", import.meta.url), "utf8"),
@@ -39,13 +39,13 @@ test("app.js has silent auto-check on startup", () => {
     assert.match(app, /5000\)/);
 });
 
-test("index.html shows version info, check button, and update button", () => {
-    assert.match(settingsHtml, /@click="checkForUpdates\(true\)"/);
-    assert.match(settingsHtml, /:disabled="checkingUpdate"/);
-    assert.match(settingsHtml, /v-if="latestVersionName"/);
-    assert.match(settingsHtml, /v-if="updateAvailable"/);
-    assert.match(settingsHtml, /@click="downloadAndInstallUpdate"/);
-    assert.match(settingsHtml, /downloadProgress/);
+test("UpdateChecker.vue shows version info, check button, and update button", () => {
+    assert.match(updateCheckerHtml, /@click="checkForUpdates\(true\)"/);
+    assert.match(updateCheckerHtml, /:disabled="checkingUpdate"/);
+    assert.match(updateCheckerHtml, /v-if="latestVersionName"/);
+    assert.match(updateCheckerHtml, /v-if="updateAvailable"/);
+    assert.match(updateCheckerHtml, /@click="downloadAndInstallUpdate"/);
+    assert.match(updateCheckerHtml, /downloadProgress/);
 });
 
 test("NativeStoragePlugin has installApk method", () => {

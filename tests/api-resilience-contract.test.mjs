@@ -11,8 +11,8 @@ const [app, chatGuardSource, memoryFallbackSource, capConfig, java] = await Prom
     readFile(new URL('../android/app/src/main/java/com/roleplayhub/app/NativeStoragePlugin.java', import.meta.url), 'utf8')
 ]);
     const appJs = readFileSync(new URL("../src/modules/app.mjs", import.meta.url), "utf8");
-const [settingsHtml, usagePanelHtml, worldInfoHtml] = await Promise.all([
-        readFile(new URL("../src/components/views/SettingsPanel.vue", import.meta.url), "utf8"),
+const [updateCheckerHtml, usagePanelHtml, worldInfoHtml] = await Promise.all([
+        readFile(new URL("../src/components/settings/UpdateChecker.vue", import.meta.url), "utf8"),
         readFile(new URL("../src/components/views/UsageStatsPanel.vue", import.meta.url), "utf8"),
         readFile(new URL("../src/components/views/WorldInfoPanel.vue", import.meta.url), "utf8")
     ]);
@@ -146,7 +146,7 @@ test('each debug build bumps version (1.9 -> 1.10 -> 1.11 ...) and exposes it in
 
     // 设置页展示版本号
 
-    assert.ok(settingsHtml.includes('v{{ appVersionName }}'));
+    assert.ok(updateCheckerHtml.includes('v{{ appVersionName }}'));
     assert.ok(app.includes('const appVersionName = ref'));
     assert.ok(app.includes('await nativeApp.getInfo?.();'));
 });

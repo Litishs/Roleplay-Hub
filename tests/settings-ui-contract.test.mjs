@@ -2,10 +2,11 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-const [html, app, styles] = await Promise.all([
+const [html, app, styles, presetManager] = await Promise.all([
     readFile(new URL('../src/components/views/SettingsPanel.vue', import.meta.url), 'utf8'),
     readFile(new URL('../src/modules/app.mjs', import.meta.url), 'utf8'),
-    readFile(new URL('../assets/css/styles.css', import.meta.url), 'utf8')
+    readFile(new URL('../assets/css/styles.css', import.meta.url), 'utf8'),
+    readFile(new URL('../src/components/settings/PresetManager.vue', import.meta.url), 'utf8')
 ]);
 
 const settingsStart = 0;
@@ -38,15 +39,15 @@ test('用户与 API 设置默认折叠且语音区保持默认折叠', () => {
 });
 
 test('紧凑用户设置保留人设管理和全部编辑能力', () => {
-    assert.match(settingsView, /user-settings-toolbar/);
-    assert.match(settingsView, /user-settings-profile-trigger/);
-    assert.match(settingsView, /@click="createNewProfile"/);
-    assert.match(settingsView, /@click="deleteProfile\(activeProfileId\)"/);
-    assert.match(settingsView, /@change="handleUserAvatarUpload"/);
-    assert.match(settingsView, /v-model="user\.name"/);
-    assert.match(settingsView, /@click="togglePerson\('second'\)"/);
-    assert.match(settingsView, /@click="togglePerson\('third'\)"/);
-    assert.match(settingsView, /v-model="user\.description"/);
+    assert.match(presetManager, /user-settings-toolbar/);
+    assert.match(presetManager, /user-settings-profile-trigger/);
+    assert.match(presetManager, /@click="createNewProfile"/);
+    assert.match(presetManager, /@click="deleteProfile\(activeProfileId\)"/);
+    assert.match(presetManager, /@change="handleUserAvatarUpload"/);
+    assert.match(presetManager, /v-model="user\.name"/);
+    assert.match(presetManager, /@click="togglePerson\('second'\)"/);
+    assert.match(presetManager, /@click="togglePerson\('third'\)"/);
+    assert.match(presetManager, /v-model="user\.description"/);
 });
 
 test('设置卡片包含窄屏布局和低亮度深色覆盖', () => {

@@ -4,12 +4,13 @@ import test from 'node:test';
 import ttsText from '../src/modules/tts-text.mjs';
 import ttsEngine from '../src/modules/tts-engine.mjs';
 
-const [html, app, mainActivity, pluginSource, messageList] = await Promise.all([
+const [html, app, mainActivity, pluginSource, messageList, ttsHtml] = await Promise.all([
     readFile(new URL('../src/components/views/SettingsPanel.vue', import.meta.url), 'utf8'),
     readFile(new URL('../src/modules/app.mjs', import.meta.url), 'utf8'),
     readFile(new URL('../android/app/src/main/java/com/roleplayhub/app/MainActivity.java', import.meta.url), 'utf8'),
     readFile(new URL('../android/app/src/main/java/com/roleplayhub/app/TTSSpeechPlugin.java', import.meta.url), 'utf8'),
-    readFile(new URL('../src/components/chat/MessageList.vue', import.meta.url), 'utf8')
+    readFile(new URL('../src/components/chat/MessageList.vue', import.meta.url), 'utf8'),
+    readFile(new URL('../src/components/settings/TtsSettings.vue', import.meta.url), 'utf8')
 ]);
     const mainJs = await readFile(new URL("../src/main.js", import.meta.url), "utf8");
 
@@ -75,17 +76,20 @@ test('SettingsPanel.vue renders TTS play/stop action and settings section', () =
     assert.match(messageList, /toggleSpeakMessage\(index\)/);
     assert.match(messageList, /settings\.ttsEnabled && ttsStatus\.available/);
     assert.match(html, /语音设置/);
-    assert.match(html, /v-model="settings\.ttsEnabled"/);
-    assert.match(html, /settings\.ttsService === 'system'/);
     assert.match(html, /ttsSettingsExpanded/);
-    assert.match(html, /selectTtsService\('system'\)/);
-    assert.match(html, /语音引擎/);
-    assert.match(html, /引擎设置/);
-    assert.match(html, /朗读偏好/);
-    assert.match(html, /v-model="settings\.ttsAutoPlay"/);
-    assert.match(html, /testTtsVoice/);
-    assert.match(html, /v-model="ttsReadMode"/);
     assert.doesNotMatch(html, /v-model="settings\.ttsVoice"/);
+});
+
+test('TtsSettings.vue renders TTS engine, prefs and test voice UI', () => {
+    assert.match(ttsHtml, /v-model="settings\.ttsEnabled"/);
+    assert.match(ttsHtml, /settings\.ttsService === 'system'/);
+    assert.match(ttsHtml, /selectTtsService\('system'\)/);
+    assert.match(ttsHtml, /语音引擎/);
+    assert.match(ttsHtml, /引擎设置/);
+    assert.match(ttsHtml, /朗读偏好/);
+    assert.match(ttsHtml, /v-model="settings\.ttsAutoPlay"/);
+    assert.match(ttsHtml, /testTtsVoice/);
+    assert.match(ttsHtml, /v-model="ttsReadMode"/);
 });
 
 test('voice settings section is inside the settings view', () => {
