@@ -342,6 +342,79 @@
                 </div>
             </div>
 
+        <!-- Add Character Selection Modal (moved from WorldInfoPanel.vue: must be reachable when currentView='characters') -->
+        <div v-if="showAddCharacterMenu"
+            class="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fade-in">
+            <div class="fixed inset-0" @click="showAddCharacterMenu = false"></div>
+            <div class="compact-modal-panel">
+                <div class="p-6">
+                    <h3 class="text-xl font-bold text-gray-900 mb-6 flex items-center">
+                        <svg class="w-6 h-6 mr-2 text-primary-600" fill="none" stroke="currentColor"
+                            viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z">
+                            </path>
+                        </svg>
+                        添加角色卡
+                    </h3>
+                    <div class="grid grid-cols-1 gap-3">
+                        <button @click="createNewCharacter(); showAddCharacterMenu = false"
+                            class="choice-card group">
+                            <div class="choice-card__icon">
+                                <svg class="w-6 h-6 text-primary-600" fill="none" stroke="currentColor"
+                                    viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M12 4v16m8-8H4"></path>
+                                </svg>
+                            </div>
+                            <div class="text-left">
+                                <div class="font-bold">新建角色卡</div>
+                                <div class="text-xs text-gray-500">从零开始创建一个新角色</div>
+                            </div>
+                        </button>
+
+                        <label class="choice-card group">
+                            <div class="choice-card__icon">
+                                <svg class="w-6 h-6 text-primary-600" fill="none" stroke="currentColor"
+                                    viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                                </svg>
+                            </div>
+                            <div class="text-left flex-1">
+                                <div class="font-bold">导入角色卡</div>
+                                <div class="text-xs text-gray-500">导入 .png 或 .json 文件</div>
+                            </div>
+                            <input type="file" accept=".png,.json"
+                                @change="importCharacter($event); showAddCharacterMenu = false" class="hidden">
+                        </label>
+
+                        <label class="choice-card group">
+                            <div class="choice-card__icon">
+                                <svg class="w-6 h-6 text-primary-600" fill="none" stroke="currentColor"
+                                    viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z">
+                                    </path>
+                                </svg>
+                            </div>
+                            <div class="text-left flex-1">
+                                <div class="font-bold">导入聊天记录</div>
+                                <div class="text-xs text-gray-500">导入 .jsonl 格式的聊天数据</div>
+                            </div>
+                            <input type="file" accept=".jsonl"
+                                @change="importCharacter($event); showAddCharacterMenu = false" class="hidden">
+                        </label>
+                    </div>
+
+                    <button @click="showAddCharacterMenu = false"
+                        class="mt-6 w-full py-3 text-red-500 font-medium hover:text-red-600 transition-colors">
+                        取消
+                    </button>
+                </div>
+            </div>
+        </div>
+
             <!-- Generator View -->
 </template>
 
