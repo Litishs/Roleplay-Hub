@@ -34,8 +34,11 @@ test('聊天请求按首包、首有效 token、有效流空闲和总时长超�
     assert.ok(app.includes('let chatWatchdog = null;'));
     assert.ok(app.includes('chatWatchdog = setInterval'));
     assert.ok(!app.includes('const chatWatchdog = setInterval'));
-    assert.ok(app.includes('const chatRequestGuard = createChatRequestGuard;'));
-    assert.ok(app.includes('const chatGuard = chatRequestGuard.create({'));
+    // 2026-08-28: the guard's create() must be invoked directly. The old alias
+    // (`const chatRequestGuard = createChatRequestGuard`) crashed every send with
+    // "chatRequestGuard.create is not a function", misreported as a CORS error.
+    assert.ok(!app.includes('const chatRequestGuard = createChatRequestGuard;'));
+    assert.ok(app.includes('const chatGuard = createChatRequestGuard({'));
     assert.ok(app.includes('const markMeaningfulChatActivity = (content, reasoning) => {'));
     assert.ok(!app.includes('lastChatActivityMs = Date.now();'));
     assert.ok(app.includes('clearInterval(chatWatchdog);'));
@@ -167,6 +170,18 @@ test('chat errors get friendly network hints and are truncated', () => {
     assert.ok(app.includes('\u8bf7\u6c42\u8fc7\u4e8e\u9891\u7e41\uff08429\uff09')); // ???????429?
     assert.ok(app.includes('const truncateErrorMessage = (message, maxLength = 600) => {'));
     assert.ok(app.includes('truncateErrorMessage(friendlyNetworkErrorMessage(error, chatUrl))'));
+    // 2026-08-28: the chat provider is pinned once per generation so URL,
+    // Authorization header and diagnostics never drift from each other
+    assert.ok(app.includes('const chatProviderForRequest = getChatProvider();'));
+    assert.ok(app.includes("'Authorization': `Bearer ${chatProviderForRequest.apiKey}`"));
+    // empty chat-provider key must surface a clear message instead of the
+    // misleading "network request failed" TypeError branch
+    assert.ok(app.includes('\u672a\u914d\u7f6e API Key')); // ????? API Key
+    // 2026-08-28: network errors are matched by message shape, not by TypeError
+    // name — non-network TypeErrors (programming bugs) must surface verbatim
+    assert.ok(!app.includes("if (error?.name === 'TypeError') return true;"));
+    assert.ok(!app.includes("if (error?.name === 'TypeError' || /failed to fetch/i.test(message))"));
+    assert.ok(app.includes('/failed to fetch|network error|networkerror|networkrequestfailed|load failed/i'));
 });
 
 test('fetchModels has a 15s timeout', () => {
@@ -219,4 +234,13 @@ test('usage view exposes a diagnostics export button', async () => {
     assert.ok(usagePanelHtml.includes('requestDiagnosticsCount'));
     assert.ok(usagePanelHtml.includes('exportRequestDiagnostics()'));
     assert.ok(usagePanelHtml.includes('\u590d\u5236\u8bca\u65ad\u4fe1\u606f')); // ??????
+});
+
+test('chat diagnostics record the pinned provider to spot mismatch with connection test', () => {
+    // 2026-08-28: the connection test only probes the settings-page provider
+    // (settings.apiUrl/apiKey) while chat uses the pinned chat provider; the
+    // diagnostics payload must record which provider chat actually used.
+    assert.ok(app.includes('providerId: chatProviderForRequest.providerId,'));
+    assert.ok(app.includes('providerApiUrl: chatProviderForRequest.apiUrl,'));
+    assert.ok(app.includes('hasApiKey: !!chatProviderForRequest.apiKey'));
 });

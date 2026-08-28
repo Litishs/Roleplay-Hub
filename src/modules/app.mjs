@@ -90,7 +90,6 @@ const __app = createApp({
     },
     setup() {
         const cardUtils = RPHubCardUtils;
-        const chatRequestGuard = createChatRequestGuard;
         const memoryRecallFallback = recallFallbackSelect;
 
         // Default Avatar (Simple Gray Background)
@@ -4877,8 +4876,10 @@ ${content}
         const isRetryableChatNetworkError = (error) => {
             if (!error) return false;
             if (error?.name === 'AbortError') return /timed out/i.test(String(error?.message || ''));
-            if (error?.name === 'TypeError') return true;
-            return /failed to fetch|network error|networkrequestfailed|load failed/i.test(String(error?.message || ''));
+            // 2026-08-28: classify by message, not by error name. Chrome/Safari/Firefox
+            // all report real fetch failures as TypeError, but so do programming errors
+            // ("x is not a function"); only network-shaped messages deserve retries.
+            return /failed to fetch|network error|networkerror|networkrequestfailed|load failed/i.test(String(error?.message || ''));
         };
         const isUserAbortError = (error) => error?.name === 'AbortError' && !/timed out/i.test(String(error?.message || ''));
 
@@ -4891,7 +4892,11 @@ ${content}
             if (error?.name === 'AbortError' && /timed out/i.test(message)) {
                 return '请求超时（长时间无响应），请检查网络或稍后重试';
             }
-            if (error?.name === 'TypeError' || /failed to fetch/i.test(message)) {
+            // 2026-08-28: match network failures by message instead of error name.
+            // Browsers report real fetch/CORS failures as TypeError("Failed to fetch"),
+            // but TypeError also covers programming errors; mapping those to the CORS
+            // hint hid the actual bug (e.g. "chatRequestGuard.create is not a function").
+            if (/failed to fetch|network error|networkerror|networkrequestfailed|load failed/i.test(message)) {
                 return '网络请求失败：可能是 CORS 限制、网络不可用或服务端无响应';
             }
             return message;
@@ -5970,6 +5975,11 @@ ${content}
             // 修复 2026-08-05 真机回归: watchdog 曾以 const 声明在 try 块内,
             // finally 块引用时抛 ReferenceError; 提升到函数作用域并统一清理。
             let chatWatchdog = null;
+            // 2026-08-28: pin the chat provider once per generation so the URL,
+            // Authorization header and diagnostics all read the same provider.
+            // Prevents mid-retry drift and surfaces misconfigured chat providers
+            // (empty API key / wrong URL) instead of misleading "network failed".
+            const chatProviderForRequest = getChatProvider();
             const chatUrl = getChatProviderEndpoint('chat/completions');
             let requestDiagnostic = RPHRequestDiagnostics?.start({
                 url: chatUrl,
@@ -5977,7 +5987,10 @@ ${content}
                     model: requestModel,
                     messages: [],
                     temperature: settings.temperature,
-                    stream: settings.stream
+                    stream: settings.stream,
+                    providerId: chatProviderForRequest.providerId,
+                    providerApiUrl: chatProviderForRequest.apiUrl,
+                    hasApiKey: !!chatProviderForRequest.apiKey
                 },
                 requestType: activeToolDepth > 0 ? 'tool_continuation' : 'chat'
             }) || null;
@@ -6892,6 +6905,15 @@ ${content}
             };
 
             try {
+                        // 2026-08-28: guard against an empty chat-provider key. Servers
+                        // and gateways often drop the connection on an empty Authorization
+                        // header, which surfaces later as a misleading TypeError
+                        // ("failed to fetch") only after CHAT_MAX_ATTEMPTS retries.
+                        // This message does not match friendlyNetworkErrorMessage's
+                        // network patterns, so it passes through verbatim.
+                        if (!chatProviderForRequest.apiKey) {
+                            throw new Error(`聊天供应商「${getProviderDisplayName(chatProviderForRequest.providerId)}」未配置 API Key，请在设置中检查`);
+                        }
                         const requestPayload = {
                             model: requestModel,
                             messages: apiMessages,
@@ -6902,7 +6924,11 @@ ${content}
                         requestDiagnostic?.request(requestPayload, Date.now() - generationStartTime);
                         requestDiagnostic?.stage('waiting_headers');
                         let response = null;
-                        const chatGuard = chatRequestGuard.create({
+                        // 2026-08-28: call the imported create() directly. The previous
+                        // alias (`const chatRequestGuard = createChatRequestGuard`) turned
+                        // every send into "chatRequestGuard.create is not a function",
+                        // which friendlyNetworkErrorMessage misreported as a CORS error.
+                        const chatGuard = createChatRequestGuard({
                             firstByteMs: CHAT_FIRST_BYTE_TIMEOUT_MS,
                             firstTokenMs: CHAT_FIRST_TOKEN_TIMEOUT_MS,
                             streamIdleMs: CHAT_STREAM_IDLE_TIMEOUT_MS,
@@ -6935,7 +6961,7 @@ ${content}
                                         method: 'POST',
                                         headers: {
                                             'Content-Type': 'application/json',
-                                            'Authorization': `Bearer ${getChatProvider().apiKey}`
+                                            'Authorization': `Bearer ${chatProviderForRequest.apiKey}`
                                         },
                                         body: JSON.stringify(requestPayload),
                                         signal: generationController.signal

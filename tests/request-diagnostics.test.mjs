@@ -124,3 +124,24 @@ test('request diagnostics keeps only ten records and exposes clones', async () =
   records[0].request.model = 'mutated';
   assert.equal(diagnostics.getAll()[0].request.model, 'model-2');
 });
+
+test('request diagnostics keeps the pinned chat provider next to the endpoint', async () => {
+  // 2026-08-28: the connection test only probes the settings-page provider while
+  // chat uses its own pinned provider; the record must show which one chat used.
+  const diagnostics = await loadDiagnostics();
+  diagnostics.start({
+    url: 'https://api.deepseek.com/v1/chat/completions',
+    payload: { model: 'deepseek-v4-flash', messages: [] },
+    providerId: 'deepseek',
+    providerApiUrl: 'https://api.deepseek.com',
+    hasApiKey: true
+  });
+  const record = diagnostics.getLatest();
+  assert.equal(record.provider.id, 'deepseek');
+  assert.equal(record.provider.apiUrl, 'https://api.deepseek.com');
+  assert.equal(record.provider.hasApiKey, true);
+  // omitted provider meta stays null instead of guessing
+  diagnostics.start({ url: '/chat/completions', payload: {} });
+  assert.equal(diagnostics.getLatest().provider.id, '');
+  assert.equal(diagnostics.getLatest().provider.hasApiKey, null);
+});

@@ -88,7 +88,7 @@
         if (Array.isArray(saved)) records.push(...saved.slice(-MAX_RECORDS));
     } catch (_) { }
 
-    const start = ({ url, payload, promptBuildMs = null, requestType = 'chat' }) => {
+    const start = ({ url, payload, promptBuildMs = null, requestType = 'chat', providerId = '', providerApiUrl = '', hasApiKey = null }) => {
         const record = {
             id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
             startedAt: new Date().toISOString(),
@@ -97,6 +97,13 @@
             stageHistory: [{ stage: 'preparing', elapsedMs: 0 }],
             requestType,
             endpoint: endpointLabel(url),
+            // 2026-08-28: the connection test probes the settings-page provider while
+            // chat uses its own pinned provider; keep both visible for diagnosis.
+            provider: {
+                id: String(providerId || ''),
+                apiUrl: String(providerApiUrl || ''),
+                hasApiKey: hasApiKey === null ? null : !!hasApiKey
+            },
             request: createRequestSnapshot(payload, promptBuildMs),
             response: {
                 httpStatus: null,
