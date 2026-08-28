@@ -40,6 +40,10 @@ import UiTemplatePending from '../components/common/UiTemplatePending.vue';
 import EmbeddedViewContent from '../components/common/EmbeddedViewContent.vue';
 import GenerationTimer from '../components/common/GenerationTimer.vue';
 import SettingsPageHeader from '../components/common/SettingsPageHeader.vue';
+import SideNav from '../components/common/SideNav.vue';
+import ToastNotification from '../components/common/ToastNotification.vue';
+import ConfirmDialog from '../components/common/ConfirmDialog.vue';
+import ModalDialog from '../components/common/ModalDialog.vue';
 import CharacterPanel from '../components/views/CharacterPanel.vue';
 import GeneratorPanel from '../components/views/GeneratorPanel.vue';
 import SquarePanel from '../components/views/SquarePanel.vue';
@@ -66,6 +70,7 @@ const __app = createApp({
     components: {
         CharacterPanel, GeneratorPanel, SquarePanel, SettingsPanel, PresetsPanel, UiTemplatePanel, RegexPanel, ToolsPanel, UsageStatsPanel, MemoryPanel, WorldInfoPanel,
         UiTemplatePending, EmbeddedViewContent, GenerationTimer, SettingsPageHeader,
+        SideNav, ToastNotification, ConfirmDialog, ModalDialog,
         CharacterInfo, MessageList, MessageInput,
         CustomSelect: RPHubCustomSelect,
         UiTemplateFrame: UiTemplateFrame,
@@ -77,7 +82,11 @@ const __app = createApp({
         'ui-template-frame': UiTemplateFrame,
         'character-info': CharacterInfo,
         'message-list': MessageList,
-        'message-input': MessageInput
+        'message-input': MessageInput,
+        'side-nav': SideNav,
+        'toast-notification': ToastNotification,
+        'confirm-dialog': ConfirmDialog,
+        'modal-dialog': ModalDialog
     },
     setup() {
         const cardUtils = RPHubCardUtils;
@@ -12262,9 +12271,18 @@ image###生成的提示词###
                 let branchProfile = savedProfile && typeof savedProfile === 'object' ? { ...savedProfile } : null;
                 let forkTurn = null;
                 if (forkFromMessage) {
-                    const sourceIndex = forkMessageId
+                    let sourceIndex = forkMessageId
                         ? branchChat.findIndex(message => message?.id === forkMessageId)
                         : forkMessageIndex;
+                    if (sourceIndex < 0 && Array.isArray(chatHistory.value)) {
+                        const memorySourceIndex = forkMessageId
+                            ? chatHistory.value.findIndex(message => message?.id === forkMessageId)
+                            : forkMessageIndex;
+                        if (memorySourceIndex >= 0 && chatHistory.value[memorySourceIndex]?.role === 'assistant') {
+                            branchChat = chatHistory.value.map(message => serializeChatMessage(message, 'final'));
+                            sourceIndex = memorySourceIndex;
+                        }
+                    }
                     if (sourceIndex < 0 || branchChat[sourceIndex]?.role !== 'assistant') {
                         throw new Error('目标消息已发生变化，请重试');
                     }
@@ -14522,6 +14540,14 @@ image###生成的提示词###
     ['generation-timer', GenerationTimer],
     ['SettingsPageHeader', SettingsPageHeader],
     ['settings-page-header', SettingsPageHeader],
+    ['SideNav', SideNav],
+    ['side-nav', SideNav],
+    ['ToastNotification', ToastNotification],
+    ['toast-notification', ToastNotification],
+    ['ConfirmDialog', ConfirmDialog],
+    ['confirm-dialog', ConfirmDialog],
+    ['ModalDialog', ModalDialog],
+    ['modal-dialog', ModalDialog],
     ['CustomSelect', RPHubCustomSelect],
     ['custom-select', RPHubCustomSelect],
     ['UiTemplateFrame', UiTemplateFrame],

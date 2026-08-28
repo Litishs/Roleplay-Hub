@@ -93,6 +93,11 @@ test('app.js scopes chat and memory persistence by branch', () => {
     assert.ok(app.includes('db.applyFragments(getCurrentChatStorageScopeId()'));
 });
 
+test('app.js falls back to in-memory history when fork target is missing from storage', () => {
+    assert.ok(app.includes('const memorySourceIndex = forkMessageId'), '分支创建须尝试内存回退定位目标消息');
+    assert.ok(app.includes("branchChat = chatHistory.value.map(message => serializeChatMessage(message, 'final'))"), '内存回退须序列化消息后再写入分支');
+});
+
 test('app.js keeps branch scope ids in the outer function scope (no try-block leakage)', () => {
     assert.ok(app.includes('let restoreScopeId = null;'), '恢复路径的作用域 id 必须在 try 外声明');
     assert.ok(app.includes("await loadCharacterMemories(restoreScopeId, ' on restore');"), '恢复路径应在 try 外使用 restoreScopeId');
