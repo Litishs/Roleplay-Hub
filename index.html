@@ -425,7 +425,11 @@
 
             <memory-panel v-if="currentView === 'memory'"></memory-panel>
 
-            <world-info-panel v-if="currentView === 'worldinfo'"></world-info-panel>
+            <!-- WorldInfoPanel is always mounted: it hosts shared editor modals
+                 (preset/regex/tool/world-info editors, import/export dialogs) used by
+                 presets/regex/tools views. Its panel body uses an internal v-if on
+                 currentView to avoid rendering when inactive. -->
+            <world-info-panel></world-info-panel>
 
         <!-- Theme-compliant Global Confirm Modal -->
         <transition enter-active-class="transition duration-300 ease-modal-fade" enter-from-class="opacity-0"
