@@ -1267,7 +1267,13 @@
 
 <script>
 import { inject } from "vue";
+import SettingsPageHeader from "../common/SettingsPageHeader.vue";
+import { RPHubCustomSelect as CustomSelect } from "../../modules/ui-select.mjs";
+import { UiTemplateFrame } from "../../modules/ui-template-frame.mjs";
+// 2026-08-28 Phase 1.6: shared components are declared locally now that the
+// app-level global registration workaround has been removed.
 export default {
+  components: { SettingsPageHeader, CustomSelect, UiTemplateFrame },
   setup() {
     const ctx = inject("appContext");
     return ctx || {};

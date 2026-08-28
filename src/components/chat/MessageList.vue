@@ -427,7 +427,13 @@
 
 <script>
 import { inject } from "vue";
+import { UiTemplateFrame } from "../../modules/ui-template-frame.mjs";
+import GenerationTimer from "../common/GenerationTimer.vue";
+import UiTemplatePending from "../common/UiTemplatePending.vue";
+// 2026-08-28 Phase 1.6: shared components are declared locally now that the
+// app-level global registration workaround has been removed.
 export default {
+  components: { UiTemplateFrame, GenerationTimer, UiTemplatePending },
   setup() {
     const ctx = inject("appContext");
     return ctx || {};

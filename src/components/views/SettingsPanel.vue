@@ -190,7 +190,16 @@
 
 <script>
 import { inject } from "vue";
+import ApiConfig from "../settings/ApiConfig.vue";
+import PresetManager from "../settings/PresetManager.vue";
+import DataManager from "../settings/DataManager.vue";
+import UpdateChecker from "../settings/UpdateChecker.vue";
+import AdvancedSettings from "../settings/AdvancedSettings.vue";
+import TtsSettings from "../settings/TtsSettings.vue";
+// 2026-08-28 Phase 1.6: shared components are declared locally now that the
+// app-level global registration workaround has been removed.
 export default {
+  components: { ApiConfig, PresetManager, DataManager, UpdateChecker, AdvancedSettings, TtsSettings },
   setup() {
     const ctx = inject("appContext");
     return ctx || {};

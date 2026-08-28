@@ -71,7 +71,11 @@
 
 <script>
 import { inject } from "vue";
+import SettingsPageHeader from "../common/SettingsPageHeader.vue";
+// 2026-08-28 Phase 1.6: shared components are declared locally now that the
+// app-level global registration workaround has been removed.
 export default {
+  components: { SettingsPageHeader },
   setup() {
     const ctx = inject("appContext");
     return ctx || {};

@@ -423,7 +423,11 @@
 
 <script>
 import { inject } from "vue";
+import { RPHubCustomSelect as CustomSelect } from "../../modules/ui-select.mjs";
+// 2026-08-28 Phase 1.6: shared components are declared locally now that the
+// app-level global registration workaround has been removed.
 export default {
+  components: { CustomSelect },
     setup() {
         const ctx = inject("appContext");
         return ctx || {};

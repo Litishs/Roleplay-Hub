@@ -14538,46 +14538,12 @@ image###生成的提示词###
     }
 });
 
-// Register globally so compiled SFCs (MemoryPanel, UsageStatsPanel, etc.) can resolve
-// <settings-page-header> / <custom-select> / <ui-template-frame> etc. via app-level lookup.
-[
-    ['CharacterPanel', CharacterPanel],
-    ['GeneratorPanel', GeneratorPanel],
-    ['SquarePanel', SquarePanel],
-    ['SettingsPanel', SettingsPanel],
-    ['UpdateChecker', UpdateChecker],
-    ['DataManager', DataManager],
-    ['PresetManager', PresetManager],
-    ['ApiConfig', ApiConfig],
-    ['AdvancedSettings', AdvancedSettings],
-['TtsSettings', TtsSettings],
-    ['PresetsPanel', PresetsPanel],
-    ['UiTemplatePanel', UiTemplatePanel],
-    ['RegexPanel', RegexPanel],
-    ['ToolsPanel', ToolsPanel],
-    ['UsageStatsPanel', UsageStatsPanel],
-    ['MemoryPanel', MemoryPanel],
-    ['WorldInfoPanel', WorldInfoPanel],
-    ['UiTemplatePending', UiTemplatePending],
-    ['ui-template-pending', UiTemplatePending],
-    ['EmbeddedViewContent', EmbeddedViewContent],
-    ['embedded-view-content', EmbeddedViewContent],
-    ['GenerationTimer', GenerationTimer],
-    ['generation-timer', GenerationTimer],
-    ['SettingsPageHeader', SettingsPageHeader],
-    ['settings-page-header', SettingsPageHeader],
-    ['SideNav', SideNav],
-    ['side-nav', SideNav],
-    ['ToastNotification', ToastNotification],
-    ['toast-notification', ToastNotification],
-    ['ConfirmDialog', ConfirmDialog],
-    ['confirm-dialog', ConfirmDialog],
-    ['ModalDialog', ModalDialog],
-    ['modal-dialog', ModalDialog],
-    ['CustomSelect', RPHubCustomSelect],
-    ['custom-select', RPHubCustomSelect],
-    ['UiTemplateFrame', UiTemplateFrame],
-    ['ui-template-frame', UiTemplateFrame],
-].forEach(([name, comp]) => __app.component(name, comp));
+// Phase 1.6 (2026-08-28): the temporary app.component global-registration
+// workaround is gone. Shared helpers (<settings-page-header>, <custom-select>,
+// <ui-template-frame>, <generation-timer>, <ui-template-pending>,
+// <embedded-view-content>) and the settings sub-components are declared
+// locally by each consuming SFC; the createApp({ components }) block above
+// keeps resolving the root index.html runtime template.
+
 
 __app.mount('#app');

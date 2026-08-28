@@ -21,12 +21,11 @@ test("app.mjs imports and registers the mounted common components in both casing
       `app.mjs must import ${name}.vue`
     );
     assert.match(app, new RegExp(`['"]${kebab}['"]\\s*:\\s*${name}`), `createApp components must map ${kebab}`);
-    assert.match(
-      app,
-      new RegExp(`\\['${name}', ${name}\\],?\\s*\\['${kebab}', ${name}\\]`),
-      `global registration must register both ${name} and ${kebab}`
-    );
   }
+  // Phase 1.6 (2026-08-28): the app.component global-registration workaround is
+  // gone — consuming SFCs declare their shared dependencies locally, and only
+  // the root index.html runtime template resolves through createApp({ components }).
+  assert.ok(!app.includes("__app.component("), "global registration workaround must stay removed");
 });
 
 test("extracted SFCs read the shared appContext and are exported from index.js", async () => {
