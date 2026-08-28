@@ -43,3 +43,13 @@ scripts/final-audit.mjs
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# Root-level debugging leftovers (CDP probes, screenshots, device logs)
+/screenshot*.png
+/screenshot*.jpg
+/logcat*.txt
+/vite.log
+/check_*.js
+/test_*.js
+/tmp-*.js
+*.bak
