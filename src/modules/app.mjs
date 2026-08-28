@@ -5092,24 +5092,30 @@ ${content}
         };
 
         const toggleChatFullscreen = async () => {
-            try {
+            // State-driven: in WebViews where requestFullscreen silently no-ops,
+            // fullscreenElement never becomes truthy, so keying the exit branch on
+            // the native element made the toggle impossible to turn off.
+            if (isChatFullscreen.value) {
+                isChatFullscreen.value = false;
                 if (getNativeFullscreenElement()) {
-                    isChatFullscreen.value = false;
-                    await exitNativeFullscreen();
-                    return;
+                    try {
+                        await exitNativeFullscreen();
+                    } catch (err) {
+                        console.error('Exit native fullscreen failed:', err);
+                    }
                 }
-                const fullscreenTarget = document.documentElement || document.body;
-                if (!fullscreenTarget || (!fullscreenTarget.requestFullscreen && !fullscreenTarget.webkitRequestFullscreen)) {
-                    showToast('当前浏览器不支持全屏', 'warning');
-                    return;
+                return;
+            }
+            closeMobileMenu();
+            isChatFullscreen.value = true;
+            const fullscreenTarget = document.documentElement || document.body;
+            if (fullscreenTarget?.requestFullscreen || fullscreenTarget?.webkitRequestFullscreen) {
+                try {
+                    await requestNativeFullscreen(fullscreenTarget);
+                } catch (err) {
+                    // Layout fullscreen stays active even if the native request fails.
+                    console.error('Request native fullscreen failed:', err);
                 }
-                closeMobileMenu();
-                isChatFullscreen.value = true;
-                await requestNativeFullscreen(fullscreenTarget);
-            } catch (err) {
-                isChatFullscreen.value = !!getNativeFullscreenElement();
-                console.error('Toggle fullscreen failed:', err);
-                showToast('全屏失败', 'error');
             }
         };
 

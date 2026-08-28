@@ -1,4 +1,4 @@
-﻿node_modules/
+node_modules/
 .toolchains/
 dist/
 assets/vendor/
@@ -27,6 +27,9 @@ AGENTS.md
 
 # Phone app data safety backups (contains API keys / user data)
 .rphub-data-safety.*
+
+# Diagnostic output from view/CDP auditing scripts (runtime screenshots + reports)
+.rphub-diag-out/
 
 # 銆岎煃婂濡堜滑銆嶈鑹插崱宸ヤ綔绾匡紙涓汉璧勬簮锛屼笉鍏ュ簱锛?
 scripts/build-mama-card-v3.mjs
