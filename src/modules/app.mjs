@@ -67,6 +67,7 @@ import MessageInput from '../components/chat/MessageInput.vue';
 import { generateUUID, parseCot } from './utils.mjs';
 import { useMemorySystem } from '../composables/useMemorySystem.mjs';
 import { useWorldInfo } from '../composables/useWorldInfo.mjs';
+import { useCharacterState } from '../composables/useCharacterState.mjs';
 
 const __app = createApp({
     components: {
@@ -98,6 +99,8 @@ const __app = createApp({
         const memorySystemState = useMemorySystem();
         // World info state lives in src/composables/useWorldInfo.mjs (Phase 2); same pattern.
         const worldInfoState = useWorldInfo();
+        // Character state lives in src/composables/useCharacterState.mjs (Phase 2); same pattern.
+        const characterState = useCharacterState();
 
         // Default Avatar (Simple Gray Background)
         const defaultAvatar = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0iI2U1ZTdlYiIvPjwvc3ZnPg==';
@@ -231,7 +234,7 @@ const __app = createApp({
         const showModelSelector = ref(false);
         const modelSelectionTarget = ref('model');
         const showChatModelSelector = ref(false);
-        const showCharacterEditor = ref(false);
+        const { showCharacterEditor } = characterState;
         const showPresetEditor = ref(false);
         const showUiTemplateEditor = ref(false);
         const uiTemplateUpdateStatus = reactive({ state: 'idle', message: '待命', time: 0, remaining: 0, targetMessageId: null });
@@ -251,7 +254,7 @@ const __app = createApp({
             const input = eventTarget?.tagName === 'INPUT' ? eventTarget : userSetupNameInput.value;
             if (input) tempUserSetup.name = input.value;
         };
-        const characterDisplayLimit = ref(8);
+        const { characterDisplayLimit } = characterState;
 
         // Quota State
         const quotaValue = ref(0);
@@ -392,7 +395,7 @@ const __app = createApp({
         const modelSearchQuery = ref('');
         const activeModelTag = ref('all');
         const popularModelFamilies = ['claude', 'gemini', 'deepseek', 'llama', 'glm', 'minimax', 'moonshot', 'grok'];
-        const characterSearchQuery = ref('');
+        const { characterSearchQuery } = characterState;
         const availableModels = ref([]);
         const providerModels = reactive({});
         const activeProviderTag = ref('all');
@@ -1180,9 +1183,7 @@ const __app = createApp({
         });
 
 
-        const characters = ref([]);
-        const showAddCharacterMenu = ref(false);
-        const currentCharacterIndex = ref(-1);
+        const { characters, showAddCharacterMenu, currentCharacterIndex } = characterState;
 
         const chatHistory = ref([]);
         const CHAT_RENDER_INITIAL_LIMIT = RPHRuntimePolicy?.limits?.chatInitial || 20;
@@ -1194,7 +1195,7 @@ const __app = createApp({
         let isLoadingEarlierChatMessages = false;
         let isLoadingLaterChatMessages = false;
         let isChatTopUnlockArmed = true;
-        const lastActiveCharacterId = ref(null); // For persistence
+        const { lastActiveCharacterId } = characterState; // For persistence
         function hasActiveToolContinuationWork() {
             return !!(activeToolContinuationPending.value || (
                 activeToolContinuationMessageId.value
@@ -2014,10 +2015,7 @@ const __app = createApp({
         const { worldInfoSettings } = worldInfoState;
 
         // Editing States
-        const editingCharacter = reactive({ id: undefined, data: {} });
-        const editorTab = ref('basic'); // 'basic', 'description', 'personality', 'first_mes'
-        const isBatchDeleteMode = ref(false);
-        const selectedCharacterIndices = ref(new Set());
+        const { editingCharacter, editorTab, isBatchDeleteMode, selectedCharacterIndices } = characterState;
         const editingPreset = reactive({ id: undefined, data: {} });
         const editingUiTemplate = reactive({ id: undefined, data: {}, tab: 'history' });
         const editingRegex = reactive({ id: undefined, data: {} });
@@ -2081,8 +2079,7 @@ const __app = createApp({
         const selectedExportIndices = ref(new Set());
 
         // Character Export Modal State
-        const showCharacterExportModal = ref(false);
-        const characterToExportIndex = ref(null);
+        const { showCharacterExportModal, characterToExportIndex } = characterState;
 
         const openCharacterExportModal = (index) => {
             characterToExportIndex.value = index;
@@ -3085,9 +3082,7 @@ const __app = createApp({
         });
 
         // --- Computed ---
-        const currentCharacter = computed(() => {
-            return currentCharacterIndex.value >= 0 ? characters.value[currentCharacterIndex.value] : null;
-        });
+        const { currentCharacter } = characterState;
         const scopeOptions = computed(() => [
             { value: 'character', label: '绑定当前角色卡', disabled: !currentCharacter.value },
             { value: 'global', label: '全局生效' }
@@ -3778,45 +3773,7 @@ ${content}
             markUiTemplateStatus('idle', '待命');
         };
 
-        const getCharacterFavoriteTime = (char) => {
-            const time = Number(char?.favoriteAt || 0);
-            return Number.isFinite(time) && time > 0 ? time : 0;
-        };
-
-        const isCharacterFavorite = (char) => getCharacterFavoriteTime(char) > 0;
-
-        const filteredCharacters = computed(() => {
-            let result = characters.value.map((char, index) => ({ ...char, originalIndex: index }));
-
-            if (characterSearchQuery.value) {
-                const query = characterSearchQuery.value.toLowerCase();
-                result = result.filter(char =>
-                    char.name.toLowerCase().includes(query) ||
-                    (char.description && char.description.toLowerCase().includes(query))
-                );
-            }
-
-            // Favorites stay on top, with the most recently favorited first.
-            result.sort((a, b) => {
-                const favoriteDiff = getCharacterFavoriteTime(b) - getCharacterFavoriteTime(a);
-                if (favoriteDiff !== 0) return favoriteDiff;
-                const timeA = a.createdAt || 0;
-                const timeB = b.createdAt || 0;
-                if (timeB !== timeA) return timeB - timeA;
-                // Fallback to UUID if timestamps are missing or identical
-                return (b.uuid || '').localeCompare(a.uuid || '');
-            });
-
-            return result;
-        });
-
-        const displayedCharacters = computed(() => {
-            return filteredCharacters.value.slice(0, characterDisplayLimit.value);
-        });
-
-        const loadMoreCharacters = () => {
-            characterDisplayLimit.value += 8;
-        };
+        const { getCharacterFavoriteTime, isCharacterFavorite, filteredCharacters, displayedCharacters, loadMoreCharacters } = characterState;
 
         const resetChatRenderWindow = () => {
             chatRenderLimit.value = Math.min(CHAT_RENDER_INITIAL_LIMIT, chatHistory.value.length);

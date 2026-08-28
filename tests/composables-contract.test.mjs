@@ -18,6 +18,7 @@ import { ref, isRef, isReactive } from 'vue';
 const app = (await readFile(new URL('../src/modules/app.mjs', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
 const memoryState = (await readFile(new URL('../src/composables/useMemorySystem.mjs', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
 const worldInfoState = (await readFile(new URL('../src/composables/useWorldInfo.mjs', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
+const characterSource = (await readFile(new URL('../src/composables/useCharacterState.mjs', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
 
 test('useMemorySystem composable exists and is pure state', () => {
     assert.ok(memoryState.includes("import { ref, reactive } from 'vue';"), 'imports vue reactivity');
@@ -144,4 +145,72 @@ test('useWorldInfo returns live reactive state (runtime)', async () => {
     ]) {
         assert.ok(isRef(state[key]), `exposes ref ${key}`);
     }
+});
+
+test('useCharacterState composable exists and is pure state', () => {
+    assert.ok(characterSource.includes("import { ref, reactive, computed } from 'vue';"), 'imports vue reactivity');
+    assert.ok(characterSource.includes('export function useCharacterState()'), 'named export');
+    assert.ok(!characterSource.includes('fetch('), 'no network calls');
+    assert.ok(!characterSource.includes('watch('), 'no watchers (belong to app.mjs for now)');
+    assert.ok(!characterSource.includes('saveData('), 'no persistence logic');
+});
+
+test('app.mjs wires useCharacterState with single call and site destructuring', () => {
+    assert.ok(app.includes("import { useCharacterState } from '../composables/useCharacterState.mjs';"), 'import');
+    assert.equal(app.split('useCharacterState()').length - 1, 1, 'exactly one composable call per setup()');
+    assert.ok(app.includes('const characterState = useCharacterState();'), 'state holder binding');
+    // destructured at original declaration sites — identifiers keep previous names
+    assert.ok(app.includes('const { showCharacterEditor } = characterState;'));
+    assert.ok(app.includes('const { characterDisplayLimit } = characterState;'));
+    assert.ok(app.includes('const { characterSearchQuery } = characterState;'));
+    assert.ok(app.includes('const { characters, showAddCharacterMenu, currentCharacterIndex } = characterState;'));
+    assert.ok(app.includes('const { lastActiveCharacterId } = characterState;'));
+    assert.ok(app.includes('const { editingCharacter, editorTab, isBatchDeleteMode, selectedCharacterIndices } = characterState;'));
+    assert.ok(app.includes('const { showCharacterExportModal, characterToExportIndex } = characterState;'));
+    assert.ok(app.includes('const { currentCharacter } = characterState;'));
+    assert.ok(app.includes('const { getCharacterFavoriteTime, isCharacterFavorite, filteredCharacters, displayedCharacters, loadMoreCharacters } = characterState;'));
+});
+
+test('app.mjs no longer declares character state inline', () => {
+    assert.ok(!app.includes('const characters = ref('), 'characters moved to composable');
+    assert.ok(!app.includes('const currentCharacter = computed('), 'currentCharacter moved to composable');
+    assert.ok(!app.includes('const filteredCharacters = computed('), 'filteredCharacters moved to composable');
+    assert.ok(!app.includes('const editingCharacter = reactive('), 'editingCharacter moved to composable');
+    assert.ok(!app.includes('const characterSearchQuery = ref('), 'search query moved to composable');
+    assert.ok(!app.includes('const showCharacterEditor = ref('), 'editor flag moved to composable');
+});
+
+test('useCharacterState returns live reactive state (runtime)', async () => {
+    const { useCharacterState } = await import('../src/composables/useCharacterState.mjs');
+    const state = useCharacterState();
+    const other = useCharacterState();
+    assert.notEqual(state.characters, other.characters, 'independent instances per call');
+
+    assert.ok(isRef(state.characters) && Array.isArray(state.characters.value));
+    assert.equal(state.currentCharacterIndex.value, -1);
+    assert.equal(state.currentCharacter.value, null, 'no character selected initially');
+    assert.ok(isReactive(state.editingCharacter), 'editingCharacter is reactive');
+    assert.ok(state.selectedCharacterIndices.value instanceof Set);
+    assert.equal(state.editorTab.value, 'basic');
+    assert.equal(state.characterDisplayLimit.value, 8);
+
+    // derived state reacts to collection mutations
+    state.characters.value = [
+        { uuid: 'a', name: 'Beta', favoriteAt: 0, createdAt: 1 },
+        { uuid: 'b', name: 'Alpha', favoriteAt: 5, createdAt: 2 }
+    ];
+    assert.equal(state.currentCharacterIndex.value, -1);
+    state.currentCharacterIndex.value = 0;
+    assert.equal(state.currentCharacter.value.name, 'Beta');
+    assert.equal(state.filteredCharacters.value[0].uuid, 'b', 'favorite sorts first');
+    assert.equal(state.filteredCharacters.value[0].originalIndex, 1, 'original index preserved');
+    state.characterSearchQuery.value = 'alpha';
+    assert.equal(state.filteredCharacters.value.length, 1);
+    assert.equal(state.displayedCharacters.value.length, 1);
+    state.characterSearchQuery.value = '';
+    assert.equal(state.displayedCharacters.value.length, 2);
+    state.loadMoreCharacters();
+    assert.equal(state.characterDisplayLimit.value, 16);
+    assert.equal(state.isCharacterFavorite(state.characters.value[1]), true);
+    assert.equal(state.getCharacterFavoriteTime(state.characters.value[0]), 0);
 });
