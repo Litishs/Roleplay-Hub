@@ -17,6 +17,7 @@ import { ref, isRef, isReactive } from 'vue';
 
 const app = (await readFile(new URL('../src/modules/app.mjs', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
 const memoryState = (await readFile(new URL('../src/composables/useMemorySystem.mjs', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
+const worldInfoState = (await readFile(new URL('../src/composables/useWorldInfo.mjs', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
 
 test('useMemorySystem composable exists and is pure state', () => {
     assert.ok(memoryState.includes("import { ref, reactive } from 'vue';"), 'imports vue reactivity');
@@ -84,4 +85,63 @@ test('useMemorySystem returns live reactive state (runtime)', async () => {
     assert.equal(state.LIST_PAGE_SIZE, 10);
     assert.equal(state.MEMORY_MODE_VECTOR, 'vector');
     assert.ok(isRef(state.memoryFacts) && Array.isArray(state.memoryFacts.value));
+});
+
+test('useWorldInfo composable exists and is pure state', () => {
+    assert.ok(worldInfoState.includes("import { ref, reactive } from 'vue';"), 'imports vue reactivity');
+    assert.ok(worldInfoState.includes('export function useWorldInfo()'), 'named export');
+    assert.ok(!worldInfoState.includes('fetch('), 'no network calls');
+    assert.ok(!worldInfoState.includes('watch('), 'no watchers (belong to app.mjs for now)');
+    assert.ok(!worldInfoState.includes('saveData('), 'no persistence logic');
+});
+
+test('app.mjs wires useWorldInfo with single call and site destructuring', () => {
+    assert.ok(app.includes("import { useWorldInfo } from '../composables/useWorldInfo.mjs';"), 'import');
+    assert.equal(app.split('useWorldInfo()').length - 1, 1, 'exactly one composable call per setup()');
+    assert.ok(app.includes('const worldInfoState = useWorldInfo();'), 'state holder binding');
+    // destructured at original declaration sites — identifiers keep previous names
+    assert.ok(app.includes('const { systemWorldInfoNames } = worldInfoState;'));
+    assert.ok(app.includes('const { showWorldInfoEditor } = worldInfoState;'));
+    assert.ok(app.includes('const { worldInfoPositionOptions } = worldInfoState;'));
+    assert.ok(app.includes('const { globalWorldInfo, worldInfo } = worldInfoState;'));
+    assert.ok(app.includes('const { showWorldInfoSettings } = worldInfoState;'));
+    assert.ok(app.includes('const { worldInfoSettings } = worldInfoState;'));
+    assert.ok(app.includes('const { editingWorldInfo, worldInfoKeysText } = worldInfoState;'));
+    assert.ok(app.includes('const { currentHoverWorldInfo } = worldInfoState;'));
+    // chat-context trigger records and data-IO export type stay in app.mjs
+    assert.ok(app.includes('const lastTriggeredWorldInfos = ref([]);'));
+    assert.ok(app.match(/const exportType = ref\(null\);/));
+});
+
+test('app.mjs no longer declares world info state inline', () => {
+    assert.ok(!app.includes('const worldInfo = ref('), 'worldInfo moved to composable');
+    assert.ok(!app.includes('const globalWorldInfo = ref('), 'globalWorldInfo moved to composable');
+    assert.ok(!app.includes('const worldInfoSettings = reactive('), 'worldInfoSettings moved to composable');
+    assert.ok(!app.includes('const editingWorldInfo = reactive('), 'editingWorldInfo moved to composable');
+    assert.ok(!app.includes("const systemWorldInfoNames = ['自动生图'];"), 'system names moved to composable');
+    assert.ok(!app.includes('const currentHoverWorldInfo = ref('), 'hover state moved to composable');
+});
+
+test('useWorldInfo returns live reactive state (runtime)', async () => {
+    const { useWorldInfo } = await import('../src/composables/useWorldInfo.mjs');
+    const state = useWorldInfo();
+    const other = useWorldInfo();
+    assert.notEqual(state.worldInfo, other.worldInfo, 'independent instances per call');
+
+    assert.ok(isRef(state.worldInfo) && Array.isArray(state.worldInfo.value));
+    assert.ok(isRef(state.globalWorldInfo) && Array.isArray(state.globalWorldInfo.value));
+    assert.ok(isReactive(state.worldInfoSettings), 'worldInfoSettings is reactive');
+    assert.equal(state.worldInfoSettings.scanDepth, 2);
+    assert.equal(state.worldInfoSettings.maxDepth, 0);
+    assert.ok(isReactive(state.editingWorldInfo), 'editingWorldInfo is reactive');
+    assert.deepEqual(state.systemWorldInfoNames, ['自动生图']);
+    assert.equal(state.worldInfoPositionOptions.length, 7);
+    assert.ok(state.worldInfoPositionOptions.every(opt => 'group' in opt && 'value' in opt && 'label' in opt));
+
+    for (const key of [
+        'showWorldInfoEditor', 'showWorldInfoSettings', 'worldInfoKeysText',
+        'currentHoverWorldInfo'
+    ]) {
+        assert.ok(isRef(state[key]), `exposes ref ${key}`);
+    }
 });

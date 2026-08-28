@@ -66,6 +66,7 @@ import MessageList from '../components/chat/MessageList.vue';
 import MessageInput from '../components/chat/MessageInput.vue';
 import { generateUUID, parseCot } from './utils.mjs';
 import { useMemorySystem } from '../composables/useMemorySystem.mjs';
+import { useWorldInfo } from '../composables/useWorldInfo.mjs';
 
 const __app = createApp({
     components: {
@@ -95,6 +96,8 @@ const __app = createApp({
         // Memory system state lives in src/composables/useMemorySystem.mjs (Phase 2);
         // destructured at the original declaration sites below to keep names identical.
         const memorySystemState = useMemorySystem();
+        // World info state lives in src/composables/useWorldInfo.mjs (Phase 2); same pattern.
+        const worldInfoState = useWorldInfo();
 
         // Default Avatar (Simple Gray Background)
         const defaultAvatar = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0iI2U1ZTdlYiIvPjwvc3ZnPg==';
@@ -128,7 +131,7 @@ const __app = createApp({
 
         // --- Constants ---
         const systemRegexNames = ['Auto Replace {{user}}', 'NAI画图正则'];
-        const systemWorldInfoNames = ['自动生图'];
+        const { systemWorldInfoNames } = worldInfoState;
 
         // --- 生图服务配置（暂不可用） ---
         // 生图服务当前无可用提供商；后续接入新服务商时只需在 imageGenProviderOptions 增加条目，
@@ -235,7 +238,7 @@ const __app = createApp({
         let uiTemplateUpdateSeq = 0;
         let uiTemplateUpdateAbortController = null;
         const showRegexEditor = ref(false);
-        const showWorldInfoEditor = ref(false);
+        const { showWorldInfoEditor } = worldInfoState;
         const showActiveToolEditor = ref(false);
         const showUserSetupModal = ref(false);
         const showAutoImageGenModal = ref(false);
@@ -1266,15 +1269,7 @@ const __app = createApp({
             { value: 'top', label: '对话顶部' },
             { value: 'bottom', label: '对话底部' }
         ];
-        const worldInfoPositionOptions = [
-            { group: '系统提示词', value: 'system_top', label: '最顶层' },
-            { group: '系统提示词', value: 'global_note', label: '全局备注' },
-            { group: '系统提示词', value: 'before_char', label: '角色设定前' },
-            { group: '系统提示词', value: 'after_char', label: '角色设定后' },
-            { group: '对话中', value: 'at_depth', label: '按深度插入' },
-            { group: '对话中', value: 'user_top', label: '用户消息顶部' },
-            { group: '对话中', value: 'assistant_top', label: '助手消息顶部' }
-        ];
+        const { worldInfoPositionOptions } = worldInfoState;
         const presetRoleDisplayLabels = {
             system: '系统',
             user: 'User',
@@ -1500,8 +1495,7 @@ const __app = createApp({
 
         const regexScripts = ref([]);
         const globalRegexScripts = ref([]);
-        const globalWorldInfo = ref([]);
-        const worldInfo = ref([]);
+        const { globalWorldInfo, worldInfo } = worldInfoState;
         const globalUiTemplates = ref([]);
         const recentGenerationTimes = ref([]);
         const currentWaitTime = ref('0.0');
@@ -2012,15 +2006,12 @@ const __app = createApp({
             return (total / recentGenerationTimes.value.length / 1000).toFixed(1);
         });
 
-        const showWorldInfoSettings = ref(false);
+        const { showWorldInfoSettings } = worldInfoState;
         const { showMemorySettings } = memorySystemState;
         const settingsHelpTopic = ref('');
         const showActiveToolSettings = ref(false);
         const showUiTemplateSettings = ref(false);
-        const worldInfoSettings = reactive({
-            scanDepth: 2,
-            maxDepth: 0,
-        });
+        const { worldInfoSettings } = worldInfoState;
 
         // Editing States
         const editingCharacter = reactive({ id: undefined, data: {} });
@@ -2030,13 +2021,12 @@ const __app = createApp({
         const editingPreset = reactive({ id: undefined, data: {} });
         const editingUiTemplate = reactive({ id: undefined, data: {}, tab: 'history' });
         const editingRegex = reactive({ id: undefined, data: {} });
-        const editingWorldInfo = reactive({ id: undefined, data: {} });
-        const worldInfoKeysText = ref('');
+        const { editingWorldInfo, worldInfoKeysText } = worldInfoState;
         const editingActiveTool = reactive({ id: undefined, data: {} });
 
         const sysInstruction = ref('');
         const showInstructionPanel = ref(false);
-        const currentHoverWorldInfo = ref(null);
+        const { currentHoverWorldInfo } = worldInfoState;
         const showContextViewerModal = ref(false);
         // --- 剧情分支状态 ---
         const storyBranchApi = () => RPHStoryBranch;
