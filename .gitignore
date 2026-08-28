@@ -23,6 +23,7 @@ assets/backup/
 assets/character/
 documents/
 AGENTS.md
+CODE_WIKI.md
 .archive/
 
 # Phone app data safety backups (contains API keys / user data)
