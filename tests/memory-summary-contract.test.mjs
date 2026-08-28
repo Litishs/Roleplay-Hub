@@ -3,10 +3,11 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import * as memorySummary from '../src/modules/memory-summary.mjs';
 
-const [html, app, messageList] = await Promise.all([
+const [html, app, messageList, memoryState] = await Promise.all([
     readFile(new URL('../src/components/views/MemoryPanel.vue', import.meta.url), 'utf8'),
     readFile(new URL('../src/modules/app.mjs', import.meta.url), 'utf8'),
-    readFile(new URL('../src/components/chat/MessageList.vue', import.meta.url), 'utf8')
+    readFile(new URL('../src/components/chat/MessageList.vue', import.meta.url), 'utf8'),
+    readFile(new URL('../src/composables/useMemorySystem.mjs', import.meta.url), 'utf8')
 ]);
     const mainJs = await readFile(new URL("../src/main.js", import.meta.url), "utf8");
 
@@ -223,7 +224,8 @@ test('本地嵌入模型默认自动加载（v4）', () => {
 });
 
 test('总结批次大小可配置', () => {
-    assert.ok(app.includes('summaryBatchSize: SUMMARY_BATCH_SIZE_DEFAULT'));
+    // memorySettings defaults moved to src/composables/useMemorySystem.mjs (Phase 2)
+    assert.ok(memoryState.includes('summaryBatchSize: SUMMARY_BATCH_SIZE_DEFAULT'));
     assert.ok(app.includes('batchSize: memorySettings.summaryBatchSize'));
     assert.ok(app.includes('const summaryBatchSizeSlider'));
     assert.ok(html.includes('summaryBatchSizeSlider'));

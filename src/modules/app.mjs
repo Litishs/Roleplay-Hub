@@ -65,6 +65,7 @@ import CharacterInfo from '../components/chat/CharacterInfo.vue';
 import MessageList from '../components/chat/MessageList.vue';
 import MessageInput from '../components/chat/MessageInput.vue';
 import { generateUUID, parseCot } from './utils.mjs';
+import { useMemorySystem } from '../composables/useMemorySystem.mjs';
 
 const __app = createApp({
     components: {
@@ -91,6 +92,9 @@ const __app = createApp({
     setup() {
         const cardUtils = RPHubCardUtils;
         const memoryRecallFallback = recallFallbackSelect;
+        // Memory system state lives in src/composables/useMemorySystem.mjs (Phase 2);
+        // destructured at the original declaration sites below to keep names identical.
+        const memorySystemState = useMemorySystem();
 
         // Default Avatar (Simple Gray Background)
         const defaultAvatar = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0iI2U1ZTdlYiIvPjwvc3ZnPg==';
@@ -367,7 +371,7 @@ const __app = createApp({
         const showConfirmModal = ref(false);
         const confirmMessage = ref('');
         const confirmCallback = ref(null);
-        const showNoMemoryNeededModal = ref(false);
+        const { showNoMemoryNeededModal } = memorySystemState;
         const isGenerating = ref(false);
         const isRemoteGenerating = ref(false); // 新增：远程生成状态
         const remoteEstimatedTime = ref(null); // 新增：远程预计时间
@@ -1504,69 +1508,57 @@ const __app = createApp({
         let waitTimer = null;
         const longPressTimer = ref(null);
 
-        // --- Memory System State ---
-        const MEMORY_VECTOR_BATCH_SIZE = 16;
-        const MEMORY_VECTOR_SAVE_EVERY_BATCHES = 4;
-        const MEMORY_VECTOR_MAX_PARAGRAPH_LENGTH = 1800;
-        const MEMORY_VECTOR_MERGE_MAX_LENGTH = 400;
-        const MEMORY_VECTOR_MIN_TOP_K = 10;
-        const MEMORY_VECTOR_MAX_TOP_K = 20;
-        const MEMORY_VECTOR_DEFAULT_TOP_K = 10;
-        const MEMORY_VECTOR_MIN_SIMILARITY = 40;
-        const MEMORY_VECTOR_MAX_SIMILARITY = 70;
-        const MEMORY_VECTOR_DEFAULT_SIMILARITY = 50;
-        const MEMORY_VECTOR_DEFAULT_DEPTH = 1;
-        const CLASSIC_MEMORY_MIN_CONCURRENCY = 1;
-        const MEMORY_MODE_VECTOR = 'vector';
-        const VECTOR_KEEP_FLOORS_MIN = 8;
-        const VECTOR_KEEP_FLOORS_MAX = 40;
-        const VECTOR_KEEP_FLOORS_DEFAULT = 16;
-        const SUMMARY_BATCH_SIZE_MIN = 4;
-        const SUMMARY_BATCH_SIZE_MAX = 24;
-        const SUMMARY_BATCH_SIZE_DEFAULT = 12;
-        const MIN_CONTEXT_FLOORS = 6;          // 原文现场窗口下限（质量保底）
-        const LIST_PAGE_SIZE = 10;
-        const memories = ref([]);
-        // 遗留数据兼容：classicMemories 不再写入，仅保留 ref 供旧数据查看/导出逻辑引用
-        const classicMemories = ref([]);
-        const classicMemoryPage = ref(1);
-        // --- 滚动摘要（记忆重构 P0：原文真相源 + 派生摘要层） ---
-        const memorySummaries = ref(null);
-        const memoryProfile = ref(null);
-        const summaryProgress = ref(null); // {fromTurn,toTurn,status:'running'|'done'|'failed'}
-        let _summaryInFlight = false;
-        let _summaryAbortController = null;
-        let _summaryDoneTimer = null;
-        const memorySettings = reactive({
-            enabled: false,
-            mode: MEMORY_MODE_VECTOR,
-            embeddingModel: '',
-            classicModel: '',
-            keepFloors: VECTOR_KEEP_FLOORS_DEFAULT,
-            summaryBatchSize: SUMMARY_BATCH_SIZE_DEFAULT,
-            vectorTopK: MEMORY_VECTOR_DEFAULT_TOP_K,
-            similarityThreshold: MEMORY_VECTOR_DEFAULT_SIMILARITY,
-            defaultDepth: MEMORY_VECTOR_DEFAULT_DEPTH,
-            embeddingBackend: 'api',        // 'api' | 'local'
-            localEmbeddingModel: 'bge-small-zh-v1.5',
-            memoryProviderId: ''             // 记忆供应商（滚动总结/嵌入），空=聊天供应商
-        });
-        const isBatchExtracting = ref(false);
-        const batchExtractProgress = ref({ current: 0, total: 0 });
-        // 分片生成状态（自动补录可见性）：idle | building | done | error
-        const sliceBuildStatus = ref({ status: 'idle', message: '' });
-        const vectorMemorySearchQuery = ref('');
-        const vectorMemorySearchResults = ref([]);
-        const vectorMemorySearchError = ref('');
-        const vectorMemorySearchSortMode = ref('time');
-        const isVectorMemorySearching = ref(false);
-        const memoryGraphView = ref('list');
-        const isClassicBatchExtracting = ref(false);
-        const classicBatchExtractProgress = ref({ current: 0, total: 0 });
-        let _vectorMemorySearchAbort = null;
+        // --- Memory System State (moved to src/composables/useMemorySystem.mjs) ---
+        const {
+            MEMORY_VECTOR_BATCH_SIZE,
+            MEMORY_VECTOR_SAVE_EVERY_BATCHES,
+            MEMORY_VECTOR_MAX_PARAGRAPH_LENGTH,
+            MEMORY_VECTOR_MERGE_MAX_LENGTH,
+            MEMORY_VECTOR_MIN_TOP_K,
+            MEMORY_VECTOR_MAX_TOP_K,
+            MEMORY_VECTOR_DEFAULT_TOP_K,
+            MEMORY_VECTOR_MIN_SIMILARITY,
+            MEMORY_VECTOR_MAX_SIMILARITY,
+            MEMORY_VECTOR_DEFAULT_SIMILARITY,
+            MEMORY_VECTOR_DEFAULT_DEPTH,
+            CLASSIC_MEMORY_MIN_CONCURRENCY,
+            MEMORY_MODE_VECTOR,
+            VECTOR_KEEP_FLOORS_MIN,
+            VECTOR_KEEP_FLOORS_MAX,
+            VECTOR_KEEP_FLOORS_DEFAULT,
+            SUMMARY_BATCH_SIZE_MIN,
+            SUMMARY_BATCH_SIZE_MAX,
+            SUMMARY_BATCH_SIZE_DEFAULT,
+            MIN_CONTEXT_FLOORS,
+            LIST_PAGE_SIZE,
+            memories,
+            classicMemories,
+            classicMemoryPage,
+            memorySummaries,
+            memoryProfile,
+            summaryProgress,
+            memorySettings,
+            isBatchExtracting,
+            batchExtractProgress,
+            sliceBuildStatus,
+            vectorMemorySearchQuery,
+            vectorMemorySearchResults,
+            vectorMemorySearchError,
+            vectorMemorySearchSortMode,
+            isVectorMemorySearching,
+            memoryGraphView,
+            isClassicBatchExtracting,
+            classicBatchExtractProgress
+        } = memorySystemState;
+        let {
+            _summaryInFlight,
+            _summaryAbortController,
+            _summaryDoneTimer,
+            _vectorMemorySearchAbort,
+            _memoriesLoaded,
+            _classicMemoriesLoaded
+        } = memorySystemState;
         let _isApplyingCharacterScopedData = false;
-        let _memoriesLoaded = false; // 标志：防止在记忆加载前 saveData 覆盖已存数据
-        let _classicMemoriesLoaded = false;
         let _initComplete = false; // 守卫标志：防止 onMounted 初始化阶段写入默认值覆盖服务端数据
         let _dataLoadFailed = false; // 守卫标志：loadData 失败时禁止 saveData 用默认空值覆盖存储中的数据
 
@@ -2021,7 +2013,7 @@ const __app = createApp({
         });
 
         const showWorldInfoSettings = ref(false);
-        const showMemorySettings = ref(false);
+        const { showMemorySettings } = memorySystemState;
         const settingsHelpTopic = ref('');
         const showActiveToolSettings = ref(false);
         const showUiTemplateSettings = ref(false);
@@ -9101,22 +9093,26 @@ ${content}
             memoryGraphView.value = view;
         };
 
-        // --- 差异式事实层（P1：抽取 / P2：整理） ---
-        const memoryFacts = ref([]);
-        const isFactExtracting = ref(false);
-        const isFactMaintaining = ref(false);
-        const factExtractProgress = ref({ current: 0, total: 0 });
-        const factMaintenancePreview = ref(null);
-        const factBaselineStatus = ref('none');
-        const factShowRecycleBin = ref(false);
-        const factArcRetainTurns = ref(60);
-        const factArcMinEvents = ref(3);
-        let _factExtractAbort = null;
-        let _factFragmentsLoaded = false;
-        let _factDirty = new Set();
-        let _factRemoved = new Set();
-        let _factMeta = null;
-        let _factLoadedCharacterId = '';
+        // --- 差异式事实层（P1：抽取 / P2：整理）— state moved to useMemorySystem ---
+        const {
+            memoryFacts,
+            isFactExtracting,
+            isFactMaintaining,
+            factExtractProgress,
+            factMaintenancePreview,
+            factBaselineStatus,
+            factShowRecycleBin,
+            factArcRetainTurns,
+            factArcMinEvents
+        } = memorySystemState;
+        let {
+            _factExtractAbort,
+            _factFragmentsLoaded,
+            _factDirty,
+            _factRemoved,
+            _factMeta,
+            _factLoadedCharacterId
+        } = memorySystemState;
 
         const schemaLib = () => globalThis.RPHMemorySchema;
 

@@ -7,10 +7,11 @@ import test from 'node:test';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 
-const [html, app, localEmbedding] = await Promise.all([
+const [html, app, localEmbedding, memoryState] = await Promise.all([
     readFile(new URL('../src/components/views/MemoryPanel.vue', import.meta.url), 'utf8'),
     readFile(new URL('../src/modules/app.mjs', import.meta.url), 'utf8'),
-    readFile(new URL('../src/modules/local-embedding.mjs', import.meta.url), 'utf8')
+    readFile(new URL('../src/modules/local-embedding.mjs', import.meta.url), 'utf8'),
+    readFile(new URL('../src/composables/useMemorySystem.mjs', import.meta.url), 'utf8')
 ]);
     const mainJs = await readFile(new URL("../src/main.js", import.meta.url), "utf8");
 
@@ -25,8 +26,9 @@ test('local-embedding.js exposes RPHLocalEmbedding with model registry', () => {
 
 
 test('app.js wires embeddingBackend local routing and classic->vector migration', () => {
-    assert.match(app, /embeddingBackend: 'api'/);
-    assert.match(app, /localEmbeddingModel: 'bge-small-zh-v1\.5'/);
+    // memorySettings defaults moved to src/composables/useMemorySystem.mjs (Phase 2)
+    assert.match(memoryState, /embeddingBackend: 'api'/);
+    assert.match(memoryState, /localEmbeddingModel: 'bge-small-zh-v1\.5'/);
     assert.match(app, /if \(memorySettings\.embeddingBackend === 'local'\)/);
     assert.match(app, /\bRPHLocalEmbedding\b/);
     assert.match(app, /const migrateClassicMemoriesToVectors = async \(\) => \{/);
