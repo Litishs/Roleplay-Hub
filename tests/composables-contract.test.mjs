@@ -33,6 +33,7 @@ const dataLoaderSource = (await readFile(new URL('../src/composables/useDataLoad
 const pipelineSource = (await readFile(new URL('../src/composables/useUiTemplatePipeline.mjs', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
 const activeToolPipelineSource = (await readFile(new URL('../src/composables/useActiveToolPipeline.mjs', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
 const specialRulesSource = (await readFile(new URL('../src/composables/useSpecialRules.mjs', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
+const vectorPatrolSource = (await readFile(new URL('../src/composables/useVectorMemoryPatrol.mjs', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
 
 test('useMemorySystem composable exists and is pure state', () => {
     assert.ok(memoryState.includes("import { ref, reactive } from 'vue';"), 'imports vue reactivity');
@@ -969,4 +970,35 @@ test('app.mjs wires useSpecialRules at the original declaration site', () => {
     // call sites stay: settings watch, character switch (useCardOperations), ctx export
     assert.ok(app.includes('enforceSpecialRules();'), 'call sites kept in app.mjs');
     assert.ok(app.includes('enforceSpecialRules,'), 'ctx export kept');
+});
+
+// --- useVectorMemoryPatrol (Phase 3.0): vector batch memory extraction ---
+
+test('useVectorMemoryPatrol composable owns the vector extraction run', () => {
+    assert.ok(vectorPatrolSource.includes("import { RPHLocalEmbedding } from '../modules/local-embedding.mjs';"), 'imports local embedding');
+    assert.ok(vectorPatrolSource.includes("import { getMemoryEmptyTurnsKey, getMemoryVectorExtractedKey } from '../modules/memory-utils.mjs';"), 'imports memory key helpers');
+    assert.ok(vectorPatrolSource.includes('export function useVectorMemoryPatrol(deps)'), 'deps-injecting factory export');
+    assert.ok(vectorPatrolSource.includes('const startVectorBatchMemoryExtraction = async (options = {}) => {'), 'owns startVectorBatchMemoryExtraction');
+    // shared guards reached through accessors, never rebound locally
+    assert.ok(vectorPatrolSource.includes('setBatchExtractAbort(batchController);'), 'stores run controller through bridge');
+    assert.ok(vectorPatrolSource.includes('while (getBatchExtractAbort() === batchController && !batchController.signal.aborted) {'), 'run loop guarded through bridge');
+    assert.ok(vectorPatrolSource.includes('setBatchExtractAbort(null);'), 'clears controller through bridge');
+    assert.ok(vectorPatrolSource.includes('getVectorBatchRescanRequested() ||'), 'rescan flag read through bridge');
+    assert.ok(!/_(batchExtractAbort|vectorBatchRescanRequested)/.test(vectorPatrolSource.replace(/^\/\/.*$/gm, '')), 'no direct guard access in code');
+    // v4 self-healing marker stays
+    assert.ok(vectorPatrolSource.includes('delete memorySettings.vectorExtractedTurns[extractedKey];'), 'self-healing rescan kept');
+    assert.ok(vectorPatrolSource.includes('return { startVectorBatchMemoryExtraction };'));
+});
+
+test('app.mjs wires useVectorMemoryPatrol with guard accessors', () => {
+    assert.ok(app.includes("import { useVectorMemoryPatrol } from '../composables/useVectorMemoryPatrol.mjs';"), 'import');
+    assert.equal(app.split('useVectorMemoryPatrol(').length - 1, 1, 'exactly one composable call per setup()');
+    assert.ok(app.includes('const { startVectorBatchMemoryExtraction } = useVectorMemoryPatrol({'), 'destructures at the wiring site');
+    assert.ok(!app.includes('const startVectorBatchMemoryExtraction = async'), 'moved out of app.mjs');
+    // the shared guard bindings stay in app.mjs for abortVectorBatchExtraction / manual rescan
+    assert.ok(app.includes('let _batchExtractAbort = null;'));
+    assert.ok(app.includes('const getBatchExtractAbort = () => _batchExtractAbort;'), 'getter accessor defined');
+    assert.ok(app.includes('const setVectorBatchRescanRequested = (value) => { _vectorBatchRescanRequested = value; };'), 'setter accessor defined');
+    assert.ok(app.includes('_vectorBatchRescanRequested = true;'), 'manual rescan request site kept');
+    assert.ok(app.includes('startVectorBatchMemoryExtraction,'), 'ctx export kept');
 });
