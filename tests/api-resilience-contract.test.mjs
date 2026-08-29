@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
-const [app, sender, chatGuardSource, memoryFallbackSource, capConfig, java, uiState, utils] = await Promise.all([
+const [app, sender, chatGuardSource, memoryFallbackSource, capConfig, java, uiState, utils, uiTemplatePipeline] = await Promise.all([
     readFile(new URL('../src/modules/app.mjs', import.meta.url), 'utf8'),
     readFile(new URL('../src/composables/useMessageSender.mjs', import.meta.url), 'utf8'),
     readFile(new URL('../src/modules/chat-request-guard.mjs', import.meta.url), 'utf8'),
@@ -11,7 +11,8 @@ const [app, sender, chatGuardSource, memoryFallbackSource, capConfig, java, uiSt
     readFile(new URL('../capacitor.config.json', import.meta.url), 'utf8'),
     readFile(new URL('../android/app/src/main/java/com/roleplayhub/app/NativeStoragePlugin.java', import.meta.url), 'utf8'),
     readFile(new URL('../src/composables/useUiState.mjs', import.meta.url), 'utf8'),
-    readFile(new URL('../src/modules/utils.mjs', import.meta.url), 'utf8')
+    readFile(new URL('../src/modules/utils.mjs', import.meta.url), 'utf8'),
+    readFile(new URL('../src/composables/useUiTemplatePipeline.mjs', import.meta.url), 'utf8')
 ]);
     const appJs = readFileSync(new URL("../src/modules/app.mjs", import.meta.url), "utf8");
 const [updateCheckerHtml, usagePanelHtml, worldInfoHtml] = await Promise.all([
@@ -121,9 +122,12 @@ test('chat errors render as character replies and are excluded from model contex
 
 test('offline chat flow no longer pops toasts (UI template analysis + auto model fetch)', () => {
     // 变量分析失败只保留内联状态条，不再弹 toast
-    assert.ok(app.includes("const failUiTemplateAnalysis = (message, targetMessageId = null) => {"));
-    assert.ok(app.includes("markUiTemplateStatus('error', message, 0, targetMessageId);"));
-    assert.ok(!app.includes("showToast(message, 'error');"));
+    // 2026-08-29 (Phase 3.0): the UI template analysis pipeline moved from
+    // app.mjs to src/composables/useUiTemplatePipeline.mjs; assertions for
+    // pipeline-internal text read from `uiTemplatePipeline` instead of `app`.
+    assert.ok(uiTemplatePipeline.includes("const failUiTemplateAnalysis = (message, targetMessageId = null) => {"));
+    assert.ok(uiTemplatePipeline.includes("markUiTemplateStatus('error', message, 0, targetMessageId);"));
+    assert.ok(!uiTemplatePipeline.includes("showToast(message, 'error');"));
     // 自动拉取模型失败保持静默，只有手动拉取才弹 toast
     assert.ok(app.includes("if (isManual) showToast('\u83b7\u53d6\u6a21\u578b\u5931\u8d25: ' + error.message, 'error');"));
     // 变量分析失败提示以内联红条展示在设置页
@@ -223,10 +227,11 @@ test('memory requests have a 60s timeout and validate embedding dimensions', () 
 });
 
 test('UI template analysis is concurrency-throttled', () => {
-    assert.ok(app.includes('UI_TEMPLATE_ANALYSIS_CONCURRENCY = 3'));
-    // Phase 2.3: runWithConcurrency moved to utils.mjs; call site stays in app.mjs
+    // Phase 3.0: pipeline moved to useUiTemplatePipeline.mjs
+    assert.ok(uiTemplatePipeline.includes('UI_TEMPLATE_ANALYSIS_CONCURRENCY = 3'));
+    // Phase 2.3: runWithConcurrency moved to utils.mjs; call site stays in the pipeline
     assert.ok(utils.includes('export const runWithConcurrency = async (items, limit, worker) => {'));
-    assert.ok(app.includes('await runWithConcurrency(templates, UI_TEMPLATE_ANALYSIS_CONCURRENCY, async (template) => {'));
+    assert.ok(uiTemplatePipeline.includes('await runWithConcurrency(templates, UI_TEMPLATE_ANALYSIS_CONCURRENCY, async (template) => {'));
 });
 
 test('request diagnostics export copies JSON to clipboard', () => {

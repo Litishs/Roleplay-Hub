@@ -83,9 +83,9 @@ export function useUiState() {
     const showContextViewerModal = ref(false);
 
     // --- UI template update run status ---
+    // (run lifecycle guards uiTemplateUpdateSeq/AbortController moved to
+    // useUiTemplatePipeline — Phase 3.0)
     const uiTemplateUpdateStatus = reactive({ state: 'idle', message: '待命', time: 0, remaining: 0, targetMessageId: null });
-    let uiTemplateUpdateSeq = 0;
-    let uiTemplateUpdateAbortController = null;
 
     // --- User setup modal draft ---
     const tempUserSetup = reactive({ name: '', description: '', person: 'second' });
@@ -146,8 +146,6 @@ export function useUiState() {
         showInstructionPanel,
         showContextViewerModal,
         uiTemplateUpdateStatus,
-        uiTemplateUpdateSeq,
-        uiTemplateUpdateAbortController,
         tempUserSetup,
         userSetupNameInput,
         syncUserSetupName,

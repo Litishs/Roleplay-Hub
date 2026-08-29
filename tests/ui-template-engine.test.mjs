@@ -154,7 +154,10 @@ test('app.js: applyMainModelUiTemplateUpdates renders panel before early returns
 });
 
 test('app.js: D1 batch mode / C1 json mode / D2 model required markers', async () => {
-  const source = await read('src/modules/app.mjs');
+  // 2026-08-29 (Phase 3.0): the analysis pipeline moved from app.mjs to
+  // src/composables/useUiTemplatePipeline.mjs; pipeline-internal markers read
+  // from the pipeline source.
+  const source = await read('src/composables/useUiTemplatePipeline.mjs');
   const settingsState = await read('src/composables/useSettingsState.mjs');
   assert.match(settingsState, /uiTemplateBatchMode: true/);
   assert.match(settingsState, /uiTemplateJsonMode: true/);
@@ -183,11 +186,11 @@ test('card-utils.js and app.js no longer persist updateMode', async () => {
 });
 
 test('app.js: UI模板变量分析请求不使用未声明的裸 apiKey', async () => {
-  const app = await read('src/modules/app.mjs');
-  const start = app.indexOf('const chatProviderForAnalysis = getChatProvider();');
-  const end = app.indexOf('const filterMemoriesAsync');
-  assert.ok(start > 0 && end > start, '应能找到 UI 模板分析函数边界');
-  const section = app.slice(start, end);
+  // 2026-08-29 (Phase 3.0): analysis requests moved to useUiTemplatePipeline.mjs
+  const pipeline = await read('src/composables/useUiTemplatePipeline.mjs');
+  const start = pipeline.indexOf('const chatProviderForAnalysis = getChatProvider();');
+  assert.ok(start > 0, '应能找到 UI 模板分析函数边界');
+  const section = pipeline.slice(start);
   assert.ok(
     !section.includes('Bearer ${apiKey}'),
     '单模板分析请求引用了未声明的 apiKey，会抛 ReferenceError: apiKey is not defined'

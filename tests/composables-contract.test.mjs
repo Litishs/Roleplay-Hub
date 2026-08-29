@@ -29,6 +29,7 @@ const rendererSource = (await readFile(new URL('../src/composables/useTemplateRe
 const cardOpsSource = (await readFile(new URL('../src/composables/useCardOperations.mjs', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
 const dataIoSource = (await readFile(new URL('../src/composables/useDataIO.mjs', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
 const backupRestoreSource = (await readFile(new URL('../src/composables/useBackupRestore.mjs', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
+const pipelineSource = (await readFile(new URL('../src/composables/useUiTemplatePipeline.mjs', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
 
 test('useMemorySystem composable exists and is pure state', () => {
     assert.ok(memoryState.includes("import { ref, reactive } from 'vue';"), 'imports vue reactivity');
@@ -246,8 +247,10 @@ test('app.mjs wires useUiState with single call and site destructuring', () => {
     assert.ok(app.includes('const { quotaValue, quotaLoading, quotaError, backupInProgress } = uiState;'));
     // mutable non-reactive guards use let-destructuring
     assert.ok(app.includes('let { isMobileSidebarOpen, nativeAppStateListener, nativeBackButtonListener } = uiState;'));
-    assert.ok(app.includes('let { uiTemplateUpdateSeq, uiTemplateUpdateAbortController } = uiState;'));
     assert.ok(app.includes('let { toastIdSeed } = uiState;'));
+    // UI template run lifecycle guards moved to useUiTemplatePipeline (Phase 3.0)
+    assert.ok(!uiStateSource.includes('let uiTemplateUpdateSeq'), 'seq guard moved to pipeline');
+    assert.ok(!uiStateSource.includes('let uiTemplateUpdateAbortController'), 'abort guard moved to pipeline');
     // active-tool pipeline contexts moved to useChatState (locked in the
     // useChatState wiring test)
     // check/update logic stays in app.mjs while display state moved
@@ -694,4 +697,45 @@ test('useBackupRestore returns callable members (runtime smoke)', async () => {
     assert.equal(typeof br.exportNativeBackup, 'function');
     assert.equal(typeof br.restoreNativeBackup, 'function');
     assert.notEqual(br.exportNativeBackup, other.exportNativeBackup, 'independent closures per call');
+});
+
+// --- useUiTemplatePipeline (Phase 3.0): UI template variable analysis pipeline ---
+
+test('useUiTemplatePipeline composable owns the analysis pipeline', () => {
+    assert.ok(pipelineSource.includes("import { generateUUID, parseCot, runWithConcurrency, stringifyUiSchema } from '../modules/utils.mjs';"), 'imports utils helpers');
+    assert.ok(pipelineSource.includes("import engine from '../modules/ui-template-engine.mjs';"), 'imports template engine');
+    assert.ok(pipelineSource.includes('export function useUiTemplatePipeline(deps)'), 'deps-injecting factory export');
+    assert.ok(pipelineSource.includes('const updateUiTemplatesFromChat = async ({ manual = false, targetMessageId = null, forceSuggestions = false } = {}) => {'), 'owns updateUiTemplatesFromChat');
+    assert.ok(pipelineSource.includes('const markUiTemplateStatus = (state, message, remaining = 0, targetMessageId = null) => {'), 'owns status marker');
+    assert.ok(pipelineSource.includes('const failUiTemplateAnalysis = (message, targetMessageId = null) => {'), 'owns failure marker');
+    assert.ok(pipelineSource.includes('const abortUiTemplateUpdate = (targetMessageId = null) => {'), 'owns run abort');
+    // run lifecycle guards are private to the pipeline now
+    assert.ok(pipelineSource.includes('let uiTemplateUpdateSeq = 0;'), 'private seq guard');
+    assert.ok(pipelineSource.includes('let uiTemplateUpdateAbortController = null;'), 'private abort guard');
+    assert.ok(pipelineSource.includes('return { markUiTemplateStatus, failUiTemplateAnalysis, abortUiTemplateUpdate, updateUiTemplatesFromChat };'));
+    assert.ok(!pipelineSource.includes('showToast('), 'no toast side effects (inline status bar only)');
+});
+
+test('app.mjs wires useUiTemplatePipeline after its last dep', () => {
+    assert.ok(app.includes("import { useUiTemplatePipeline } from '../composables/useUiTemplatePipeline.mjs';"), 'import');
+    assert.equal(app.split('useUiTemplatePipeline(').length - 1, 1, 'exactly one composable call per setup()');
+    assert.ok(app.includes('const {\n            markUiTemplateStatus,\n            failUiTemplateAnalysis,\n            abortUiTemplateUpdate,\n            updateUiTemplatesFromChat\n        } = useUiTemplatePipeline({'), 'destructures at the wiring site');
+    // app.mjs no longer holds the moved definitions or the uiState guards
+    assert.ok(!app.includes('const updateUiTemplatesFromChat = async'), 'moved out of app.mjs');
+    assert.ok(!app.includes('const markUiTemplateStatus = '), 'moved out of app.mjs');
+    assert.ok(!app.includes('let { uiTemplateUpdateSeq, uiTemplateUpdateAbortController } = uiState;'), 'lifecycle guards removed from uiState destructuring');
+    // useCardOperations and ctx still receive abortUiTemplateUpdate / updateUiTemplatesFromChat
+    assert.ok(app.includes('abortUiTemplateUpdate,'));
+    assert.ok(app.includes('updateUiTemplatesFromChat,'));
+});
+
+test('useUiTemplatePipeline returns callable members (runtime smoke)', async () => {
+    const { useUiTemplatePipeline } = await import('../src/composables/useUiTemplatePipeline.mjs');
+    const pipeline = useUiTemplatePipeline({});
+    const other = useUiTemplatePipeline({});
+    assert.equal(typeof pipeline.updateUiTemplatesFromChat, 'function');
+    assert.equal(typeof pipeline.markUiTemplateStatus, 'function');
+    assert.equal(typeof pipeline.failUiTemplateAnalysis, 'function');
+    assert.equal(typeof pipeline.abortUiTemplateUpdate, 'function');
+    assert.notEqual(pipeline.updateUiTemplatesFromChat, other.updateUiTemplatesFromChat, 'independent closures per call');
 });
