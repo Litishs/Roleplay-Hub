@@ -79,6 +79,7 @@ import { useActiveToolPipeline } from '../composables/useActiveToolPipeline.mjs'
 import { useDataLoader } from '../composables/useDataLoader.mjs';
 import { useSpecialRules } from '../composables/useSpecialRules.mjs';
 import { useVectorMemoryPatrol } from '../composables/useVectorMemoryPatrol.mjs';
+import { useRollingSummary } from '../composables/useRollingSummary.mjs';
 import { useDataIO } from '../composables/useDataIO.mjs';
 import { useBackupRestore } from '../composables/useBackupRestore.mjs';
 import { buildExecutableHtmlDocument, buildKeywordToolSnippet, bytesToBase64, checkConnectionStatus, cleanActiveToolCallReason, cleanupActiveToolCaptureState, collapseNativeReasoning, debounce, escapeRegexText, escapeXmlAttribute, escapeXmlText, estimateTokens, formatAIResponseForConsole, formatTokenAggregate, formatTokenCount, formatTokenUsageTime, getConversationTurnAtIndexFromSnapshot, getTokenUsageCategory, indentXmlText, isDatabaseClosingError, isDesktopSidebarViewport, isEditableElement, isMobileViewport, normalizePresetRole, normalizeTavilyExtractUrl, printAIRequestLogs, readUsageNumber, removeActiveToolCallRawsFromText, requestTavily, resizeChatInputElement, runWithConcurrency, stringifyErrorDetail, stringifyUiSchema, stripActiveToolCallsFromAssistant, stripCodeBlocksForToolDetection, stripUiTemplateContextInjection, throwApiError, yieldToBrowser, yieldToUi } from './utils.mjs';
@@ -1301,6 +1302,14 @@ const __app = createApp({
             _memoriesLoaded,
             _classicMemoriesLoaded
         } = memorySystemState;
+
+        // shared-guard accessors: useRollingSummary reads/writes the in-flight
+        // flag and the abort controller through these (deps are passed by value,
+        // so raw reassignment cannot reach the app.mjs bindings)
+        const getSummaryInFlight = () => _summaryInFlight;
+        const setSummaryInFlight = (value) => { _summaryInFlight = value; };
+        const getSummaryAbortController = () => _summaryAbortController;
+        const setSummaryAbortController = (value) => { _summaryAbortController = value; };
         let _isApplyingCharacterScopedData = false;
         let _initComplete = false; // 守卫标志：防止 onMounted 初始化阶段写入默认值覆盖服务端数据
         let _dataLoadFailed = false; // 守卫标志：loadData 失败时禁止 saveData 用默认空值覆盖存储中的数据
@@ -6562,112 +6571,33 @@ const __app = createApp({
             return parsed;
         };
 
-        const runRollingSummaryCheck = async (options = {}) => {
-            const lib = summaryLib();
-            if (!lib || !memorySettings.enabled || !currentCharacter.value?.uuid) return false;
-            if (_summaryInFlight) return false;
-            const current = getMemorySummaries();
-            const historySnapshot = chatHistory.value;
-            const turnCount = buildConversationTurnSnapshot(historySnapshot, { includeSystem: false }).turns.length;
-            const state = {
-                keepFloors: memorySettings.keepFloors,
-                batchSize: memorySettings.summaryBatchSize
-            };
-            const force = options.force === true;
-            const firstBatch = lib.computePendingBatch(current.batches, turnCount, state, { force });
-            if (!firstBatch) {
-                if (options.force === true) {
-                    showToast(`当前对话 ${turnCount} 轮未超过保留窗口（${memorySettings.keepFloors} 轮），暂无需要总结的内容，继续聊天后会自动总结`, 'info');
-                }
-                return false;
-            }
-            const scopeId = getCurrentChatStorageScopeId();
-            // v4 链快照：链内每批只读这里捕获的数据，切换角色/分支由 abortRollingSummary 中止，杜绝混合写入
-            const chainContext = {
-                summaries: current,
-                profile: profileLib() ? getMemoryProfile() : null,
-                historySnapshot,
-                characterName: currentCharacter.value?.name || '角色',
-                userRoleName: user.name || '用户'
-            };
-            const abortController = new AbortController();
-            _summaryAbortController = abortController;
-            _summaryInFlight = true;
-            try {
-                let processed = 0;
-                let chainProfile = chainContext.profile;
-                while (true) {
-                    // 双保险：作用域已切换（中止信号丢失时）立即停链，保留已完成批次
-                    if (getCurrentChatStorageScopeId() !== scopeId) break;
-                    const batch = lib.computePendingBatch(current.batches, turnCount, state, { force });
-                    if (!batch) break;
-                    setSummaryProgress({ ...batch, status: 'running' }, false);
-                    try {
-                        const parsed = await requestRollingSummary(batch, abortController.signal, chainContext);
-                        current.long = parsed.long || current.long;
-                        current.short = parsed.short;
-                        current.batches = lib.pruneCoveredFailedBatches([...current.batches, { ...batch, status: 'done', at: Date.now() }]);
-                        current.updatedAt = Date.now();
-                        await saveMemorySummariesNow(scopeId, current);
-                        if (parsed.profile && profileLib() && chainProfile) {
-                            // 链内逐批累计合并（旧实现在快照上合并，同链多批时只保留最后一批的信息卡更新）
-                            const mergedCharacters = profileLib().mergeCharacters(parsed.profile.characters, chainProfile, batch.toTurn);
-                            const mergedPlots = profileLib().mergeOpenPlots(parsed.profile.openPlots, chainProfile, batch.toTurn);
-                            chainProfile = {
-                                ...chainProfile,
-                                characters: mergedCharacters.characters,
-                                openPlots: mergedPlots.openPlots,
-                                updatedAt: Date.now()
-                            };
-                            if (getCurrentChatStorageScopeId() === scopeId) {
-                                memoryProfile.value = chainProfile;
-                            }
-                            await saveMemoryProfileNow(scopeId, chainProfile);
-                        }
-                        processed++;
-                    } catch (error) {
-                        if (error?.name === 'AbortError') {
-                            clearSummaryProgress();
-                            break;
-                        }
-                        const failedEntry = {
-                            ...batch,
-                            status: 'failed',
-                            at: Date.now(),
-                            error: String(error?.message || error)
-                        };
-                        current.batches = [...current.batches, failedEntry];
-                        current.updatedAt = Date.now();
-                        await saveMemorySummariesNow(scopeId, current).catch(() => { });
-                        setSummaryProgress({ ...batch, status: 'failed' });
-                        console.error('Rolling summary failed:', error);
-                        break;
-                    }
-                    if (processed > 200) break; // 安全上限，防止异常死循环
-                }
-                if (processed > 0) {
-                    setSummaryProgress({ fromTurn: firstBatch.fromTurn, toTurn: current.batches[current.batches.length - 1]?.toTurn || firstBatch.toTurn, status: 'done' });
-                }
-                return true;
-            } catch (error) {
-                if (error.name !== 'AbortError') {
-                    current.batches = [...current.batches, {
-                        ...firstBatch,
-                        status: 'failed',
-                        at: Date.now(),
-                        error: String(error.message || error)
-                    }];
-                    setSummaryProgress({ ...firstBatch, status: 'failed' });
-                    console.error('Rolling summary failed:', error);
-                }
-                return false;
-            } finally {
-                _summaryInFlight = false;
-                if (_summaryAbortController === abortController) _summaryAbortController = null;
-            }
-        };
-
-        // v4：切换角色 / 分支 / 清空重建前调用，中止进行中的摘要链（AbortError 在链内静默退出）
+        // Rolling summary chain lives in useRollingSummary (Phase 3.0); wired here
+        // after its last dep (requestRollingSummary, above) is defined.
+        const { runRollingSummaryCheck } = useRollingSummary({
+            // memory state
+            currentCharacter,
+            chatHistory,
+            user,
+            memorySettings,
+            memoryProfile,
+            // shared guard bridges
+            getSummaryInFlight,
+            setSummaryInFlight,
+            getSummaryAbortController,
+            setSummaryAbortController,
+            // summary domain helpers
+            getMemorySummaries,
+            getMemoryProfile,
+            saveMemorySummariesNow,
+            saveMemoryProfileNow,
+            setSummaryProgress,
+            clearSummaryProgress,
+            requestRollingSummary,
+            // context helpers
+            getCurrentChatStorageScopeId,
+            buildConversationTurnSnapshot,
+            showToast
+        });
         const abortRollingSummary = () => {
             if (_summaryAbortController) {
                 _summaryAbortController.abort();

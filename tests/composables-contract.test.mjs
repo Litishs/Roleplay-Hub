@@ -34,6 +34,7 @@ const pipelineSource = (await readFile(new URL('../src/composables/useUiTemplate
 const activeToolPipelineSource = (await readFile(new URL('../src/composables/useActiveToolPipeline.mjs', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
 const specialRulesSource = (await readFile(new URL('../src/composables/useSpecialRules.mjs', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
 const vectorPatrolSource = (await readFile(new URL('../src/composables/useVectorMemoryPatrol.mjs', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
+const rollingSummarySource = (await readFile(new URL('../src/composables/useRollingSummary.mjs', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
 
 test('useMemorySystem composable exists and is pure state', () => {
     assert.ok(memoryState.includes("import { ref, reactive } from 'vue';"), 'imports vue reactivity');
@@ -1001,4 +1002,35 @@ test('app.mjs wires useVectorMemoryPatrol with guard accessors', () => {
     assert.ok(app.includes('const setVectorBatchRescanRequested = (value) => { _vectorBatchRescanRequested = value; };'), 'setter accessor defined');
     assert.ok(app.includes('_vectorBatchRescanRequested = true;'), 'manual rescan request site kept');
     assert.ok(app.includes('startVectorBatchMemoryExtraction,'), 'ctx export kept');
+});
+
+// --- useRollingSummary (Phase 3.0): rolling memory summary chain ---
+
+test('useRollingSummary composable owns the summary chain run', () => {
+    assert.ok(rollingSummarySource.includes("import * as RPHMemorySummary from '../modules/memory-summary.mjs';"), 'imports summary lib');
+    assert.ok(rollingSummarySource.includes("import * as RPHMemoryProfile from '../modules/memory-profile.mjs';"), 'imports profile lib');
+    assert.ok(rollingSummarySource.includes('const summaryLib = () => RPHMemorySummary;'), 'module alias recreated');
+    assert.ok(rollingSummarySource.includes('export function useRollingSummary(deps)'), 'deps-injecting factory export');
+    assert.ok(rollingSummarySource.includes('const runRollingSummaryCheck = async (options = {}) => {'), 'owns runRollingSummaryCheck');
+    // shared guards reached through accessors, never rebound locally
+    assert.ok(rollingSummarySource.includes('if (getSummaryInFlight()) return false;'), 'in-flight guard read through bridge');
+    assert.ok(rollingSummarySource.includes('setSummaryInFlight(true);'), 'in-flight guard set through bridge');
+    assert.ok(rollingSummarySource.includes('if (getSummaryAbortController() === abortController) setSummaryAbortController(null);'), 'controller cleared through bridge');
+    assert.ok(!/_(summaryInFlight|summaryAbortController)/.test(rollingSummarySource.replace(/^\/\/.*$/gm, '')), 'no direct guard access in code');
+    // chain behavior markers stay
+    assert.ok(rollingSummarySource.includes('if (processed > 200) break;'), 'safety cap kept');
+    assert.ok(rollingSummarySource.includes("if (getCurrentChatStorageScopeId() !== scopeId) break;"), 'scope-switch double guard kept');
+    assert.ok(rollingSummarySource.includes('return { runRollingSummaryCheck };'));
+});
+
+test('app.mjs wires useRollingSummary with guard accessors', () => {
+    assert.ok(app.includes("import { useRollingSummary } from '../composables/useRollingSummary.mjs';"), 'import');
+    assert.equal(app.split('useRollingSummary(').length - 1, 1, 'exactly one composable call per setup()');
+    assert.ok(app.includes('const { runRollingSummaryCheck } = useRollingSummary({'), 'destructures at the wiring site');
+    assert.ok(!app.includes('const runRollingSummaryCheck = async'), 'moved out of app.mjs');
+    // the shared guard bindings stay in app.mjs for abortRollingSummary / memory patrol
+    assert.ok(app.includes('const getSummaryInFlight = () => _summaryInFlight;'), 'getter accessor defined');
+    assert.ok(app.includes('const setSummaryAbortController = (value) => { _summaryAbortController = value; };'), 'setter accessor defined');
+    assert.ok(app.includes('if (!_summaryInFlight) {'), 'memory patrol still reads the flag');
+    assert.ok(app.includes('runRollingSummaryCheck,'), 'ctx export kept');
 });

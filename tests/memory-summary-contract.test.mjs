@@ -3,13 +3,14 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import * as memorySummary from '../src/modules/memory-summary.mjs';
 
-const [html, app, sender, messageList, memoryState, vectorPatrol] = await Promise.all([
+const [html, app, sender, messageList, memoryState, vectorPatrol, rollingSummary] = await Promise.all([
     readFile(new URL('../src/components/views/MemoryPanel.vue', import.meta.url), 'utf8'),
     readFile(new URL('../src/modules/app.mjs', import.meta.url), 'utf8'),
     readFile(new URL('../src/composables/useMessageSender.mjs', import.meta.url), 'utf8'),
     readFile(new URL('../src/components/chat/MessageList.vue', import.meta.url), 'utf8'),
     readFile(new URL('../src/composables/useMemorySystem.mjs', import.meta.url), 'utf8'),
-    readFile(new URL('../src/composables/useVectorMemoryPatrol.mjs', import.meta.url), 'utf8')
+    readFile(new URL('../src/composables/useVectorMemoryPatrol.mjs', import.meta.url), 'utf8'),
+    readFile(new URL('../src/composables/useRollingSummary.mjs', import.meta.url), 'utf8')
 ]);
     const mainJs = await readFile(new URL("../src/main.js", import.meta.url), "utf8");
 
@@ -171,27 +172,30 @@ test('记忆重构:单一引擎且旧模式/事实层 UI 已移除', () => {
 
 test('立即总结按钮使用强制模式', () => {
     assert.ok(html.includes("runRollingSummaryCheck({ force: true })"));
-    assert.ok(app.includes('const force = options.force === true'));
+    // 2026-08-29 (Phase 3.0): the summary chain moved to useRollingSummary.mjs
+    assert.ok(rollingSummary.includes('const force = options.force === true'));
 });
 
 test('滚动总结循环处理全部待总结批次', () => {
-    assert.ok(app.includes('while (true)'));
-    assert.ok(app.includes('processed > 200'));
+    // 2026-08-29 (Phase 3.0): chain loop moved to useRollingSummary.mjs
+    assert.ok(rollingSummary.includes('while (true)'));
+    assert.ok(rollingSummary.includes('processed > 200'));
     assert.ok(app.includes('withTimeoutSignal(signal, 180000)'));
-    assert.ok(app.includes('status: \'failed\''));
+    assert.ok(rollingSummary.includes("status: 'failed'"));
 });
 
 test('滚动摘要:链内使用快照且切换角色/分支/清空重建时中止（v4）', () => {
     // 链快照：批次请求只读链启动捕获的数据，不逐批读共享 ref
-    assert.ok(app.includes('const chainContext = {'));
-    assert.ok(app.includes('historySnapshot,'));
-    assert.ok(app.includes('requestRollingSummary(batch, abortController.signal, chainContext)'));
+    // 2026-08-29 (Phase 3.0): chain snapshot moved to useRollingSummary.mjs
+    assert.ok(rollingSummary.includes('const chainContext = {'));
+    assert.ok(rollingSummary.includes('historySnapshot,'));
+    assert.ok(rollingSummary.includes('requestRollingSummary(batch, abortController.signal, chainContext)'));
     // 中止接线与每批前 scope 校验双保险
     assert.ok(app.includes('const abortRollingSummary = () => {'));
     assert.ok(app.includes('_summaryAbortController'));
-    assert.ok(app.includes('getCurrentChatStorageScopeId() !== scopeId'));
+    assert.ok(rollingSummary.includes('getCurrentChatStorageScopeId() !== scopeId'));
     // 失败批次补上后自动清理记录
-    assert.ok(app.includes('pruneCoveredFailedBatches'));
+    assert.ok(rollingSummary.includes('pruneCoveredFailedBatches'));
 });
 
 // 2026-08-29 (Phase 2.2): timeline digest injection moved to useMessageSender
@@ -231,7 +235,7 @@ test('本地嵌入模型默认自动加载（v4）', () => {
 test('总结批次大小可配置', () => {
     // memorySettings defaults moved to src/composables/useMemorySystem.mjs (Phase 2)
     assert.ok(memoryState.includes('summaryBatchSize: SUMMARY_BATCH_SIZE_DEFAULT'));
-    assert.ok(app.includes('batchSize: memorySettings.summaryBatchSize'));
+    assert.ok(rollingSummary.includes('batchSize: memorySettings.summaryBatchSize'));
     assert.ok(app.includes('const summaryBatchSizeSlider'));
     assert.ok(html.includes('summaryBatchSizeSlider'));
     assert.ok(html.includes('总结批次大小'));
