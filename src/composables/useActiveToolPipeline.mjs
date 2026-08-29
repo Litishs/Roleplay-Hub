@@ -46,6 +46,7 @@ export function useActiveToolPipeline(deps) {
         searchWebByTavilyForTool,
         searchVectorMemoriesForTool,
         // result context helpers / orchestration
+        updateActiveToolResultContext,
         normalizeActiveToolResultContext,
         formatActiveToolResultContext,
         formatActiveToolErrorContext,

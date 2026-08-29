@@ -39,7 +39,7 @@ export function useVectorMemoryPatrol(deps) {
         getMemoryEmbeddingModel,
         getCurrentChatStorageScopeId,
         buildConversationTurnSnapshot,
-        doBatchEmbedMemoryChunks,
+        _doBatchEmbedMemoryChunks,
         waitForMemoryConversationIdle,
         saveMemorySettingsNow,
         showToast

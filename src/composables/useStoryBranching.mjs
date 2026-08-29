@@ -38,6 +38,7 @@ export function useStoryBranching(deps) {
         activeStoryBranchId,
         storyBranchSwitching,
         memorySettings,
+        memoryFacts,
         globalUiTemplates,
         // shared guard bridges
         setApplyingCharacterScopedData,
@@ -55,6 +56,7 @@ export function useStoryBranching(deps) {
         setScopedStoredValue,
         deleteScopedStoredValue,
         setStoredValue,
+        cloneForStorage,
         saveMemorySettingsNow,
         saveStoryBranchesForCharacter,
         // context / runtime helpers

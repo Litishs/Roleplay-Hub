@@ -7656,6 +7656,7 @@ const __app = createApp({
             searchWebByTavilyForTool,
             searchVectorMemoriesForTool,
             // result context helpers / orchestration
+            updateActiveToolResultContext,
             normalizeActiveToolResultContext,
             formatActiveToolResultContext,
             formatActiveToolErrorContext,
@@ -7705,7 +7706,7 @@ const __app = createApp({
             getMemoryEmbeddingModel,
             getCurrentChatStorageScopeId,
             buildConversationTurnSnapshot,
-            doBatchEmbedMemoryChunks: _doBatchEmbedMemoryChunks,
+            _doBatchEmbedMemoryChunks,
             waitForMemoryConversationIdle,
             saveMemorySettingsNow,
             showToast
@@ -8299,6 +8300,7 @@ const __app = createApp({
             activeStoryBranchId,
             storyBranchSwitching,
             memorySettings,
+            memoryFacts,
             globalUiTemplates,
             // shared guard bridges
             setApplyingCharacterScopedData,
@@ -8316,6 +8318,7 @@ const __app = createApp({
             setScopedStoredValue,
             deleteScopedStoredValue,
             setStoredValue,
+            cloneForStorage,
             saveMemorySettingsNow,
             saveStoryBranchesForCharacter,
             // context / runtime helpers

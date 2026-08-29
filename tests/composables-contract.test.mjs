@@ -1075,3 +1075,14 @@ test('app.mjs wires useStoryBranching after its last dep', () => {
     assert.ok(app.includes('const setMemoriesLoaded = (value) => { _memoriesLoaded = value; };'), 'memory guard setters');
     assert.ok(app.includes('const setFactFragmentsLoaded = (value) => { _factFragmentsLoaded = value; };'), 'fact guard setters');
 });
+
+test('Phase 3.0 device-caught dep regressions stay locked', () => {
+    // _doBatchEmbedMemoryChunks: renamed dep broke the patrol call site (device logcat)
+    assert.ok(vectorPatrolSource.includes('        _doBatchEmbedMemoryChunks,'), 'patrol destructures _doBatchEmbedMemoryChunks');
+    assert.ok(app.includes('            _doBatchEmbedMemoryChunks,'), 'app.mjs passes it as a dep');
+    // updateActiveToolResultContext: missing dep broke tool result bookkeeping
+    assert.ok(activeToolPipelineSource.includes('        updateActiveToolResultContext,'), 'tool pipeline destructures updateActiveToolResultContext');
+    // cloneForStorage / memoryFacts: missing deps broke branch seeding and rollback
+    assert.ok(branchingSource.includes('        cloneForStorage,'), 'branching destructures cloneForStorage');
+    assert.ok(branchingSource.includes('        memoryFacts,'), 'branching destructures memoryFacts');
+});
