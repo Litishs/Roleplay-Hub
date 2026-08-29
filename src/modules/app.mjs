@@ -81,6 +81,7 @@ import { useSpecialRules } from '../composables/useSpecialRules.mjs';
 import { useVectorMemoryPatrol } from '../composables/useVectorMemoryPatrol.mjs';
 import { useRollingSummary } from '../composables/useRollingSummary.mjs';
 import { useRegexPipeline } from '../composables/useRegexPipeline.mjs';
+import { useStoryBranching } from '../composables/useStoryBranching.mjs';
 import { useDataIO } from '../composables/useDataIO.mjs';
 import { useBackupRestore } from '../composables/useBackupRestore.mjs';
 import { buildExecutableHtmlDocument, buildKeywordToolSnippet, bytesToBase64, checkConnectionStatus, cleanActiveToolCallReason, cleanupActiveToolCaptureState, collapseNativeReasoning, debounce, escapeRegexText, escapeXmlAttribute, escapeXmlText, estimateTokens, formatAIResponseForConsole, formatTokenAggregate, formatTokenCount, formatTokenUsageTime, getConversationTurnAtIndexFromSnapshot, getTokenUsageCategory, indentXmlText, isDatabaseClosingError, isDesktopSidebarViewport, isEditableElement, isMobileViewport, normalizePresetRole, normalizeTavilyExtractUrl, printAIRequestLogs, readUsageNumber, removeActiveToolCallRawsFromText, requestTavily, resizeChatInputElement, runWithConcurrency, stringifyErrorDetail, stringifyUiSchema, stripActiveToolCallsFromAssistant, stripCodeBlocksForToolDetection, stripUiTemplateContextInjection, throwApiError, yieldToBrowser, yieldToUi } from './utils.mjs';
@@ -1311,6 +1312,12 @@ const __app = createApp({
         const setSummaryInFlight = (value) => { _summaryInFlight = value; };
         const getSummaryAbortController = () => _summaryAbortController;
         const setSummaryAbortController = (value) => { _summaryAbortController = value; };
+
+        // shared-guard setter bridges: useStoryBranching flips the memory-load
+        // guards through these (deps are passed by value, so raw reassignment
+        // cannot reach the app.mjs bindings)
+        const setMemoriesLoaded = (value) => { _memoriesLoaded = value; };
+        const setClassicMemoriesLoaded = (value) => { _classicMemoriesLoaded = value; };
         let _isApplyingCharacterScopedData = false;
         let _initComplete = false; // 守卫标志：防止 onMounted 初始化阶段写入默认值覆盖服务端数据
         let _dataLoadFailed = false; // 守卫标志：loadData 失败时禁止 saveData 用默认空值覆盖存储中的数据
@@ -5815,6 +5822,11 @@ const __app = createApp({
             _factLoadedCharacterId
         } = memorySystemState;
 
+        // shared-guard setter bridges: useStoryBranching resets the fact-layer
+        // guards on branch rollback (same by-value deps constraint)
+        const setFactFragmentsLoaded = (value) => { _factFragmentsLoaded = value; };
+        const setFactLoadedCharacterId = (value) => { _factLoadedCharacterId = value; };
+
         const schemaLib = () => globalThis.RPHMemorySchema;
 
         const getFactExtractionModel = () => String(memorySettings.factModel || memorySettings.classicModel || '').trim();
@@ -8273,155 +8285,54 @@ const __app = createApp({
             });
         };
 
-        const createStoryBranch = async (forkMessageIndex = null) => {
-            const char = currentCharacter.value;
-            if (!char?.uuid || storyBranchSwitching.value) return;
-            const forkFromMessage = Number.isInteger(forkMessageIndex);
-            const forkMessage = forkFromMessage ? chatHistory.value[forkMessageIndex] : null;
-            if (forkFromMessage && forkMessage?.role !== 'assistant') return;
-            const forkMessageId = forkMessage?.id;
-            const parent = forkFromMessage
-                ? currentStoryBranch.value
-                : storyBranches.value.find(branch => branch.id === selectedStoryBranchId.value)
-                || currentStoryBranch.value;
-            if (!parent) return;
-            storyBranchSwitching.value = true;
-            let createdBranch = null;
-            const previousState = {
-                activeId: activeStoryBranchId.value,
-                chatHistory: chatHistory.value,
-                memories: memories.value,
-                classicMemories: classicMemories.value
-            };
-            try {
-                if (!await flushCurrentBranchState()) return;
-                const parentId = parent.id;
-                const parentScopeId = getStoryBranchScopeId(char.uuid, parentId);
-                const api = storyBranchApi();
-                const branchId = api ? api.createId() : generateUUID();
-                const branchScopeId = getStoryBranchScopeId(char.uuid, branchId);
-                createdBranch = { branchId, branchScopeId, parentId };
-                const branchNumber = storyBranches.value.filter(branch => branch.id !== 'main').length + 1;
-                const branchName = api ? api.defaultBranchName(branchNumber) : `分支 ${branchNumber}`;
-                const now = Date.now();
-                const [savedChat, savedMemories, savedClassicMemories, savedSummaries, savedProfile] = await Promise.all([
-                    getStoredChatHistoryWithRetry(parentScopeId),
-                    getScopedStoredValue('memories', parentScopeId),
-                    getScopedStoredValue('classic_memories', parentScopeId),
-                    getScopedStoredValue('memory_summaries', parentScopeId),
-                    getScopedStoredValue('memory_profile', parentScopeId)
-                ]);
-                let branchChat = Array.isArray(savedChat) ? savedChat : [];
-                let branchMemories = Array.isArray(savedMemories) ? savedMemories : [];
-                let branchClassicMemories = Array.isArray(savedClassicMemories) ? savedClassicMemories : [];
-                let branchSummaries = savedSummaries && typeof savedSummaries === 'object' ? { ...savedSummaries } : null;
-                let branchProfile = savedProfile && typeof savedProfile === 'object' ? { ...savedProfile } : null;
-                let forkTurn = null;
-                if (forkFromMessage) {
-                    let sourceIndex = forkMessageId
-                        ? branchChat.findIndex(message => message?.id === forkMessageId)
-                        : forkMessageIndex;
-                    if (sourceIndex < 0 && Array.isArray(chatHistory.value)) {
-                        const memorySourceIndex = forkMessageId
-                            ? chatHistory.value.findIndex(message => message?.id === forkMessageId)
-                            : forkMessageIndex;
-                        if (memorySourceIndex >= 0 && chatHistory.value[memorySourceIndex]?.role === 'assistant') {
-                            branchChat = chatHistory.value.map(message => serializeChatMessage(message, 'final'));
-                            sourceIndex = memorySourceIndex;
-                        }
-                    }
-                    if (sourceIndex < 0 || branchChat[sourceIndex]?.role !== 'assistant') {
-                        throw new Error('目标消息已发生变化，请重试');
-                    }
-                    branchChat = branchChat.slice(0, sourceIndex + 1);
-                    forkTurn = buildConversationTurnSnapshot(
-                        prepareLoadedChatHistoryForDisplay(branchChat),
-                        { includeSystem: false }
-                    ).turns.length;
-                    branchMemories = branchMemories.filter(memory => Number(memory?.turn) <= forkTurn);
-                    branchClassicMemories = branchClassicMemories.filter(memory => Number(memory?.turn) <= forkTurn);
-                    if (branchSummaries && Array.isArray(branchSummaries.batches)) {
-                        branchSummaries.batches = branchSummaries.batches.filter(b => Number(b?.toTurn) <= forkTurn);
-                    }
-                }
-                await setScopedStoredValue('chat', branchScopeId, branchChat, { clone: false });
-                await setScopedStoredValue('memories', branchScopeId, branchMemories, { clone: false });
-                await setScopedStoredValue('classic_memories', branchScopeId, branchClassicMemories, { clone: false });
-                if (branchSummaries) {
-                    await setScopedStoredValue('memory_summaries', branchScopeId, cloneForStorage(branchSummaries), { clone: false });
-                }
-                if (branchProfile) {
-                    await setScopedStoredValue('memory_profile', branchScopeId, cloneForStorage(branchProfile), { clone: false });
-                }
-                copyUiTemplateRuntimeForBranch(parentScopeId, branchScopeId, forkTurn);
-                const floorCount = getPostprocessedChatMessages(branchChat, { includeSystem: false }).length;
-                const wordCount = branchChat.reduce((sum, message) => sum + String(message?.content || '').length, 0);
-                storyBranches.value.push({
-                    id: branchId,
-                    name: branchName,
-                    parentId,
-                    createdAt: now,
-                    updatedAt: now,
-                    forkFloor: floorCount,
-                    floorCount,
-                    messageCount: branchChat.filter(message => ['user', 'assistant'].includes(message?.role)).length,
-                    wordCount
-                });
-                activeStoryBranchId.value = branchId;
-                selectedStoryBranchId.value = branchId;
-                await Promise.all([
-                    saveStoryBranchesForCharacter(char),
-                    saveMemorySettingsNow(),
-                    setStoredValue('global_ui_templates', globalUiTemplates.value)
-                ]);
-                loadGlobalUiTemplateRuntimeForCharacter(char);
-                _isApplyingCharacterScopedData = true;
-                resetChatRenderWindow();
-                chatHistory.value = branchChat.length
-                    ? prepareLoadedChatHistoryForDisplay(branchChat)
-                    : createInitialChatHistory(char);
-                memories.value = branchMemories.length ? prepareMemoriesForRuntime(branchMemories) : [];
-                classicMemories.value = prepareClassicMemoriesForRuntime(branchClassicMemories);
-                _memoriesLoaded = true;
-                _classicMemoriesLoaded = true;
-                finishApplyingCharacterScopedData();
-                showToast(`已创建并进入“${branchName}”`, 'success');
-                await scrollChatToBottom();
-            } catch (error) {
-                _isApplyingCharacterScopedData = false;
-                if (createdBranch) {
-                    storyBranches.value = storyBranches.value.filter(branch => branch.id !== createdBranch.branchId);
-                    activeStoryBranchId.value = previousState.activeId;
-                    selectedStoryBranchId.value = previousState.activeId;
-                    chatHistory.value = previousState.chatHistory;
-                    memories.value = previousState.memories;
-                    classicMemories.value = previousState.classicMemories;
-                    _factFragmentsLoaded = false;
-                    _factLoadedCharacterId = '';
-                    memoryFacts.value = [];
-                    if (memorySettings.emptyTurns) {
-                        delete memorySettings.emptyTurns[getMemoryEmptyTurnsKey(createdBranch.branchScopeId)];
-                    }
-                    ensureGlobalUiTemplates().forEach(template => {
-                        if (template.runtimeByCharacter) delete template.runtimeByCharacter[createdBranch.branchScopeId];
-                    });
-                    loadGlobalUiTemplateRuntimeForCharacter(char);
-                    await Promise.allSettled([
-                        deleteScopedStoredValue('chat', createdBranch.branchScopeId),
-                        deleteScopedStoredValue('memories', createdBranch.branchScopeId),
-                        deleteScopedStoredValue('classic_memories', createdBranch.branchScopeId),
-                        db ? db.deleteFragments(createdBranch.branchScopeId) : Promise.resolve(),
-                        saveStoryBranchesForCharacter(char),
-                        saveMemorySettingsNow(),
-                        setStoredValue('global_ui_templates', globalUiTemplates.value)
-                    ]);
-                }
-                console.error('Failed to create story branch:', error);
-                showToast(`创建分支失败：${error.message || '请稍后重试'}`, 'error');
-            } finally {
-                storyBranchSwitching.value = false;
-            }
-        };
+        // Story branch creation lives in useStoryBranching (Phase 3.0); wired here
+        // after its last dep (copyUiTemplateRuntimeForBranch, above) is defined.
+        const { createStoryBranch } = useStoryBranching({
+            // branch / chat / memory state
+            currentCharacter,
+            chatHistory,
+            memories,
+            classicMemories,
+            storyBranches,
+            currentStoryBranch,
+            selectedStoryBranchId,
+            activeStoryBranchId,
+            storyBranchSwitching,
+            memorySettings,
+            globalUiTemplates,
+            // shared guard bridges
+            setApplyingCharacterScopedData,
+            finishApplyingCharacterScopedData,
+            setMemoriesLoaded,
+            setClassicMemoriesLoaded,
+            setFactFragmentsLoaded,
+            setFactLoadedCharacterId,
+            getDb,
+            // storage layer
+            flushCurrentBranchState,
+            getStoryBranchScopeId,
+            getStoredChatHistoryWithRetry,
+            getScopedStoredValue,
+            setScopedStoredValue,
+            deleteScopedStoredValue,
+            setStoredValue,
+            saveMemorySettingsNow,
+            saveStoryBranchesForCharacter,
+            // context / runtime helpers
+            buildConversationTurnSnapshot,
+            getPostprocessedChatMessages,
+            serializeChatMessage,
+            prepareLoadedChatHistoryForDisplay,
+            createInitialChatHistory,
+            prepareMemoriesForRuntime,
+            prepareClassicMemoriesForRuntime,
+            copyUiTemplateRuntimeForBranch,
+            loadGlobalUiTemplateRuntimeForCharacter,
+            ensureGlobalUiTemplates,
+            resetChatRenderWindow,
+            scrollChatToBottom,
+            showToast
+        });
 
         const switchStoryBranch = async (branchId, options = {}) => {
             const { closeModal = true, notify = true } = options;

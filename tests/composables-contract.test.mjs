@@ -36,6 +36,7 @@ const specialRulesSource = (await readFile(new URL('../src/composables/useSpecia
 const vectorPatrolSource = (await readFile(new URL('../src/composables/useVectorMemoryPatrol.mjs', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
 const rollingSummarySource = (await readFile(new URL('../src/composables/useRollingSummary.mjs', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
 const regexPipelineSource = (await readFile(new URL('../src/composables/useRegexPipeline.mjs', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
+const branchingSource = (await readFile(new URL('../src/composables/useStoryBranching.mjs', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
 
 test('useMemorySystem composable exists and is pure state', () => {
     assert.ok(memoryState.includes("import { ref, reactive } from 'vue';"), 'imports vue reactivity');
@@ -1058,4 +1059,19 @@ test('app.mjs wires useRegexPipeline at the original declaration site', () => {
     assert.ok(!app.includes('const processRegex = (text, options = {}) => {'), 'moved out of app.mjs');
     // consumers keep receiving it through the deps objects
     assert.ok(app.includes('processRegex,'));
+});
+
+// --- useStoryBranching (Phase 3.0): story branch creation ---
+
+test('app.mjs wires useStoryBranching after its last dep', () => {
+    assert.ok(app.includes("import { useStoryBranching } from '../composables/useStoryBranching.mjs';"), 'import');
+    assert.equal(app.split('useStoryBranching(').length - 1, 1, 'exactly one composable call per setup()');
+    assert.ok(app.includes('const { createStoryBranch } = useStoryBranching({'), 'destructures at the wiring site');
+    assert.ok(app.includes('after its last dep (copyUiTemplateRuntimeForBranch, above) is defined.'), 'late wiring documented');
+    assert.ok(!app.includes('const createStoryBranch = async'), 'moved out of app.mjs');
+    // ctx export kept
+    assert.ok(app.includes('openStoryBranchModal, createStoryBranch, switchStoryBranch,'));
+    // guard setter bridges defined in app.mjs
+    assert.ok(app.includes('const setMemoriesLoaded = (value) => { _memoriesLoaded = value; };'), 'memory guard setters');
+    assert.ok(app.includes('const setFactFragmentsLoaded = (value) => { _factFragmentsLoaded = value; };'), 'fact guard setters');
 });

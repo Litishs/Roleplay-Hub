@@ -3,11 +3,12 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import * as storyBranch from '../src/modules/story-branch.mjs';
 
-const [html, app, presets, cardOps] = await Promise.all([
+const [html, app, presets, cardOps, branching] = await Promise.all([
     readFile(new URL('../index.html', import.meta.url), 'utf8'),
     readFile(new URL('../src/modules/app.mjs', import.meta.url), 'utf8'),
     readFile(new URL('../src/modules/default-presets.mjs', import.meta.url), 'utf8'),
-    readFile(new URL('../src/composables/useCardOperations.mjs', import.meta.url), 'utf8')
+    readFile(new URL('../src/composables/useCardOperations.mjs', import.meta.url), 'utf8'),
+    readFile(new URL('../src/composables/useStoryBranching.mjs', import.meta.url), 'utf8')
 ]);
     const mainJs = await readFile(new URL("../src/main.js", import.meta.url), "utf8");
 
@@ -77,11 +78,29 @@ test('app.js wires branch state and actions into setup return', () => {
     assert.ok(app.includes('const RPHStoryBranch = {'));
     assert.ok(app.includes('const storyBranches = ref([])'));
     assert.ok(app.includes('const activeStoryBranchId = ref(\'main\')'));
-    assert.ok(app.includes('const createStoryBranch = async'));
+    // 2026-08-29 (Phase 3.0): createStoryBranch moved to useStoryBranching.mjs
+    assert.ok(branching.includes('const createStoryBranch = async'));
     assert.ok(app.includes('const switchStoryBranch = async'));
     assert.ok(app.includes('const openStoryBranchModal = ()'));
     assert.ok(app.includes('const deleteSelectedStoryBranch = ()'));
     assert.ok(app.includes('storyBranches, activeStoryBranchId, currentStoryBranch, storyRouteMap,'));
+});
+
+test('useStoryBranching owns createStoryBranch with rollback and guards', () => {
+    assert.ok(branching.includes('export function useStoryBranching(deps)'), 'deps-injecting factory export');
+    // fork + rollback behavior markers stay intact
+    assert.ok(branching.includes('目标消息已发生变化，请重试'), 'fork validation kept');
+    assert.ok(branching.includes('已创建并进入'), 'success toast kept');
+    assert.ok(branching.includes('创建分支失败：'), 'failure toast kept');
+    assert.ok(branching.includes('storyBranches.value = storyBranches.value.filter(branch => branch.id !== createdBranch.branchId);'), 'rollback kept');
+    // guards reached through setter bridges, never rebound locally
+    assert.ok(branching.includes('setApplyingCharacterScopedData(true);'), 'apply guard set through bridge');
+    assert.ok(branching.includes('setMemoriesLoaded(true);'), 'memories guard set through bridge');
+    assert.ok(branching.includes("setFactLoadedCharacterId('');"), 'fact guard reset through bridge');
+    assert.ok(branching.includes('getDb() ? getDb().deleteFragments(createdBranch.branchScopeId) : Promise.resolve(),'), 'db reached through accessor');
+    assert.ok(!/_(isApplyingCharacterScopedData|memoriesLoaded|classicMemoriesLoaded|factFragmentsLoaded|factLoadedCharacterId)\b/.test(branching.replace(/^\/\/.*$/gm, '')), 'no direct guard access in code');
+    assert.ok(!branching.includes('\ndb ?') && !branching.includes(' db ? db.deleteFragments'), 'no direct db binding access');
+    assert.ok(branching.includes('return { createStoryBranch };'));
 });
 
 test('app.js scopes chat and memory persistence by branch', () => {
@@ -95,8 +114,9 @@ test('app.js scopes chat and memory persistence by branch', () => {
 });
 
 test('app.js falls back to in-memory history when fork target is missing from storage', () => {
-    assert.ok(app.includes('const memorySourceIndex = forkMessageId'), '分支创建须尝试内存回退定位目标消息');
-    assert.ok(app.includes("branchChat = chatHistory.value.map(message => serializeChatMessage(message, 'final'))"), '内存回退须序列化消息后再写入分支');
+    // 2026-08-29 (Phase 3.0): createStoryBranch moved to useStoryBranching.mjs
+    assert.ok(branching.includes('const memorySourceIndex = forkMessageId'), '分支创建须尝试内存回退定位目标消息');
+    assert.ok(branching.includes("branchChat = chatHistory.value.map(message => serializeChatMessage(message, 'final'))"), '内存回退须序列化消息后再写入分支');
 });
 
 test('app.js keeps branch scope ids in the outer function scope (no try-block leakage)', () => {
@@ -118,4 +138,14 @@ test('default-presets.js seeds 时间戳 preset', () => {
 
 test('src/main.js imports story-branch.js', () => {
     assert.ok(app.includes('./story-branch.mjs'));
+});
+
+test('useStoryBranching receives flushCurrentBranchState as a dep', () => {
+    // runtime regression caught by desktop smoke: a missing dep surfaced only as
+    // "创建分支失败：flushCurrentBranchState is not defined" at call time
+    assert.ok(branching.includes('        flushCurrentBranchState,'), 'composable destructures flushCurrentBranchState');
+    assert.ok(branching.includes('if (!await flushCurrentBranchState()) return;'), 'call site kept');
+    const wiring = app.slice(app.indexOf('const { createStoryBranch } = useStoryBranching({'));
+    const wiringEnd = wiring.indexOf('});');
+    assert.ok(wiring.slice(0, wiringEnd).includes('flushCurrentBranchState,'), 'app.mjs passes flushCurrentBranchState');
 });
