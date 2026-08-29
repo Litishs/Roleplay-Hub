@@ -35,6 +35,7 @@ const activeToolPipelineSource = (await readFile(new URL('../src/composables/use
 const specialRulesSource = (await readFile(new URL('../src/composables/useSpecialRules.mjs', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
 const vectorPatrolSource = (await readFile(new URL('../src/composables/useVectorMemoryPatrol.mjs', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
 const rollingSummarySource = (await readFile(new URL('../src/composables/useRollingSummary.mjs', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
+const regexPipelineSource = (await readFile(new URL('../src/composables/useRegexPipeline.mjs', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
 
 test('useMemorySystem composable exists and is pure state', () => {
     assert.ok(memoryState.includes("import { ref, reactive } from 'vue';"), 'imports vue reactivity');
@@ -1033,4 +1034,28 @@ test('app.mjs wires useRollingSummary with guard accessors', () => {
     assert.ok(app.includes('const setSummaryAbortController = (value) => { _summaryAbortController = value; };'), 'setter accessor defined');
     assert.ok(app.includes('if (!_summaryInFlight) {'), 'memory patrol still reads the flag');
     assert.ok(app.includes('runRollingSummaryCheck,'), 'ctx export kept');
+});
+
+// --- useRegexPipeline (Phase 3.0): regex script processing ---
+
+test('useRegexPipeline composable owns processRegex', () => {
+    assert.ok(regexPipelineSource.includes("import { RPHubCardUtils } from '../modules/card-utils.mjs';"), 'imports card utils');
+    assert.ok(regexPipelineSource.includes('export function useRegexPipeline(deps)'), 'deps-injecting factory export');
+    assert.ok(regexPipelineSource.includes('const processRegex = (text, options = {}) => {'), 'owns processRegex');
+    // behavior markers stay intact
+    assert.ok(regexPipelineSource.includes("=== 'NAI画图正则'"), 'NAI regex ordering kept');
+    assert.ok(regexPipelineSource.includes('transformUnprotectedText'), 'HTML/code protection kept');
+    assert.ok(regexPipelineSource.includes("script.name !== 'Auto Replace {{user}}'"), 'protection exemption kept');
+    assert.ok(regexPipelineSource.includes('if (isDisplay && script.promptOnly) return;'), 'mode filter kept');
+    assert.ok(regexPipelineSource.includes('return { processRegex };'));
+    assert.ok(!regexPipelineSource.includes('showToast('), 'no toast side effects');
+});
+
+test('app.mjs wires useRegexPipeline at the original declaration site', () => {
+    assert.ok(app.includes("import { useRegexPipeline } from '../composables/useRegexPipeline.mjs';"), 'import');
+    assert.equal(app.split('useRegexPipeline(').length - 1, 1, 'exactly one composable call per setup()');
+    assert.ok(app.includes('const { processRegex } = useRegexPipeline({ regexScripts });'), 'single-dep wiring');
+    assert.ok(!app.includes('const processRegex = (text, options = {}) => {'), 'moved out of app.mjs');
+    // consumers keep receiving it through the deps objects
+    assert.ok(app.includes('processRegex,'));
 });
