@@ -30,7 +30,8 @@ test('regular exports no longer write to the app cache or open the share sheet',
 });
 
 test('export success messages wait for a confirmed save result', async () => {
-  const source = await readFile(new URL('../src/modules/app.mjs', import.meta.url), 'utf8');
+  // 2026-08-29 (Phase 2.2): character export functions moved to useDataIO
+  const source = await readFile(new URL('../src/composables/useDataIO.mjs', import.meta.url), 'utf8');
 
   assert.match(source, /const result = await cardUtils\.downloadBlob\(blob, \(char\.name \|\| 'character'\) \+ '\.json'\)/);
   assert.match(source, /if \(result\.saved\) showToast\('角色卡 JSON 导出成功'/);

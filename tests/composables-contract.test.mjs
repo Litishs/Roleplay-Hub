@@ -26,6 +26,7 @@ const chatStateSource = (await readFile(new URL('../src/composables/useChatState
 const senderSource = (await readFile(new URL('../src/composables/useMessageSender.mjs', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
 const rendererSource = (await readFile(new URL('../src/composables/useTemplateRenderer.mjs', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
 const cardOpsSource = (await readFile(new URL('../src/composables/useCardOperations.mjs', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
+const dataIoSource = (await readFile(new URL('../src/composables/useDataIO.mjs', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
 
 test('useMemorySystem composable exists and is pure state', () => {
     assert.ok(memoryState.includes("import { ref, reactive } from 'vue';"), 'imports vue reactivity');
@@ -116,9 +117,9 @@ test('app.mjs wires useWorldInfo with single call and site destructuring', () =>
     assert.ok(app.includes('const { worldInfoSettings } = worldInfoState;'));
     assert.ok(app.includes('const { editingWorldInfo, worldInfoKeysText } = worldInfoState;'));
     assert.ok(app.includes('const { currentHoverWorldInfo } = worldInfoState;'));
-    // data-IO export type stays in app.mjs; chat-context trigger records
-    // moved to useChatState (locked in the useChatState wiring test)
-    assert.ok(app.match(/const exportType = ref\(null\);/));
+    // data-IO export type moved to useDataIO (Phase 2.2); chat-context trigger
+    // records moved to useChatState (locked in the useChatState wiring test)
+    assert.ok(!app.includes('const exportType = ref(null);'), 'exportType moved to useDataIO');
 });
 
 test('app.mjs no longer declares world info state inline', () => {

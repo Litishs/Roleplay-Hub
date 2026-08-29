@@ -5,7 +5,7 @@ import test from 'node:test';
 const read = (p) => readFile(new URL(p, import.meta.url), 'utf8');
 
 test('main interface import preserves external card fields for lossless round-trip', async () => {
-  const source = await read('../src/modules/app.mjs');
+  const source = await read('../src/composables/useDataIO.mjs'); // 2026-08-29 (Phase 2.2): import/export moved here
   const importRegion = source.slice(
     source.indexOf('const importCharacter = (event) => {'),
     source.indexOf('const buildCharacterExportData')
@@ -54,7 +54,7 @@ test('card export writes preserved fields and foreign extensions back', async ()
 });
 
 test('main interface accepts .json files even when the provider returns an empty MIME', async () => {
-  const source = await read('../src/modules/app.mjs');
+  const source = await read('../src/composables/useDataIO.mjs'); // 2026-08-29 (Phase 2.2): import/export moved here
   const importRegion = source.slice(
     source.indexOf('const importCharacter = (event) => {'),
     source.indexOf('const buildCharacterExportData')
@@ -64,7 +64,7 @@ test('main interface accepts .json files even when the provider returns an empty
 });
 
 test('chat jsonl import validates messages and asks before overwrite/append', async () => {
-  const source = await read('../src/modules/app.mjs');
+  const source = await read('../src/composables/useDataIO.mjs'); // 2026-08-29 (Phase 2.2): import/export moved here
   const importRegion = source.slice(
     source.indexOf('const importCharacter = (event) => {'),
     source.indexOf('const buildCharacterExportData')
@@ -79,16 +79,20 @@ test('chat jsonl import validates messages and asks before overwrite/append', as
 });
 
 test('chat import dialog is exposed to the template with overwrite/append/cancel handlers', async () => {
-  const source = await read('../src/modules/app.mjs');
+  // 2026-08-29 (Phase 2.2): state/handler defs live in useDataIO; the ctx export stays in app.mjs
+  const source = await read('../src/composables/useDataIO.mjs');
+  const app = await read('../src/modules/app.mjs');
   assert.match(source, /const showChatImportDialog = ref\(false\);/);
   assert.match(source, /const confirmChatImportOverwrite = async \(\) =>/);
   assert.match(source, /const confirmChatImportAppend = async \(\) =>/);
   assert.match(source, /const cancelChatImport = \(\) =>/);
-  assert.match(source, /showChatImportDialog, chatImportDialog, confirmChatImportOverwrite, confirmChatImportAppend, cancelChatImport,/);
+  assert.match(app, /showChatImportDialog, chatImportDialog, confirmChatImportOverwrite, confirmChatImportAppend, cancelChatImport,/);
 });
 
 test('preset/regex/worldbook imports dedupe by content fingerprint and show a preview', async () => {
-  const source = await read('../src/modules/app.mjs');
+  // 2026-08-29 (Phase 2.2): defs/preview live in useDataIO; the ctx export stays in app.mjs
+  const source = await read('../src/composables/useDataIO.mjs');
+  const app = await read('../src/modules/app.mjs');
   assert.match(source, /const stableJsonStringify = \(value\) =>/);
   assert.match(source, /const importItemFingerprint = \(item, fields\) =>/);
   assert.match(source, /importItemFingerprint\(p, \['role', 'content'\]\)/);
@@ -99,7 +103,7 @@ test('preset/regex/worldbook imports dedupe by content fingerprint and show a pr
   assert.match(source, /title: '导入世界书'/);
   assert.match(source, /importPreview\.value = \{/);
   assert.match(source, /showImportPreview\.value = true/);
-  assert.match(source, /showImportPreview, importPreview, confirmImportPreview, cancelImportPreview,/);
+  assert.match(app, /showImportPreview, importPreview, confirmImportPreview, cancelImportPreview,/);
 });
 
 test('workshop import preserves the same external fields', async () => {
