@@ -3,10 +3,11 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import * as storyBranch from '../src/modules/story-branch.mjs';
 
-const [html, app, presets] = await Promise.all([
+const [html, app, presets, cardOps] = await Promise.all([
     readFile(new URL('../index.html', import.meta.url), 'utf8'),
     readFile(new URL('../src/modules/app.mjs', import.meta.url), 'utf8'),
-    readFile(new URL('../src/modules/default-presets.mjs', import.meta.url), 'utf8')
+    readFile(new URL('../src/modules/default-presets.mjs', import.meta.url), 'utf8'),
+    readFile(new URL('../src/composables/useCardOperations.mjs', import.meta.url), 'utf8')
 ]);
     const mainJs = await readFile(new URL("../src/main.js", import.meta.url), "utf8");
 
@@ -99,10 +100,12 @@ test('app.js falls back to in-memory history when fork target is missing from st
 });
 
 test('app.js keeps branch scope ids in the outer function scope (no try-block leakage)', () => {
+    // 2026-08-29 (Phase 2.2): selectCharacter moved to useCardOperations; the
+    // startup restore path (restoreScopeId) stays in app.mjs
     assert.ok(app.includes('let restoreScopeId = null;'), '恢复路径的作用域 id 必须在 try 外声明');
     assert.ok(app.includes("await loadCharacterMemories(restoreScopeId, ' on restore');"), '恢复路径应在 try 外使用 restoreScopeId');
-    assert.ok(app.includes('let initialBranchScopeId = null;'), '角色切换的作用域 id 必须在 try 外声明');
-    assert.ok(app.includes('await loadCharacterMemories(initialBranchScopeId);'), '角色切换应在 try 外使用 initialBranchScopeId');
+    assert.ok(cardOps.includes('let initialBranchScopeId = null;'), '角色切换的作用域 id 必须在 try 外声明');
+    assert.ok(cardOps.includes('await loadCharacterMemories(initialBranchScopeId);'), '角色切换应在 try 外使用 initialBranchScopeId');
 });
 
 test('default-presets.js seeds 时间戳 preset', () => {

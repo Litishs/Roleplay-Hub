@@ -2,9 +2,10 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-const [html, app, css] = await Promise.all([
+const [html, app, cardOps, css] = await Promise.all([
     readFile(new URL('../src/components/views/CharacterPanel.vue', import.meta.url), 'utf8'),
     readFile(new URL('../src/modules/app.mjs', import.meta.url), 'utf8'),
+    readFile(new URL('../src/composables/useCardOperations.mjs', import.meta.url), 'utf8'),
     readFile(new URL('../assets/css/styles.css', import.meta.url), 'utf8')
 ]);
 
@@ -20,11 +21,13 @@ test('index.html wires press animation handlers on both character card grids', (
 });
 
 test('app.js defines card press state and exposes handlers', () => {
-    assert.ok(app.includes('const characterCardPressStates = new WeakMap();'));
-    assert.ok(app.includes('const beginCharacterCardPress = (event) => {'));
-    assert.ok(app.includes('const endCharacterCardPress = (event) => {'));
-    assert.ok(app.includes('is-card-pressing'));
-    assert.ok(app.includes('is-card-releasing'));
+    // 2026-08-29 (Phase 2.2): the press handlers moved to useCardOperations;
+    // app.mjs keeps the ctx export wiring
+    assert.ok(cardOps.includes('const characterCardPressStates = new WeakMap();'));
+    assert.ok(cardOps.includes('const beginCharacterCardPress = (event) => {'));
+    assert.ok(cardOps.includes('const endCharacterCardPress = (event) => {'));
+    assert.ok(cardOps.includes('is-card-pressing'));
+    assert.ok(cardOps.includes('is-card-releasing'));
     assert.ok(app.includes('beginCharacterCardPress, endCharacterCardPress, toggleCharacterFavorite'));
 });
 

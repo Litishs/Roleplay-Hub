@@ -25,6 +25,7 @@ const apiConfigSource = (await readFile(new URL('../src/composables/useApiConfig
 const chatStateSource = (await readFile(new URL('../src/composables/useChatState.mjs', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
 const senderSource = (await readFile(new URL('../src/composables/useMessageSender.mjs', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
 const rendererSource = (await readFile(new URL('../src/composables/useTemplateRenderer.mjs', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
+const cardOpsSource = (await readFile(new URL('../src/composables/useCardOperations.mjs', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
 
 test('useMemorySystem composable exists and is pure state', () => {
     assert.ok(memoryState.includes("import { ref, reactive } from 'vue';"), 'imports vue reactivity');
@@ -628,4 +629,33 @@ test('useTemplateRenderer returns callable members (runtime smoke)', async () =>
     assert.equal(typeof renderer.clearRenderCaches, 'function');
     assert.notEqual(renderer.renderMarkdown, other.renderMarkdown, 'independent closures per call');
     assert.equal(renderer.messageUsesWideLayout(null), false, 'null guard works without deps');
+});
+
+// --- useCardOperations (Phase 2, roadmap 2.2): character card operations ---
+
+test('useCardOperations composable holds the card CRUD/selection logic', () => {
+    assert.ok(cardOpsSource.includes("import { generateUUID } from '../modules/utils.mjs';"), 'imports generateUUID');
+    assert.ok(cardOpsSource.includes('export function useCardOperations(deps)'), 'deps-injecting factory export');
+    assert.ok(cardOpsSource.includes('const createNewCharacter = () => {'), 'owns createNewCharacter');
+    assert.ok(cardOpsSource.includes('const saveCharacter = () => {'), 'owns saveCharacter');
+    assert.ok(cardOpsSource.includes('const deleteCharacter = (index) => {'), 'owns deleteCharacter');
+    assert.ok(cardOpsSource.includes('const batchDeleteCharacters = () => {'), 'owns batch delete');
+    assert.ok(cardOpsSource.includes('const selectCharacter = async (index, isNewImport = false) => {'), 'owns selectCharacter');
+    assert.ok(cardOpsSource.includes('const characterCardPressStates = new WeakMap();'), 'owns card press animation');
+    // the shared data-load guard is bridged through a setter, never the raw binding
+    assert.ok(cardOpsSource.includes('setApplyingCharacterScopedData(true);'));
+    assert.ok(!/_{1}_isApplyingCharacterScopedDatas*=/.test(cardOpsSource), 'raw guard binding must not be assigned inside the composable');
+    assert.ok(cardOpsSource.includes('return {'), 'returns the operation functions');
+    assert.ok(cardOpsSource.includes('selectCharacter'), 'exposes selectCharacter');
+    // no watchers inside the composable
+    assert.ok(!cardOpsSource.includes('watch('), 'no watchers');
+});
+
+test('app.mjs wires useCardOperations with the guard bridge in place', () => {
+    assert.ok(app.includes("import { useCardOperations } from '../composables/useCardOperations.mjs';"), 'import');
+    assert.equal(app.split('useCardOperations(').length - 1, 1, 'exactly one composable call per setup()');
+    assert.ok(app.includes('const setApplyingCharacterScopedData = (value) => {'), 'guard setter bridge stays in app.mjs');
+    assert.ok(app.includes('_isApplyingCharacterScopedData = value;'), 'bridge writes the shared let binding');
+    // call sites stay wired through ctx
+    assert.ok(app.includes('createNewCharacter, editCharacter, saveCharacter,'));
 });
