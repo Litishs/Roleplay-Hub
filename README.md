@@ -43,7 +43,7 @@ Android WebView 壳（Capacitor 7，4 个自定义原生插件：NativeStorage /
 ┌─ Android 原生壳（Capacitor 7 + 自定义插件）
 ├─ Web 应用层
 │   ├─ src/modules/app.mjs    编排入口：跨域 watch 同步、API 编排、数据加载守卫
-│   ├─ src/composables/       状态域 ×8（useChatState / useCharacterState / useSettingsState …）
+│   ├─ src/composables/       状态域 ×7（useChatState / useCharacterState / useSettingsState …）
 │   │                         业务管线 ×5（useMessageSender / useTemplateRenderer / useCardOperations
 │   │                         / useDataIO / useBackupRestore，deps 注入逻辑工厂模式）
 │   ├─ src/modules/           25+ 纯函数业务模块（记忆引擎 / 故事分支 / TTS / 请求看门狗 / utils …）
