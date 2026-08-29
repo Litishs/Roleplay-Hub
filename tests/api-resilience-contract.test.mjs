@@ -3,14 +3,15 @@ import { readFile } from 'node:fs/promises';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
-const [app, sender, chatGuardSource, memoryFallbackSource, capConfig, java, uiState] = await Promise.all([
+const [app, sender, chatGuardSource, memoryFallbackSource, capConfig, java, uiState, utils] = await Promise.all([
     readFile(new URL('../src/modules/app.mjs', import.meta.url), 'utf8'),
     readFile(new URL('../src/composables/useMessageSender.mjs', import.meta.url), 'utf8'),
     readFile(new URL('../src/modules/chat-request-guard.mjs', import.meta.url), 'utf8'),
     readFile(new URL('../src/modules/memory-recall-fallback.mjs', import.meta.url), 'utf8'),
     readFile(new URL('../capacitor.config.json', import.meta.url), 'utf8'),
     readFile(new URL('../android/app/src/main/java/com/roleplayhub/app/NativeStoragePlugin.java', import.meta.url), 'utf8'),
-    readFile(new URL('../src/composables/useUiState.mjs', import.meta.url), 'utf8')
+    readFile(new URL('../src/composables/useUiState.mjs', import.meta.url), 'utf8'),
+    readFile(new URL('../src/modules/utils.mjs', import.meta.url), 'utf8')
 ]);
     const appJs = readFileSync(new URL("../src/modules/app.mjs", import.meta.url), "utf8");
 const [updateCheckerHtml, usagePanelHtml, worldInfoHtml] = await Promise.all([
@@ -223,7 +224,8 @@ test('memory requests have a 60s timeout and validate embedding dimensions', () 
 
 test('UI template analysis is concurrency-throttled', () => {
     assert.ok(app.includes('UI_TEMPLATE_ANALYSIS_CONCURRENCY = 3'));
-    assert.ok(app.includes('const runWithConcurrency = async (items, limit, worker) => {'));
+    // Phase 2.3: runWithConcurrency moved to utils.mjs; call site stays in app.mjs
+    assert.ok(utils.includes('export const runWithConcurrency = async (items, limit, worker) => {'));
     assert.ok(app.includes('await runWithConcurrency(templates, UI_TEMPLATE_ANALYSIS_CONCURRENCY, async (template) => {'));
 });
 

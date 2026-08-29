@@ -3,10 +3,11 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 test('chat input uses a textarea with IME-safe handlers', async () => {
-  const [html, source, messageInput] = await Promise.all([
+  const [html, source, messageInput, utils] = await Promise.all([
     readFile(new URL('../index.html', import.meta.url), 'utf8'),
     readFile(new URL('../src/modules/app.mjs', import.meta.url), 'utf8'),
-    readFile(new URL('../src/components/chat/MessageInput.vue', import.meta.url), 'utf8')
+    readFile(new URL('../src/components/chat/MessageInput.vue', import.meta.url), 'utf8'),
+    readFile(new URL('../src/modules/utils.mjs', import.meta.url), 'utf8')
   ]);
 
   const chatInput = messageInput.match(/<textarea[\s\S]*?ref="inputBox"><\/textarea>/)?.[0] || '';
@@ -33,16 +34,19 @@ test('chat input uses a textarea with IME-safe handlers', async () => {
 
 test('chat input reads textarea value, pastes plain text, and auto-resizes', async () => {
   const source = await readFile(new URL('../src/modules/app.mjs', import.meta.url), 'utf8');
+  const utils = await readFile(new URL('../src/modules/utils.mjs', import.meta.url), 'utf8');
 
   assert.match(source, /const syncChatInputFromElement = \(element = inputBox\.value\) => \{[\s\S]*?typeof element\.value === 'string' \? element\.value/);
   assert.match(source, /const handleChatInputPaste = \(event\) => \{[\s\S]*?getData\('text\/plain'\)[\s\S]*?document\.execCommand\('insertText', false, text\)/);
-  assert.match(source, /const resizeChatInputElement = \(element = inputBox\.value\) => \{\s*if \(!element\) return;\s*if \(element\.tagName === 'TEXTAREA'\)/);
+  // Phase 2.3: resizeChatInputElement moved to utils.mjs (element is now a required arg;
+  // the single call site in app.mjs always passes the element explicitly)
+  assert.match(utils, /export const resizeChatInputElement = \(element\) => \{\s*if \(!element\) return;\s*if \(element\.tagName === 'TEXTAREA'\)/);
   // 单行高度交给内容 + CSS min-h 决定，不再强制 44px 下限，避免输入框偏高
-  assert.match(source, /Math\.min\(element\.scrollHeight, maxHeight\)/);
-  assert.doesNotMatch(source, /Math\.max\(element\.scrollHeight, 44\)/);
+  assert.match(utils, /Math\.min\(element\.scrollHeight, maxHeight\)/);
+  assert.doesNotMatch(utils, /Math\.max\(element\.scrollHeight, 44\)/);
   // 内容超出最大高度时视图跟随到末行（光标可见），不让新输入被遮挡；
   // 并用 rAF 补一次以兼容 Android WebView overflow 切换当帧不可滚动的问题
-  assert.match(source, /if \(overflow\) \{\s*element\.scrollTop = element\.scrollHeight[\s\S]*?requestAnimationFrame\(\(\) => \{\s*element\.scrollTop = element\.scrollHeight/);
+  assert.match(utils, /if \(overflow\) \{\s*element\.scrollTop = element\.scrollHeight[\s\S]*?requestAnimationFrame\(\(\) => \{\s*element\.scrollTop = element\.scrollHeight/);
   assert.doesNotMatch(source, /watch\(userInput, \(\) =>/);
 });
 

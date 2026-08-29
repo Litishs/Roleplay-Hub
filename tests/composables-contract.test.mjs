@@ -16,6 +16,7 @@ import test from 'node:test';
 import { ref, isRef, isReactive } from 'vue';
 
 const app = (await readFile(new URL('../src/modules/app.mjs', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
+const utilsSource = (await readFile(new URL('../src/modules/utils.mjs', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
 const memoryState = (await readFile(new URL('../src/composables/useMemorySystem.mjs', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
 const worldInfoState = (await readFile(new URL('../src/composables/useWorldInfo.mjs', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
 const characterSource = (await readFile(new URL('../src/composables/useCharacterState.mjs', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
@@ -329,10 +330,11 @@ test('app.mjs wires useSettingsState with single call and site destructuring', (
     assert.ok(app.includes('const { THEME_MODES, normalizeThemeMode, themeMedia, resolveTheme } = settingsState;'));
     assert.ok(app.includes('const { settingsHelpTopic } = settingsState;'));
     assert.ok(app.includes('const { settingsSectionsOpen } = settingsState;'));
-    // theme/font DOM application and token estimation stay in app.mjs
+    // theme/font DOM application stays in app.mjs; token estimation moved to utils.mjs (Phase 2.3)
     assert.ok(app.includes('const applyTheme = () => {'));
     assert.ok(app.includes('const applyFontFamily = (value) => {'));
-    assert.ok(app.includes('const estimateTokens = (text) => {'));
+    assert.ok(utilsSource.includes('export const estimateTokens = (text) => {'));
+    assert.ok(app.includes('estimateTokens'), 'app still references estimateTokens via import');
 });
 
 test('app.mjs no longer declares settings state inline', () => {
