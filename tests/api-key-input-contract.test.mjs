@@ -2,11 +2,12 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-const [html, settingsHtml, app, apiConfigHtml] = await Promise.all([
+const [html, settingsHtml, app, apiConfigHtml, apiConfigState] = await Promise.all([
     readFile(new URL('../index.html', import.meta.url), 'utf8'),
     readFile(new URL('../src/components/views/SettingsPanel.vue', import.meta.url), 'utf8'),
     readFile(new URL('../src/modules/app.mjs', import.meta.url), 'utf8'),
     readFile(new URL('../src/components/settings/ApiConfig.vue', import.meta.url), 'utf8'),
+    readFile(new URL('../src/composables/useApiConfig.mjs', import.meta.url), 'utf8'),
 ]);
 
 test('API Key input explicitly synchronizes WebView password and paste events', () => {
@@ -29,7 +30,8 @@ test('API Key input supports show/hide visibility toggle and paste from clipboar
 });
 
 test('pasteApiKeyFromClipboard prefers the native clipboard plugin and writes settings.apiKey', () => {
-    assert.match(app, /const apiKeyVisible = ref\(false\);/);
+    // apiKeyVisible lives in useApiConfig (Phase 2)
+    assert.match(apiConfigState, /const apiKeyVisible = ref\(false\);/);
     assert.match(app, /const pasteApiKeyFromClipboard = async \(\) => \{/);
     assert.match(app, /window\.Capacitor\?\.Plugins\?\.NativeStorage/);
     assert.match(app, /typeof native\.clipboardRead === 'function'/);

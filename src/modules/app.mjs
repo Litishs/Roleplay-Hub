@@ -70,6 +70,7 @@ import { useWorldInfo } from '../composables/useWorldInfo.mjs';
 import { useCharacterState } from '../composables/useCharacterState.mjs';
 import { useUiState } from '../composables/useUiState.mjs';
 import { useSettingsState } from '../composables/useSettingsState.mjs';
+import { useApiConfig } from '../composables/useApiConfig.mjs';
 
 const __app = createApp({
     components: {
@@ -107,6 +108,8 @@ const __app = createApp({
         const uiState = useUiState();
         // Settings state lives in src/composables/useSettingsState.mjs (Phase 2); same pattern.
         const settingsState = useSettingsState();
+        // API config state lives in src/composables/useApiConfig.mjs (Phase 2); same pattern.
+        const apiConfigState = useApiConfig();
 
         // Default Avatar (Simple Gray Background)
         const defaultAvatar = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0iI2U1ZTdlYiIvPjwvc3ZnPg==';
@@ -145,44 +148,10 @@ const __app = createApp({
         // --- 生图服务配置（暂不可用） ---
         // 生图服务当前无可用提供商；后续接入新服务商时只需在 imageGenProviderOptions 增加条目，
         // 例如：{ id: 'xxx', name: 'XXX', apiUrl: 'https://...', icon: '' }，再在设置页接入选择器即可。
-        const imageGenProviderOptions = [];
-        const getImageGenProviderById = (id) => imageGenProviderOptions.find(provider => provider.id === id);
-        const imageGenUnavailable = computed(() => imageGenProviderOptions.length === 0);
+        const { imageGenProviderOptions, getImageGenProviderById, imageGenUnavailable } = apiConfigState;
 
         // --- Default API Configuration ---
-        const apiProviderOptions = [
-            {
-                id: 'deepseek',
-                name: 'DeepSeek',
-                apiUrl: 'https://api.deepseek.com/v1',
-                icon: 'https://www.deepseek.com/favicon.ico'
-            },
-            {
-                id: 'openrouter',
-                name: 'OpenRouter',
-                apiUrl: 'https://openrouter.ai/api/v1',
-                icon: 'https://openrouter.ai/favicon.ico'
-            },
-            {
-                id: 'siliconflow',
-                name: 'SiliconFlow',
-                apiUrl: 'https://api.siliconflow.cn/v1',
-                icon: 'https://siliconflow.cn/favicon.ico'
-            },
-            {
-                id: 'bailian',
-                name: '阿里百炼',
-                apiUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
-                icon: 'https://www.aliyun.com/favicon.ico'
-            },
-            {
-                id: 'zhipu',
-                name: '智谱',
-                apiUrl: 'https://open.bigmodel.cn/api/paas/v4',
-                icon: ''
-            }
-        ];
-
+        const { apiProviderOptions } = apiConfigState;
         // --- State ---
         // App shell UI state lives in src/composables/useUiState.mjs (Phase 2);
         // destructured at the original declaration sites to keep names identical.
@@ -350,13 +319,11 @@ const __app = createApp({
         let activeToolQueueAbortController = null;
         const abortController = ref(null);
         const userInput = ref('');
-        const modelSearchQuery = ref('');
-        const activeModelTag = ref('all');
-        const popularModelFamilies = ['claude', 'gemini', 'deepseek', 'llama', 'glm', 'minimax', 'moonshot', 'grok'];
+        const {
+            modelSearchQuery, activeModelTag, popularModelFamilies,
+            availableModels, providerModels, activeProviderTag
+        } = apiConfigState;
         const { characterSearchQuery } = characterState;
-        const availableModels = ref([]);
-        const providerModels = reactive({});
-        const activeProviderTag = ref('all');
         const { toasts } = uiState;
         let { toastIdSeed } = uiState;
         const chatContainer = ref(null);
@@ -640,10 +607,7 @@ const __app = createApp({
         };
 
         // Service Status
-        const apiStatus = ref('unknown'); // 'unknown', 'checking', 'connected', 'error'
-        const apiLatency = ref(0);
-        const imageGenStatus = ref('unavailable');
-        const imageGenLatency = ref(0);
+        const { apiStatus, apiLatency, imageGenStatus, imageGenLatency } = apiConfigState;
 
         const { user } = settingsState;
         const buildUserInfoPrompt = () => [
@@ -714,15 +678,13 @@ const __app = createApp({
             .reduce((sum, message) => sum + estimateTokens(message?.content), 0);
 
 
-        const apiKeyInput = ref(null);
+        const { apiKeyInput, apiKeyVisible, toggleApiKeyVisibility } = apiConfigState;
         const syncApiKeyInput = event => {
             const eventTarget = event?.target;
             const input = eventTarget?.tagName === 'INPUT' ? eventTarget : apiKeyInput.value;
             if (input && settings.apiKey !== input.value) settings.apiKey = input.value;
             return String(settings.apiKey || '').trim();
         };
-        const apiKeyVisible = ref(false);
-        const toggleApiKeyVisibility = () => { apiKeyVisible.value = !apiKeyVisible.value; };
         const readClipboardText = async () => {
             const native = window.Capacitor?.Plugins?.NativeStorage;
             if (native && typeof native.clipboardRead === 'function') {
@@ -771,29 +733,13 @@ const __app = createApp({
         watch(() => settings.themeMode, applyTheme, { immediate: true });
         if (themeMedia) themeMedia.addEventListener('change', () => { if (settings.themeMode === 'system') applyTheme(); });
 
-        const showApiProviderSelector = ref(false);
+        const {
+            showApiProviderSelector,
+            customApiProviderOption, customApiProviderOption2, customApiProviderOptions,
+            isCustomApiProviderId, getCustomApiUrlKey,
+            normalizeApiProviderUrl, getApiProviderById, getApiProviderByUrl
+        } = apiConfigState;
         const selectedApiProviderId = ref(DEFAULT_API_PROVIDER_ID);
-        const customApiProviderOption = {
-            id: 'custom',
-            name: '自定义',
-            apiUrl: '',
-            icon: ''
-        };
-        const customApiProviderOption2 = {
-            id: 'custom2',
-            name: '自定义2',
-            apiUrl: '',
-            icon: ''
-        };
-        const customApiProviderOptions = [customApiProviderOption, customApiProviderOption2];
-        const isCustomApiProviderId = (id) => customApiProviderOptions.some(provider => provider.id === id);
-        const getCustomApiUrlKey = (id) => id === 'custom2' ? 'customApiUrl2' : 'customApiUrl';
-        const normalizeApiProviderUrl = (url) => String(url || '').replace(/\/+$/, '').toLowerCase();
-        const getApiProviderById = (id) => apiProviderOptions.find(provider => provider.id === id);
-        const getApiProviderByUrl = (url) => {
-            const currentUrl = normalizeApiProviderUrl(url);
-            return apiProviderOptions.find(provider => normalizeApiProviderUrl(provider.apiUrl) === currentUrl);
-        };
         const syncCurrentApiKeyToProvider = () => {
             const providerId = settings.apiProviderId || selectedApiProvider.value.id || DEFAULT_API_PROVIDER_ID;
             if (!settings.apiProviderKeys || typeof settings.apiProviderKeys !== 'object' || Array.isArray(settings.apiProviderKeys)) {
@@ -1048,7 +994,7 @@ const __app = createApp({
             syncSettingsToGenerator();
         });
 
-        const currentModelMode = ref('quality');
+        const { currentModelMode } = apiConfigState;
         const modelMode = computed({
             get: () => {
                 return currentModelMode.value;

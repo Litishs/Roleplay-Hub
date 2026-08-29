@@ -21,6 +21,7 @@ const worldInfoState = (await readFile(new URL('../src/composables/useWorldInfo.
 const characterSource = (await readFile(new URL('../src/composables/useCharacterState.mjs', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
 const uiStateSource = (await readFile(new URL('../src/composables/useUiState.mjs', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
 const settingsStateSource = (await readFile(new URL('../src/composables/useSettingsState.mjs', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
+const apiConfigSource = (await readFile(new URL('../src/composables/useApiConfig.mjs', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
 
 test('useMemorySystem composable exists and is pure state', () => {
     assert.ok(memoryState.includes("import { ref, reactive } from 'vue';"), 'imports vue reactivity');
@@ -383,4 +384,77 @@ test('useSettingsState returns live reactive state (runtime)', async () => {
     assert.equal(state.imageStyleOptions.length, 7);
     assert.equal(state.imageSizeOptions.length, 9);
     assert.equal(state.imageGenCountOptions.length, 6);
+});
+
+test('useApiConfig composable exists and is pure state', () => {
+    assert.ok(apiConfigSource.includes("import { ref, reactive, computed } from 'vue';"), 'imports vue reactivity');
+    assert.ok(apiConfigSource.includes('export function useApiConfig()'), 'named export');
+    assert.ok(!apiConfigSource.includes('await fetch'), 'no network calls');
+    assert.ok(!apiConfigSource.includes('watch('), 'no watchers (belong to app.mjs for now)');
+    assert.ok(!apiConfigSource.includes('saveData('), 'no persistence logic');
+    assert.ok(!apiConfigSource.includes('settings.'), 'no settings access (settings-dependent logic stays in app.mjs)');
+});
+
+test('app.mjs wires useApiConfig with single call and site destructuring', () => {
+    assert.ok(app.includes("import { useApiConfig } from '../composables/useApiConfig.mjs';"), 'import');
+    assert.equal(app.split('useApiConfig()').length - 1, 1, 'exactly one composable call per setup()');
+    assert.ok(app.includes('const apiConfigState = useApiConfig();'), 'state holder binding');
+    // destructured at original declaration sites — identifiers keep previous names
+    assert.ok(app.includes('const { imageGenProviderOptions, getImageGenProviderById, imageGenUnavailable } = apiConfigState;'));
+    assert.ok(app.includes('const { apiProviderOptions } = apiConfigState;'));
+    assert.ok(app.includes('const { apiStatus, apiLatency, imageGenStatus, imageGenLatency } = apiConfigState;'));
+    assert.ok(app.includes('const { apiKeyInput, apiKeyVisible, toggleApiKeyVisibility } = apiConfigState;'));
+    assert.ok(app.includes('const { currentModelMode } = apiConfigState;'));
+    // settings-dependent logic and computed stay in app.mjs
+    assert.ok(app.includes('const selectedApiProviderId = ref(DEFAULT_API_PROVIDER_ID);'));
+    assert.ok(app.includes('const syncCurrentApiKeyToProvider = () => {'));
+    assert.ok(app.includes('const normalizeApiProviderSettings = () => {'));
+    assert.ok(app.includes('const selectedApiProvider = computed(() => {'));
+    assert.ok(app.includes('const fetchModelsForProvider = async (providerId, options = {}) => {'));
+    assert.ok(app.includes('const modelMode = computed({'));
+});
+
+test('app.mjs no longer declares API config state inline', () => {
+    assert.ok(!app.includes('const apiProviderOptions = ['), 'provider catalogue moved to composable');
+    assert.ok(!app.includes('const apiStatus = ref('), 'connection status moved to composable');
+    assert.ok(!app.includes('const availableModels = ref('), 'model list moved to composable');
+    assert.ok(!app.includes('const providerModels = reactive('), 'provider models moved to composable');
+    assert.ok(!app.includes('const customApiProviderOptions = ['), 'custom providers moved to composable');
+    assert.ok(!app.includes("const currentModelMode = ref('quality');"), 'model mode moved to composable');
+    assert.ok(!app.includes('const apiKeyVisible = ref('), 'key visibility moved to composable');
+});
+
+test('useApiConfig returns live reactive state (runtime)', async () => {
+    const { useApiConfig } = await import('../src/composables/useApiConfig.mjs');
+    const state = useApiConfig();
+    const other = useApiConfig();
+    assert.notEqual(state.availableModels, other.availableModels, 'independent instances per call');
+
+    assert.equal(state.apiProviderOptions.length, 5);
+    assert.ok(state.apiProviderOptions.every(p => 'id' in p && 'name' in p && 'apiUrl' in p));
+    assert.equal(state.apiProviderOptions[0].id, 'deepseek');
+    assert.equal(state.imageGenProviderOptions.length, 0, 'image gen extension point stays empty');
+    assert.equal(state.imageGenUnavailable.value, true);
+    assert.equal(state.apiStatus.value, 'unknown');
+    assert.equal(state.imageGenStatus.value, 'unavailable');
+    assert.equal(state.currentModelMode.value, 'quality');
+    assert.equal(state.activeModelTag.value, 'all');
+    assert.equal(state.popularModelFamilies.length, 8);
+    assert.ok(isReactive(state.providerModels), 'providerModels is reactive');
+    assert.ok(isRef(state.modelSearchQuery) && state.modelSearchQuery.value === '');
+    assert.equal(state.isCustomApiProviderId('custom'), true);
+    assert.equal(state.isCustomApiProviderId('custom2'), true);
+    assert.equal(state.isCustomApiProviderId('deepseek'), false);
+    assert.equal(state.getCustomApiUrlKey('custom2'), 'customApiUrl2');
+    assert.equal(state.getCustomApiUrlKey('custom'), 'customApiUrl');
+    assert.equal(state.getApiProviderById('zhipu').name, '智谱');
+    assert.equal(state.getApiProviderById('nope'), undefined);
+    assert.equal(state.getApiProviderByUrl('https://api.deepseek.com/v1/').id, 'deepseek', 'trailing slash normalized');
+    assert.equal(state.getApiProviderByUrl('https://example.com'), undefined);
+    assert.equal(state.customApiProviderOptions.length, 2);
+
+    // toggleApiKeyVisibility flips the shared ref
+    assert.equal(state.apiKeyVisible.value, false);
+    state.toggleApiKeyVisibility();
+    assert.equal(state.apiKeyVisible.value, true);
 });
