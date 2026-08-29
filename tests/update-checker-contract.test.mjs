@@ -2,12 +2,13 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-const [html, updateCheckerHtml, app, checker, java] = await Promise.all([
+const [html, updateCheckerHtml, app, checker, java, uiState] = await Promise.all([
     readFile(new URL("../index.html", import.meta.url), "utf8"),
     readFile(new URL("../src/components/settings/UpdateChecker.vue", import.meta.url), "utf8"),
     readFile(new URL("../src/modules/app.mjs", import.meta.url), "utf8"),
     readFile(new URL("../src/modules/update-checker.mjs", import.meta.url), "utf8"),
     readFile(new URL("../android/app/src/main/java/com/roleplayhub/app/NativeStoragePlugin.java", import.meta.url), "utf8"),
+    readFile(new URL("../src/composables/useUiState.mjs", import.meta.url), "utf8"),
 ]);
 
 test("index.html uses Vite module entry point", () => {
@@ -27,9 +28,11 @@ test("app.js wires checkForUpdates and exposes state", () => {
     assert.match(app, /const checkForUpdates = async/);
     assert.match(app, /const downloadAndInstallUpdate = async/);
     assert.match(app, /RPHUpdateChecker/);
-    assert.match(app, /const latestVersionName = ref/);
-    assert.match(app, /const downloadingUpdate = ref/);
-    assert.match(app, /const downloadProgress = ref/);
+    // Update display state lives in useUiState (Phase 2); app.mjs keeps the logic
+    assert.match(uiState, /const latestVersionName = ref/);
+    assert.match(uiState, /const downloadingUpdate = ref/);
+    assert.match(uiState, /const downloadProgress = ref/);
+    assert.match(app, /const uiState = useUiState\(\);/);
     assert.match(app, /checkForUpdates, checkingUpdate, updateAvailable, updateInfo, latestVersionName, downloadingUpdate, downloadProgress, downloadAndInstallUpdate,/);
 });
 

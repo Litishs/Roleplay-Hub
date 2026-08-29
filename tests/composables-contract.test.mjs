@@ -19,6 +19,7 @@ const app = (await readFile(new URL('../src/modules/app.mjs', import.meta.url), 
 const memoryState = (await readFile(new URL('../src/composables/useMemorySystem.mjs', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
 const worldInfoState = (await readFile(new URL('../src/composables/useWorldInfo.mjs', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
 const characterSource = (await readFile(new URL('../src/composables/useCharacterState.mjs', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
+const uiStateSource = (await readFile(new URL('../src/composables/useUiState.mjs', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
 
 test('useMemorySystem composable exists and is pure state', () => {
     assert.ok(memoryState.includes("import { ref, reactive } from 'vue';"), 'imports vue reactivity');
@@ -213,4 +214,90 @@ test('useCharacterState returns live reactive state (runtime)', async () => {
     assert.equal(state.characterDisplayLimit.value, 16);
     assert.equal(state.isCharacterFavorite(state.characters.value[1]), true);
     assert.equal(state.getCharacterFavoriteTime(state.characters.value[0]), 0);
+});
+
+test('useUiState composable exists and is pure state', () => {
+    assert.ok(uiStateSource.includes("import { ref, reactive } from 'vue';"), 'imports vue reactivity');
+    assert.ok(uiStateSource.includes('export function useUiState()'), 'named export');
+    assert.ok(!uiStateSource.includes('fetch('), 'no network calls');
+    assert.ok(!uiStateSource.includes('watch('), 'no watchers (belong to app.mjs for now)');
+    assert.ok(!uiStateSource.includes('saveData('), 'no persistence logic');
+});
+
+test('app.mjs wires useUiState with single call and site destructuring', () => {
+    assert.ok(app.includes("import { useUiState } from '../composables/useUiState.mjs';"), 'import');
+    assert.equal(app.split('useUiState()').length - 1, 1, 'exactly one composable call per setup()');
+    assert.ok(app.includes('const uiState = useUiState();'), 'state holder binding');
+    // destructured at original declaration sites — identifiers keep previous names
+    assert.ok(app.includes('const { globalConfirmModal, showVueConfirmModal } = uiState;'));
+    assert.ok(app.includes('const { showAuthorNoticeModal, showConfirmModal, confirmMessage, confirmCallback } = uiState;'));
+    assert.ok(app.includes('const { toasts } = uiState;'));
+    assert.ok(app.includes('const { showInstructionPanel } = uiState;'));
+    assert.ok(app.includes('const { showContextViewerModal } = uiState;'));
+    assert.ok(app.includes('const { quotaValue, quotaLoading, quotaError, backupInProgress } = uiState;'));
+    // mutable non-reactive guards use let-destructuring
+    assert.ok(app.includes('let { isMobileSidebarOpen, nativeAppStateListener, nativeBackButtonListener } = uiState;'));
+    assert.ok(app.includes('let { uiTemplateUpdateSeq, uiTemplateUpdateAbortController } = uiState;'));
+    assert.ok(app.includes('let { toastIdSeed } = uiState;'));
+    // active-tool pipeline contexts stay in app.mjs (not UI shell domain)
+    assert.ok(app.includes('const pendingActiveToolContext = ref('));
+    assert.ok(app.includes('const activeToolResultContexts = ref('));
+    // check/update logic stays in app.mjs while display state moved
+    assert.ok(app.includes('const checkForUpdates = async (showResult = true) => {'));
+    assert.ok(app.includes('const downloadAndInstallUpdate = async (maxRetries = 2) => {'));
+});
+
+test('app.mjs no longer declares UI shell state inline', () => {
+    assert.ok(!app.includes('const globalConfirmModal = ref('), 'globalConfirmModal moved to composable');
+    assert.ok(!app.includes('const currentView = ref('), 'currentView moved to composable');
+    assert.ok(!app.includes('const isSidebarCollapsed = ref('), 'sidebar flag moved to composable');
+    assert.ok(!app.includes('const uiTemplateUpdateStatus = reactive('), 'template status moved to composable');
+    assert.ok(!app.includes('const tempUserSetup = reactive('), 'user setup draft moved to composable');
+    assert.ok(!app.includes('const toasts = ref('), 'toasts moved to composable');
+    assert.ok(!app.includes('const updateAvailable = ref('), 'update state moved to composable');
+    assert.ok(!app.includes('const showAuthorNoticeModal = ref('), 'notice flag moved to composable');
+    assert.ok(!app.includes('const showInstructionPanel = ref('), 'instruction panel flag moved to composable');
+});
+
+test('useUiState returns live reactive state (runtime)', async () => {
+    const { useUiState } = await import('../src/composables/useUiState.mjs');
+    const state = useUiState();
+    const other = useUiState();
+    assert.notEqual(state.globalConfirmModal, other.globalConfirmModal, 'independent instances per call');
+
+    assert.equal(state.currentView.value, 'chat');
+    assert.equal(state.isSidebarCollapsed.value, false);
+    assert.ok(isReactive(state.uiTemplateUpdateStatus), 'uiTemplateUpdateStatus is reactive');
+    assert.equal(state.uiTemplateUpdateStatus.state, 'idle');
+    assert.ok(isReactive(state.tempUserSetup), 'tempUserSetup is reactive');
+    assert.equal(state.tempUserSetup.person, 'second');
+    assert.ok(state.toasts.value instanceof Array);
+
+    for (const key of [
+        'appVersionName', 'appVersionCode', 'isAdvancedNavOpen', 'showModelSelector',
+        'showPresetEditor', 'showUiTemplateEditor', 'showRegexEditor', 'showUserSetupModal',
+        'quotaValue', 'backupInProgress', 'updateAvailable', 'downloadingUpdate',
+        'showConfirmModal', 'confirmMessage', 'confirmCallback'
+    ]) {
+        assert.ok(isRef(state[key]), `exposes ref ${key}`);
+    }
+
+    // toggleAdvancedNav flips only the advanced-nav flag
+    state.isSidebarCollapsed.value = false;
+    state.toggleAdvancedNav();
+    assert.equal(state.isAdvancedNavOpen.value, true);
+    state.toggleAdvancedNav();
+    assert.equal(state.isAdvancedNavOpen.value, false);
+
+    // showVueConfirmModal resolves through the shared modal ref
+    const pending = state.showVueConfirmModal('t', 'm');
+    assert.equal(state.globalConfirmModal.value.show, true);
+    assert.equal(state.globalConfirmModal.value.title, 't');
+    state.globalConfirmModal.value.onConfirm();
+    assert.equal(await pending, true);
+    assert.equal(state.globalConfirmModal.value.show, false);
+
+    // syncUserSetupName reads INPUT targets into the draft
+    state.syncUserSetupName({ target: { tagName: 'INPUT', value: '阿明' } });
+    assert.equal(state.tempUserSetup.name, '阿明');
 });

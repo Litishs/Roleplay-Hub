@@ -3,12 +3,13 @@ import { readFile } from 'node:fs/promises';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
-const [app, chatGuardSource, memoryFallbackSource, capConfig, java] = await Promise.all([
+const [app, chatGuardSource, memoryFallbackSource, capConfig, java, uiState] = await Promise.all([
     readFile(new URL('../src/modules/app.mjs', import.meta.url), 'utf8'),
     readFile(new URL('../src/modules/chat-request-guard.mjs', import.meta.url), 'utf8'),
     readFile(new URL('../src/modules/memory-recall-fallback.mjs', import.meta.url), 'utf8'),
     readFile(new URL('../capacitor.config.json', import.meta.url), 'utf8'),
-    readFile(new URL('../android/app/src/main/java/com/roleplayhub/app/NativeStoragePlugin.java', import.meta.url), 'utf8')
+    readFile(new URL('../android/app/src/main/java/com/roleplayhub/app/NativeStoragePlugin.java', import.meta.url), 'utf8'),
+    readFile(new URL('../src/composables/useUiState.mjs', import.meta.url), 'utf8')
 ]);
     const appJs = readFileSync(new URL("../src/modules/app.mjs", import.meta.url), "utf8");
 const [updateCheckerHtml, usagePanelHtml, worldInfoHtml] = await Promise.all([
@@ -150,7 +151,9 @@ test('each debug build bumps version (1.9 -> 1.10 -> 1.11 ...) and exposes it in
     // 设置页展示版本号
 
     assert.ok(updateCheckerHtml.includes('v{{ appVersionName }}'));
-    assert.ok(app.includes('const appVersionName = ref'));
+    // Version display state lives in useUiState (Phase 2); app.mjs keeps the getInfo wiring
+    assert.ok(uiState.includes('const appVersionName = ref'));
+    assert.ok(app.includes('const uiState = useUiState();'));
     assert.ok(app.includes('await nativeApp.getInfo?.();'));
 });
 

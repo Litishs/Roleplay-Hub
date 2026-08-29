@@ -68,6 +68,7 @@ import { generateUUID, parseCot } from './utils.mjs';
 import { useMemorySystem } from '../composables/useMemorySystem.mjs';
 import { useWorldInfo } from '../composables/useWorldInfo.mjs';
 import { useCharacterState } from '../composables/useCharacterState.mjs';
+import { useUiState } from '../composables/useUiState.mjs';
 
 const __app = createApp({
     components: {
@@ -101,6 +102,8 @@ const __app = createApp({
         const worldInfoState = useWorldInfo();
         // Character state lives in src/composables/useCharacterState.mjs (Phase 2); same pattern.
         const characterState = useCharacterState();
+        // App shell UI state lives in src/composables/useUiState.mjs (Phase 2); same pattern.
+        const uiState = useUiState();
 
         // Default Avatar (Simple Gray Background)
         const defaultAvatar = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0iI2U1ZTdlYiIvPjwvc3ZnPg==';
@@ -188,93 +191,59 @@ const __app = createApp({
         ];
 
         // --- State ---
-        const globalConfirmModal = ref({
-            show: false,
-            title: '',
-            message: '',
-            onConfirm: null,
-            onCancel: null
-        });
+        // App shell UI state lives in src/composables/useUiState.mjs (Phase 2);
+        // destructured at the original declaration sites to keep names identical.
+        const { globalConfirmModal, showVueConfirmModal } = uiState;
 
-        const showVueConfirmModal = (title, message) => {
-            return new Promise((resolve) => {
-                globalConfirmModal.value = {
-                    show: true,
-                    title,
-                    message,
-                    onConfirm: () => {
-                        globalConfirmModal.value.show = false;
-                        resolve(true);
-                    },
-                    onCancel: () => {
-                        globalConfirmModal.value.show = false;
-                        resolve(false);
-                    }
-                };
-            });
-        };
-
-        const currentView = ref('chat');
-        let isMobileSidebarOpen = false;
-        let nativeAppStateListener = null;
-        let nativeBackButtonListener = null;
-        const appVersionName = ref('');
-        const appVersionCode = ref('');
-        const isSidebarCollapsed = ref(false);
-        const isAdvancedNavOpen = ref(false);
-        const toggleAdvancedNav = () => {
-            if (isSidebarCollapsed.value) {
-                isSidebarCollapsed.value = false;
-                isAdvancedNavOpen.value = true;
-                return;
-            }
-            isAdvancedNavOpen.value = !isAdvancedNavOpen.value;
-        };
-        const showDescriptionPanel = ref(false);
-        const showModelSelector = ref(false);
-        const modelSelectionTarget = ref('model');
-        const showChatModelSelector = ref(false);
+        let { isMobileSidebarOpen, nativeAppStateListener, nativeBackButtonListener } = uiState;
+        const {
+            currentView,
+            appVersionName,
+            appVersionCode,
+            isSidebarCollapsed,
+            isAdvancedNavOpen,
+            toggleAdvancedNav,
+            showDescriptionPanel,
+            showModelSelector,
+            modelSelectionTarget,
+            showChatModelSelector,
+            showPresetEditor,
+            showUiTemplateEditor,
+            uiTemplateUpdateStatus,
+            showRegexEditor,
+            showActiveToolEditor,
+            showUserSetupModal,
+            showAutoImageGenModal,
+            tempUserSetup,
+            userSetupNameInput,
+            syncUserSetupName
+        } = uiState;
+        let { uiTemplateUpdateSeq, uiTemplateUpdateAbortController } = uiState;
         const { showCharacterEditor } = characterState;
-        const showPresetEditor = ref(false);
-        const showUiTemplateEditor = ref(false);
-        const uiTemplateUpdateStatus = reactive({ state: 'idle', message: '待命', time: 0, remaining: 0, targetMessageId: null });
-        let uiTemplateUpdateSeq = 0;
-        let uiTemplateUpdateAbortController = null;
-        const showRegexEditor = ref(false);
         const { showWorldInfoEditor } = worldInfoState;
-        const showActiveToolEditor = ref(false);
-        const showUserSetupModal = ref(false);
-        const showAutoImageGenModal = ref(false);
         const pendingActiveToolContext = ref('');
         const activeToolResultContexts = ref([]);
-        const tempUserSetup = reactive({ name: '', description: '', person: 'second' });
-        const userSetupNameInput = ref(null);
-        const syncUserSetupName = event => {
-            const eventTarget = event?.target;
-            const input = eventTarget?.tagName === 'INPUT' ? eventTarget : userSetupNameInput.value;
-            if (input) tempUserSetup.name = input.value;
-        };
         const { characterDisplayLimit } = characterState;
 
         // Quota State
-        const quotaValue = ref(0);
-        const quotaLoading = ref(false);
-        const quotaError = ref(false);
-        const backupInProgress = ref(false);
+        // Quota state lives in useUiState (display only; fetch logic stays here)
+        const { quotaValue, quotaLoading, quotaError, backupInProgress } = uiState;
 
         const fetchQuota = async () => {
             // 生图服务暂不可用：不再向任何生图服务商请求配额
             quotaValue.value = 0;
             quotaError.value = false;
         };
-        // Update check state
-        const updateAvailable = ref(false);
-        const updateInfo = ref(null);
-        const checkingUpdate = ref(false);
-        const lastUpdateCheck = ref(null);
-        const latestVersionName = ref('');
-        const downloadingUpdate = ref(false);
-        const downloadProgress = ref(0);
+        // Update check state lives in useUiState; check/install logic stays here.
+        const {
+            updateAvailable,
+            updateInfo,
+            checkingUpdate,
+            lastUpdateCheck,
+            latestVersionName,
+            downloadingUpdate,
+            downloadProgress
+        } = uiState;
 
         const checkForUpdates = async (showResult = true) => {
             if (checkingUpdate.value) return;
@@ -368,15 +337,11 @@ const __app = createApp({
             }
         }, 5000);
         // Author Notice Modal (首次启动的作者致谢公告)
-        const showAuthorNoticeModal = ref(false);
+        const { showAuthorNoticeModal, showConfirmModal, confirmMessage, confirmCallback } = uiState;
         const closeAuthorNoticeModal = () => {
             showAuthorNoticeModal.value = false;
             setStoredValue('author_notice_seen', true).catch(error => console.error('Author notice marker save failed:', error));
         };
-
-        const showConfirmModal = ref(false);
-        const confirmMessage = ref('');
-        const confirmCallback = ref(null);
         const { showNoMemoryNeededModal } = memorySystemState;
         const isGenerating = ref(false);
         const isRemoteGenerating = ref(false); // 新增：远程生成状态
@@ -399,8 +364,8 @@ const __app = createApp({
         const availableModels = ref([]);
         const providerModels = reactive({});
         const activeProviderTag = ref('all');
-        const toasts = ref([]);
-        let toastIdSeed = 0;
+        const { toasts } = uiState;
+        let { toastIdSeed } = uiState;
         const chatContainer = ref(null);
         const isChatFullscreen = ref(false);
         const isMobileKeyboardOpen = ref(false);
@@ -2023,9 +1988,9 @@ const __app = createApp({
         const editingActiveTool = reactive({ id: undefined, data: {} });
 
         const sysInstruction = ref('');
-        const showInstructionPanel = ref(false);
+        const { showInstructionPanel } = uiState;
         const { currentHoverWorldInfo } = worldInfoState;
-        const showContextViewerModal = ref(false);
+        const { showContextViewerModal } = uiState;
         // --- 剧情分支状态 ---
         const storyBranchApi = () => RPHStoryBranch;
         const storyBranches = ref([]);
