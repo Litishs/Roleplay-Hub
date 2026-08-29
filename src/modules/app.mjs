@@ -69,6 +69,7 @@ import { useMemorySystem } from '../composables/useMemorySystem.mjs';
 import { useWorldInfo } from '../composables/useWorldInfo.mjs';
 import { useCharacterState } from '../composables/useCharacterState.mjs';
 import { useUiState } from '../composables/useUiState.mjs';
+import { useSettingsState } from '../composables/useSettingsState.mjs';
 
 const __app = createApp({
     components: {
@@ -104,6 +105,8 @@ const __app = createApp({
         const characterState = useCharacterState();
         // App shell UI state lives in src/composables/useUiState.mjs (Phase 2); same pattern.
         const uiState = useUiState();
+        // Settings state lives in src/composables/useSettingsState.mjs (Phase 2); same pattern.
+        const settingsState = useSettingsState();
 
         // Default Avatar (Simple Gray Background)
         const defaultAvatar = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0iI2U1ZTdlYiIvPjwvc3ZnPg==';
@@ -147,16 +150,6 @@ const __app = createApp({
         const imageGenUnavailable = computed(() => imageGenProviderOptions.length === 0);
 
         // --- Default API Configuration ---
-        const DEFAULT_API_PROVIDER_ID = 'deepseek';
-        const DEFAULT_API_CONFIG = {
-            apiUrl: 'https://api.deepseek.com/v1',
-            apiKey: '',
-            model: '', // Default selected
-            qualityModel: '',
-            balancedModel: '',
-            fastModel: ''
-        };
-
         const apiProviderOptions = [
             {
                 id: 'deepseek',
@@ -652,12 +645,7 @@ const __app = createApp({
         const imageGenStatus = ref('unavailable');
         const imageGenLatency = ref(0);
 
-        const user = reactive({
-            name: '请前往设置自定义你的名称',
-            description: '',
-            avatar: '',
-            person: 'second', //记录人称偏好：second 或 third
-        });
+        const { user } = settingsState;
         const buildUserInfoPrompt = () => [
             '[User Info]',
             `Name: ${user.name || ''}`,
@@ -666,9 +654,7 @@ const __app = createApp({
         const getCurrentCharacterPrompt = () =>
             `Name: ${currentCharacter.value.name}\nPersonality: ${currentCharacter.value.personality}`;
 
-        const userProfiles = ref([]);
-        const activeProfileId = ref(null);
-        const showProfileDropdown = ref(false);
+        const { userProfiles, activeProfileId, showProfileDropdown } = settingsState;
 
         watch(user, (newVal) => {
             if (activeProfileId.value && userProfiles.value.length > 0) {
@@ -686,65 +672,18 @@ const __app = createApp({
             }
         }, { deep: true });
 
-        const MAX_CONTEXT_SIZE = 1000000;
-        const CONTEXT_TOKEN_BUDGET_DEFAULT = 26000;
-        const CONTEXT_TOKEN_BUDGET_MIN = 8000;
-        const CONTEXT_TOKEN_BUDGET_MAX = 64000;
-
-        const settings = reactive({
-            apiUrl: DEFAULT_API_CONFIG.apiUrl,
-            apiKey: DEFAULT_API_CONFIG.apiKey,
-            apiProviderId: DEFAULT_API_PROVIDER_ID,
-            apiProviderKeys: {},
-            customApiUrl: '',
-            customApiUrl2: '',
-            model: DEFAULT_API_CONFIG.qualityModel,
-            contextSize: MAX_CONTEXT_SIZE,
-            contextTokenBudget: CONTEXT_TOKEN_BUDGET_DEFAULT,
-            maxOutputTokens: 4096,
-            worldInfoTokenBudget: 4000,     // 世界书 token 预算（0=不限）
-            chatProviderId: '',             // 聊天供应商，空=回退设置页当前浏览的供应商
-            temperature: 1.0,
-            autoFetchModels: true,
-            stream: true,
-            activeToolAggressiveness: 'adaptive',
-            activeToolAggressivenessVersion: 2,
-
-            useCharacterBackground: true,
-            immersiveMode: false,
-            uiTemplateEnabled: false,
-            uiTemplateModel: '',
-            uiTemplateAnalysisDepth: 4,
-            uiTemplateInjectContext: false,
-            uiTemplateMainModelAnalysis: true,
-            uiTemplateBatchMode: true,
-            uiTemplateJsonMode: true,
-            fontFamily: 'modern',
-            fontFamilyVersion: 4,
-            fontSize: window.innerWidth > 768 ? 16 : 14,
-            themeMode: 'system',
-            imageGenKey: '',
-            imageGenProviderId: '',
-            imageStyle: 'vertical',
-            customImageArtists: '',
-            imageSize: '竖图',
-            imageGenCount: 2,
-            ttsEnabled: false,
-            ttsAutoPlay: false,
-            ttsService: 'system',
-            ttsVoice: '',
-            ttsLocalVoice: '',
-            ttsCloneReferenceUri: '',
-            ttsCloneReferenceText: '',
-            ttsRate: 1.0,
-            ttsPitch: 1.0,
-            ttsDialogueOnly: false,
-            ttsSkipActions: false,
-            ttsMaxChars: 2000,
-            qualityModel: DEFAULT_API_CONFIG.qualityModel,
-            balancedModel: DEFAULT_API_CONFIG.balancedModel,
-            fastModel: DEFAULT_API_CONFIG.fastModel
-        });
+        const {
+            MAX_CONTEXT_SIZE,
+            CONTEXT_TOKEN_BUDGET_DEFAULT,
+            CONTEXT_TOKEN_BUDGET_MIN,
+            CONTEXT_TOKEN_BUDGET_MAX,
+            DEFAULT_API_PROVIDER_ID,
+            DEFAULT_API_CONFIG,
+            settings,
+            getContextTokenBudget,
+            getMaxOutputTokens,
+            getWorldInfoTokenBudget
+        } = settingsState;
 
         // 旧版 Web 端存储可能只保留了预设模型，未同步当前聊天模型。
         // 解析时优先保留用户当前选择；为空时按预设顺序回退，避免请求提交空 model。
@@ -773,20 +712,7 @@ const __app = createApp({
         };
         const estimateMessagesTokens = (messages) => (Array.isArray(messages) ? messages : [])
             .reduce((sum, message) => sum + estimateTokens(message?.content), 0);
-        const getContextTokenBudget = () => {
-            const budget = Number(settings.contextTokenBudget);
-            return Number.isFinite(budget) && budget > 0
-                ? Math.max(CONTEXT_TOKEN_BUDGET_MIN, Math.min(CONTEXT_TOKEN_BUDGET_MAX, Math.round(budget)))
-                : 0;
-        };
-        const getMaxOutputTokens = () => {
-            const value = Number(settings.maxOutputTokens);
-            return Number.isFinite(value) ? Math.max(256, Math.min(8192, Math.round(value))) : 4096;
-        };
-        const getWorldInfoTokenBudget = () => {
-            const value = Number(settings.worldInfoTokenBudget);
-            return Number.isFinite(value) ? Math.max(0, Math.min(16000, Math.round(value))) : 0;
-        };
+
 
         const apiKeyInput = ref(null);
         const syncApiKeyInput = event => {
@@ -822,7 +748,7 @@ const __app = createApp({
             showToast('已粘贴 API Key', 'success');
         };
 
-        const normalizeFontFamily = (value) => ['modern', 'serif', 'system'].includes(value) ? value : 'modern';
+        const { normalizeFontFamily } = settingsState;
         const applyFontFamily = (value) => {
             document.documentElement.dataset.appFont = normalizeFontFamily(value);
         };
@@ -832,13 +758,7 @@ const __app = createApp({
         // applyTheme 写 documentElement.dataset.theme 驱动 styles.css 里的
         // [data-theme='dark'] 覆盖规则；同时双写 localStorage 供 head 内联
         // 防闪脚本首屏同步读取，并经 ThemeBridge 联动 Android 状态栏/导航栏。
-        const THEME_MODES = ['system', 'light', 'dark'];
-        const normalizeThemeMode = (value) => THEME_MODES.includes(value) ? value : 'system';
-        const themeMedia = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)');
-        const resolveTheme = () => {
-            const mode = normalizeThemeMode(settings.themeMode);
-            return mode === 'system' ? (themeMedia && themeMedia.matches ? 'dark' : 'light') : mode;
-        };
+        const { THEME_MODES, normalizeThemeMode, themeMedia, resolveTheme } = settingsState;
         const applyTheme = () => {
             const theme = resolveTheme();
             document.documentElement.dataset.theme = theme;
@@ -1197,40 +1117,10 @@ const __app = createApp({
             { value: 'user', label: 'User消息' },
             { value: 'assistant', label: 'AI消息' }
         ];
-        const fontFamilyOptions = [
-            { value: 'modern', label: '现代通用字体' },
-            { value: 'serif', label: '衬线字体' },
-            { value: 'system', label: '系统字体' }
-        ];
-        const themeModeOptions = [
-            { value: 'system', label: '跟随系统' },
-            { value: 'light', label: '浅色' },
-            { value: 'dark', label: '深色' }
-        ];
-        const imageStyleOptions = [
-            { value: 'vertical', label: '韩漫小清新风' },
-            { value: 'comicDoujin', label: '动漫同人风' },
-            { value: 'r18', label: '2.5D唯美风' },
-            { value: 'lolita25d', label: '2.5D唯美风（萝）' },
-            { value: 'anime', label: '本子里番风' },
-            { value: 'galgame', label: 'GalGame风' },
-            { value: 'custom', label: '自定义' }
-        ];
-        const imageSizeOptions = [
-            { value: '竖图', label: '竖图(-1)' },
-            { value: '横图', label: '横图(-1)' },
-            { value: '方图', label: '方图(-1)' },
-            { value: '2K竖图', label: '2K竖图(-15)' },
-            { value: '2K横图', label: '2K横图(-15)' },
-            { value: '2K方图', label: '2K方图(-15)' },
-            { value: '4K竖图', label: '4K竖图(-25)' },
-            { value: '4K横图', label: '4K横图(-25)' },
-            { value: '4K方图', label: '4K方图(-25)' }
-        ];
-        const imageGenCountOptions = [1, 2, 3, 4, 5, 6].map(count => ({
-            value: count,
-            label: `${count} 张`
-        }));
+        const {
+            fontFamilyOptions, themeModeOptions,
+            imageStyleOptions, imageSizeOptions, imageGenCountOptions
+        } = settingsState;
         const uiTemplatePlacementOptions = [
             { value: 'top', label: '对话顶部' },
             { value: 'bottom', label: '对话底部' }
@@ -1974,7 +1864,7 @@ const __app = createApp({
 
         const { showWorldInfoSettings } = worldInfoState;
         const { showMemorySettings } = memorySystemState;
-        const settingsHelpTopic = ref('');
+        const { settingsHelpTopic } = settingsState;
         const showActiveToolSettings = ref(false);
         const showUiTemplateSettings = ref(false);
         const { worldInfoSettings } = worldInfoState;
@@ -7471,12 +7361,7 @@ ${content}
         const ttsStatus = ref({ available: false, engineLabel: '', state: 'idle', error: '', checked: false });
         const ttsPlayingMessageId = ref(null);
         const ttsSettingsExpanded = ref(false);
-        const settingsSectionsOpen = reactive({
-            user: false,
-            api: false,
-            advanced: false,
-            localData: false
-        });
+        const { settingsSectionsOpen } = settingsState;
         const ttsServiceOptions = [
             { id: 'system', name: '系统语音', desc: 'Android 系统引擎，无需下载', available: true },
             { id: 'local', name: '本地模型', desc: 'On-device neural TTS, voices download on demand', available: true }

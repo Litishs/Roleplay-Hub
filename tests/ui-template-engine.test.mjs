@@ -155,8 +155,9 @@ test('app.js: applyMainModelUiTemplateUpdates renders panel before early returns
 
 test('app.js: D1 batch mode / C1 json mode / D2 model required markers', async () => {
   const source = await read('src/modules/app.mjs');
-  assert.match(source, /uiTemplateBatchMode: true/);
-  assert.match(source, /uiTemplateJsonMode: true/);
+  const settingsState = await read('src/composables/useSettingsState.mjs');
+  assert.match(settingsState, /uiTemplateBatchMode: true/);
+  assert.match(settingsState, /uiTemplateJsonMode: true/);
   assert.match(source, /UI_TEMPLATE_BATCH_MAX_TEMPLATES = 5/);
   assert.match(source, /UI_TEMPLATE_BATCH_MAX_PAYLOAD_BYTES = 200 \* 1024/);
   assert.match(source, /response_format: \{ type: 'json_object' \}/);

@@ -4,13 +4,14 @@ import test from 'node:test';
 import ttsText from '../src/modules/tts-text.mjs';
 import ttsEngine from '../src/modules/tts-engine.mjs';
 
-const [html, app, mainActivity, pluginSource, messageList, ttsHtml] = await Promise.all([
+const [html, app, mainActivity, pluginSource, messageList, ttsHtml, settingsState] = await Promise.all([
     readFile(new URL('../src/components/views/SettingsPanel.vue', import.meta.url), 'utf8'),
     readFile(new URL('../src/modules/app.mjs', import.meta.url), 'utf8'),
     readFile(new URL('../android/app/src/main/java/com/roleplayhub/app/MainActivity.java', import.meta.url), 'utf8'),
     readFile(new URL('../android/app/src/main/java/com/roleplayhub/app/TTSSpeechPlugin.java', import.meta.url), 'utf8'),
     readFile(new URL('../src/components/chat/MessageList.vue', import.meta.url), 'utf8'),
-    readFile(new URL('../src/components/settings/TtsSettings.vue', import.meta.url), 'utf8')
+    readFile(new URL('../src/components/settings/TtsSettings.vue', import.meta.url), 'utf8'),
+    readFile(new URL('../src/composables/useSettingsState.mjs', import.meta.url), 'utf8')
 ]);
     const mainJs = await readFile(new URL("../src/main.js", import.meta.url), "utf8");
 
@@ -111,15 +112,15 @@ test('settings sections are collapsible and local-data sits at the bottom', () =
 });
 
 test('app.js wires TTS defaults, engine, actions and auto-play', () => {
-    assert.match(app, /ttsEnabled: false/);
-    assert.match(app, /ttsAutoPlay: false/);
-    assert.match(app, /ttsService: 'system'/);
-    assert.match(app, /ttsVoice: ''/);
-    assert.match(app, /ttsRate: 1\.0/);
-    assert.match(app, /ttsPitch: 1\.0/);
-    assert.match(app, /ttsDialogueOnly: false/);
-    assert.match(app, /ttsSkipActions: false/);
-    assert.match(app, /ttsMaxChars: 2000/);
+    assert.match(settingsState, /ttsEnabled: false/);
+    assert.match(settingsState, /ttsAutoPlay: false/);
+    assert.match(settingsState, /ttsService: 'system'/);
+    assert.match(settingsState, /ttsVoice: ''/);
+    assert.match(settingsState, /ttsRate: 1\.0/);
+    assert.match(settingsState, /ttsPitch: 1\.0/);
+    assert.match(settingsState, /ttsDialogueOnly: false/);
+    assert.match(settingsState, /ttsSkipActions: false/);
+    assert.match(settingsState, /ttsMaxChars: 2000/);
     assert.match(app, /\bRPHTts\b/);
     assert.match(app, /\bRPHTtsText\b/);
     assert.match(app, /const toggleSpeakMessage = async \(index\) => \{/);
@@ -128,7 +129,7 @@ test('app.js wires TTS defaults, engine, actions and auto-play', () => {
     assert.match(app, /stopSpeaking\(\);/);
     assert.match(app, /const selectTtsService = \(id\) => \{/);
     assert.match(app, /ttsSettingsExpanded = ref\(false\)/);
-    assert.match(app, /settingsSectionsOpen = reactive\(\{/);
+    assert.match(settingsState, /settingsSectionsOpen = reactive\(\{/);
     assert.match(app, /ttsStatus, ttsStatusLabel, ttsPlayingMessageId, ttsSettingsExpanded, ttsServiceOptions, ttsReadMode,/);
     assert.match(app, /settingsSectionsOpen, selectTtsService,/);
     assert.doesNotMatch(app, /refreshTtsVoiceOptions/);

@@ -3,14 +3,15 @@ import { access, readFile } from 'node:fs/promises';
 import test from 'node:test';
 import localTtsEngine from '../src/modules/tts-local-engine.mjs';
 
-const [html, app, mainActivity, pluginSource, buildGradle, gitignore, ttsHtml] = await Promise.all([
+const [html, app, mainActivity, pluginSource, buildGradle, gitignore, ttsHtml, settingsState] = await Promise.all([
     readFile(new URL('../src/components/views/SettingsPanel.vue', import.meta.url), 'utf8'),
     readFile(new URL('../src/modules/app.mjs', import.meta.url), 'utf8'),
     readFile(new URL('../android/app/src/main/java/com/roleplayhub/app/MainActivity.java', import.meta.url), 'utf8'),
     readFile(new URL('../android/app/src/main/java/com/roleplayhub/app/LocalTTSPlugin.java', import.meta.url), 'utf8'),
     readFile(new URL('../android/app/build.gradle', import.meta.url), 'utf8'),
     readFile(new URL('../.gitignore', import.meta.url), 'utf8'),
-    readFile(new URL('../src/components/settings/TtsSettings.vue', import.meta.url), 'utf8')
+    readFile(new URL('../src/components/settings/TtsSettings.vue', import.meta.url), 'utf8'),
+    readFile(new URL('../src/composables/useSettingsState.mjs', import.meta.url), 'utf8')
 ]);
     const mainJs = await readFile(new URL("../src/main.js", import.meta.url), "utf8");
 
@@ -85,7 +86,7 @@ test('TtsSettings.vue renders clone voice reference controls for ZipVoice voices
 
 test('app.js marks the local engine available and dispatches speak by service', () => {
     assert.match(app, /\{ id: 'local', name: '本地模型', desc: 'On-device neural TTS, voices download on demand', available: true \}/);
-    assert.match(app, /ttsLocalVoice: ''/);
+    assert.match(settingsState, /ttsLocalVoice: ''/);
     assert.match(app, /const speakTtsText = async \(text\) => \{/);
     assert.match(app, /settings\.ttsService === 'local'/);
     assert.match(app, /\bRPHLocalTts\b/);

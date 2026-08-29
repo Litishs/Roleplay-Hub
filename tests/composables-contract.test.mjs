@@ -20,6 +20,7 @@ const memoryState = (await readFile(new URL('../src/composables/useMemorySystem.
 const worldInfoState = (await readFile(new URL('../src/composables/useWorldInfo.mjs', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
 const characterSource = (await readFile(new URL('../src/composables/useCharacterState.mjs', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
 const uiStateSource = (await readFile(new URL('../src/composables/useUiState.mjs', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
+const settingsStateSource = (await readFile(new URL('../src/composables/useSettingsState.mjs', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
 
 test('useMemorySystem composable exists and is pure state', () => {
     assert.ok(memoryState.includes("import { ref, reactive } from 'vue';"), 'imports vue reactivity');
@@ -300,4 +301,86 @@ test('useUiState returns live reactive state (runtime)', async () => {
     // syncUserSetupName reads INPUT targets into the draft
     state.syncUserSetupName({ target: { tagName: 'INPUT', value: '阿明' } });
     assert.equal(state.tempUserSetup.name, '阿明');
+});
+
+test('useSettingsState composable exists and is pure state', () => {
+    assert.ok(settingsStateSource.includes("import { ref, reactive } from 'vue';"), 'imports vue reactivity');
+    assert.ok(settingsStateSource.includes('export function useSettingsState()'), 'named export');
+    assert.ok(!settingsStateSource.includes('fetch('), 'no network calls');
+    assert.ok(!settingsStateSource.includes('watch('), 'no watchers (belong to app.mjs for now)');
+    assert.ok(!settingsStateSource.includes('saveData('), 'no persistence logic');
+    assert.ok(!settingsStateSource.includes('document.documentElement'), 'no DOM application (stays in app.mjs)');
+});
+
+test('app.mjs wires useSettingsState with single call and site destructuring', () => {
+    assert.ok(app.includes("import { useSettingsState } from '../composables/useSettingsState.mjs';"), 'import');
+    assert.equal(app.split('useSettingsState()').length - 1, 1, 'exactly one composable call per setup()');
+    assert.ok(app.includes('const settingsState = useSettingsState();'), 'state holder binding');
+    // destructured at original declaration sites — identifiers keep previous names
+    assert.ok(app.includes('const { user } = settingsState;'));
+    assert.ok(app.includes('const { userProfiles, activeProfileId, showProfileDropdown } = settingsState;'));
+    assert.ok(app.includes('const { normalizeFontFamily } = settingsState;'));
+    assert.ok(app.includes('const { THEME_MODES, normalizeThemeMode, themeMedia, resolveTheme } = settingsState;'));
+    assert.ok(app.includes('const { settingsHelpTopic } = settingsState;'));
+    assert.ok(app.includes('const { settingsSectionsOpen } = settingsState;'));
+    // theme/font DOM application and token estimation stay in app.mjs
+    assert.ok(app.includes('const applyTheme = () => {'));
+    assert.ok(app.includes('const applyFontFamily = (value) => {'));
+    assert.ok(app.includes('const estimateTokens = (text) => {'));
+});
+
+test('app.mjs no longer declares settings state inline', () => {
+    assert.ok(!app.includes('const settings = reactive('), 'settings moved to composable');
+    assert.ok(!app.includes('const user = reactive('), 'user persona moved to composable');
+    assert.ok(!app.includes('const userProfiles = ref('), 'profiles moved to composable');
+    assert.ok(!app.includes('const MAX_CONTEXT_SIZE = 1000000;'), 'context constants moved to composable');
+    assert.ok(!app.includes("const DEFAULT_API_PROVIDER_ID = 'deepseek';"), 'API defaults moved to composable');
+    assert.ok(!app.includes("const THEME_MODES = ['system', 'light', 'dark'];"), 'theme constants moved to composable');
+    assert.ok(!app.includes('const settingsSectionsOpen = reactive('), 'accordion state moved to composable');
+});
+
+test('useSettingsState returns live reactive state (runtime)', async () => {
+    // the composable reads window.innerWidth/matchMedia for defaults; stub for Node
+    if (typeof globalThis.window === 'undefined') {
+        globalThis.window = { innerWidth: 1024, matchMedia: () => ({ matches: false }) };
+    }
+    const { useSettingsState } = await import('../src/composables/useSettingsState.mjs');
+    const state = useSettingsState();
+    const other = useSettingsState();
+    assert.notEqual(state.settings, other.settings, 'independent instances per call');
+
+    assert.ok(isReactive(state.settings), 'settings is reactive');
+    assert.ok(isReactive(state.user), 'user is reactive');
+    assert.equal(state.user.person, 'second');
+    assert.equal(state.settings.themeMode, 'system');
+    assert.equal(state.settings.contextTokenBudget, 26000);
+    assert.equal(state.MAX_CONTEXT_SIZE, 1000000);
+    assert.equal(state.CONTEXT_TOKEN_BUDGET_MIN, 8000);
+    assert.equal(state.CONTEXT_TOKEN_BUDGET_MAX, 64000);
+    assert.equal(state.DEFAULT_API_PROVIDER_ID, 'deepseek');
+    assert.equal(state.DEFAULT_API_CONFIG.apiUrl, 'https://api.deepseek.com/v1');
+    assert.ok(isRef(state.userProfiles) && Array.isArray(state.userProfiles.value));
+    assert.ok(isRef(state.activeProfileId) && state.activeProfileId.value === null);
+    assert.ok(isReactive(state.settingsSectionsOpen), 'settingsSectionsOpen is reactive');
+    assert.equal(state.settingsSectionsOpen.user, false);
+
+    // budget getters clamp to the locked ranges
+    state.settings.contextTokenBudget = 1;
+    assert.equal(state.getContextTokenBudget(), state.CONTEXT_TOKEN_BUDGET_MIN);
+    state.settings.contextTokenBudget = 0;
+    assert.equal(state.getContextTokenBudget(), 0);
+    state.settings.maxOutputTokens = 999999;
+    assert.equal(state.getMaxOutputTokens(), 8192);
+    state.settings.worldInfoTokenBudget = 999999;
+    assert.equal(state.getWorldInfoTokenBudget(), 16000);
+
+    // theme resolution follows the mode
+    assert.equal(state.normalizeThemeMode('bogus'), 'system');
+    state.settings.themeMode = 'dark';
+    assert.equal(state.resolveTheme(), 'dark');
+    assert.equal(state.normalizeFontFamily('bogus'), 'modern');
+    assert.equal(state.themeModeOptions.length, 3);
+    assert.equal(state.imageStyleOptions.length, 7);
+    assert.equal(state.imageSizeOptions.length, 9);
+    assert.equal(state.imageGenCountOptions.length, 6);
 });

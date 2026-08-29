@@ -4,18 +4,19 @@ import test from 'node:test';
 
 test('dark mode theme state machine is wired in app.js', async () => {
   const source = await readFile(new URL('../src/modules/app.mjs', import.meta.url), 'utf8');
+  const settingsState = await readFile(new URL('../src/composables/useSettingsState.mjs', import.meta.url), 'utf8');
 
   // 默认值煎０鏄庯紙loadData 鍙悎骞?settings 涓凡瀛樺湪鐨?key锛屽繀椤诲厛澹版槑锛?
-  assert.match(source, /themeMode:\s*'system'/);
+  assert.match(settingsState, /themeMode:\s*'system'/);
 
   // 三选一规范化?
-  assert.match(source, /const THEME_MODES = \['system', 'light', 'dark'\]/);
-  assert.match(source, /const normalizeThemeMode = /);
-  assert.match(source, /const resolveTheme = /);
+  assert.match(settingsState, /const THEME_MODES = \['system', 'light', 'dark'\]/);
+  assert.match(settingsState, /const normalizeThemeMode = /);
+  assert.match(settingsState, /const resolveTheme = /);
   assert.match(source, /const applyTheme = /);
 
   // 跟随系统锛氱洃鍚?prefers-color-scheme
-  assert.match(source, /matchMedia\('\(prefers-color-scheme: dark\)'\)/);
+  assert.match(settingsState, /matchMedia\('\(prefers-color-scheme: dark\)'\)/);
   assert.match(source, /themeMedia\.addEventListener\('change'/);
 
   // 驱动 CSS 覆盖规则
@@ -32,10 +33,10 @@ test('dark mode theme state machine is wired in app.js', async () => {
   assert.match(source, /watch\(\(\) => settings\.themeMode, applyTheme, \{\s*immediate: true\s*\}\)/);
 
   // 涓夐€夐」渚?custom-select 浣跨敤
-  assert.match(source, /const themeModeOptions = \[/);
-  assert.match(source, /value: 'system', label: '跟随系统'/);
-  assert.match(source, /value: 'light', label: '浅色'/);
-  assert.match(source, /value: 'dark', label: '深色'/);
+  assert.match(settingsState, /const themeModeOptions = \[/);
+  assert.match(settingsState, /value: 'system', label: '跟随系统'/);
+  assert.match(settingsState, /value: 'light', label: '浅色'/);
+  assert.match(settingsState, /value: 'dark', label: '深色'/);
 
   // 导出到模板?
   assert.match(source, /themeModeOptions,/);

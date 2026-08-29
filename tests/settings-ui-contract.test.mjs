@@ -2,11 +2,12 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-const [html, app, styles, presetManager] = await Promise.all([
+const [html, app, styles, presetManager, settingsState] = await Promise.all([
     readFile(new URL('../src/components/views/SettingsPanel.vue', import.meta.url), 'utf8'),
     readFile(new URL('../src/modules/app.mjs', import.meta.url), 'utf8'),
     readFile(new URL('../assets/css/styles.css', import.meta.url), 'utf8'),
-    readFile(new URL('../src/components/settings/PresetManager.vue', import.meta.url), 'utf8')
+    readFile(new URL('../src/components/settings/PresetManager.vue', import.meta.url), 'utf8'),
+    readFile(new URL('../src/composables/useSettingsState.mjs', import.meta.url), 'utf8')
 ]);
 
 const settingsStart = 0;
@@ -35,7 +36,8 @@ test('设置页五个区块使用统一折叠卡片并保持原有顺序', () =>
 
 test('用户与 API 设置默认折叠且语音区保持默认折叠', () => {
     assert.match(app, /const ttsSettingsExpanded = ref\(false\);/);
-    assert.match(app, /const settingsSectionsOpen = reactive\(\{\s*user: false,\s*api: false,\s*advanced: false,\s*localData: false\s*\}\);/);
+    // settingsSectionsOpen lives in useSettingsState (Phase 2)
+    assert.match(settingsState, /const settingsSectionsOpen = reactive\(\{\s*user: false,\s*api: false,\s*advanced: false,\s*localData: false\s*\}\);/);
 });
 
 test('紧凑用户设置保留人设管理和全部编辑能力', () => {
