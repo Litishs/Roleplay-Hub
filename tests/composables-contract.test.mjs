@@ -32,6 +32,7 @@ const backupRestoreSource = (await readFile(new URL('../src/composables/useBacku
 const dataLoaderSource = (await readFile(new URL('../src/composables/useDataLoader.mjs', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
 const pipelineSource = (await readFile(new URL('../src/composables/useUiTemplatePipeline.mjs', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
 const activeToolPipelineSource = (await readFile(new URL('../src/composables/useActiveToolPipeline.mjs', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
+const specialRulesSource = (await readFile(new URL('../src/composables/useSpecialRules.mjs', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
 
 test('useMemorySystem composable exists and is pure state', () => {
     assert.ok(memoryState.includes("import { ref, reactive } from 'vue';"), 'imports vue reactivity');
@@ -942,4 +943,30 @@ test('useDataLoader flips the failure guard on storage errors (runtime)', async 
     await loader.loadData();
     assert.equal(loadFailed, true, 'guard flipped so saveData refuses to overwrite storage with defaults');
     assert.equal(errorToast, '加载保存的数据失败');
+});
+
+// --- useSpecialRules (Phase 3.0): image-gen special rule injection ---
+
+test('useSpecialRules composable owns enforceSpecialRules', () => {
+    assert.ok(specialRulesSource.includes("import { RPHubCardUtils } from '../modules/card-utils.mjs';"), 'imports card utils');
+    assert.ok(specialRulesSource.includes('export function useSpecialRules(deps)'), 'deps-injecting factory export');
+    assert.ok(specialRulesSource.includes('const enforceSpecialRules = () => {'), 'owns enforceSpecialRules');
+    // rule injection behavior markers stay intact
+    assert.ok(specialRulesSource.includes("const imageGenRegexName = 'NAI画图正则';"), 'NAI regex rule kept');
+    assert.ok(specialRulesSource.includes("const autoImageGenWIName = '自动生图';"), 'auto image-gen world info kept');
+    assert.ok(specialRulesSource.includes("regexScripts.value.unshift(imageGenRegexContent);"), 'regex list injection kept');
+    assert.ok(specialRulesSource.includes("worldInfo.value.unshift(autoImageGenWIContent);"), 'worldinfo injection kept');
+    assert.ok(specialRulesSource.includes('return { enforceSpecialRules };'));
+    assert.ok(!specialRulesSource.includes('showToast('), 'no toast side effects');
+    assert.ok(!specialRulesSource.includes('saveData('), 'no persistence side effects');
+});
+
+test('app.mjs wires useSpecialRules at the original declaration site', () => {
+    assert.ok(app.includes("import { useSpecialRules } from '../composables/useSpecialRules.mjs';"), 'import');
+    assert.equal(app.split('useSpecialRules(').length - 1, 1, 'exactly one composable call per setup()');
+    assert.ok(app.includes('const { enforceSpecialRules } = useSpecialRules({'), 'destructures at the wiring site');
+    assert.ok(!app.includes('const enforceSpecialRules = () => {'), 'moved out of app.mjs');
+    // call sites stay: settings watch, character switch (useCardOperations), ctx export
+    assert.ok(app.includes('enforceSpecialRules();'), 'call sites kept in app.mjs');
+    assert.ok(app.includes('enforceSpecialRules,'), 'ctx export kept');
 });
