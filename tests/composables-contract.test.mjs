@@ -24,6 +24,7 @@ const settingsStateSource = (await readFile(new URL('../src/composables/useSetti
 const apiConfigSource = (await readFile(new URL('../src/composables/useApiConfig.mjs', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
 const chatStateSource = (await readFile(new URL('../src/composables/useChatState.mjs', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
 const senderSource = (await readFile(new URL('../src/composables/useMessageSender.mjs', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
+const rendererSource = (await readFile(new URL('../src/composables/useTemplateRenderer.mjs', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
 
 test('useMemorySystem composable exists and is pure state', () => {
     assert.ok(memoryState.includes("import { ref, reactive } from 'vue';"), 'imports vue reactivity');
@@ -581,4 +582,50 @@ test('useMessageSender returns callable generateResponse (runtime smoke)', async
     const other = useMessageSender({});
     assert.equal(typeof sender.generateResponse, 'function');
     assert.notEqual(sender.generateResponse, other.generateResponse, 'independent closures per call');
+});
+
+// --- useTemplateRenderer (Phase 2, roadmap 2.2): markdown/template rendering ---
+
+test('useTemplateRenderer composable holds the rendering pipeline', () => {
+    assert.ok(rendererSource.includes("import { RPHRuntimePolicy } from '../modules/runtime-policy.mjs';"), 'imports runtime policy for render caches');
+    assert.ok(rendererSource.includes("import { parseCot } from '../modules/utils.mjs';"), 'imports parseCot');
+    assert.ok(rendererSource.includes('export function useTemplateRenderer(deps)'), 'deps-injecting factory export');
+    assert.ok(rendererSource.includes('const renderMarkdownCache = new RPHRuntimePolicy.LruCache('), 'owns the render LRU cache');
+    assert.ok(rendererSource.includes('const htmlFrameDetectionCache = new RPHRuntimePolicy.LruCache('), 'owns the frame detection cache');
+    assert.ok(rendererSource.includes('const htmlBlockStartPattern = '), 'owns HTML block detection');
+    assert.ok(rendererSource.includes('const contentUsesHtmlFrame = (text, role'), 'owns frame detection');
+    assert.ok(rendererSource.includes('const messageUsesWideLayout = (msg) => {'), 'owns layout predicates');
+    assert.ok(rendererSource.includes('const renderMarkdown = (text, role'), 'owns renderMarkdown');
+    assert.ok(rendererSource.includes('const clearRenderCaches = () => {'), 'exposes cache clearing for the app.mjs watcher');
+    assert.ok(rendererSource.includes('return { renderMarkdown, messageUsesWideLayout, clearRenderCaches };'), 'exposes exactly the three consumers need');
+    // no watchers inside the composable (they stay in app.mjs for now)
+    assert.ok(!rendererSource.includes('watch('), 'no watchers');
+});
+
+test('app.mjs wires useTemplateRenderer and keeps the cache-clear watcher', () => {
+    assert.ok(app.includes("import { useTemplateRenderer } from '../composables/useTemplateRenderer.mjs';"), 'import');
+    assert.equal(app.split('useTemplateRenderer(').length - 1, 1, 'exactly one composable call per setup()');
+    assert.ok(app.includes('const { renderMarkdown, messageUsesWideLayout, clearRenderCaches } = useTemplateRenderer({'), 'destructures at the wiring site');
+    // the invalidation watcher stays in app.mjs and calls the returned helper
+    assert.ok(app.includes("watch(() => [settings.disableImages, regexScripts.value], () => {\n            clearRenderCaches();\n        }, { deep: true });"));
+    // consumers (MessageList etc.) keep reading renderMarkdown/messageUsesWideLayout from ctx
+    assert.ok(app.includes('renderMarkdown, messageUsesWideLayout, parseCot,'));
+});
+
+test('app.mjs no longer declares the rendering pipeline inline', () => {
+    assert.ok(!app.includes('const renderMarkdown = (text, role'), 'renderMarkdown moved to composable');
+    assert.ok(!app.includes('const renderMarkdownCache = new RPHRuntimePolicy.LruCache('), 'render cache moved to composable');
+    assert.ok(!app.includes('const htmlBlockStartPattern = '), 'HTML block detection moved to composable');
+    assert.ok(!app.includes('const messageUsesWideLayout = (msg) => {'), 'layout predicates moved to composable');
+});
+
+test('useTemplateRenderer returns callable members (runtime smoke)', async () => {
+    const { useTemplateRenderer } = await import('../src/composables/useTemplateRenderer.mjs');
+    const renderer = useTemplateRenderer({});
+    const other = useTemplateRenderer({});
+    assert.equal(typeof renderer.renderMarkdown, 'function');
+    assert.equal(typeof renderer.messageUsesWideLayout, 'function');
+    assert.equal(typeof renderer.clearRenderCaches, 'function');
+    assert.notEqual(renderer.renderMarkdown, other.renderMarkdown, 'independent closures per call');
+    assert.equal(renderer.messageUsesWideLayout(null), false, 'null guard works without deps');
 });

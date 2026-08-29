@@ -3,7 +3,8 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 test('regex-generated srcdoc frames are rebuilt as controlled executable frames', async () => {
-  const source = await readFile(new URL('../src/modules/app.mjs', import.meta.url), 'utf8');
+  // 2026-08-29 (Phase 2.2): renderMarkdown moved to useTemplateRenderer
+  const source = await readFile(new URL('../src/composables/useTemplateRenderer.mjs', import.meta.url), 'utf8');
 
   assert.match(source, /const sanitizeWithControlledSrcdocFrames = \(rawMarkup\) =>/);
   assert.match(source, /querySelectorAll\('iframe\[srcdoc\]'\)/);
@@ -29,7 +30,8 @@ test('controlled frames retain the app sandbox and lifecycle class', async () =>
 });
 
 test('HTML card detection covers common block tags in fenced code blocks', async () => {
-  const source = await readFile(new URL('../src/modules/app.mjs', import.meta.url), 'utf8');
+  // 2026-08-29 (Phase 2.2): HTML block detection moved to useTemplateRenderer
+  const source = await readFile(new URL('../src/composables/useTemplateRenderer.mjs', import.meta.url), 'utf8');
 
   assert.match(source, /const htmlBlockStartPattern = /);
   assert.match(source, /section\|article\|aside\|header\|footer\|nav\|main\|form\|fieldset\|ul\|ol\|li/);
