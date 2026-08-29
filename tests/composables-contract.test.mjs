@@ -27,6 +27,7 @@ const senderSource = (await readFile(new URL('../src/composables/useMessageSende
 const rendererSource = (await readFile(new URL('../src/composables/useTemplateRenderer.mjs', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
 const cardOpsSource = (await readFile(new URL('../src/composables/useCardOperations.mjs', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
 const dataIoSource = (await readFile(new URL('../src/composables/useDataIO.mjs', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
+const backupRestoreSource = (await readFile(new URL('../src/composables/useBackupRestore.mjs', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
 
 test('useMemorySystem composable exists and is pure state', () => {
     assert.ok(memoryState.includes("import { ref, reactive } from 'vue';"), 'imports vue reactivity');
@@ -659,4 +660,36 @@ test('app.mjs wires useCardOperations with the guard bridge in place', () => {
     assert.ok(app.includes('_isApplyingCharacterScopedData = value;'), 'bridge writes the shared let binding');
     // call sites stay wired through ctx
     assert.ok(app.includes('createNewCharacter, editCharacter, saveCharacter,'));
+});
+
+// --- useBackupRestore (Phase 2, roadmap 2.2): full backup / restore ---
+
+test('useBackupRestore composable holds backup and restore', () => {
+    assert.ok(backupRestoreSource.includes("import { RPHStorage } from '../modules/storage-repository.mjs';"), 'imports storage repository');
+    assert.ok(backupRestoreSource.includes('export function useBackupRestore(deps)'), 'deps-injecting factory export');
+    assert.ok(backupRestoreSource.includes('const exportNativeBackup = async () => {'), 'owns exportNativeBackup');
+    assert.ok(backupRestoreSource.includes('const restoreNativeBackup = async () => {'), 'owns restoreNativeBackup');
+    assert.ok(backupRestoreSource.includes('await RPHStorage.exportBackup();'), 'delegates to the native plugin');
+    assert.ok(backupRestoreSource.includes('window.location.reload();'), 'restore reloads the webview');
+    assert.ok(backupRestoreSource.includes("showVueConfirmModal('恢复完整备份'"), 'restore asks before replacing data');
+    assert.ok(backupRestoreSource.includes('return { exportNativeBackup, restoreNativeBackup };'));
+    assert.ok(!backupRestoreSource.includes('watch('), 'no watchers');
+});
+
+test('app.mjs wires useBackupRestore after its last dep', () => {
+    assert.ok(app.includes("import { useBackupRestore } from '../composables/useBackupRestore.mjs';"), 'import');
+    assert.equal(app.split('useBackupRestore(').length - 1, 1, 'exactly one composable call per setup()');
+    assert.ok(app.includes('const { exportNativeBackup, restoreNativeBackup } = useBackupRestore({'), 'destructures at the wiring site');
+    // ctx keeps exposing both functions for the settings data manager
+    assert.ok(app.includes('backupInProgress, exportNativeBackup, restoreNativeBackup,'));
+    assert.ok(!app.includes('const exportNativeBackup = async'), 'moved out of app.mjs');
+});
+
+test('useBackupRestore returns callable members (runtime smoke)', async () => {
+    const { useBackupRestore } = await import('../src/composables/useBackupRestore.mjs');
+    const br = useBackupRestore({});
+    const other = useBackupRestore({});
+    assert.equal(typeof br.exportNativeBackup, 'function');
+    assert.equal(typeof br.restoreNativeBackup, 'function');
+    assert.notEqual(br.exportNativeBackup, other.exportNativeBackup, 'independent closures per call');
 });

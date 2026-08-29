@@ -75,6 +75,7 @@ import { useMessageSender } from '../composables/useMessageSender.mjs';
 import { useTemplateRenderer } from '../composables/useTemplateRenderer.mjs';
 import { useCardOperations } from '../composables/useCardOperations.mjs';
 import { useDataIO } from '../composables/useDataIO.mjs';
+import { useBackupRestore } from '../composables/useBackupRestore.mjs';
 
 const __app = createApp({
     components: {
@@ -2374,42 +2375,6 @@ const __app = createApp({
             return db.remove(key);
         };
 
-        const exportNativeBackup = async () => {
-            if (backupInProgress.value) return;
-            backupInProgress.value = true;
-            try {
-                await saveData();
-                await flushPendingChatHistorySave();
-                await RPHStorage.exportBackup();
-                showToast('完整备份已保存', 'success');
-            } catch (error) {
-                if (!/cancel/i.test(String(error?.message || error || ''))) {
-                    console.error('Backup export failed:', error);
-                    showToast('完整备份失败：' + (error?.message || error), 'error', 5000);
-                }
-            } finally {
-                backupInProgress.value = false;
-            }
-        };
-
-        const restoreNativeBackup = async () => {
-            if (backupInProgress.value) return;
-            const confirmed = await showVueConfirmModal('恢复完整备份', '恢复将替换当前角色、聊天、记忆、设置和本地图片。API Key 不会从备份恢复。');
-            if (!confirmed) return;
-            backupInProgress.value = true;
-            try {
-                await RPHStorage.restoreBackup();
-                window.location.reload();
-            } catch (error) {
-                if (!/cancel/i.test(String(error?.message || error || ''))) {
-                    console.error('Backup restore failed:', error);
-                    showToast('完整恢复失败，当前数据未被替换：' + (error?.message || error), 'error', 6000);
-                }
-            } finally {
-                backupInProgress.value = false;
-            }
-        };
-
         const deleteScopedStoredValue = async (name, id) => {
             if (!db) await initDB();
             if (name === 'chat') return db.deleteChat(id);
@@ -3817,6 +3782,16 @@ ${content}
                 toasts.value = toasts.value.filter(t => t.id !== id);
             }, duration);
         };
+
+        // Backup/restore lives in useBackupRestore (Phase 2.2); called here because
+        // showToast (above) is the last of its deps.
+        const { exportNativeBackup, restoreNativeBackup } = useBackupRestore({
+            backupInProgress,
+            saveData,
+            flushPendingChatHistorySave,
+            showToast,
+            showVueConfirmModal
+        });
 
         // Confirmation Dialog
         const yieldToUi = () => new Promise(resolve => {
