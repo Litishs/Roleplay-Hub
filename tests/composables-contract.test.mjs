@@ -29,6 +29,7 @@ const rendererSource = (await readFile(new URL('../src/composables/useTemplateRe
 const cardOpsSource = (await readFile(new URL('../src/composables/useCardOperations.mjs', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
 const dataIoSource = (await readFile(new URL('../src/composables/useDataIO.mjs', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
 const backupRestoreSource = (await readFile(new URL('../src/composables/useBackupRestore.mjs', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
+const dataLoaderSource = (await readFile(new URL('../src/composables/useDataLoader.mjs', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
 const pipelineSource = (await readFile(new URL('../src/composables/useUiTemplatePipeline.mjs', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
 const activeToolPipelineSource = (await readFile(new URL('../src/composables/useActiveToolPipeline.mjs', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
 
@@ -777,4 +778,168 @@ test('useActiveToolPipeline returns a callable member (runtime smoke)', async ()
     const other = useActiveToolPipeline({});
     assert.equal(typeof pipeline.handleActiveToolCallFromAssistant, 'function');
     assert.notEqual(pipeline.handleActiveToolCallFromAssistant, other.handleActiveToolCallFromAssistant, 'independent closures per call');
+});
+
+// --- useDataLoader (Phase 3.0): startup data load / migration ---
+
+test('useDataLoader composable owns loadData', () => {
+    assert.ok(dataLoaderSource.includes("import { generateUUID } from '../modules/utils.mjs';"), 'imports utils helper');
+    assert.ok(dataLoaderSource.includes('export function useDataLoader(deps)'), 'deps-injecting factory export');
+    assert.ok(dataLoaderSource.includes('const loadData = async () => {'), 'owns loadData');
+    assert.ok(dataLoaderSource.includes('setDataLoadFailed(true); // 阻止后续 saveData 用默认空值覆盖存储中的数据'), 'flips the failure guard through the bridge');
+    assert.ok(!/_dataLoadFailed\s*[=!]/.test(dataLoaderSource), 'no direct access to the shared guard binding');
+    // migrations stay intact
+    assert.ok(dataLoaderSource.includes('Migrated characters to UUID and timestamp system'), 'character UUID migration kept');
+    assert.ok(dataLoaderSource.includes("normalizeRegexScript(script, 'character')"), 'character regex normalization kept');
+    assert.ok(dataLoaderSource.includes('Migrate single user to profiles'), 'user profile migration kept');
+    assert.ok(dataLoaderSource.includes('return { loadData };'));
+});
+
+test('app.mjs wires useDataLoader after its last dep', () => {
+    assert.ok(app.includes("import { useDataLoader } from '../composables/useDataLoader.mjs';"), 'import');
+    assert.equal(app.split('useDataLoader(').length - 1, 1, 'exactly one composable call per setup()');
+    assert.ok(app.includes('const { loadData } = useDataLoader({'), 'destructures at the wiring site');
+    // the wiring comment must pin the placement reason (last dep defined above)
+    assert.ok(app.includes('after its last dep (normalizeCharacterUiTemplates, above) is defined.'), 'late wiring documented');
+    // app.mjs no longer holds the moved definition
+    assert.ok(!app.includes('const loadData = async'), 'moved out of app.mjs');
+    assert.ok(app.includes('/* extracted loadData — src/composables/useDataLoader.mjs (Phase 3.0) */'), 'marker comment at the original site');
+    // the shared guard stays in app.mjs for saveData, with the setter bridge
+    assert.ok(app.includes('let _dataLoadFailed = false;'));
+    assert.ok(app.includes('const setDataLoadFailed = (value) => {'), 'setter bridge defined');
+    assert.ok(app.includes('if (_dataLoadFailed) {'), 'saveData still reads the guard');
+});
+
+test('useDataLoader restores data end-to-end with mocked storage (runtime)', async () => {
+    const { useDataLoader } = await import('../src/composables/useDataLoader.mjs');
+    // in-memory storage mock
+    const store = new Map();
+    const getStoredValue = async (key) => structuredClone(store.get(key));
+    const setStoredValue = async (key, value) => { store.set(key, structuredClone(value)); };
+    const getScopedStoredValue = async (name, id) => name === 'chat' ? store.get(`chat:${id}`) : store.get(`${name}:${id}`);
+    const setScopedStoredValue = async (name, id, value) => {
+        if (name === 'chat') store.set(`chat:${id}`, structuredClone(value));
+        else store.set(`${name}:${id}`, structuredClone(value));
+    };
+    const deleteScopedStoredValue = async (name, id) => { if (name === 'chat') store.delete(`chat:${id}`); else store.delete(`${name}:${id}`); };
+    const normalizeRegexScript = (script, scope) => ({ ...script, scope: script.scope || scope });
+    const normalizeWorldInfoEntry = (entry) => ({ ...entry });
+    const normalizeUiTemplate = (t) => ({ ...t });
+    const normalizeActiveTools = (items) => items;
+    const normalizeApiProviderSettings = () => { };
+    const normalizeActiveToolAggressivenessSettings = () => { };
+    const normalizeMemorySettings = () => { };
+    const normalizeFontFamily = (v) => v;
+    const applyFontFamily = () => { };
+    const syncChatModelFromPresets = () => 'm';
+    const getApiProviderByUrl = () => null;
+    let loadFailed = false;
+
+    // legacy character without uuid/createdAt + scenario field, plus saved user/settings
+    store.set('characters', [{ name: '旧卡', scenario: '旧场景', worldInfo: [{ scope: 'global', id: 'g1' }], regexScripts: [{ name: 'r', scope: 'global' }] }]);
+    store.set('user', { name: '老用户' });
+    store.set('settings', { model: 'm1' });
+    let loadErrorToast = null;
+    const loader = useDataLoader({
+        initDB: async () => { },
+        getStoredValue, setStoredValue, getScopedStoredValue, setScopedStoredValue, deleteScopedStoredValue,
+        characters: { value: [] },
+        settings: { model: '', fontFamily: 'modern', fontFamilyVersion: 4, contextSize: 0, apiProviderId: '', stream: false },
+        presets: { value: [] },
+        deletedDefaultPresetNames: { value: [] },
+        globalRegexScripts: { value: [] },
+        regexScripts: { value: [] },
+        globalWorldInfo: { value: [] },
+        worldInfo: { value: [] },
+        worldInfoSettings: {},
+        globalUiTemplates: { value: [] },
+        activeTools: { value: [] },
+        user: {},
+        userProfiles: { value: [] },
+        activeProfileId: { value: null },
+        lastActiveCharacterId: { value: null },
+        memorySettings: {},
+        tokenUsageHistory: { value: [] },
+        DEFAULT_API_PROVIDER_ID: 'default',
+        MAX_CONTEXT_SIZE: 64,
+        getApiProviderByUrl,
+        normalizeApiProviderSettings,
+        normalizeFontFamily,
+        applyFontFamily,
+        syncChatModelFromPresets,
+        normalizeActiveToolAggressivenessSettings,
+        normalizePreset: (p) => p,
+        normalizeRegexScript,
+        normalizeWorldInfoEntry,
+        normalizeUiTemplate,
+        normalizeActiveTools,
+        normalizeCharacterUiTemplates: (char) => { char.uiTemplates = []; },
+        normalizeMemorySettings,
+        setDataLoadFailed: (v) => { loadFailed = v; },
+        showToast: (msg) => { loadErrorToast = msg; }
+    });
+
+    await loader.loadData();
+    assert.equal(loadFailed, false, 'no failure guard flip on the happy path');
+    assert.equal(loadErrorToast, null, 'no error toast on the happy path');
+    // characters restored + migrated
+    assert.equal(store.get('characters')[0].name, '旧卡');
+    assert.ok(store.get('characters')[0].uuid, 'legacy character migrated to uuid');
+    assert.ok(store.get('characters')[0].createdAt, 'legacy character migrated to createdAt');
+    assert.ok(!('scenario' in store.get('characters')[0]), 'legacy scenario field dropped');
+    // user restored
+    assert.equal(store.get('user').name, '老用户');
+    // settings merged (existing key only) + forced fields
+    assert.equal(store.get('settings').model, 'm1');
+});
+
+test('useDataLoader flips the failure guard on storage errors (runtime)', async () => {
+    const { useDataLoader } = await import('../src/composables/useDataLoader.mjs');
+    let loadFailed = false;
+    let errorToast = null;
+    const loader = useDataLoader({
+        initDB: async () => { throw new Error('db unavailable'); },
+        getStoredValue: async () => undefined,
+        setStoredValue: async () => { },
+        getScopedStoredValue: async () => undefined,
+        setScopedStoredValue: async () => { },
+        deleteScopedStoredValue: async () => { },
+        characters: { value: [] },
+        settings: {},
+        presets: { value: [] },
+        deletedDefaultPresetNames: { value: [] },
+        globalRegexScripts: { value: [] },
+        regexScripts: { value: [] },
+        globalWorldInfo: { value: [] },
+        worldInfo: { value: [] },
+        worldInfoSettings: {},
+        globalUiTemplates: { value: [] },
+        activeTools: { value: [] },
+        user: {},
+        userProfiles: { value: [] },
+        activeProfileId: { value: null },
+        lastActiveCharacterId: { value: null },
+        memorySettings: {},
+        tokenUsageHistory: { value: [] },
+        DEFAULT_API_PROVIDER_ID: 'default',
+        MAX_CONTEXT_SIZE: 64,
+        getApiProviderByUrl: () => null,
+        normalizeApiProviderSettings: () => { },
+        normalizeFontFamily: (v) => v,
+        applyFontFamily: () => { },
+        syncChatModelFromPresets: () => '',
+        normalizeActiveToolAggressivenessSettings: () => { },
+        normalizePreset: (p) => p,
+        normalizeRegexScript: (s, scope) => ({ ...s, scope }),
+        normalizeWorldInfoEntry: (e) => e,
+        normalizeUiTemplate: (t) => t,
+        normalizeActiveTools: (i) => i,
+        normalizeCharacterUiTemplates: () => { },
+        normalizeMemorySettings: () => { },
+        setDataLoadFailed: (v) => { loadFailed = v; },
+        showToast: (msg) => { errorToast = msg; }
+    });
+    await loader.loadData();
+    assert.equal(loadFailed, true, 'guard flipped so saveData refuses to overwrite storage with defaults');
+    assert.equal(errorToast, '加载保存的数据失败');
 });

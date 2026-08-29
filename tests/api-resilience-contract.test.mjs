@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
-const [app, sender, chatGuardSource, memoryFallbackSource, capConfig, java, uiState, utils, uiTemplatePipeline] = await Promise.all([
+const [app, sender, chatGuardSource, memoryFallbackSource, capConfig, java, uiState, utils, uiTemplatePipeline, dataLoaderSource] = await Promise.all([
     readFile(new URL('../src/modules/app.mjs', import.meta.url), 'utf8'),
     readFile(new URL('../src/composables/useMessageSender.mjs', import.meta.url), 'utf8'),
     readFile(new URL('../src/modules/chat-request-guard.mjs', import.meta.url), 'utf8'),
@@ -12,7 +12,8 @@ const [app, sender, chatGuardSource, memoryFallbackSource, capConfig, java, uiSt
     readFile(new URL('../android/app/src/main/java/com/roleplayhub/app/NativeStoragePlugin.java', import.meta.url), 'utf8'),
     readFile(new URL('../src/composables/useUiState.mjs', import.meta.url), 'utf8'),
     readFile(new URL('../src/modules/utils.mjs', import.meta.url), 'utf8'),
-    readFile(new URL('../src/composables/useUiTemplatePipeline.mjs', import.meta.url), 'utf8')
+    readFile(new URL('../src/composables/useUiTemplatePipeline.mjs', import.meta.url), 'utf8'),
+    readFile(new URL('../src/composables/useDataLoader.mjs', import.meta.url), 'utf8')
 ]);
     const appJs = readFileSync(new URL("../src/modules/app.mjs", import.meta.url), "utf8");
 const [updateCheckerHtml, usagePanelHtml, worldInfoHtml] = await Promise.all([
@@ -204,7 +205,8 @@ test('chat model falls back to configured presets when legacy Web storage lacks 
     assert.ok(app.includes('const resolveChatModel = () => ['));
     assert.ok(app.includes('settings.qualityModel,'));
     assert.ok(app.includes('const syncChatModelFromPresets = () => {'));
-    assert.ok(app.includes('syncChatModelFromPresets();'));
+    // Phase 3.0: the loadData call site moved to useDataLoader.mjs
+    assert.ok(dataLoaderSource.includes('syncChatModelFromPresets();'));
     assert.ok(sender.includes('const requestModel = syncChatModelFromPresets();'));
     assert.ok(sender.includes("showToast('请先在设置中选择聊天模型', 'error');"));
 });
