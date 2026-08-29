@@ -30,6 +30,7 @@ const cardOpsSource = (await readFile(new URL('../src/composables/useCardOperati
 const dataIoSource = (await readFile(new URL('../src/composables/useDataIO.mjs', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
 const backupRestoreSource = (await readFile(new URL('../src/composables/useBackupRestore.mjs', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
 const pipelineSource = (await readFile(new URL('../src/composables/useUiTemplatePipeline.mjs', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
+const activeToolPipelineSource = (await readFile(new URL('../src/composables/useActiveToolPipeline.mjs', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
 
 test('useMemorySystem composable exists and is pure state', () => {
     assert.ok(memoryState.includes("import { ref, reactive } from 'vue';"), 'imports vue reactivity');
@@ -738,4 +739,42 @@ test('useUiTemplatePipeline returns callable members (runtime smoke)', async () 
     assert.equal(typeof pipeline.failUiTemplateAnalysis, 'function');
     assert.equal(typeof pipeline.abortUiTemplateUpdate, 'function');
     assert.notEqual(pipeline.updateUiTemplatesFromChat, other.updateUiTemplatesFromChat, 'independent closures per call');
+});
+
+// --- useActiveToolPipeline (Phase 3.0): active tool queue execution ---
+
+test('useActiveToolPipeline composable owns the tool queue run', () => {
+    assert.ok(activeToolPipelineSource.includes("import { cleanupActiveToolCaptureState, stripActiveToolCallsFromAssistant } from '../modules/utils.mjs';"), 'imports utils helpers');
+    assert.ok(activeToolPipelineSource.includes('export function useActiveToolPipeline(deps)'), 'deps-injecting factory export');
+    assert.ok(activeToolPipelineSource.includes('const handleActiveToolCallFromAssistant = async (assistantMessage, activeToolDepth = 0) => {'), 'owns handleActiveToolCallFromAssistant');
+    assert.ok(activeToolPipelineSource.includes('const ACTIVE_TOOL_MAX_AUTO_CONTINUE = 4;'), 'owns the auto-continue limit');
+    // run AbortController is reached through the shared-guard accessors, never rebound locally
+    assert.ok(activeToolPipelineSource.includes('setActiveToolQueueAbortController(toolAbort);'), 'stores run controller through bridge');
+    assert.ok(activeToolPipelineSource.includes('getActiveToolQueueAbortController() === toolAbort'), 'clears run controller through bridge');
+    assert.ok(!activeToolPipelineSource.includes('activeToolQueueAbortController ='), 'no local reassignment of the shared binding');
+    assert.ok(activeToolPipelineSource.includes('return { handleActiveToolCallFromAssistant };'));
+});
+
+test('app.mjs wires useActiveToolPipeline with a late-bound bridge into useMessageSender', () => {
+    assert.ok(app.includes("import { useActiveToolPipeline } from '../composables/useActiveToolPipeline.mjs';"), 'import');
+    assert.equal(app.split('useActiveToolPipeline(').length - 1, 1, 'exactly one composable call per setup()');
+    assert.ok(app.includes('let activeToolPipeline = null;'), 'late-bound bridge binding declared before both factories');
+    // mutual recursion: useMessageSender receives the wrapper, pipeline receives generateResponse
+    assert.ok(app.includes('handleActiveToolCallFromAssistant: (...args) => activeToolPipeline.handleActiveToolCallFromAssistant(...args),'), 'useMessageSender dep is the late-bound wrapper');
+    assert.ok(app.includes('const { handleActiveToolCallFromAssistant } = useActiveToolPipeline({'), 'destructures at the wiring site');
+    assert.ok(app.includes('activeToolPipeline = { handleActiveToolCallFromAssistant };'), 'bridge assigned after wiring');
+    // app.mjs no longer holds the moved definition or the auto-continue constant
+    assert.ok(!app.includes('const handleActiveToolCallFromAssistant = async'), 'moved out of app.mjs');
+    assert.ok(!app.includes('const ACTIVE_TOOL_MAX_AUTO_CONTINUE = 4;'), 'constant moved to the pipeline');
+    // the shared chatState guard binding stays in app.mjs for stopGeneration
+    assert.ok(app.includes('let { activeToolQueueAbortController } = chatState;'));
+    assert.ok(app.includes('const getActiveToolQueueAbortController = () => activeToolQueueAbortController;'), 'getter accessor defined');
+});
+
+test('useActiveToolPipeline returns a callable member (runtime smoke)', async () => {
+    const { useActiveToolPipeline } = await import('../src/composables/useActiveToolPipeline.mjs');
+    const pipeline = useActiveToolPipeline({});
+    const other = useActiveToolPipeline({});
+    assert.equal(typeof pipeline.handleActiveToolCallFromAssistant, 'function');
+    assert.notEqual(pipeline.handleActiveToolCallFromAssistant, other.handleActiveToolCallFromAssistant, 'independent closures per call');
 });
