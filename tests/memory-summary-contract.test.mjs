@@ -3,9 +3,10 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import * as memorySummary from '../src/modules/memory-summary.mjs';
 
-const [html, app, messageList, memoryState] = await Promise.all([
+const [html, app, sender, messageList, memoryState] = await Promise.all([
     readFile(new URL('../src/components/views/MemoryPanel.vue', import.meta.url), 'utf8'),
     readFile(new URL('../src/modules/app.mjs', import.meta.url), 'utf8'),
+    readFile(new URL('../src/composables/useMessageSender.mjs', import.meta.url), 'utf8'),
     readFile(new URL('../src/components/chat/MessageList.vue', import.meta.url), 'utf8'),
     readFile(new URL('../src/composables/useMemorySystem.mjs', import.meta.url), 'utf8')
 ]);
@@ -192,10 +193,11 @@ test('滚动摘要:链内使用快照且切换角色/分支/清空重建时中�
     assert.ok(app.includes('pruneCoveredFailedBatches'));
 });
 
+// 2026-08-29 (Phase 2.2): timeline digest injection moved to useMessageSender
 test('记忆摘要固定注入前缀且不参与楼层裁剪', () => {
-    assert.ok(app.includes("const timelineDigestText = memorySettings.enabled"));
-    assert.ok(app.includes("content: timelineDigestText"));
-    assert.ok(app.includes('safeTargetLimit += 1;'));
+    assert.ok(sender.includes("const timelineDigestText = memorySettings.enabled"));
+    assert.ok(sender.includes("content: timelineDigestText"));
+    assert.ok(sender.includes('safeTargetLimit += 1;'));
     assert.ok(!app.includes('时间线摘要注入（摘要为主，P4）'));
 });
 

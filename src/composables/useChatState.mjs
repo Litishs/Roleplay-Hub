@@ -96,7 +96,9 @@ export function useChatState() {
     // --- Generation timer ---
     const recentGenerationTimes = ref([]);
     const currentWaitTime = ref('0.0');
-    let waitTimer = null;
+    // waitTimer moved to useMessageSender (Phase 2.2): every read/write of it
+    // lives inside the generation pipeline, which is now a deps-injecting
+    // composable that owns the handle privately.
     const longPressTimer = ref(null);
     const estimatedGenerationTime = computed(() => {
         if (recentGenerationTimes.value.length === 0) return null;
@@ -158,7 +160,6 @@ export function useChatState() {
         chatStatsTimer,
         recentGenerationTimes,
         currentWaitTime,
-        waitTimer,
         longPressTimer,
         estimatedGenerationTime
     };

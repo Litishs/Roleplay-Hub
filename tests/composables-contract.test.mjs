@@ -23,6 +23,7 @@ const uiStateSource = (await readFile(new URL('../src/composables/useUiState.mjs
 const settingsStateSource = (await readFile(new URL('../src/composables/useSettingsState.mjs', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
 const apiConfigSource = (await readFile(new URL('../src/composables/useApiConfig.mjs', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
 const chatStateSource = (await readFile(new URL('../src/composables/useChatState.mjs', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
+const senderSource = (await readFile(new URL('../src/composables/useMessageSender.mjs', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
 
 test('useMemorySystem composable exists and is pure state', () => {
     assert.ok(memoryState.includes("import { ref, reactive } from 'vue';"), 'imports vue reactivity');
@@ -481,7 +482,10 @@ test('app.mjs wires useChatState with single call and site destructuring', () =>
     assert.ok(app.includes('let { activeToolQueueAbortController } = chatState;'));
     assert.ok(app.includes('let { isLoadingEarlierChatMessages, isLoadingLaterChatMessages, isChatTopUnlockArmed } = chatState;'));
     assert.ok(app.includes('let { chatStatsTimer } = chatState;'));
-    assert.ok(app.includes('let { waitTimer } = chatState;'));
+    // waitTimer moved out of useChatState to useMessageSender (Phase 2.2):
+    // every read/write of it lives inside the generation pipeline
+    assert.ok(!app.includes('let { waitTimer } = chatState;'));
+    assert.ok(!chatStateSource.includes('let waitTimer = null;'));
     // generation pipeline logic and tool-inline computeds stay in app.mjs
     assert.ok(app.includes('const sendMessage = async () => {'));
     assert.ok(app.includes('function hasActiveToolContinuationWork()'));
@@ -536,4 +540,45 @@ test('useChatState returns live reactive state (runtime)', async () => {
     ]) {
         assert.ok(isRef(state[key]), `exposes ref ${key}`);
     }
+});
+
+// --- useMessageSender (Phase 2, roadmap 2.2): chat generation pipeline ---
+
+test('useMessageSender composable holds the chat generation pipeline', () => {
+    assert.ok(senderSource.includes("import { nextTick, reactive } from 'vue';"), 'imports vue');
+    assert.ok(senderSource.includes("import { create as createChatRequestGuard } from '../modules/chat-request-guard.mjs';"), 'imports the chat request guard');
+    assert.ok(senderSource.includes('export function useMessageSender(deps)'), 'deps-injecting factory export');
+    assert.ok(senderSource.includes('const generateResponseCore = async (startTime = null, options = {}) => {'), 'owns generateResponseCore');
+    assert.ok(senderSource.includes('const generateResponse = async (startTime = null, options = {}) => {'), 'owns generateResponse');
+    assert.ok(senderSource.includes('return { generateResponse };'), 'exposes only generateResponse');
+    // chat request resilience policy moved along with the pipeline
+    assert.ok(senderSource.includes('CHAT_FIRST_BYTE_TIMEOUT_MS = 60000'));
+    assert.ok(senderSource.includes('const sleepChatRetry = (attempt) =>'));
+    assert.ok(senderSource.includes('const truncateErrorMessage = (message, maxLength = 600) => {'));
+    // waitTimer is private to the pipeline (all its uses moved here)
+    assert.ok(senderSource.includes('let waitTimer = null;'));
+});
+
+test('app.mjs wires useMessageSender with a single deps call', () => {
+    assert.ok(app.includes("import { useMessageSender } from '../composables/useMessageSender.mjs';"), 'import');
+    assert.equal(app.split('useMessageSender(').length - 1, 1, 'exactly one composable call per setup()');
+    assert.ok(app.includes('const { generateResponse } = useMessageSender({'), 'destructures generateResponse from deps call');
+    // app.mjs keeps the send/regenerate/continuation call sites
+    assert.ok(app.includes('const sendMessage = async () => {'));
+    assert.ok(app.includes('await generateResponse(startTime);'));
+});
+
+test('app.mjs no longer declares the generation pipeline inline', () => {
+    assert.ok(!app.includes('const generateResponseCore = async'), 'generateResponseCore moved to composable');
+    assert.ok(!app.includes('CHAT_FIRST_BYTE_TIMEOUT_MS'), 'retry policy moved to composable');
+    assert.ok(!app.includes('const truncateErrorMessage ='), 'error helpers moved to composable');
+    assert.ok(!app.includes("import { create as createChatRequestGuard } from './chat-request-guard.mjs';"), 'guard import moved to composable');
+});
+
+test('useMessageSender returns callable generateResponse (runtime smoke)', async () => {
+    const { useMessageSender } = await import('../src/composables/useMessageSender.mjs');
+    const sender = useMessageSender({});
+    const other = useMessageSender({});
+    assert.equal(typeof sender.generateResponse, 'function');
+    assert.notEqual(sender.generateResponse, other.generateResponse, 'independent closures per call');
 });

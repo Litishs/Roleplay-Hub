@@ -4,9 +4,10 @@ import test from 'node:test';
 import ttsText from '../src/modules/tts-text.mjs';
 import ttsEngine from '../src/modules/tts-engine.mjs';
 
-const [html, app, mainActivity, pluginSource, messageList, ttsHtml, settingsState] = await Promise.all([
+const [html, app, sender, mainActivity, pluginSource, messageList, ttsHtml, settingsState] = await Promise.all([
     readFile(new URL('../src/components/views/SettingsPanel.vue', import.meta.url), 'utf8'),
     readFile(new URL('../src/modules/app.mjs', import.meta.url), 'utf8'),
+    readFile(new URL('../src/composables/useMessageSender.mjs', import.meta.url), 'utf8'),
     readFile(new URL('../android/app/src/main/java/com/roleplayhub/app/MainActivity.java', import.meta.url), 'utf8'),
     readFile(new URL('../android/app/src/main/java/com/roleplayhub/app/TTSSpeechPlugin.java', import.meta.url), 'utf8'),
     readFile(new URL('../src/components/chat/MessageList.vue', import.meta.url), 'utf8'),
@@ -125,7 +126,8 @@ test('app.js wires TTS defaults, engine, actions and auto-play', () => {
     assert.match(app, /\bRPHTtsText\b/);
     assert.match(app, /const toggleSpeakMessage = async \(index\) => \{/);
     assert.match(app, /const stopSpeaking = async \(\) => \{/);
-    assert.match(app, /settings\.ttsEnabled && settings\.ttsAutoPlay/);
+    // TTS autoplay wiring moved to useMessageSender (Phase 2.2)
+    assert.match(sender, /settings\.ttsEnabled && settings\.ttsAutoPlay/);
     assert.match(app, /stopSpeaking\(\);/);
     assert.match(app, /const selectTtsService = \(id\) => \{/);
     assert.match(app, /ttsSettingsExpanded = ref\(false\)/);

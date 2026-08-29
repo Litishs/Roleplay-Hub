@@ -166,10 +166,13 @@ test('app.js: D1 batch mode / C1 json mode / D2 model required markers', async (
 });
 
 test('app.js: B1 appends UI template instruction at end of messages', async () => {
-  const source = await read('src/modules/app.mjs');
+  // B1 lives in the generation pipeline, which moved to useMessageSender (Phase 2.2)
+  const source = await read('src/composables/useMessageSender.mjs');
   assert.match(source, /mainModelUiTemplatePrompt[\s\S]*?finalMessages\.push\(\{[\s\S]*?Instructions for next message[\s\S]*?mainModelUiTemplatePrompt/);
   assert.doesNotMatch(source, /insertUserMessageAtDepth\(mainModelUiTemplatePrompt, 1\)/);
-  assert.match(source, /不要写进思考过程（reasoning\/CoT）里/);
+  // the CoT exclusion wording lives in buildUiTemplateContextSystemPrompt, which stays in app.mjs
+  const appSource = await read('src/modules/app.mjs');
+  assert.match(appSource, /不要写进思考过程（reasoning\/CoT）里/);
 });
 
 test('card-utils.js and app.js no longer persist updateMode', async () => {
