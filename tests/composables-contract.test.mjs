@@ -22,6 +22,7 @@ const characterSource = (await readFile(new URL('../src/composables/useCharacter
 const uiStateSource = (await readFile(new URL('../src/composables/useUiState.mjs', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
 const settingsStateSource = (await readFile(new URL('../src/composables/useSettingsState.mjs', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
 const apiConfigSource = (await readFile(new URL('../src/composables/useApiConfig.mjs', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
+const chatStateSource = (await readFile(new URL('../src/composables/useChatState.mjs', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
 
 test('useMemorySystem composable exists and is pure state', () => {
     assert.ok(memoryState.includes("import { ref, reactive } from 'vue';"), 'imports vue reactivity');
@@ -112,8 +113,8 @@ test('app.mjs wires useWorldInfo with single call and site destructuring', () =>
     assert.ok(app.includes('const { worldInfoSettings } = worldInfoState;'));
     assert.ok(app.includes('const { editingWorldInfo, worldInfoKeysText } = worldInfoState;'));
     assert.ok(app.includes('const { currentHoverWorldInfo } = worldInfoState;'));
-    // chat-context trigger records and data-IO export type stay in app.mjs
-    assert.ok(app.includes('const lastTriggeredWorldInfos = ref([]);'));
+    // data-IO export type stays in app.mjs; chat-context trigger records
+    // moved to useChatState (locked in the useChatState wiring test)
     assert.ok(app.match(/const exportType = ref\(null\);/));
 });
 
@@ -241,9 +242,8 @@ test('app.mjs wires useUiState with single call and site destructuring', () => {
     assert.ok(app.includes('let { isMobileSidebarOpen, nativeAppStateListener, nativeBackButtonListener } = uiState;'));
     assert.ok(app.includes('let { uiTemplateUpdateSeq, uiTemplateUpdateAbortController } = uiState;'));
     assert.ok(app.includes('let { toastIdSeed } = uiState;'));
-    // active-tool pipeline contexts stay in app.mjs (not UI shell domain)
-    assert.ok(app.includes('const pendingActiveToolContext = ref('));
-    assert.ok(app.includes('const activeToolResultContexts = ref('));
+    // active-tool pipeline contexts moved to useChatState (locked in the
+    // useChatState wiring test)
     // check/update logic stays in app.mjs while display state moved
     assert.ok(app.includes('const checkForUpdates = async (showResult = true) => {'));
     assert.ok(app.includes('const downloadAndInstallUpdate = async (maxRetries = 2) => {'));
@@ -457,4 +457,83 @@ test('useApiConfig returns live reactive state (runtime)', async () => {
     assert.equal(state.apiKeyVisible.value, false);
     state.toggleApiKeyVisibility();
     assert.equal(state.apiKeyVisible.value, true);
+});
+
+test('useChatState composable exists and is pure state', () => {
+    assert.ok(chatStateSource.includes("import { ref, computed } from 'vue';"), 'imports vue reactivity');
+    assert.ok(chatStateSource.includes("import { RPHRuntimePolicy } from '../modules/runtime-policy.mjs';"), 'imports runtime policy for render limits');
+    assert.ok(chatStateSource.includes('export function useChatState()'), 'named export');
+    assert.ok(!chatStateSource.includes('fetch('), 'no network calls');
+    assert.ok(!chatStateSource.includes('watch('), 'no watchers (belong to app.mjs for now)');
+    assert.ok(!chatStateSource.includes('saveData('), 'no persistence logic');
+    assert.ok(!chatStateSource.includes('settings.'), 'no settings access');
+});
+
+test('app.mjs wires useChatState with single call and site destructuring', () => {
+    assert.ok(app.includes("import { useChatState } from '../composables/useChatState.mjs';"), 'import');
+    assert.equal(app.split('useChatState()').length - 1, 1, 'exactly one composable call per setup()');
+    assert.ok(app.includes('const chatState = useChatState();'), 'state holder binding');
+    // destructured at original declaration sites — identifiers keep previous names
+    assert.ok(app.includes('const { pendingActiveToolContext, activeToolResultContexts } = chatState;'));
+    assert.ok(app.includes('const { lastContextMessages, lastTriggeredWorldInfos, lastContextTotalLength } = chatState;'));
+    assert.ok(app.includes('const { recentGenerationTimes, currentWaitTime, longPressTimer, estimatedGenerationTime } = chatState;'));
+    // mutable non-reactive guards use let-destructuring
+    assert.ok(app.includes('let { activeToolQueueAbortController } = chatState;'));
+    assert.ok(app.includes('let { isLoadingEarlierChatMessages, isLoadingLaterChatMessages, isChatTopUnlockArmed } = chatState;'));
+    assert.ok(app.includes('let { chatStatsTimer } = chatState;'));
+    assert.ok(app.includes('let { waitTimer } = chatState;'));
+    // generation pipeline logic and tool-inline computeds stay in app.mjs
+    assert.ok(app.includes('const sendMessage = async () => {'));
+    assert.ok(app.includes('function hasActiveToolContinuationWork()'));
+    assert.ok(app.includes('const hasActiveToolInlineWork = computed(() => {'));
+    assert.ok(app.includes('const isConversationBusy = computed(() => isGenerating.value || isRemoteGenerating.value || hasActiveToolInlineWork.value);'));
+});
+
+test('app.mjs no longer declares chat state inline', () => {
+    assert.ok(!app.includes('const chatHistory = ref('), 'chatHistory moved to composable');
+    assert.ok(!app.includes('const isGenerating = ref('), 'generation flag moved to composable');
+    assert.ok(!app.includes('const abortController = ref('), 'abort controller moved to composable');
+    assert.ok(!app.includes('const userInput = ref('), 'input moved to composable');
+    assert.ok(!app.includes('const chatContainer = ref('), 'container ref moved to composable');
+    assert.ok(!app.includes('const isChatFullscreen = ref('), 'fullscreen flag moved to composable');
+    assert.ok(!app.includes('const inputBox = ref('), 'input ref moved to composable');
+    assert.ok(!app.includes('const chatRenderLimit = ref('), 'render window moved to composable');
+    assert.ok(!app.includes('const lastContextMessages = ref('), 'context snapshot moved to composable');
+    assert.ok(!app.includes('const currentWaitTime = ref('), 'wait time moved to composable');
+    assert.ok(!app.includes('const estimatedGenerationTime = computed('), 'timer computed moved to composable');
+});
+
+test('useChatState returns live reactive state (runtime)', async () => {
+    const { useChatState } = await import('../src/composables/useChatState.mjs');
+    const state = useChatState();
+    const other = useChatState();
+    assert.notEqual(state.chatHistory, other.chatHistory, 'independent instances per call');
+
+    assert.ok(isRef(state.chatHistory) && Array.isArray(state.chatHistory.value));
+    assert.equal(state.isGenerating.value, false);
+    assert.equal(state.userInput.value, '');
+    assert.equal(state.isChatFullscreen.value, false);
+    assert.equal(state.chatRenderLimit.value, 20, 'render limit defaults to runtime policy chatInitial');
+    assert.equal(state.CHAT_RENDER_BATCH_SIZE, 10);
+    assert.equal(state.CHAT_RENDER_MAX_LIMIT, 40);
+    assert.equal(state.CHAT_ESTIMATED_MESSAGE_HEIGHT, 180);
+    assert.equal(state.currentWaitTime.value, '0.0');
+    assert.equal(state.pendingActiveToolContext.value, '');
+    assert.ok(Array.isArray(state.activeToolResultContexts.value));
+    assert.equal(state.estimatedGenerationTime.value, null);
+
+    // derived computeds react to their domain state
+    state.lastContextMessages.value = [{ content: 'hello' }, { content: 'world!' }];
+    assert.equal(state.lastContextTotalLength.value, 11);
+    state.recentGenerationTimes.value = [1000, 3000];
+    assert.equal(state.estimatedGenerationTime.value, '2.0');
+
+    for (const key of [
+        'isRemoteGenerating', 'isReceiving', 'isThinking', 'activeToolHandoffPending',
+        'chatContainer', 'inputBox', 'messageElements', 'chatRenderStart',
+        'lastTriggeredWorldInfos', 'chatRoundStats', 'conversationBodyLength',
+        'summaryCompressedBodyLength', 'longPressTimer', 'remoteEstimatedTime'
+    ]) {
+        assert.ok(isRef(state[key]), `exposes ref ${key}`);
+    }
 });

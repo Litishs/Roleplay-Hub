@@ -71,6 +71,7 @@ import { useCharacterState } from '../composables/useCharacterState.mjs';
 import { useUiState } from '../composables/useUiState.mjs';
 import { useSettingsState } from '../composables/useSettingsState.mjs';
 import { useApiConfig } from '../composables/useApiConfig.mjs';
+import { useChatState } from '../composables/useChatState.mjs';
 
 const __app = createApp({
     components: {
@@ -110,6 +111,8 @@ const __app = createApp({
         const settingsState = useSettingsState();
         // API config state lives in src/composables/useApiConfig.mjs (Phase 2); same pattern.
         const apiConfigState = useApiConfig();
+        // Chat state lives in src/composables/useChatState.mjs (Phase 2); same pattern.
+        const chatState = useChatState();
 
         // Default Avatar (Simple Gray Background)
         const defaultAvatar = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0iI2U1ZTdlYiIvPjwvc3ZnPg==';
@@ -183,8 +186,7 @@ const __app = createApp({
         let { uiTemplateUpdateSeq, uiTemplateUpdateAbortController } = uiState;
         const { showCharacterEditor } = characterState;
         const { showWorldInfoEditor } = worldInfoState;
-        const pendingActiveToolContext = ref('');
-        const activeToolResultContexts = ref([]);
+        const { pendingActiveToolContext, activeToolResultContexts } = chatState;
         const { characterDisplayLimit } = characterState;
 
         // Quota State
@@ -305,20 +307,22 @@ const __app = createApp({
             setStoredValue('author_notice_seen', true).catch(error => console.error('Author notice marker save failed:', error));
         };
         const { showNoMemoryNeededModal } = memorySystemState;
-        const isGenerating = ref(false);
-        const isRemoteGenerating = ref(false); // 新增：远程生成状态
-        const remoteEstimatedTime = ref(null); // 新增：远程预计时间
-        const isReceiving = ref(false);
-        const isThinking = ref(false);
-        const activeToolContinuationMessageId = ref(null);
-        const activeToolContinuationToolCallId = ref(null);
-        const activeToolContinuationHasResponse = ref(false);
-        const activeToolHandoffPending = ref(false);
-        const activeToolQueueRunning = ref(false);
-        const activeToolContinuationPending = ref(false);
-        let activeToolQueueAbortController = null;
-        const abortController = ref(null);
-        const userInput = ref('');
+        const {
+            isGenerating,
+            isRemoteGenerating,
+            remoteEstimatedTime,
+            isReceiving,
+            isThinking,
+            activeToolContinuationMessageId,
+            activeToolContinuationToolCallId,
+            activeToolContinuationHasResponse,
+            activeToolHandoffPending,
+            activeToolQueueRunning,
+            activeToolContinuationPending,
+            abortController,
+            userInput
+        } = chatState;
+        let { activeToolQueueAbortController } = chatState;
         const {
             modelSearchQuery, activeModelTag, popularModelFamilies,
             availableModels, providerModels, activeProviderTag
@@ -326,22 +330,24 @@ const __app = createApp({
         const { characterSearchQuery } = characterState;
         const { toasts } = uiState;
         let { toastIdSeed } = uiState;
-        const chatContainer = ref(null);
-        const isChatFullscreen = ref(false);
-        const isMobileKeyboardOpen = ref(false);
-        // 焦点进入角色卡（executable-html iframe）内输入框时为 true，
-        // 用于隐藏底部聊天输入栏，避免它遮挡卡片内容/输入框。
-        const isExternalInputFocused = ref(false);
-        const inputBox = ref(null);
-        const messageElements = ref([]);
-        let mobileViewportRaf = null;
-        let mobileKeyboardBlurTimer = null;
-        let chatInputComposing = false;
-        let chatInputSyncRaf = null;
-        let chatInputResizeRaf = null;
-        let lastAppliedMobileViewportHeight = 0;
-        let lastAppliedMobileKeyboardInset = 0;
-        let lastAppliedMobileBackgroundHeight = 0;
+        const {
+            chatContainer,
+            isChatFullscreen,
+            isMobileKeyboardOpen,
+            isExternalInputFocused,
+            inputBox,
+            messageElements
+        } = chatState;
+        let {
+            mobileViewportRaf,
+            mobileKeyboardBlurTimer,
+            chatInputComposing,
+            chatInputSyncRaf,
+            chatInputResizeRaf,
+            lastAppliedMobileViewportHeight,
+            lastAppliedMobileKeyboardInset,
+            lastAppliedMobileBackgroundHeight
+        } = chatState;
         // IntersectionObserver for lazy loading images or other visibility triggers could go here
 
         let scrollRevealObserver = null;
@@ -1016,16 +1022,16 @@ const __app = createApp({
 
         const { characters, showAddCharacterMenu, currentCharacterIndex } = characterState;
 
-        const chatHistory = ref([]);
-        const CHAT_RENDER_INITIAL_LIMIT = RPHRuntimePolicy?.limits?.chatInitial || 20;
-        const CHAT_RENDER_BATCH_SIZE = RPHRuntimePolicy?.limits?.chatBatch || 10;
-        const CHAT_RENDER_MAX_LIMIT = RPHRuntimePolicy?.limits?.chatMaximum || 40;
-        const CHAT_ESTIMATED_MESSAGE_HEIGHT = 180;
-        const chatRenderLimit = ref(CHAT_RENDER_INITIAL_LIMIT);
-        const chatRenderStart = ref(0);
-        let isLoadingEarlierChatMessages = false;
-        let isLoadingLaterChatMessages = false;
-        let isChatTopUnlockArmed = true;
+        const {
+            chatHistory,
+            CHAT_RENDER_INITIAL_LIMIT,
+            CHAT_RENDER_BATCH_SIZE,
+            CHAT_RENDER_MAX_LIMIT,
+            CHAT_ESTIMATED_MESSAGE_HEIGHT,
+            chatRenderLimit,
+            chatRenderStart
+        } = chatState;
+        let { isLoadingEarlierChatMessages, isLoadingLaterChatMessages, isChatTopUnlockArmed } = chatState;
         const { lastActiveCharacterId } = characterState; // For persistence
         function hasActiveToolContinuationWork() {
             return !!(activeToolContinuationPending.value || (
@@ -1299,10 +1305,8 @@ const __app = createApp({
         const globalRegexScripts = ref([]);
         const { globalWorldInfo, worldInfo } = worldInfoState;
         const globalUiTemplates = ref([]);
-        const recentGenerationTimes = ref([]);
-        const currentWaitTime = ref('0.0');
-        let waitTimer = null;
-        const longPressTimer = ref(null);
+        const { recentGenerationTimes, currentWaitTime, longPressTimer, estimatedGenerationTime } = chatState;
+        let { waitTimer } = chatState;
 
         // --- Memory System State (moved to src/composables/useMemorySystem.mjs) ---
         const {
@@ -1798,16 +1802,6 @@ const __app = createApp({
             return result;
         };
 
-        const estimatedGenerationTime = computed(() => {
-            if (recentGenerationTimes.value.length === 0) return null;
-            const total = recentGenerationTimes.value.reduce((sum, item) => {
-                // Compatibility: handle both number and object
-                const duration = typeof item === 'number' ? item : item.duration;
-                return sum + duration;
-            }, 0);
-            return (total / recentGenerationTimes.value.length / 1000).toFixed(1);
-        });
-
         const { showWorldInfoSettings } = worldInfoState;
         const { showMemorySettings } = memorySystemState;
         const { settingsHelpTopic } = settingsState;
@@ -1852,12 +1846,7 @@ const __app = createApp({
             return getStoryBranchScopeId(char.uuid, activeStoryBranchId.value);
         };
         const getCurrentChatStorageScopeId = () => getCurrentStoryBranchScopeId() || currentCharacter.value?.uuid || null;
-        const lastContextMessages = ref([]);
-        const lastTriggeredWorldInfos = ref([]);
-        const lastContextTotalLength = computed(() => lastContextMessages.value.reduce(
-            (total, message) => total + String(message?.content || '').length,
-            0
-        ));
+        const { lastContextMessages, lastTriggeredWorldInfos, lastContextTotalLength } = chatState;
         const tokenUsageHistory = ref([]);
         const tokenUsagePage = ref(1);
         const tokenUsageFilter = ref('all');
@@ -3722,10 +3711,8 @@ ${content}
             characterDisplayLimit.value = 8;
         });
 
-        const chatRoundStats = ref({ floors: 0 });
-        const conversationBodyLength = ref(0);
-        const summaryCompressedBodyLength = ref(0);
-        let chatStatsTimer = null;
+        const { chatRoundStats, conversationBodyLength, summaryCompressedBodyLength } = chatState;
+        let { chatStatsTimer } = chatState;
 
         const calculateConversationBodyLength = () => (
             chatHistory.value.reduce((total, message) => {
