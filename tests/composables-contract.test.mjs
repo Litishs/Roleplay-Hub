@@ -716,6 +716,22 @@ test('useBackupRestore returns callable members (runtime smoke)', async () => {
     assert.notEqual(br.exportNativeBackup, other.exportNativeBackup, 'independent closures per call');
 });
 
+test('every showVueConfirmModal call site declares its own button labels', () => {
+    // The global confirm dialog no longer hardcodes context-specific button
+    // text (取消中断/立即重试). Each caller passes confirmLabel/cancelLabel
+    // matching its own action: restore backup shows 立即恢复/取消恢复, the three
+    // retry prompts show 立即重试/取消. A new call site without labels fails
+    // here on purpose so the button semantics are decided at the call site.
+    const combined = app + '\n' + backupRestoreSource;
+    const callCount = (combined.match(/showVueConfirmModal\(/g) || []).length;
+    const confirmCount = (combined.match(/confirmLabel:\s*'/g) || []).length;
+    const cancelCount = (combined.match(/cancelLabel:\s*'/g) || []).length;
+    assert.equal(callCount, 4, 'exactly four confirm call sites (restore + 3 retry prompts)');
+    assert.equal(confirmCount, callCount, 'every call site must pass confirmLabel');
+    assert.equal(cancelCount, callCount, 'every call site must pass cancelLabel');
+    assert.ok(!combined.includes('取消中断'), 'mistranslated Cancel label must not reappear');
+});
+
 // --- useUiTemplatePipeline (Phase 3.0): UI template variable analysis pipeline ---
 
 test('useUiTemplatePipeline composable owns the analysis pipeline', () => {

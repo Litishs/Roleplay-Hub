@@ -15,10 +15,10 @@
                 <p class="text-[13px] text-gray-500 mb-6 whitespace-pre-wrap leading-relaxed px-2">{{ globalConfirmModal.message }}</p>
                 <div class="flex space-x-3 w-full">
                     <button @click="globalConfirmModal.onCancel" class="flex-1 py-2.5 px-4 bg-gray-50 hover:bg-gray-100 text-gray-600 font-bold rounded-xl transition-all border border-gray-200 shadow-sm focus:outline-none focus:ring-2 focus:ring-gray-300 hover:-translate-y-0.5">
-                        取消中断
+                        {{ globalConfirmModal.cancelLabel || '取消' }}
                     </button>
                     <button @click="globalConfirmModal.onConfirm" class="flex-1 py-2.5 px-4 bg-primary-600 hover:bg-primary-500 text-white font-bold rounded-xl shadow-md hover:shadow-lg transition-all focus:outline-none focus:ring-2 focus:ring-primary-400 hover:-translate-y-0.5">
-                        立即重试
+                        {{ globalConfirmModal.confirmLabel || '确认' }}
                     </button>
                 </div>
             </div>

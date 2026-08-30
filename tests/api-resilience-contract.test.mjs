@@ -72,7 +72,7 @@ test('聊天向量召回超时后仍通过关键词与最近轮次注入记忆',
     assert.ok(app.includes("abortSafely(recallController, 'Memory recall timed out')"));
     assert.ok(app.includes('const selectVectorMemoriesLexicalFallback = (options = {}) => {'));
     assert.ok(app.includes('const memoryRecallFallback = recallFallbackSelect;'));
-    assert.ok(app.includes('return memoryRecallFallback.select(vectorMemories, {'));
+    assert.ok(app.includes('return memoryRecallFallback(vectorMemories, {'));
     assert.ok(memoryFallbackSource.includes("vectorRecallMode: 'lexical-fallback'"));
     assert.ok(app.includes("diagnostic?.stage('memory_recall_lexical_fallback')"));
     assert.ok(app.includes("diagnostic?.stage('memory_recall_circuit_fallback')"));

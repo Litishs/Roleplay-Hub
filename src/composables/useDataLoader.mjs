@@ -33,6 +33,8 @@ export function useDataLoader(deps) {
         characters,
         settings,
         presets,
+        presetGroups,
+        presetDefinitionsVersionApplied,
         deletedDefaultPresetNames,
         globalRegexScripts,
         regexScripts,
@@ -144,6 +146,23 @@ export function useDataLoader(deps) {
 
                 const savedPresets = await getStoredValue('presets');
                 if (savedPresets) presets.value = savedPresets.map(normalizePreset);
+
+                const savedPresetGroups = await getStoredValue('preset_groups');
+                if (Array.isArray(savedPresetGroups) && savedPresetGroups.length > 0) {
+                    presetGroups.value = savedPresetGroups
+                        .filter(g => g && typeof g.id === 'string' && g.id)
+                        .map(g => ({
+                            id: g.id,
+                            name: g.name || (g.id === 'default' ? '默认预设' : g.id),
+                            builtin: g.id === 'default' ? true : !!g.builtin,
+                            enabled: g.id === 'default' ? (g.enabled !== false) : (g.enabled === true)
+                        }));
+                }
+
+                const savedPresetVersion = await getStoredValue('preset_definitions_version');
+                if (typeof savedPresetVersion === 'number') {
+                    presetDefinitionsVersionApplied.value = savedPresetVersion;
+                }
 
                 const savedDeletedDefaultPresets = await getStoredValue('deleted_default_presets');
                 if (Array.isArray(savedDeletedDefaultPresets)) {

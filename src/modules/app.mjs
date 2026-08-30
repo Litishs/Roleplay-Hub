@@ -24,7 +24,8 @@ import { RPHRequestDiagnostics } from './request-diagnostics.mjs';
 import { compareVersions, checkForUpdate, fetchLatestRelease, downloadApk, saveAndInstallApk, GITHUB_REPO, RELEASES_PAGE_URL } from './update-checker.mjs';
 const RPHUpdateChecker = { compareVersions, checkForUpdate, fetchLatestRelease, downloadApk, saveAndInstallApk, GITHUB_REPO, RELEASES_PAGE_URL };
 import { RPHChatPersistence } from './chat-persistence.mjs';
-import { DEFAULT_PRESET_DEFINITIONS } from './default-presets.mjs';
+import { DEFAULT_PRESET_DEFINITIONS, DEFAULT_PRESET_DEFINITIONS_VERSION } from './default-presets.mjs';
+import { buildCotPresetContent } from './cot-builder.mjs';
 import { RPHStorage } from './storage-repository.mjs';
 import { RPHRuntimePolicy } from './runtime-policy.mjs';
 import { RPHLocalEmbedding } from './local-embedding.mjs';
@@ -1063,6 +1064,11 @@ const __app = createApp({
         const isConversationBusy = computed(() => isGenerating.value || isRemoteGenerating.value || hasActiveToolInlineWork.value);
 
         const presets = ref([]);
+        // 预设分组：全局只启用一个分组（互斥），组内预设的 enabled 是分闸。
+        // 默认预设组（id:'default'）由应用维护、不可删除；自定义分组由用户管理。
+        const presetGroups = ref([]);
+        // 已应用的预设定义版本（用于版本变化时强制同步默认预设组）
+        const presetDefinitionsVersionApplied = ref(null);
         // 用户主动删除的内置预设（避免启动时重新播种；第二/第三人称除外）
         const deletedDefaultPresetNames = ref([]);
         const presetRoleOptions = [
@@ -2267,6 +2273,8 @@ const __app = createApp({
                 await setStoredValue('characters', characters.value);
                 await setStoredValue('settings', settings);
                 await setStoredValue('presets', presets.value);
+                await setStoredValue('preset_groups', presetGroups.value);
+                await setStoredValue('preset_definitions_version', presetDefinitionsVersionApplied.value);
                 await setStoredValue('deleted_default_presets', deletedDefaultPresetNames.value);
                 await setStoredValue('regex', regexScripts.value);
                 await setStoredValue('global_regex', globalRegexScripts.value);
@@ -5423,7 +5431,8 @@ const __app = createApp({
 
                     const retry = await showVueConfirmModal(
                         '向量补录遇到错误',
-                        `第 ${i + 1}-${Math.min(i + batch.length, fragmentItems.length)} 个段落补录遇到错误：\n${err.message}\n\n是否立即重试？`
+                        `第 ${i + 1}-${Math.min(i + batch.length, fragmentItems.length)} 个段落补录遇到错误：\n${err.message}\n\n是否立即重试？`,
+                        { confirmLabel: '立即重试', cancelLabel: '取消' }
                     );
                     if (retry) {
                         i -= MEMORY_VECTOR_BATCH_SIZE;
@@ -5670,7 +5679,7 @@ const __app = createApp({
         const selectVectorMemoriesLexicalFallback = (options = {}) => {
             const vectorMemories = getContextVectorMemories(options);
             const queryTerms = extractVectorQueryTerms(getLatestUserMemoryQuery());
-            return memoryRecallFallback.select(vectorMemories, {
+            return memoryRecallFallback(vectorMemories, {
                 queryTerms,
                 topK: getVectorMemoryTopK(),
                 getFingerprint: getVectorMemoryFingerprint
@@ -6189,7 +6198,8 @@ const __app = createApp({
                             if (!manual) throw error;
                             const retry = await showVueConfirmModal(
                                 '事实抽取遇到错误',
-                                `第 ${turnInfo.turn} 轮抽取失败：\n${error.message}\n\n是否立即重试？`
+                                `第 ${turnInfo.turn} 轮抽取失败：\n${error.message}\n\n是否立即重试？`,
+                                { confirmLabel: '立即重试', cancelLabel: '取消' }
                             );
                             if (!retry) throw error;
                             i--;
@@ -7571,6 +7581,7 @@ const __app = createApp({
             getCurrentCharacterPrompt,
             syncChatModelFromPresets,
             presets,
+            presetGroups,
             normalizePreset,
             estimateTokens,
             estimateMessagesTokens,
@@ -7804,7 +7815,8 @@ const __app = createApp({
                                 if (retryError.name === 'AbortError') throw retryError;
                                 const retry = await showVueConfirmModal(
                                     '总结模式补录遇到错误',
-                                    `第 ${failed.job.turn} 轮生成失败：\n${retryError.message}\n\n是否立即重试？`
+                                    `第 ${failed.job.turn} 轮生成失败：\n${retryError.message}\n\n是否立即重试？`,
+                                    { confirmLabel: '立即重试', cancelLabel: '取消' }
                                 );
                                 if (!retry) throw retryError;
                                 const retryResult = await runClassicJob(failed.job);
@@ -8673,6 +8685,8 @@ const __app = createApp({
             characters,
             settings,
             presets,
+            presetGroups,
+            presetDefinitionsVersionApplied,
             deletedDefaultPresetNames,
             globalRegexScripts,
             regexScripts,
@@ -8920,9 +8934,15 @@ const __app = createApp({
         };
 
         // Preset Management
-        const createPreset = () => {
+        const createPreset = (groupId) => {
             editingPreset.id = undefined;
-            editingPreset.data = { name: 'New Preset', content: '', enabled: false, role: 'system' };
+            editingPreset.data = {
+                name: 'New Preset',
+                content: '',
+                enabled: false,
+                role: 'system',
+                group: groupId || 'default'
+            };
             showPresetEditor.value = true;
         };
 
@@ -8955,6 +8975,118 @@ const __app = createApp({
                 showToast('预设已删除', 'success');
             });
         };
+
+        // --- Preset Group Management (D5/D5.4) ---
+        // 全局互斥：只启用一个分组；启用某分组时自动关闭其他分组。
+        const setActivePresetGroup = (groupId) => {
+            if (!presetGroups.value.some(g => g.id === groupId)) return;
+            presetGroups.value = presetGroups.value.map(g => ({
+                ...g,
+                enabled: g.id === groupId
+            }));
+        };
+
+        // 新建自定义分组：seedFromDefault=true 时复制当前默认组全部预设作为初始条目（副本归属新组）。
+        const createPresetGroup = ({ name = '', seedFromDefault = false } = {}) => {
+            const groupName = String(name || '').trim() || '新建分组';
+            const groupId = `group_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+            presetGroups.value.push({ id: groupId, name: groupName, builtin: false, enabled: false });
+            if (seedFromDefault) {
+                const defaultPresets = presets.value.filter(p => p.group === 'default');
+                const copies = defaultPresets.map(p => ({
+                    ...p,
+                    group: groupId,
+                    enabled: p.enabled !== false
+                }));
+                presets.value = [...presets.value, ...copies];
+            }
+            return groupId;
+        };
+
+        // 删除自定义分组 = 删除该分组下全部预设（D5.2）；默认预设组不可删除。
+        const deletePresetGroup = (groupId) => {
+            const group = presetGroups.value.find(g => g.id === groupId);
+            if (!group || group.builtin) return;
+            const count = presets.value.filter(p => p.group === groupId).length;
+            confirmAction(`确定要删除该分组及组内 ${count} 条预设吗？此操作无法撤销。`, () => {
+                presetGroups.value = presetGroups.value.filter(g => g.id !== groupId);
+                presets.value = presets.value.filter(p => p.group !== groupId);
+                // 若删除的是当前启用分组，回落到默认预设组
+                if (group.enabled) {
+                    presetGroups.value = presetGroups.value.map(g => ({
+                        ...g,
+                        enabled: g.id === 'default'
+                    }));
+                }
+                showToast('预设分组已删除', 'success');
+            });
+        };
+
+        // 导出分组：把整个分组结构（分组 + 各组预设）打包为 JSON，导入时可完整重建。
+        const exportPresetGroups = async () => {
+            const data = {
+                type: 'rp-hub-preset-groups',
+                groups: presetGroups.value.map(g => ({ ...g })),
+                presets: presets.value.map(p => ({ ...p }))
+            };
+            try {
+                const { result } = await downloadJsonFile(data, 'preset_groups.json');
+                if (result.saved) {
+                    showToast(`成功导出 ${presetGroups.value.length} 个预设分组`, 'success');
+                }
+            } catch (error) {
+                console.error('Export preset groups failed:', error);
+                showToast('导出分组失败: ' + (error?.message || error), 'error');
+            }
+        };
+
+        // 导入分组：读取导出的分组结构 JSON，重建分组与组内预设。
+        const importPresetGroups = (event) => readJsonFileInput(event, (data) => {
+            const importedGroups = Array.isArray(data?.groups) ? data.groups : [];
+            const importedPresets = Array.isArray(data?.presets) ? data.presets : [];
+            if (importedGroups.length === 0 && importedPresets.length === 0) {
+                showToast('导入失败：未识别到分组数据，请选择导出的预设分组文件', 'error');
+                return;
+            }
+            const validGroups = importedGroups.filter(g => g && typeof g.id === 'string' && g.id);
+            const validPresets = importedPresets
+                .map(p => normalizePreset(p))
+                .filter(p => String(p.content || '').trim());
+            if (validGroups.length === 0 && validPresets.length === 0) {
+                showToast('导入失败：文件内没有有效的分组或预设', 'error');
+                return;
+            }
+            confirmAction(`确定要导入 ${validGroups.length} 个分组 / ${validPresets.length} 条预设吗？`, () => {
+                // 重建分组：默认组已存在则复用，其余按 id 去重，撞 id 时生成新 id 并映射预设
+                const existingIds = new Set(presetGroups.value.map(g => g.id));
+                const idMap = new Map();
+                const addedGroups = [];
+                validGroups.forEach(g => {
+                    if (existingIds.has(g.id)) { idMap.set(g.id, g.id); return; }
+                    const newId = g.id === 'default' ? 'default' : `group_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+                    idMap.set(g.id, newId);
+                    addedGroups.push({ id: newId, name: g.name || (newId === 'default' ? '默认预设' : newId), builtin: newId === 'default', enabled: false });
+                    existingIds.add(newId);
+                });
+                presetGroups.value = [...presetGroups.value, ...addedGroups];
+                // 重建预设：归属映射后的分组
+                const newPresets = validPresets.map(p => ({
+                    ...p,
+                    group: idMap.get(p.group) || p.group || 'default'
+                }));
+                const existingFingerprints = new Set(presets.value.map(p => importItemFingerprint(p, ['role', 'content'])));
+                const deduped = [];
+                newPresets.forEach(p => {
+                    const fp = importItemFingerprint(p, ['role', 'content']);
+                    if (existingFingerprints.has(fp)) return;
+                    existingFingerprints.add(fp);
+                    deduped.push(p);
+                });
+                presets.value = [...presets.value, ...deduped];
+                saveData();
+                showToast(`成功导入 ${addedGroups.length} 个分组 / ${deduped.length} 条预设${validGroups.length - addedGroups.length ? `（${validGroups.length - addedGroups.length} 个分组已存在跳过）` : ''}`, 'success');
+            });
+        }, () => showToast('导入失败: 格式错误', 'error'));
 
         // Expose triggerSlash for character cards (Defined early)
         window.triggerSlash = async (text) => {
@@ -9111,40 +9243,75 @@ const __app = createApp({
                 delete settings.autoRestoreDefaultAPI;
             }
 
-            // --- Seed Default Presets (只播种，不覆盖用户编辑) ---
+            // --- Seed Default Presets (分组播种：默认预设组 + 用户自定义预设组) ---
             // 内置预设定义位于独立数据文件 src/modules/default-presets.mjs。
-            // 启动时只在“缺失”时创建一次；已存在的预设保留用户的编辑内容、开关和顺序，
-            // 删除后不会复活（第二/第三人称除外：二者是功能预设，开关跟随人称设置）。
+            // 分组模型（D5）：每个预设带 group 字段（'default' 默认组 / 自定义分组 id）；
+            // 全局只启用一个分组（互斥，D5.4）：组级 enabled 是总闸，组内预设 enabled 是分闸。
+            // 首次迁移：存量旧内置预设转入自定义组并默认关闭（D5.1），再播种全新默认预设组；
+            // 版本变化时：仅强制同步默认预设组的内容/角色（D5），自定义组永不动。
 
             const presetDefinitions = Array.isArray(DEFAULT_PRESET_DEFINITIONS) ? DEFAULT_PRESET_DEFINITIONS : [];
             const preludePresetNames = ['破限预注入 · User 1', '破限预注入 · AI 1', '破限预注入 · User 2', '破限预注入 · AI 2'];
 
-            // 破限预注入的默认启用状态跟随「破限」（兼容旧数据迁移）
-            const existingDefaultPreset = presets.value.find(p => p.name === '破限');
+            // 1) 首次迁移：旧数据（无 group 字段）→ 归入自定义组；随后播种全新默认组。
+            //    名字匹配定义的视为旧内置预设（转自定义并默认关闭，D5.1，避免与新默认组重复注入）；
+            //    其余为用户自建预设（归自定义组，保留原开关）。
+            if (presets.value.some(p => !p.group)) {
+                presetGroups.value = [{ id: 'custom', name: '自定义预设', builtin: false, enabled: false }];
+                const definitionNameSet = new Set(presetDefinitions.map(d => d.name));
+                presets.value = presets.value.map(p => {
+                    if (p.group) return p;
+                    const isLegacyBuiltin = definitionNameSet.has(p.name);
+                    return { ...p, group: 'custom', enabled: isLegacyBuiltin ? false : (p.enabled !== false) };
+                });
+            }
+
+            // 2) 确保默认预设组存在（内置、不可删除、不可重命名）
+            if (!presetGroups.value.some(g => g.id === 'default')) {
+                presetGroups.value.unshift({ id: 'default', name: '默认预设', builtin: true, enabled: true });
+            }
+
+            // 破限预注入的默认启用状态跟随「破限」（默认组内，兼容旧数据迁移）
+            const existingDefaultPreset = presets.value.find(p => p.name === '破限' && p.group === 'default');
             const fallbackBuiltinEnabled = existingDefaultPreset ? existingDefaultPreset.enabled !== false : true;
 
-            const existingPresetNames = new Set(presets.value.map(p => p.name));
+            // 3) 版本变化 → 强制同步默认组；否则只播种缺失的默认组预设
+            const versionChanged = presetDefinitionsVersionApplied.value !== DEFAULT_PRESET_DEFINITIONS_VERSION;
+            const defaultByName = new Map(presets.value.filter(p => p.group === 'default').map(p => [p.name, p]));
             const deletedNames = new Set(deletedDefaultPresetNames.value || []);
             for (const def of presetDefinitions) {
-                if (existingPresetNames.has(def.name)) continue;
-                // 用户主动删除的内置预设不重新播种（第二/第三人称除外）
-                if (deletedNames.has(def.name) && !def.systemManaged) continue;
+                const existing = defaultByName.get(def.name);
                 let content = def.content || '';
-                if (def.name === 'COT' && memorySettings.enabled && def.contentWithMemory) {
-                    content = def.contentWithMemory;
-                }
                 let enabled = def.defaultEnabled !== false;
                 if (preludePresetNames.includes(def.name)) {
                     enabled = fallbackBuiltinEnabled;
                 }
                 if (def.name === '第二人称') enabled = user.person !== 'third';
                 if (def.name === '第三人称') enabled = user.person === 'third';
+                if (existing) {
+                    // 版本变化时：强制覆盖 content/role，保留用户 enabled 开关
+                    if (versionChanged) {
+                        existing.content = content;
+                        existing.role = def.role || 'system';
+                    }
+                    continue;
+                }
+                // 缺失：播种（版本未变时保留"删除后不复活"；版本变化时按定义补齐）
+                if (!versionChanged && deletedNames.has(def.name) && !def.systemManaged) continue;
                 presets.value.push({
                     name: def.name,
                     role: def.role || 'system',
                     content,
-                    enabled
+                    enabled,
+                    group: 'default',
+                    systemManaged: !!def.systemManaged
                 });
+            }
+
+            // 版本变化时：移除已下架的默认组预设（定义中已不存在者；功能预设除外）
+            if (versionChanged) {
+                const defNames = new Set(presetDefinitions.map(d => d.name));
+                presets.value = presets.value.filter(p => p.group !== 'default' || defNames.has(p.name) || p.systemManaged);
             }
 
             // 功能预设（第二/第三人称）：开关强制跟随人称设置，内容不覆盖
@@ -9153,6 +9320,49 @@ const __app = createApp({
             const thirdPersonPreset = presets.value.find(p => p.name === '第三人称');
             if (thirdPersonPreset) thirdPersonPreset.enabled = user.person === 'third';
 
+            // 4) COT 动态内容（D6/A）：由构建器按记忆/UI模板/模型实时生成，watch 联动
+            const usesThinkingCotTag = (model) => /(?:deepseek|glm|kimi)/i.test(String(model || ''));
+            const isUiTemplateAnalysisEnabled = () => !!(settings.uiTemplateEnabled && settings.uiTemplateMainModelAnalysis && activeUiTemplates.value.length > 0);
+            const syncCotPresetContent = () => {
+                const useThinkingOpening = usesThinkingCotTag(settings.model);
+                const cotContent = buildCotPresetContent({
+                    memoryEnabled: !!memorySettings.enabled,
+                    uiTemplateAnalysisEnabled: isUiTemplateAnalysisEnabled(),
+                    useThinkingOpening
+                });
+                let existingCotPreset = presets.value.find(p => p.name === 'COT' && p.group === 'default');
+                if (!existingCotPreset) {
+                    presets.value.push({ name: 'COT', role: 'system', content: cotContent, enabled: true, group: 'default', systemManaged: true });
+                    existingCotPreset = presets.value.find(p => p.name === 'COT' && p.group === 'default');
+                } else if (existingCotPreset.content !== cotContent) {
+                    existingCotPreset.content = cotContent;
+                }
+                const prefillEnabled = existingCotPreset?.enabled !== false;
+                ['破限预注入 · AI 1', '破限预注入 · AI 2'].forEach((prefillName, index) => {
+                    const prefillPreset = presets.value.find(p => p.name === prefillName && p.group === 'default');
+                    if (!prefillPreset) return;
+                    const baseContent = presetDefinitions.find(d => d.name === prefillName)?.content || '';
+                    prefillPreset.content = buildCotPresetContent({
+                        memoryEnabled: !!memorySettings.enabled,
+                        uiTemplateAnalysisEnabled: isUiTemplateAnalysisEnabled(),
+                        useThinkingOpening,
+                        prefillPhase: index + 1,
+                        prefillEnabled,
+                        prefillBaseContent: baseContent
+                    });
+                });
+            };
+            syncCotPresetContent();
+            watch([
+                () => memorySettings.enabled,
+                () => settings.uiTemplateEnabled,
+                () => settings.uiTemplateMainModelAnalysis,
+                () => settings.model,
+                () => presets.value.find(p => p.name === 'COT')?.enabled
+            ], syncCotPresetContent);
+
+            // 5) 记录已应用版本并保存
+            presetDefinitionsVersionApplied.value = DEFAULT_PRESET_DEFINITIONS_VERSION;
             ensureDefaultUserRegex({ prepend: true });
             // Save enforced defaults immediately (仅保存预设/正则等结构性数据)
             saveData();
@@ -9681,6 +9891,8 @@ const __app = createApp({
             handleStoryRouteNodeClick, startStoryRouteDrag, moveStoryRouteDrag, endStoryRouteDrag,
             openStoryBranchNameEditor, saveStoryBranchName, deleteSelectedStoryBranch,
             createPreset, editPreset, savePreset, deletePreset,
+            presetGroups, setActivePresetGroup, createPresetGroup, deletePresetGroup,
+            exportPresetGroups, importPresetGroups,
             renderMarkdown, messageUsesWideLayout, parseCot, closeCharacterEditor: () => showCharacterEditor.value = false,
             openExportModal, toggleExportSelection, selectAllExportItems, deselectAllExportItems, confirmExport,
             importPresets,

@@ -47,7 +47,7 @@ export function useBackupRestore(deps) {
 
         const restoreNativeBackup = async () => {
             if (backupInProgress.value) return;
-            const confirmed = await showVueConfirmModal('恢复完整备份', '恢复将替换当前角色、聊天、记忆、设置和本地图片。API Key 不会从备份恢复。');
+            const confirmed = await showVueConfirmModal('恢复完整备份', '恢复将替换当前角色、聊天、记忆、设置和本地图片。API Key 不会从备份恢复。', { confirmLabel: '立即恢复', cancelLabel: '取消恢复' });
             if (!confirmed) return;
             backupInProgress.value = true;
             try {
