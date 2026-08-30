@@ -557,11 +557,109 @@ year 2025, textless version, {{petite,loli}}, Petite figure, no text, The image 
         return { ...(result || {}), target: 'document' };
     };
 
+    // --- Iframe export bridge -----------------------------------------------
+    // The character-card workshop (character/index.html) runs inside an iframe
+    // whose sandbox keeps allow-same-origin, so it reaches the native bridge via
+    // window.parent.Capacitor. But the native create-document picker uses
+    // startActivityForResult + an @ActivityCallback, and that callback never
+    // resolves back across the frame boundary — exportFileStart() hangs silently
+    // and no picker ever appears. To work around this, an iframe delegates the
+    // whole native export to its parent frame through postMessage; the parent
+    // runs the identical downloadBlob() (where the plugin callback resolves) and
+    // returns the result. The parent installs its listener once at module load.
+    const EXPORT_BRIDGE_REQ = 'rph:export-blob';
+    const EXPORT_BRIDGE_ACK = 'rph:export-blob-ack';
+    const EXPORT_BRIDGE_RES = 'rph:export-blob-result';
+
+    const downloadBlobViaParentFrame = (blob, filename, options = {}) => new Promise((resolve, reject) => {
+        const id = 'exp-' + Date.now() + '-' + Math.random().toString(36).slice(2);
+        let origin = '*';
+        try { origin = window.location.origin || '*'; } catch (_) { }
+        let ackTimer = null;
+        let resTimer = null;
+        const cleanup = () => {
+            if (ackTimer) { clearTimeout(ackTimer); ackTimer = null; }
+            if (resTimer) { clearTimeout(resTimer); resTimer = null; }
+            window.removeEventListener('message', onMessage);
+        };
+        const onMessage = (event) => {
+            const data = event.data;
+            if (!data || data.id !== id) return;
+            if (data.type === EXPORT_BRIDGE_ACK) {
+                // Parent has the bridge and is handling the request; only the
+                // final result remains, which may take as long as the user
+                // spends in the system file picker.
+                if (ackTimer) { clearTimeout(ackTimer); ackTimer = null; }
+                return;
+            }
+            if (data.type === EXPORT_BRIDGE_RES) {
+                cleanup();
+                if (data.error) reject(new Error(data.error.message || 'export failed in parent frame'));
+                else resolve(data.result || { saved: true, target: 'document' });
+            }
+        };
+        // No ACK within a short window means the parent has no bridge installed
+        // (e.g. the workshop iframe is opened outside the app shell); bail out
+        // so the caller surfaces an error instead of hanging forever.
+        ackTimer = setTimeout(() => { cleanup(); reject(new Error('iframe export bridge unavailable')); }, 3000);
+        // Safety net: if the parent acknowledged but the export never completes,
+        // reject after a generous grace period.
+        resTimer = setTimeout(() => { cleanup(); reject(new Error('iframe export timed out')); }, 300000);
+        window.addEventListener('message', onMessage);
+        try {
+            window.parent.postMessage(
+                { type: EXPORT_BRIDGE_REQ, id, blob, filename, options },
+                origin
+            );
+        } catch (error) {
+            cleanup();
+            reject(error);
+        }
+    });
+
+    let iframeExportBridgeInstalled = false;
+    const installIframeExportBridge = () => {
+        if (iframeExportBridgeInstalled) return;
+        if (typeof window === 'undefined' || !window.addEventListener) return;
+        iframeExportBridgeInstalled = true;
+        window.addEventListener('message', async (event) => {
+            const data = event.data;
+            if (!data || data.type !== EXPORT_BRIDGE_REQ) return;
+            const source = event.source;
+            if (!source) return;
+            // Only answer requests from our own (same-origin) child frames.
+            try { if (event.origin !== window.location.origin) return; } catch (_) { return; }
+            const reply = (payload) => {
+                try { source.postMessage({ id: data.id, ...payload }, event.origin); } catch (_) { }
+            };
+            reply({ type: EXPORT_BRIDGE_ACK });
+            try {
+                const result = await downloadBlob(data.blob, data.filename, data.options || {});
+                reply({ type: EXPORT_BRIDGE_RES, result });
+            } catch (error) {
+                reply({ type: EXPORT_BRIDGE_RES, error: { message: error?.message || String(error) } });
+            }
+        });
+    };
+
     const downloadBlob = async (blob, filename, options = {}) => {
         let capacitor = window.Capacitor;
         try {
             if (!capacitor && window.parent !== window) capacitor = window.parent.Capacitor;
         } catch (_) { }
+        // Inside the character-card workshop iframe the native create-document
+        // ActivityCallback never resolves across the frame boundary, so the picker
+        // would hang. Delegate the whole export to the parent frame, where the
+        // plugin callback works. Falls through on any failure.
+        if (window.parent !== window) {
+            try {
+                if (capacitor?.Plugins?.NativeStorage?.exportFile) {
+                    return await downloadBlobViaParentFrame(blob, filename, options);
+                }
+            } catch (error) {
+                console.error('Parent-frame export bridge failed:', error);
+            }
+        }
         const nativeStorage = capacitor?.Plugins?.NativeStorage;
         if (!nativeStorage?.exportFile) {
             downloadBlobInBrowser(blob, filename, options);
@@ -589,6 +687,8 @@ year 2025, textless version, {{petite,loli}}, Petite figure, no text, The image 
         });
         return { ...result, target: 'document' };
     };
+
+    installIframeExportBridge();
 
     const RPHubCardUtils =  {
         blobToDataUrl,
