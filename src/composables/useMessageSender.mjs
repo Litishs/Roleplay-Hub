@@ -51,6 +51,7 @@ export function useMessageSender(deps) {
         getCurrentCharacterPrompt,
         syncChatModelFromPresets,
         presets,
+        presetGroups,
         normalizePreset,
         estimateTokens,
         estimateMessagesTokens,
@@ -420,9 +421,12 @@ export function useMessageSender(deps) {
             });
 
             // Construct Prompt Parts
+            // 分组消费（D5.4）：组级开关是总闸，组内预设开关是分闸——只合并「已启用分组」内
+            // enabled 的预设；功能预设（第二/第三人称、COT）不受分组限制，始终按其自身开关参与。
+            const activeGroupId = presetGroups.value.find(g => g.enabled)?.id || 'default';
             const enabledPresets = presets.value
                 .map(normalizePreset)
-                .filter(p => p.enabled && p.content.trim());
+                .filter(p => p.enabled && p.content.trim() && (p.systemManaged || p.name === 'COT' || p.group === activeGroupId));
             const systemPresets = enabledPresets.filter(p => p.role === 'system');
             const messagePresets = enabledPresets.filter(p => p.role === 'user' || p.role === 'assistant');
             const systemPresetPrompt = systemPresets
