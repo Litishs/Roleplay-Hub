@@ -9022,6 +9022,72 @@ const __app = createApp({
             });
         };
 
+        // 导出分组：把整个分组结构（分组 + 各组预设）打包为 JSON，导入时可完整重建。
+        const exportPresetGroups = async () => {
+            const data = {
+                type: 'rp-hub-preset-groups',
+                groups: presetGroups.value.map(g => ({ ...g })),
+                presets: presets.value.map(p => ({ ...p }))
+            };
+            try {
+                const { result } = await downloadJsonFile(data, 'preset_groups.json');
+                if (result.saved) {
+                    showToast(`成功导出 ${presetGroups.value.length} 个预设分组`, 'success');
+                }
+            } catch (error) {
+                console.error('Export preset groups failed:', error);
+                showToast('导出分组失败: ' + (error?.message || error), 'error');
+            }
+        };
+
+        // 导入分组：读取导出的分组结构 JSON，重建分组与组内预设。
+        const importPresetGroups = (event) => readJsonFileInput(event, (data) => {
+            const importedGroups = Array.isArray(data?.groups) ? data.groups : [];
+            const importedPresets = Array.isArray(data?.presets) ? data.presets : [];
+            if (importedGroups.length === 0 && importedPresets.length === 0) {
+                showToast('导入失败：未识别到分组数据，请选择导出的预设分组文件', 'error');
+                return;
+            }
+            const validGroups = importedGroups.filter(g => g && typeof g.id === 'string' && g.id);
+            const validPresets = importedPresets
+                .map(p => normalizePreset(p))
+                .filter(p => String(p.content || '').trim());
+            if (validGroups.length === 0 && validPresets.length === 0) {
+                showToast('导入失败：文件内没有有效的分组或预设', 'error');
+                return;
+            }
+            confirmAction(`确定要导入 ${validGroups.length} 个分组 / ${validPresets.length} 条预设吗？`, () => {
+                // 重建分组：默认组已存在则复用，其余按 id 去重，撞 id 时生成新 id 并映射预设
+                const existingIds = new Set(presetGroups.value.map(g => g.id));
+                const idMap = new Map();
+                const addedGroups = [];
+                validGroups.forEach(g => {
+                    if (existingIds.has(g.id)) { idMap.set(g.id, g.id); return; }
+                    const newId = g.id === 'default' ? 'default' : `group_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+                    idMap.set(g.id, newId);
+                    addedGroups.push({ id: newId, name: g.name || (newId === 'default' ? '默认预设' : newId), builtin: newId === 'default', enabled: false });
+                    existingIds.add(newId);
+                });
+                presetGroups.value = [...presetGroups.value, ...addedGroups];
+                // 重建预设：归属映射后的分组
+                const newPresets = validPresets.map(p => ({
+                    ...p,
+                    group: idMap.get(p.group) || p.group || 'default'
+                }));
+                const existingFingerprints = new Set(presets.value.map(p => importItemFingerprint(p, ['role', 'content'])));
+                const deduped = [];
+                newPresets.forEach(p => {
+                    const fp = importItemFingerprint(p, ['role', 'content']);
+                    if (existingFingerprints.has(fp)) return;
+                    existingFingerprints.add(fp);
+                    deduped.push(p);
+                });
+                presets.value = [...presets.value, ...deduped];
+                saveData();
+                showToast(`成功导入 ${addedGroups.length} 个分组 / ${deduped.length} 条预设${validGroups.length - addedGroups.length ? `（${validGroups.length - addedGroups.length} 个分组已存在跳过）` : ''}`, 'success');
+            });
+        }, () => showToast('导入失败: 格式错误', 'error'));
+
         // Expose triggerSlash for character cards (Defined early)
         window.triggerSlash = async (text) => {
             console.log('triggerSlash called from UI:', text);
@@ -9826,6 +9892,7 @@ const __app = createApp({
             openStoryBranchNameEditor, saveStoryBranchName, deleteSelectedStoryBranch,
             createPreset, editPreset, savePreset, deletePreset,
             presetGroups, setActivePresetGroup, createPresetGroup, deletePresetGroup,
+            exportPresetGroups, importPresetGroups,
             renderMarkdown, messageUsesWideLayout, parseCot, closeCharacterEditor: () => showCharacterEditor.value = false,
             openExportModal, toggleExportSelection, selectAllExportItems, deselectAllExportItems, confirmExport,
             importPresets,

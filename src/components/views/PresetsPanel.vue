@@ -7,12 +7,12 @@
                         </svg>
                     </template>
                     <!-- 分组级操作（白色） -->
-                    <button @click="openExportModal('presets')" class="settings-icon-button" title="导出分组">
+                    <button @click="exportPresetGroups" class="settings-icon-button" title="导出分组">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor"><use href="#icon-export"></use></svg>
                     </button>
                     <label class="settings-icon-button cursor-pointer" title="导入分组">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><use href="#icon-import"></use></svg>
-                        <input type="file" accept=".json" @change="importPresets" class="hidden">
+                        <input type="file" accept=".json" @change="importPresetGroups" class="hidden">
                     </label>
                     <button @click="openCreateGroupModal" class="settings-icon-button" title="新建分组">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

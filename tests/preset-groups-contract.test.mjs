@@ -101,12 +101,15 @@ test('PresetsPanel renders groups as accordions with a group-level toggle', () =
 
 test('PresetsPanel top bar is group-level and uses white buttons', () => {
     // 顶栏改为分组级操作：导出分组 / 导入分组 / 新建分组（白色 settings-icon-button）
-    assert.ok(panel.includes("openExportModal('presets')"), '顶栏导出分组');
-    assert.ok(panel.includes('importPresets'), '顶栏导入分组');
+    assert.ok(panel.includes('exportPresetGroups'), '顶栏导出分组');
+    assert.ok(panel.includes('importPresetGroups'), '顶栏导入分组');
     assert.ok(panel.includes('openCreateGroupModal'), '顶栏新建分组');
     assert.ok(panel.includes('title="导出分组"'), '导出分组按钮');
     assert.ok(panel.includes('title="导入分组"'), '导入分组按钮');
     assert.ok(panel.includes('title="新建分组"'), '新建分组按钮');
+    // 分组级导入导出不应再走单条目勾选导出/数组导入
+    assert.ok(!panel.includes("openExportModal('presets')"), '不再使用单条目导出弹窗');
+    assert.ok(!panel.includes('@change="importPresets"'), '不再使用单条目数组导入');
 });
 
 test('PresetsPanel adds in-group create/delete entry buttons (blue)', () => {
@@ -128,4 +131,11 @@ test('PresetsPanel create-group modal uses the app overlay pattern (not daisyUI 
 test('app.mjs createPreset accepts a target group', () => {
     assert.ok(app.includes("const createPreset = (groupId) => {"), 'createPreset 接收分组参数');
     assert.ok(app.includes("group: groupId || 'default'"), '新预设归属指定分组');
+});
+
+test('app.mjs exports/imports preset groups as a whole structure', () => {
+    assert.ok(app.includes('const exportPresetGroups = async () => {'), '导出分组函数');
+    assert.ok(app.includes("type: 'rp-hub-preset-groups'"), '导出文件带类型标记');
+    assert.ok(app.includes("const importPresetGroups = (event) => readJsonFileInput(event, (data) => {"), '导入分组函数');
+    assert.ok(app.includes('exportPresetGroups, importPresetGroups,'), '分组导出/导入暴露给模板');
 });
