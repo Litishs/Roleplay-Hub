@@ -5431,7 +5431,8 @@ const __app = createApp({
 
                     const retry = await showVueConfirmModal(
                         '向量补录遇到错误',
-                        `第 ${i + 1}-${Math.min(i + batch.length, fragmentItems.length)} 个段落补录遇到错误：\n${err.message}\n\n是否立即重试？`
+                        `第 ${i + 1}-${Math.min(i + batch.length, fragmentItems.length)} 个段落补录遇到错误：\n${err.message}\n\n是否立即重试？`,
+                        { confirmLabel: '立即重试', cancelLabel: '取消' }
                     );
                     if (retry) {
                         i -= MEMORY_VECTOR_BATCH_SIZE;
@@ -6197,7 +6198,8 @@ const __app = createApp({
                             if (!manual) throw error;
                             const retry = await showVueConfirmModal(
                                 '事实抽取遇到错误',
-                                `第 ${turnInfo.turn} 轮抽取失败：\n${error.message}\n\n是否立即重试？`
+                                `第 ${turnInfo.turn} 轮抽取失败：\n${error.message}\n\n是否立即重试？`,
+                                { confirmLabel: '立即重试', cancelLabel: '取消' }
                             );
                             if (!retry) throw error;
                             i--;
@@ -7813,7 +7815,8 @@ const __app = createApp({
                                 if (retryError.name === 'AbortError') throw retryError;
                                 const retry = await showVueConfirmModal(
                                     '总结模式补录遇到错误',
-                                    `第 ${failed.job.turn} 轮生成失败：\n${retryError.message}\n\n是否立即重试？`
+                                    `第 ${failed.job.turn} 轮生成失败：\n${retryError.message}\n\n是否立即重试？`,
+                                    { confirmLabel: '立即重试', cancelLabel: '取消' }
                                 );
                                 if (!retry) throw retryError;
                                 const retryResult = await runClassicJob(failed.job);
