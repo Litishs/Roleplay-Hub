@@ -295,10 +295,20 @@ test('useUiState returns live reactive state (runtime)', async () => {
         'appVersionName', 'appVersionCode', 'isAdvancedNavOpen', 'showModelSelector',
         'showPresetEditor', 'showUiTemplateEditor', 'showRegexEditor', 'showUserSetupModal',
         'quotaValue', 'backupInProgress', 'updateAvailable', 'downloadingUpdate',
-        'showConfirmModal', 'confirmMessage', 'confirmCallback'
+        'showConfirmModal', 'confirmMessage', 'confirmCallback', 'releaseNotesModal'
     ]) {
         assert.ok(isRef(state[key]), `exposes ref ${key}`);
     }
+
+    // release-notes modal helper resolves through the shared ref like the confirm modal
+    const notesPending = state.showReleaseNotesModal('1.0', '2.0', '<p>notes</p>');
+    assert.equal(state.releaseNotesModal.value.show, true);
+    assert.equal(state.releaseNotesModal.value.currentVersion, '1.0');
+    assert.equal(state.releaseNotesModal.value.latestVersion, '2.0');
+    assert.equal(state.releaseNotesModal.value.html, '<p>notes</p>');
+    state.releaseNotesModal.value.onConfirm();
+    assert.equal(await notesPending, true);
+    assert.equal(state.releaseNotesModal.value.show, false);
 
     // toggleAdvancedNav flips only the advanced-nav flag
     state.isSidebarCollapsed.value = false;

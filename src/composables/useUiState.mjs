@@ -48,6 +48,37 @@ export function useUiState() {
         });
     };
 
+    // --- Release notes modal (shown when an update is found) ---
+    // `html` is pre-sanitized markdown HTML produced in app.mjs; the modal only
+    // renders it, so sanitization stays centralized next to the marked.parse call.
+    const releaseNotesModal = ref({
+        show: false,
+        currentVersion: '',
+        latestVersion: '',
+        html: '',
+        onConfirm: null,
+        onCancel: null
+    });
+
+    const showReleaseNotesModal = (currentVersion, latestVersion, html) => {
+        return new Promise((resolve) => {
+            releaseNotesModal.value = {
+                show: true,
+                currentVersion,
+                latestVersion,
+                html,
+                onConfirm: () => {
+                    releaseNotesModal.value.show = false;
+                    resolve(true);
+                },
+                onCancel: () => {
+                    releaseNotesModal.value.show = false;
+                    resolve(false);
+                }
+            };
+        });
+    };
+
     // --- View / navigation shell ---
     const currentView = ref('chat');
     let isMobileSidebarOpen = false;
@@ -124,6 +155,8 @@ export function useUiState() {
     return {
         globalConfirmModal,
         showVueConfirmModal,
+        releaseNotesModal,
+        showReleaseNotesModal,
         currentView,
         isMobileSidebarOpen,
         nativeAppStateListener,

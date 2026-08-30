@@ -48,6 +48,7 @@ import GeneratorPanel from '../components/views/GeneratorPanel.vue';
 import SquarePanel from '../components/views/SquarePanel.vue';
 import SettingsPanel from '../components/views/SettingsPanel.vue';
 import UpdateChecker from '../components/settings/UpdateChecker.vue';
+import ReleaseNotesModal from '../components/settings/ReleaseNotesModal.vue';
 import DataManager from '../components/settings/DataManager.vue';
 import PresetManager from '../components/settings/PresetManager.vue';
 import ApiConfig from '../components/settings/ApiConfig.vue';
@@ -92,6 +93,7 @@ const __app = createApp({
         CharacterPanel, GeneratorPanel, SquarePanel, SettingsPanel, PresetsPanel, UiTemplatePanel, RegexPanel, ToolsPanel, UsageStatsPanel, MemoryPanel, WorldInfoPanel,
         UiTemplatePending, EmbeddedViewContent, GenerationTimer, SettingsPageHeader,
         SideNav, ToastNotification, ConfirmDialog, ModalDialog,
+        ReleaseNotesModal,
         CharacterInfo, MessageList, MessageInput,
         CustomSelect: RPHubCustomSelect,
         UiTemplateFrame: UiTemplateFrame,
@@ -107,6 +109,7 @@ const __app = createApp({
         'side-nav': SideNav,
         'toast-notification': ToastNotification,
         'confirm-dialog': ConfirmDialog,
+        'release-notes-modal': ReleaseNotesModal,
         'modal-dialog': ModalDialog
     },
     setup() {
@@ -175,6 +178,7 @@ const __app = createApp({
         const { globalConfirmModal, showVueConfirmModal } = uiState;
 
         let { isMobileSidebarOpen, nativeAppStateListener, nativeBackButtonListener } = uiState;
+        const { releaseNotesModal, showReleaseNotesModal } = uiState;
         const {
             currentView,
             appVersionName,
@@ -222,6 +226,27 @@ const __app = createApp({
             downloadProgress
         } = uiState;
 
+        // Render the GitHub release body (markdown) into sanitized HTML for the
+        // release-notes modal. marked and DOMPurify are index.html vendor globals;
+        // we sanitize centrally here so the modal can render the result via v-html.
+        const renderReleaseNotesHtml = (rawBody) => {
+            try {
+                if (!rawBody) return '<p class="text-gray-400 italic">本次发行版未附带说明。</p>';
+                const parsed = (typeof marked !== 'undefined' && marked.parse)
+                    ? marked.parse(String(rawBody))
+                    : String(rawBody);
+                if (typeof DOMPurify !== 'undefined' && DOMPurify.sanitize) {
+                    return DOMPurify.sanitize(parsed, {
+                        FORBID_TAGS: ['iframe', 'script', 'style', 'form', 'input', 'button'],
+                        FORBID_ATTR: ['onload', 'onerror', 'onclick', 'onmouseover', 'srcdoc', 'style']
+                    });
+                }
+                return parsed;
+            } catch (e) {
+                return '<p class="text-gray-400 italic">' + String(rawBody || '') + '</p>';
+            }
+        };
+
         const checkForUpdates = async (showResult = true) => {
             if (checkingUpdate.value) return;
             checkingUpdate.value = true;
@@ -241,9 +266,11 @@ const __app = createApp({
                     updateAvailable.value = true;
                     updateInfo.value = result.release;
                     if (showResult) {
-                        const doUpdate = await showVueConfirmModal(
-                            '\u53d1\u73b0\u65b0\u7248\u672c',
-                            'v' + currentVer + ' \u2192 v' + latestVersionName.value + '\n\n\u662f\u5426\u4e0b\u8f7d\u5e76\u66f4\u65b0\uff1f'
+                        const notesHtml = renderReleaseNotesHtml(result.release.body);
+                        const doUpdate = await showReleaseNotesModal(
+                            currentVer,
+                            latestVersionName.value,
+                            notesHtml
                         );
                         if (doUpdate) await downloadAndInstallUpdate();
                     }
@@ -9808,6 +9835,7 @@ const __app = createApp({
             worldInfoSettings, showWorldInfoSettings, showMemorySettings, settingsHelpTopic, showActiveToolSettings, showUiTemplateSettings, estimatedGenerationTime, currentWaitTime,
             appVersionName, appVersionCode, checkForUpdates, checkingUpdate, updateAvailable, updateInfo, latestVersionName, downloadingUpdate, downloadProgress, downloadAndInstallUpdate,
             globalConfirmModal,
+            releaseNotesModal, showReleaseNotesModal, renderReleaseNotesHtml,
             togglePlacement: (val) => {
                 if (!editingRegex.data.placement) editingRegex.data.placement = [];
                 const index = editingRegex.data.placement.indexOf(val);
