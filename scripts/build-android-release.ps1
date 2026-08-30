@@ -14,8 +14,11 @@ if (-not $env:JAVA_HOME) {
 }
 $env:GRADLE_USER_HOME = Join-Path $projectRoot '.toolchains\gradle-home'
 
-# --- Release version: always advance to the next multiple of 10 ---
-# e.g. 1.24 -> 1.30; 1.90 -> 2.00. A release build must never reuse a version.
+# --- Release version: advance by +1, mirroring debug builds ---
+# Release and debug now share the same versionCode derivation (+1 each build)
+# so version.properties stays consistent regardless of which build runs. The
+# canonical release version is set by the git tag in CI; this local script only
+# produces a release APK for testing the signed-build flow.
 $versionFile = Join-Path $projectRoot 'android\version.properties'
 $versionProps = @{}
 if (Test-Path -LiteralPath $versionFile) {
@@ -26,7 +29,7 @@ if (Test-Path -LiteralPath $versionFile) {
     }
 }
 $currentVersionCode = if ($versionProps.ContainsKey('versionCode')) { [int]$versionProps['versionCode'] } else { 0 }
-$releaseVersionCode = [int](([math]::Floor($currentVersionCode / 10) + 1) * 10)
+$releaseVersionCode = $currentVersionCode + 1
 $releaseMajor = [int]([math]::Floor($releaseVersionCode / 100) + 1)
 $releaseMinor = [int]($releaseVersionCode % 100)
 $releaseVersionName = '{0}.{1:D2}' -f $releaseMajor, $releaseMinor
