@@ -72,7 +72,7 @@ npm run android:debug       # 构建 debug 包 -> debug_apk/
 npm run android:release     # 构建正式包 -> 仓库根目录
 ```
 
-版本规则：debug 包每次构建自动 +1（如 1.30 → 1.31 → 1.32），产物输出到 `debug_apk/`；正式包版本在当前版本基础上向上取整到下一个整十（如 1.24 → 1.30），产物输出到仓库根目录。正式包签名需首次构建前自行生成 `android/keystore/roleplay-hub-release.keystore` 并配置 `android/keystore.properties`（两者均已加入 .gitignore，请自行备份）。
+版本规则：正式包签名需首次构建前自行生成 `android/keystore/roleplay-hub-release.keystore` 并配置 `android/keystore.properties`（两者均已加入 .gitignore，请自行备份）。
 
 ## 项目渊源
 
