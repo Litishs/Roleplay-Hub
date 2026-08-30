@@ -261,7 +261,7 @@ test('app.mjs wires useUiState with single call and site destructuring', () => {
     // active-tool pipeline contexts moved to useChatState (locked in the
     // useChatState wiring test)
     // check/update logic stays in app.mjs while display state moved
-    assert.ok(app.includes('const checkForUpdates = async (showResult = true) => {'));
+    assert.ok(app.includes('const checkForUpdates = async (showResult = false) => {'));
     assert.ok(app.includes('const downloadAndInstallUpdate = async (maxRetries = 2) => {'));
 });
 
@@ -292,23 +292,16 @@ test('useUiState returns live reactive state (runtime)', async () => {
     assert.ok(state.toasts.value instanceof Array);
 
     for (const key of [
-        'appVersionName', 'appVersionCode', 'isAdvancedNavOpen', 'showModelSelector',
+        'appVersionName', 'appVersionCode', 'appBuildType', 'isAdvancedNavOpen', 'showModelSelector',
         'showPresetEditor', 'showUiTemplateEditor', 'showRegexEditor', 'showUserSetupModal',
         'quotaValue', 'backupInProgress', 'updateAvailable', 'downloadingUpdate',
-        'showConfirmModal', 'confirmMessage', 'confirmCallback', 'releaseNotesModal'
+        'showConfirmModal', 'confirmMessage', 'confirmCallback', 'updateNoticeDismissedToday'
     ]) {
         assert.ok(isRef(state[key]), `exposes ref ${key}`);
     }
 
-    // release-notes modal helper resolves through the shared ref like the confirm modal
-    const notesPending = state.showReleaseNotesModal('1.0', '2.0', '<p>notes</p>');
-    assert.equal(state.releaseNotesModal.value.show, true);
-    assert.equal(state.releaseNotesModal.value.currentVersion, '1.0');
-    assert.equal(state.releaseNotesModal.value.latestVersion, '2.0');
-    assert.equal(state.releaseNotesModal.value.html, '<p>notes</p>');
-    state.releaseNotesModal.value.onConfirm();
-    assert.equal(await notesPending, true);
-    assert.equal(state.releaseNotesModal.value.show, false);
+    // "今日不再提示" flag starts false and is a plain ref
+    assert.equal(state.updateNoticeDismissedToday.value, false);
 
     // toggleAdvancedNav flips only the advanced-nav flag
     state.isSidebarCollapsed.value = false;

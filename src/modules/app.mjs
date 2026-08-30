@@ -49,7 +49,6 @@ import GeneratorPanel from '../components/views/GeneratorPanel.vue';
 import SquarePanel from '../components/views/SquarePanel.vue';
 import SettingsPanel from '../components/views/SettingsPanel.vue';
 import UpdateChecker from '../components/settings/UpdateChecker.vue';
-import ReleaseNotesModal from '../components/settings/ReleaseNotesModal.vue';
 import DataManager from '../components/settings/DataManager.vue';
 import PresetManager from '../components/settings/PresetManager.vue';
 import ApiConfig from '../components/settings/ApiConfig.vue';
@@ -94,7 +93,6 @@ const __app = createApp({
         CharacterPanel, GeneratorPanel, SquarePanel, SettingsPanel, PresetsPanel, UiTemplatePanel, RegexPanel, ToolsPanel, UsageStatsPanel, MemoryPanel, WorldInfoPanel,
         UiTemplatePending, EmbeddedViewContent, GenerationTimer, SettingsPageHeader,
         SideNav, ToastNotification, ConfirmDialog, ModalDialog,
-        ReleaseNotesModal,
         CharacterInfo, MessageList, MessageInput,
         CustomSelect: RPHubCustomSelect,
         UiTemplateFrame: UiTemplateFrame,
@@ -110,7 +108,6 @@ const __app = createApp({
         'side-nav': SideNav,
         'toast-notification': ToastNotification,
         'confirm-dialog': ConfirmDialog,
-        'release-notes-modal': ReleaseNotesModal,
         'modal-dialog': ModalDialog
     },
     setup() {
@@ -179,11 +176,11 @@ const __app = createApp({
         const { globalConfirmModal, showVueConfirmModal } = uiState;
 
         let { isMobileSidebarOpen, nativeAppStateListener, nativeBackButtonListener } = uiState;
-        const { releaseNotesModal, showReleaseNotesModal } = uiState;
         const {
             currentView,
             appVersionName,
             appVersionCode,
+            appBuildType,
             isSidebarCollapsed,
             isAdvancedNavOpen,
             toggleAdvancedNav,
@@ -224,12 +221,14 @@ const __app = createApp({
             lastUpdateCheck,
             latestVersionName,
             downloadingUpdate,
-            downloadProgress
+            downloadProgress,
+            updateNoticeDismissedToday
         } = uiState;
 
         // Render the GitHub release body (markdown) into sanitized HTML for the
-        // release-notes modal. marked and DOMPurify are index.html vendor globals;
-        // we sanitize centrally here so the modal can render the result via v-html.
+        // settings-footer update card. marked and DOMPurify are index.html vendor
+        // globals; we sanitize centrally here so the card can render the result
+        // via v-html.
         const renderReleaseNotesHtml = (rawBody) => {
             try {
                 if (!rawBody) return '<p class="text-gray-400 italic">本次发行版未附带说明。</p>';
@@ -248,7 +247,7 @@ const __app = createApp({
             }
         };
 
-        const checkForUpdates = async (showResult = true) => {
+        const checkForUpdates = async (showResult = false) => {
             if (checkingUpdate.value) return;
             checkingUpdate.value = true;
             try {
@@ -266,15 +265,6 @@ const __app = createApp({
                 if (result.hasUpdate && result.release) {
                     updateAvailable.value = true;
                     updateInfo.value = result.release;
-                    if (showResult) {
-                        const notesHtml = renderReleaseNotesHtml(result.release.body);
-                        const doUpdate = await showReleaseNotesModal(
-                            currentVer,
-                            latestVersionName.value,
-                            notesHtml
-                        );
-                        if (doUpdate) await downloadAndInstallUpdate();
-                    }
                 } else if (showResult) {
                     showToast('\u5f53\u524d\u5df2\u662f\u6700\u65b0\u7248\u672c', 'success');
                 }
@@ -283,6 +273,18 @@ const __app = createApp({
             } finally {
                 checkingUpdate.value = false;
             }
+        };
+
+        // "今日不再提示": persist the current local date; the settings-footer
+        // update card hides until the stored date differs from today.
+        const dismissUpdateNoticeToday = () => {
+            updateNoticeDismissedToday.value = true;
+            const now = new Date();
+            const dateKey = now.getFullYear() + '-' +
+                String(now.getMonth() + 1).padStart(2, '0') + '-' +
+                String(now.getDate()).padStart(2, '0');
+            setStoredValue('update_notice_dismiss_date', dateKey)
+                .catch(error => console.error('Update notice dismiss save failed:', error));
         };
 
         const downloadAndInstallUpdate = async (maxRetries = 2) => {
@@ -335,9 +337,19 @@ const __app = createApp({
             }
         };
 
-        // Silent auto-check on startup
-        setTimeout(function() {
+        // Startup auto-check: fetch release info silently, so the settings-footer
+        // update card is ready without interrupting the user.
+        setTimeout(async function() {
             if (RPHUpdateChecker && appVersionName.value) {
+                // Restore the "今日不再提示" marker before showing any card.
+                try {
+                    const savedDate = await getStoredValue('update_notice_dismiss_date');
+                    const now = new Date();
+                    const dateKey = now.getFullYear() + '-' +
+                        String(now.getMonth() + 1).padStart(2, '0') + '-' +
+                        String(now.getDate()).padStart(2, '0');
+                    updateNoticeDismissedToday.value = savedDate === dateKey;
+                } catch (e) {}
                 checkForUpdates(false);
             }
         }, 5000);
@@ -9143,6 +9155,16 @@ const __app = createApp({
                         appVersionName.value = String(appInfo.version || '');
                         appVersionCode.value = String(appInfo.build || '');
                     }
+                    // 2026-08-30: 读取构建类型 (release/debug)，用于底部版本号显示。
+                    const buildInfoPlugin = window.Capacitor?.Plugins?.BuildInfo;
+                    if (buildInfoPlugin?.getBuildType) {
+                        try {
+                            const typeResult = await buildInfoPlugin.getBuildType();
+                            appBuildType.value = String(typeResult?.buildType || '');
+                        } catch (typeError) {
+                            console.warn('Failed to read build type:', typeError);
+                        }
+                    }
                 } catch (error) {
                     console.warn('Failed to read app version info:', error);
                 }
@@ -10045,9 +10067,9 @@ const __app = createApp({
 
             showRegexEditor, showWorldInfoEditor, editingRegex, editingWorldInfo, worldInfoKeysText, updateEditingWorldInfoKeys,
             worldInfoSettings, showWorldInfoSettings, showMemorySettings, settingsHelpTopic, showActiveToolSettings, showUiTemplateSettings, estimatedGenerationTime, currentWaitTime,
-            appVersionName, appVersionCode, checkForUpdates, checkingUpdate, updateAvailable, updateInfo, latestVersionName, downloadingUpdate, downloadProgress, downloadAndInstallUpdate,
+            appVersionName, appVersionCode, appBuildType, checkForUpdates, checkingUpdate, updateAvailable, updateInfo, latestVersionName, downloadingUpdate, downloadProgress, downloadAndInstallUpdate,
             globalConfirmModal,
-            releaseNotesModal, showReleaseNotesModal, renderReleaseNotesHtml,
+            updateNoticeDismissedToday, dismissUpdateNoticeToday, renderReleaseNotesHtml,
             togglePlacement: (val) => {
                 if (!editingRegex.data.placement) editingRegex.data.placement = [];
                 const index = editingRegex.data.placement.indexOf(val);

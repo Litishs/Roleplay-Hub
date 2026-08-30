@@ -55,36 +55,8 @@ export function useUiState() {
         });
     };
 
-    // --- Release notes modal (shown when an update is found) ---
-    // `html` is pre-sanitized markdown HTML produced in app.mjs; the modal only
-    // renders it, so sanitization stays centralized next to the marked.parse call.
-    const releaseNotesModal = ref({
-        show: false,
-        currentVersion: '',
-        latestVersion: '',
-        html: '',
-        onConfirm: null,
-        onCancel: null
-    });
-
-    const showReleaseNotesModal = (currentVersion, latestVersion, html) => {
-        return new Promise((resolve) => {
-            releaseNotesModal.value = {
-                show: true,
-                currentVersion,
-                latestVersion,
-                html,
-                onConfirm: () => {
-                    releaseNotesModal.value.show = false;
-                    resolve(true);
-                },
-                onCancel: () => {
-                    releaseNotesModal.value.show = false;
-                    resolve(false);
-                }
-            };
-        });
-    };
+    // --- Release notes are rendered inline in the settings footer (UpdateChecker)
+    // instead of a modal; only the dismiss flag lives here.
 
     // --- View / navigation shell ---
     const currentView = ref('chat');
@@ -105,6 +77,8 @@ export function useUiState() {
     // --- App version display ---
     const appVersionName = ref('');
     const appVersionCode = ref('');
+    // --- Build type (release/debug), read from native BuildInfoPlugin ---
+    const appBuildType = ref('');
 
     // --- Panel / modal flags ---
     const showDescriptionPanel = ref(false);
@@ -148,6 +122,9 @@ export function useUiState() {
     const latestVersionName = ref('');
     const downloadingUpdate = ref(false);
     const downloadProgress = ref(0);
+    // True once the user has dismissed the update announcement today; the
+    // settings-footer card hides until the date rolls over.
+    const updateNoticeDismissedToday = ref(false);
 
     // --- Notice / legacy confirm modal flags ---
     const showAuthorNoticeModal = ref(false);
@@ -162,8 +139,6 @@ export function useUiState() {
     return {
         globalConfirmModal,
         showVueConfirmModal,
-        releaseNotesModal,
-        showReleaseNotesModal,
         currentView,
         isMobileSidebarOpen,
         nativeAppStateListener,
@@ -173,6 +148,7 @@ export function useUiState() {
         toggleAdvancedNav,
         appVersionName,
         appVersionCode,
+        appBuildType,
         showDescriptionPanel,
         showModelSelector,
         modelSelectionTarget,
@@ -200,6 +176,7 @@ export function useUiState() {
         latestVersionName,
         downloadingUpdate,
         downloadProgress,
+        updateNoticeDismissedToday,
         showAuthorNoticeModal,
         showConfirmModal,
         confirmMessage,
