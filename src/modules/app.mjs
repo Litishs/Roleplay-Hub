@@ -338,9 +338,11 @@ const __app = createApp({
         };
 
         // Startup auto-check: fetch release info silently, so the settings-footer
-        // update card is ready without interrupting the user.
+        // update card is ready without interrupting the user. Runs on any platform
+        // (web included) — the version guard was skipped before, which made the
+        // browser never auto-check.
         setTimeout(async function() {
-            if (RPHUpdateChecker && appVersionName.value) {
+            if (RPHUpdateChecker) {
                 // Restore the "今日不再提示" marker before showing any card.
                 try {
                     const savedDate = await getStoredValue('update_notice_dismiss_date');

@@ -1,19 +1,20 @@
 <template>
     <div class="px-4 pb-4 select-none">
         <!-- Inline update announcement card (shown when an update is available
-             and the user has not dismissed it today) -->
+             and the user has not dismissed it today). Uses the app's neutral
+             surface colors so it matches the theme in both light and dark mode. -->
         <div v-if="updateAvailable && !updateNoticeDismissedToday"
-            class="mb-3 rounded-2xl border border-green-200 bg-green-50/60 overflow-hidden shadow-sm">
-            <div class="px-4 pt-3 pb-2 border-b border-green-100 flex items-start justify-between gap-3">
+            class="mb-3 rounded-2xl border border-gray-200 bg-white overflow-hidden shadow-sm">
+            <div class="px-4 pt-3 pb-2 border-b border-gray-100 flex items-start justify-between gap-3">
                 <div>
                     <h4 class="text-sm font-bold text-gray-900 flex items-center gap-1.5">
-                        <svg class="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
                         </svg>
                         发现新版本
                     </h4>
                     <p class="text-[11px] text-gray-500 font-mono mt-0.5">
-                        v{{ appVersionName || '?' }} → v{{ latestVersionName }}
+                        <template v-if="appVersionName">v{{ appVersionName }} → </template>v{{ latestVersionName }}
                     </p>
                 </div>
                 <button @click="dismissUpdateNoticeToday"
@@ -25,7 +26,7 @@
                 v-html="renderReleaseNotesHtml(updateInfo && updateInfo.body)"></div>
             <div class="px-4 pb-3">
                 <button @click="downloadAndInstallUpdate()" :disabled="downloadingUpdate || checkingUpdate"
-                    class="w-full py-2.5 bg-green-600 hover:bg-green-500 text-white text-sm font-bold rounded-xl shadow-md transition-all disabled:opacity-60">
+                    class="w-full py-2.5 bg-primary-600 hover:bg-primary-700 text-white text-sm font-bold rounded-xl shadow-md transition-all disabled:opacity-60">
                     <template v-if="!downloadingUpdate">立即更新</template>
                     <template v-else>{{ Math.round(downloadProgress * 100) }}%</template>
                 </button>
