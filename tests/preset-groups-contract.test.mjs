@@ -98,3 +98,34 @@ test('PresetsPanel renders groups as accordions with a group-level toggle', () =
     assert.ok(panel.includes('createPresetGroup?.({ name: newGroupName.value, seedFromDefault: newGroupSeed.value === \'default\' })'), '新建分组支持基于默认预设/空白分组');
     assert.ok(panel.includes('group.builtin'), '内置标记');
 });
+
+test('PresetsPanel top bar is group-level and uses white buttons', () => {
+    // 顶栏改为分组级操作：导出分组 / 导入分组 / 新建分组（白色 settings-icon-button）
+    assert.ok(panel.includes("openExportModal('presets')"), '顶栏导出分组');
+    assert.ok(panel.includes('importPresets'), '顶栏导入分组');
+    assert.ok(panel.includes('openCreateGroupModal'), '顶栏新建分组');
+    assert.ok(panel.includes('title="导出分组"'), '导出分组按钮');
+    assert.ok(panel.includes('title="导入分组"'), '导入分组按钮');
+    assert.ok(panel.includes('title="新建分组"'), '新建分组按钮');
+});
+
+test('PresetsPanel adds in-group create/delete entry buttons (blue)', () => {
+    // 展开分组后组内新建预设（蓝色 settings-create-button），条目编辑/删除
+    assert.ok(panel.includes('createPreset(group.id)'), '组内新建预设传入当前分组');
+    assert.ok(panel.includes('settings-create-button'), '组内新建预设为蓝色按钮');
+    assert.ok(panel.includes('editPreset(item.index)'), '条目编辑按钮');
+    assert.ok(panel.includes('deletePreset(item.index)'), '条目删除按钮');
+});
+
+test('PresetsPanel create-group modal uses the app overlay pattern (not daisyUI dialog)', () => {
+    // 修复：新建分组弹窗用应用自带 fixed overlay 模态，而非 dialog+daisyUI
+    assert.ok(panel.includes('class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"'), 'fixed overlay 模态容器');
+    assert.ok(panel.includes('modal-primary-button'), '模态主按钮样式');
+    assert.ok(panel.includes('showCreateGroupModal = false'), '关闭弹窗');
+    assert.ok(!panel.includes('<dialog'), '不再使用 dialog 元素');
+});
+
+test('app.mjs createPreset accepts a target group', () => {
+    assert.ok(app.includes("const createPreset = (groupId) => {"), 'createPreset 接收分组参数');
+    assert.ok(app.includes("group: groupId || 'default'"), '新预设归属指定分组');
+});

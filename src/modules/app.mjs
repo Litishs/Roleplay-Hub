@@ -8934,9 +8934,15 @@ const __app = createApp({
         };
 
         // Preset Management
-        const createPreset = () => {
+        const createPreset = (groupId) => {
             editingPreset.id = undefined;
-            editingPreset.data = { name: 'New Preset', content: '', enabled: false, role: 'system' };
+            editingPreset.data = {
+                name: 'New Preset',
+                content: '',
+                enabled: false,
+                role: 'system',
+                group: groupId || 'default'
+            };
             showPresetEditor.value = true;
         };
 

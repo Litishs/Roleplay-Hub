@@ -6,19 +6,15 @@
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"></path>
                         </svg>
                     </template>
-                    <button @click="openExportModal('presets')" class="settings-icon-button" title="导出">
+                    <!-- 分组级操作（白色） -->
+                    <button @click="openExportModal('presets')" class="settings-icon-button" title="导出分组">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor"><use href="#icon-export"></use></svg>
                     </button>
-                    <label class="settings-icon-button cursor-pointer" title="导入预设">
+                    <label class="settings-icon-button cursor-pointer" title="导入分组">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><use href="#icon-import"></use></svg>
                         <input type="file" accept=".json" @change="importPresets" class="hidden">
                     </label>
-                    <button @click="openCreateGroupModal" class="settings-icon-button" title="新建预设分组">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m7-7v14"></path>
-                        </svg>
-                    </button>
-                    <button @click="createPreset" class="settings-create-button" title="新建预设">
+                    <button @click="openCreateGroupModal" class="settings-icon-button" title="新建分组">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
                         </svg>
@@ -56,7 +52,7 @@
                                     <div class="settings-toggle"></div>
                                 </label>
                                 <button v-if="!group.builtin" @click="deletePresetGroup(group.id)"
-                                    class="item-action-button item-action-button--delete ml-3" title="删除分组">
+                                    class="settings-icon-button settings-icon-button--danger ml-3" title="删除分组">
                                     <svg class="w-5 h-5" fill="none" stroke="currentColor"><use href="#icon-delete"></use></svg>
                                 </button>
                             </span>
@@ -72,6 +68,14 @@
                             :aria-hidden="!isGroupOpen(group.id)" :inert="!isGroupOpen(group.id)">
                             <div class="settings-collapse__inner">
                                 <div class="settings-collapse__content settings-panel-body">
+                                    <!-- 组内新建条目（蓝色） -->
+                                    <button @click="createPreset(group.id)"
+                                        class="settings-create-button inline-flex items-center gap-1 text-sm px-3 py-2 mb-3" title="在该分组新建预设">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                                        </svg>
+                                        新建预设
+                                    </button>
                                     <p v-if="group.presets.length === 0" class="text-xs text-gray-400 py-2">
                                         该分组暂无预设
                                     </p>
@@ -98,6 +102,7 @@
                                                 <input type="checkbox" v-model="item.preset.enabled" class="settings-toggle-input sr-only">
                                                 <div class="settings-toggle"></div>
                                             </label>
+                                            <!-- 组内条目操作（蓝色） -->
                                             <div class="flex space-x-1 border-l border-gray-200 pl-4">
                                                 <button @click="editPreset(item.index)"
                                                     class="item-action-button item-action-button--edit"
@@ -118,35 +123,58 @@
                     </section>
                 </div>
 
-                <!-- 新建分组弹窗 -->
-                <dialog v-if="showCreateGroupModal" class="modal modal-bottom sm:modal-middle" :class="{'modal-open': showCreateGroupModal}" @click.self="showCreateGroupModal = false">
-                    <div class="modal-box bg-base-100 max-w-md">
-                        <h3 class="font-bold text-lg mb-4">新建预设分组</h3>
-                        <label class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">分组名称</label>
-                        <input v-model="newGroupName" type="text" placeholder="请输入分组名称"
-                            class="w-full input input-bordered mb-4" />
-                        <div class="space-y-2 mb-4">
-                            <label class="flex items-start gap-3 p-3 rounded-xl border cursor-pointer hover:bg-gray-50">
-                                <input type="radio" value="default" v-model="newGroupSeed" class="mt-1">
-                                <span class="flex-1">
-                                    <span class="block text-sm font-bold text-gray-800">基于默认预设新建</span>
-                                    <span class="block text-xs text-gray-500">自动复制当前全部默认预设作为该分组的初始条目</span>
-                                </span>
-                            </label>
-                            <label class="flex items-start gap-3 p-3 rounded-xl border cursor-pointer hover:bg-gray-50">
-                                <input type="radio" value="blank" v-model="newGroupSeed" class="mt-1">
-                                <span class="flex-1">
-                                    <span class="block text-sm font-bold text-gray-800">基于空白分组新建</span>
-                                    <span class="block text-xs text-gray-500">创建一个不含初始预设条目的空分组</span>
-                                </span>
-                            </label>
+                <!-- 新建分组弹窗（应用自带 fixed overlay 模态） -->
+                <div v-if="showCreateGroupModal"
+                    class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+                    <div class="bg-white rounded-2xl border border-gray-200 w-full max-w-md flex flex-col shadow-2xl max-h-[94vh] overflow-hidden">
+                        <div class="editor-modal-header">
+                            <div class="flex items-center gap-3">
+                                <div class="p-2 bg-primary-50 text-primary-600 rounded-lg">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V7z"></path>
+                                    </svg>
+                                </div>
+                                <h3 class="text-lg font-bold text-gray-800 leading-tight">新建预设分组</h3>
+                            </div>
+                            <button @click="showCreateGroupModal = false"
+                                class="modal-close-button">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M6 18L18 6M6 6l12 12"></path>
+                                </svg>
+                            </button>
                         </div>
-                        <div class="modal-action">
-                            <button @click="showCreateGroupModal = false" class="btn btn-ghost">取消</button>
-                            <button @click="confirmCreateGroup" class="btn btn-primary">创建</button>
+                        <div class="flex-1 p-6 space-y-4 bg-gray-50/30 overflow-y-auto custom-scrollbar">
+                            <div>
+                                <label class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">分组名称</label>
+                                <input v-model="newGroupName" type="text" placeholder="请输入分组名称"
+                                    class="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:outline-none transition-all shadow-sm font-medium" />
+                            </div>
+                            <div class="space-y-2">
+                                <label class="flex items-start gap-3 p-3 rounded-xl border cursor-pointer hover:bg-gray-50">
+                                    <input type="radio" value="default" v-model="newGroupSeed" class="mt-1">
+                                    <span class="flex-1">
+                                        <span class="block text-sm font-bold text-gray-800">基于默认预设新建</span>
+                                        <span class="block text-xs text-gray-500">自动复制当前全部默认预设作为该分组的初始条目</span>
+                                    </span>
+                                </label>
+                                <label class="flex items-start gap-3 p-3 rounded-xl border cursor-pointer hover:bg-gray-50">
+                                    <input type="radio" value="blank" v-model="newGroupSeed" class="mt-1">
+                                    <span class="flex-1">
+                                        <span class="block text-sm font-bold text-gray-800">基于空白分组新建</span>
+                                        <span class="block text-xs text-gray-500">创建一个不含初始预设条目的空分组</span>
+                                    </span>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="p-4 md:p-5 border-t border-gray-100 flex justify-end space-x-3 bg-gray-50/80 backdrop-blur-sm flex-shrink-0">
+                            <button @click="showCreateGroupModal = false"
+                                    class="modal-secondary-button">取消</button>
+                            <button @click="confirmCreateGroup"
+                                class="modal-primary-button">创建</button>
                         </div>
                     </div>
-                </dialog>
+                </div>
             </div>
 
             <!-- UI Templates View -->
@@ -164,7 +192,8 @@ export default {
     const app = ctx || {};
 
     // 手风琴展开状态（默认展开默认预设组）
-    const openGroupIds = ref(new Set(app.presetGroups?.filter(g => g.builtin).map(g => g.id) || []));
+    // appContext 里的 presetGroups/presets 是 ref，模板会自动解包；此处 JS 需取 .value
+    const openGroupIds = ref(new Set((app.presetGroups?.value || []).filter(g => g.builtin).map(g => g.id)));
     const isGroupOpen = (id) => openGroupIds.value.has(id);
     const toggleGroup = (id) => {
       const next = new Set(openGroupIds.value);
@@ -174,8 +203,8 @@ export default {
 
     // 分组视图：每个分组携带组内预设（含全局 index，供 editPreset/deletePreset 使用）
     const presetGroupsView = computed(() => {
-      const groups = Array.isArray(app.presetGroups) ? app.presetGroups : [];
-      const allPresets = Array.isArray(app.presets) ? app.presets : [];
+      const groups = Array.isArray(app.presetGroups?.value) ? app.presetGroups.value : [];
+      const allPresets = Array.isArray(app.presets?.value) ? app.presets.value : [];
       return groups.map(g => ({
         ...g,
         presetCount: allPresets.filter(p => (p.group || 'default') === g.id).length,
