@@ -51,11 +51,7 @@ Android WebView 壳（Capacitor 7，4 个自定义原生插件：NativeStorage /
 └─ 存储层：SQLite（WAL）+ 媒体文件 + AndroidKeyStore 加密密钥
 ```
 
-工程约定：
 
-- **契约测试**：242 项（文本断言 + 纯逻辑运行时测试，`npm test`），任何行为变更强制同步
-- **性能红线**：活动 iframe ≤ 3、聊天窗口挂载 ≤ 40 条、渲染缓存 LRU 100（统一定义于 `runtime-policy.mjs`）
-- **隐私红线**：密钥仅存 AndroidKeyStore 加密存储，不进数据库与备份；诊断日志不含 prompt 明文
 
 ## 快速开始
 
