@@ -5679,7 +5679,7 @@ const __app = createApp({
         const selectVectorMemoriesLexicalFallback = (options = {}) => {
             const vectorMemories = getContextVectorMemories(options);
             const queryTerms = extractVectorQueryTerms(getLatestUserMemoryQuery());
-            return memoryRecallFallback.select(vectorMemories, {
+            return memoryRecallFallback(vectorMemories, {
                 queryTerms,
                 topK: getVectorMemoryTopK(),
                 getFingerprint: getVectorMemoryFingerprint
