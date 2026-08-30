@@ -1,5 +1,7 @@
 <template>
-    <div class="px-4 pb-4 select-none">
+    <!-- Matches .settings-stack width (max-w-3xl / 48rem, centered) and its
+         0.75rem vertical rhythm so the card lines up with the accordions. -->
+    <div class="w-full max-w-3xl mx-auto pt-3 pb-4 select-none">
         <!-- Inline update announcement card (shown when an update is available
              and the user has not dismissed it today). Uses the app's neutral
              surface colors so it matches the theme in both light and dark mode. -->
