@@ -7,11 +7,13 @@ import test from 'node:test';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 
-const [html, app, localEmbedding, memoryState] = await Promise.all([
+const [html, app, localEmbedding, memoryState, prepareScript, packScript] = await Promise.all([
     readFile(new URL('../src/components/views/MemoryPanel.vue', import.meta.url), 'utf8'),
     readFile(new URL('../src/modules/app.mjs', import.meta.url), 'utf8'),
     readFile(new URL('../src/modules/local-embedding.mjs', import.meta.url), 'utf8'),
-    readFile(new URL('../src/composables/useMemorySystem.mjs', import.meta.url), 'utf8')
+    readFile(new URL('../src/composables/useMemorySystem.mjs', import.meta.url), 'utf8'),
+    readFile(new URL('../scripts/prepare-local-embedding.mjs', import.meta.url), 'utf8'),
+    readFile(new URL('../scripts/pack-embedding-model.mjs', import.meta.url), 'utf8')
 ]);
     const mainJs = await readFile(new URL("../src/main.js", import.meta.url), "utf8");
 
@@ -50,6 +52,30 @@ test('vendored transformers library, wasm and bge-small-zh model files exist', (
     assert.ok(existsSync(path.join(modelDir, 'config.json')), 'config.json');
     assert.ok(existsSync(path.join(modelDir, 'tokenizer.json')), 'tokenizer.json');
     assert.ok(existsSync(path.join(modelDir, 'onnx', 'model_quantized.onnx')), 'onnx/model_quantized.onnx');
+});
+
+test('prepare-local-embedding script restores the model from a GitHub Release archive, falls back to HF and fails closed', () => {
+    // The embedding model is NOT tracked by git; the prepare script must fetch
+    // it at build time so the released APK is offline-ready. A warn-and-continue
+    // script silently ships a broken vector memory feature (regression 2.42).
+    assert.match(prepareScript, /EMBEDDING_MODEL_URL/);
+    assert.match(prepareScript, /releases\/download\/embedding-model\/bge-small-zh-v1\.5\.tar\.gz/);
+    assert.match(prepareScript, /extractTar\(\{ file: tmpPath, cwd: modelsDir \}\)/);
+    assert.match(prepareScript, /HF_MIRROR_URL/);
+    assert.match(prepareScript, /Xenova\/bge-small-zh-v1\.5/);
+    assert.match(prepareScript, /onnx\/model_quantized\.onnx/);
+    assert.match(prepareScript, /EXPECTED_SIZES/);
+    assert.match(prepareScript, /size !== expected/);
+    assert.match(prepareScript, /process\.exit\(1\)/);
+    assert.match(prepareScript, /RPH_EMBEDDING_OFFLINE/);
+});
+
+test('pack-embedding-model script packs the model into a gzip archive for release upload', () => {
+    assert.match(packScript, /create as createTar/);
+    assert.match(packScript, /createTar\(\{/);
+    assert.match(packScript, /gzip: true/);
+    assert.match(packScript, /bge-small-zh-v1\.5\.tar\.gz/);
+    assert.match(packScript, /gh release upload/);
 });
 
 
