@@ -378,7 +378,7 @@ test('buildExportPayload includes schemaVersion/exportedAt/appVersion/buildType/
 
   const envelope = diagnostics.buildExportPayload({ appVersion: '2.27', buildType: 'android-capacitor' });
   assert.equal(envelope.schemaVersion, 1);
-  assert.match(envelope.exportedAt, /^\d{4}-\d{2}-\d{2}T/);
+  assert.match(envelope.exportedAt, /^\d{4}-\d{2}-\d{2} \d{2}/);
   assert.equal(envelope.appVersion, '2.27');
   assert.equal(envelope.buildType, 'android-capacitor');
   assert.equal(envelope.recordCount, 2);

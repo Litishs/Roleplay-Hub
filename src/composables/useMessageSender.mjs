@@ -1250,16 +1250,6 @@ export function useMessageSender(deps) {
                             apiMessages,
                             getMaxOutputTokens
                         });
-                        requestDiagnostic?.behavior?.({
-                            name: 'prepare_chat_attempt',
-                            result: 'ok',
-                            meta: {
-                                attempt: chatAttempt,
-                                maxAttempts: CHAT_MAX_ATTEMPTS,
-                                temperature: requestPayload.temperature,
-                                maxTokens: requestPayload.max_tokens
-                            }
-                        });
                         requestDiagnostic?.request(requestPayload, Date.now() - generationStartTime);
                         requestDiagnostic?.stage('waiting_headers');
                         let response = null;
@@ -1294,6 +1284,16 @@ export function useMessageSender(deps) {
                         for (let chatAttempt = 1; chatAttempt <= CHAT_MAX_ATTEMPTS; chatAttempt++) {
                             chatGuard.resetHeaders();
                             requestDiagnostic?.stage('waiting_headers');
+                            requestDiagnostic?.behavior?.({
+                                name: 'prepare_chat_attempt',
+                                result: 'ok',
+                                meta: {
+                                    attempt: chatAttempt,
+                                    maxAttempts: CHAT_MAX_ATTEMPTS,
+                                    temperature: requestPayload.temperature,
+                                    maxTokens: requestPayload.max_tokens
+                                }
+                            });
                             try {
                                 response = await raceWithTimeout(
                                     fetch(chatUrl, {

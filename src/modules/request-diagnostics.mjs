@@ -208,13 +208,22 @@ const sanitizeScope = (raw) => {
 
 // ---- Activity record factory --------------------------------------------------------
 
+// Local wall-clock timestamp (no timezone offset, no "T"), e.g.
+// "2026-09-04 20:58:48".  This keeps export timestamps in the same (local)
+// convention as the export filename, so a reader is never confused into
+// reading a UTC "12:58" as midday.
+const formatLocalTimestamp = (d = new Date()) => {
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+};
+
 const createActivityRecord = ({ category, action, scope }) => {
     const record = {
         schemaVersion: SCHEMA_VERSION,
         id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         category: String(category || 'general'),
         action: String(action || 'unknown'),
-        startedAt: new Date().toISOString(),
+        startedAt: formatLocalTimestamp(),
         durationMs: null,
         result: 'pending',
         scope: sanitizeScope(scope),
@@ -707,7 +716,7 @@ const projectForExport = (record) => {
 // and the projected records array.
 const buildExportPayload = ({ appVersion = '', buildType = 'web' } = {}) => ({
     schemaVersion: SCHEMA_VERSION,
-    exportedAt: new Date().toISOString(),
+    exportedAt: formatLocalTimestamp(),
     appVersion: String(appVersion || ''),
     buildType: String(buildType || 'web'),
     recordCount: records.length,
@@ -786,7 +795,7 @@ const loadPersistedRecords = () => {
                         id: String(item.id || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`),
                         category: String(item.category || 'general'),
                         action: String(item.action || 'unknown'),
-                        startedAt: String(item.startedAt || new Date(0).toISOString()),
+                        startedAt: String(item.startedAt || formatLocalTimestamp(new Date(0))),
                         durationMs: Number.isFinite(Number(item.durationMs)) ? item.durationMs : null,
                         result: ['ok', 'failed', 'cancelled', 'timed_out', 'skipped', 'pending'].includes(item.result) ? item.result : 'pending',
                         scope: item.scope && typeof item.scope === 'object' ? item.scope : {},
