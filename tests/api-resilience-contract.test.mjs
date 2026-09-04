@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
-const [app, sender, chatGuardSource, memoryFallbackSource, capConfig, java, uiState, utils, uiTemplatePipeline, dataLoaderSource] = await Promise.all([
+const [app, sender, chatGuardSource, memoryFallbackSource, capConfig, java, uiState, utils, uiTemplatePipeline, dataLoaderSource, requestDiagnostics, toolPipeline] = await Promise.all([
     readFile(new URL('../src/modules/app.mjs', import.meta.url), 'utf8'),
     readFile(new URL('../src/composables/useMessageSender.mjs', import.meta.url), 'utf8'),
     readFile(new URL('../src/modules/chat-request-guard.mjs', import.meta.url), 'utf8'),
@@ -13,7 +13,9 @@ const [app, sender, chatGuardSource, memoryFallbackSource, capConfig, java, uiSt
     readFile(new URL('../src/composables/useUiState.mjs', import.meta.url), 'utf8'),
     readFile(new URL('../src/modules/utils.mjs', import.meta.url), 'utf8'),
     readFile(new URL('../src/composables/useUiTemplatePipeline.mjs', import.meta.url), 'utf8'),
-    readFile(new URL('../src/composables/useDataLoader.mjs', import.meta.url), 'utf8')
+    readFile(new URL('../src/composables/useDataLoader.mjs', import.meta.url), 'utf8'),
+    readFile(new URL('../src/modules/request-diagnostics.mjs', import.meta.url), 'utf8'),
+    readFile(new URL('../src/composables/useActiveToolPipeline.mjs', import.meta.url), 'utf8')
 ]);
     const appJs = readFileSync(new URL("../src/modules/app.mjs", import.meta.url), "utf8");
 const [updateCheckerHtml, usagePanelHtml, worldInfoHtml] = await Promise.all([
@@ -237,10 +239,28 @@ test('UI template analysis is concurrency-throttled', () => {
 });
 
 test('request diagnostics export copies JSON to clipboard', () => {
-    assert.ok(app.includes('const exportRequestDiagnostics = async () => {'));
+    // v1 upgrade: export accepts optional `mode` ('copy' default / 'file'),
+    // exposes a buildDiagnosticsExportEnvelope helper, and writes both copy
+    // and file-download diagnostics export.  Plan B further exposes a chat-
+    // only counter so the original "LLM request count" semantics survives
+    // alongside the new "all activities" tally.
+    assert.ok(/const exportRequestDiagnostics = async \(/.test(app));
     assert.ok(app.includes('const requestDiagnosticsCount = computed'));
+    assert.ok(app.includes('const chatDiagnosticsCount = computed'));
+    // Chat-only counter must be wired to a real category filter (never just
+    // equal the all-records total — that would defeat plan B).
+    assert.ok(/chatDiagnosticsCount[\s\S]{0,200}category === 'chat'/.test(app));
     assert.ok(app.includes('const writeClipboardText = async (text) => {'));
-    assert.ok(app.includes('requestDiagnosticsCount, exportRequestDiagnostics,'));
+    // Both counters and the two export helpers are exposed in the setup
+    // return (order-insensitive; setup() returns them as a plain object with
+    // shorthand keys — just verify each textually).
+    assert.ok(app.includes('requestDiagnosticsCount'));
+    assert.ok(app.includes('chatDiagnosticsCount'));
+    assert.ok(app.includes('exportRequestDiagnostics,'));
+    // New: envelope helper is exposed and used (adds schemaVersion +
+    // appVersion + buildType + recordCount to the exported payload).
+    assert.ok(app.includes('buildDiagnosticsExportEnvelope'));
+    assert.ok(app.includes('appVersion') && app.includes('buildType'));
     assert.ok(java.includes('public void clipboardWrite(PluginCall call)'));
     assert.ok(java.includes('clipboard.setPrimaryClip(ClipData.newPlainText('));
 });
@@ -248,8 +268,16 @@ test('request diagnostics export copies JSON to clipboard', () => {
 test('usage view exposes a diagnostics export button', async () => {
 
     assert.ok(usagePanelHtml.includes('requestDiagnosticsCount'));
-    assert.ok(usagePanelHtml.includes('exportRequestDiagnostics()'));
-    assert.ok(usagePanelHtml.includes('\u590d\u5236\u8bca\u65ad\u4fe1\u606f')); // ??????
+    // Plan B: panel also shows the chat-only counter so users can see the
+    // original "LLM request count" semantics alongside total activities.
+    assert.ok(usagePanelHtml.includes('chatDiagnosticsCount'));
+    assert.ok(usagePanelHtml.includes('\u5176\u4e2d LLM \u5bf9\u8bdd\u8bf7\u6c42')); // 其中 LLM 对话请求
+    // The button now dispatches both copy + file flows, so the Vue call site
+    // passes an explicit mode string.  Accept both the old bare () and the
+    // new ('copy')/'file') variants.
+    assert.ok(/exportRequestDiagnostics\((?:'copy'|'file'|)\)/.test(usagePanelHtml));
+    assert.ok(usagePanelHtml.includes('\u590d\u5236\u8bca\u65ad\u4fe1\u606f')); // 复制诊断信息
+    assert.ok(usagePanelHtml.includes('\u5bfc\u51fa\u8bca\u65ad\u65e5\u5fd7')); // 导出诊断日志
 });
 
 test('chat diagnostics record the pinned provider to spot mismatch with connection test', () => {
@@ -259,4 +287,33 @@ test('chat diagnostics record the pinned provider to spot mismatch with connecti
     assert.ok(sender.includes('providerId: chatProviderForRequest.providerId,'));
     assert.ok(sender.includes('providerApiUrl: chatProviderForRequest.apiUrl,'));
     assert.ok(sender.includes('hasApiKey: !!chatProviderForRequest.apiKey'));
+    // P0#2 (2026-09-04): real-device exports showed provider fields came out
+    // as empty strings / null because buildCompatShell only read top-level
+    // options, but the caller nests them inside the `payload` object too.
+    // Sanitize gate must accept payload.nested OR top-level placement.
+    assert.ok(/payload\.providerId/.test(requestDiagnostics), 'buildCompatShell does not read payload.providerId');
+    assert.ok(/payload\.providerApiUrl/.test(requestDiagnostics), 'buildCompatShell does not read payload.providerApiUrl');
+    assert.ok(/payload\.hasApiKey/.test(requestDiagnostics), 'buildCompatShell does not read payload.hasApiKey');
+    // hasApiKey=false (unconfigured) is a useful trilean: don't flatten it.
+    assert.ok(requestDiagnostics.includes('hasApiKeyRaw === null ? null : !!hasApiKeyRaw')
+        || requestDiagnostics.includes('hasApiKey = hasApiKeyRaw === null ? null : !!hasApiKeyRaw'));
+});
+
+test('diagnostics scope sanitization drops character display names and non-identifier keys (P0#1)', () => {
+    // Text-level contract: createActivityRecord MUST run scope through a
+    // sanitizer before persisting.  Sanitizer must declare an explicit
+    // whitelist of identifier keys and strip any non [A-Za-z0-9_-] chars from
+    // string values (which converts CJK / emoji character names to "").
+    assert.ok(/const SCOPE_ALLOWED_KEYS\s*=\s*Object\.freeze\(new Set\(/.test(requestDiagnostics));
+    assert.ok(/sanitizeScope\s*=\s*\(raw\)\s*=>/.test(requestDiagnostics));
+    assert.ok(requestDiagnostics.includes("scope: sanitizeScope(scope)"), 'createActivityRecord does not route scope through sanitizer');
+    // Values are stripped with a conservative regex — CJK/emoji/spaces all go.
+    assert.ok(requestDiagnostics.includes('[^A-Za-z0-9_\\-]') || requestDiagnostics.includes('[^A-Za-z0-9_-]'));
+    // Caller source may still write characterName for local convenience (old
+    // variable declarations don't hurt), but the JOURNAL ACTUAL WRITE must
+    // depend solely on the gate above.  We confirm neither useMessageSender
+    // nor useActiveToolPipeline bypass the gate by writing scope *directly*
+    // to localStorage.  Both go through the public begin / start API.
+    assert.ok(/RPHRequestDiagnostics\?\.start\(/s.test(sender));
+    assert.ok(/RPHRequestDiagnostics\?\.begin\?\.\(/s.test(toolPipeline));
 });

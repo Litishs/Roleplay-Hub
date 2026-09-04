@@ -7,6 +7,24 @@
     var DOWNLOAD_TIMEOUT_MS = 120000;
     var MIN_APK_SIZE = 5 * 1024 * 1024;
 
+    // Activity Journal integration: wrap check/download in lightweight records.
+    // Imported lazily with a safety fallback so the module still loads when
+    // request-diagnostics isn't available (e.g. character/index.html UMD scope).
+    function activityBegin(category, action) {
+        try {
+            var D = (typeof globalThis !== "undefined" && globalThis.RPHRequestDiagnostics)
+                || (typeof window !== "undefined" && window.RPHRequestDiagnostics);
+            if (D && typeof D.begin === "function") {
+                return D.begin({ category: category, action: action });
+            }
+        } catch (_) { /* no-op */ }
+        return {
+            input: function () { }, behavior: function () { }, output: function () { },
+            stage: function () { }, complete: function () { }, fail: function () { }
+        };
+    }
+    function behaviorChars(text) { return String(text || "").length; }
+
     function compareVersions(a, b) {
         var partsA = String(a).split(".").map(Number);
         var partsB = String(b).split(".").map(Number);
@@ -39,70 +57,134 @@
     }
 
     async function checkForUpdate(currentVersion) {
-        var release = await fetchLatestRelease();
-        if (!release || !release.tag_name) {
-            return { hasUpdate: false, release: null, error: "Unable to fetch release info" };
+        var journal = activityBegin("update", "check");
+        journal.input({
+            kind: "current_version",
+            chars: String(currentVersion || "").length,
+            summary: "current v" + String(currentVersion || "")
+        });
+        try {
+            var release = await fetchLatestRelease();
+            if (!release || !release.tag_name) {
+                journal.behavior({
+                    name: "fetch_latest_release",
+                    result: "failed",
+                    summary: "Unable to fetch release info"
+                });
+                var errRes = { hasUpdate: false, release: null, error: "Unable to fetch release info" };
+                journal.fail(new Error(errRes.error));
+                return errRes;
+            }
+            var latestVersion = release.tag_name.replace(/^v/i, "");
+            var hasUpdate = compareVersions(latestVersion, currentVersion) > 0;
+            journal.behavior({
+                name: "compare_versions",
+                result: hasUpdate ? "ok" : "skipped",
+                meta: {
+                    currentVersion: String(currentVersion || ""),
+                    latestVersion: latestVersion,
+                    hasUpdate: hasUpdate
+                }
+            });
+            journal.output({ contentChars: behaviorChars(release.body) });
+            journal.complete();
+            return { hasUpdate: hasUpdate, release: release, error: null };
+        } catch (err) {
+            journal.fail(err);
+            throw err;
         }
-        var latestVersion = release.tag_name.replace(/^v/i, "");
-        return { hasUpdate: compareVersions(latestVersion, currentVersion) > 0, release: release, error: null };
     }
 
     async function downloadApk(progressCallback) {
-        var release = await fetchLatestRelease();
-        if (!release || !release.tag_name) return { error: "Cannot fetch release info" };
-
-        var tag = release.tag_name.replace(/^v/i, "");
-        var downloadUrl = "https://github.com/" + GITHUB_REPO + "/releases/download/v" + tag + "/Roleplay-Hub-" + tag + "-release.apk";
-
-        var controller = new AbortController();
-        var timeoutId = setTimeout(function () { controller.abort(); }, DOWNLOAD_TIMEOUT_MS);
-
+        var journal = activityBegin("update", "download_apk");
         try {
-            var response = await fetch(downloadUrl, { signal: controller.signal });
-            clearTimeout(timeoutId);
-            if (!response.ok) {
-                var hint = response.status === 404 ? "APK not found for this version" : "HTTP " + response.status;
-                return { error: hint };
-            }
-            var contentLength = Number(response.headers.get("Content-Length")) || 0;
-            if (contentLength > 0 && contentLength < MIN_APK_SIZE) {
-                return { error: "Server response too small (" + Math.round(contentLength / 1024) + "KB), aborting" };
+            var release = await fetchLatestRelease();
+            if (!release || !release.tag_name) {
+                var noRel = { error: "Cannot fetch release info" };
+                journal.fail(new Error(noRel.error));
+                return noRel;
             }
 
-            var reader = response.body.getReader();
-            var receivedLength = 0;
-            var chunks = [];
+            var tag = release.tag_name.replace(/^v/i, "");
+            var downloadUrl = "https://github.com/" + GITHUB_REPO + "/releases/download/v" + tag + "/Roleplay-Hub-" + tag + "-release.apk";
+            journal.input({
+                kind: "release_download",
+                summary: "v" + tag
+            });
 
-            while (true) {
-                var result = await reader.read();
-                if (result.done) break;
-                chunks.push(result.value);
-                receivedLength += result.value.length;
-                if (progressCallback && contentLength) {
-                    progressCallback(receivedLength / contentLength);
+            var controller = new AbortController();
+            var timeoutId = setTimeout(function () { controller.abort(); }, DOWNLOAD_TIMEOUT_MS);
+
+            try {
+                var response = await fetch(downloadUrl, { signal: controller.signal });
+                clearTimeout(timeoutId);
+                if (!response.ok) {
+                    var hint = response.status === 404 ? "APK not found for this version" : "HTTP " + response.status;
+                    journal.fail(new Error(hint));
+                    return { error: hint };
                 }
-            }
+                var contentLength = Number(response.headers.get("Content-Length")) || 0;
+                journal.behavior({
+                    name: "download_started",
+                    result: "ok",
+                    meta: { expectedBytes: contentLength }
+                });
+                if (contentLength > 0 && contentLength < MIN_APK_SIZE) {
+                    var smallResp = { error: "Server response too small (" + Math.round(contentLength / 1024) + "KB), aborting" };
+                    journal.fail(new Error(smallResp.error));
+                    return smallResp;
+                }
 
-            if (contentLength > 0 && receivedLength !== contentLength) {
-                return { error: "Download incomplete: " + Math.round(receivedLength / 1024) + "KB of " + Math.round(contentLength / 1024) + "KB" };
-            }
-            if (receivedLength < MIN_APK_SIZE) {
-                return { error: "Downloaded file too small (" + Math.round(receivedLength / 1024) + "KB)" };
-            }
+                var reader = response.body.getReader();
+                var receivedLength = 0;
+                var chunks = [];
 
-            var allChunks = new Uint8Array(receivedLength);
-            var position = 0;
-            for (var i = 0; i < chunks.length; i++) {
-                allChunks.set(chunks[i], position);
-                position += chunks[i].length;
+                while (true) {
+                    var result = await reader.read();
+                    if (result.done) break;
+                    chunks.push(result.value);
+                    receivedLength += result.value.length;
+                    if (progressCallback && contentLength) {
+                        progressCallback(receivedLength / contentLength);
+                    }
+                }
+
+                if (contentLength > 0 && receivedLength !== contentLength) {
+                    var incomplete = { error: "Download incomplete: " + Math.round(receivedLength / 1024) + "KB of " + Math.round(contentLength / 1024) + "KB" };
+                    journal.fail(new Error(incomplete.error));
+                    return incomplete;
+                }
+                if (receivedLength < MIN_APK_SIZE) {
+                    var tinyFile = { error: "Downloaded file too small (" + Math.round(receivedLength / 1024) + "KB)" };
+                    journal.fail(new Error(tinyFile.error));
+                    return tinyFile;
+                }
+
+                var allChunks = new Uint8Array(receivedLength);
+                var position = 0;
+                for (var i = 0; i < chunks.length; i++) {
+                    allChunks.set(chunks[i], position);
+                    position += chunks[i].length;
+                }
+                journal.behavior({
+                    name: "download_finished",
+                    result: "ok",
+                    meta: { receivedBytes: receivedLength }
+                });
+                journal.output({ totalChars: 0 }); // no "chars" for binary
+                journal.complete();
+                return { data: allChunks, tag: tag, error: null };
+            } catch (e) {
+                clearTimeout(timeoutId);
+                journal.fail(e);
+                if (e && e.name === "AbortError") {
+                    return { error: "Download timed out after " + (DOWNLOAD_TIMEOUT_MS / 1000) + "s" };
+                }
+                return { error: "Download failed: " + ((e && e.message) || "unknown error") };
             }
-            return { data: allChunks, tag: tag, error: null };
-        } catch (e) {
-            clearTimeout(timeoutId);
-            if (e.name === "AbortError") {
-                return { error: "Download timed out after " + (DOWNLOAD_TIMEOUT_MS / 1000) + "s" };
-            }
-            return { error: "Download failed: " + (e.message || "unknown error") };
+        } catch (outer) {
+            journal.fail(outer);
+            return { error: "Release info fetch failed: " + String((outer && outer.message) || outer || "unknown error") };
         }
     }
 

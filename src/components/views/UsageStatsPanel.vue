@@ -17,15 +17,34 @@
                 </settings-page-header>
 
                 <div class="mb-4 flex items-center justify-between gap-2">
-                    <div class="text-xs text-gray-400">最近 {{ requestDiagnosticsCount }} 条请求诊断</div>
-                    <button type="button" @click="exportRequestDiagnostics()"
-                        class="inline-flex items-center text-xs px-3 py-1.5 rounded-lg bg-gray-50 hover:bg-gray-100 text-gray-600 font-medium border border-gray-200 transition-all active:scale-95">
-                        <svg class="w-3.5 h-3.5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M8 7h8m-8 4h5m-5 4h8m-9 5h10a2 2 0 002-2V5a2 2 0 00-2-2H6a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
-                        </svg>
-                        复制诊断信息
-                    </button>
+                    <div class="text-xs text-gray-400">
+                        最近 {{ requestDiagnosticsCount }} 条活动诊断日志
+                        <span class="mx-1 text-gray-300">/</span>
+                        其中 LLM 对话请求 {{ chatDiagnosticsCount }} 条
+                    </div>
+                    <div class="flex items-center gap-2 flex-wrap justify-end">
+                        <button type="button" @click="exportRequestDiagnostics('copy')"
+                            class="inline-flex items-center text-xs px-3 py-1.5 rounded-lg bg-gray-50 hover:bg-gray-100 text-gray-600 font-medium border border-gray-200 transition-all active:scale-95">
+                            <svg class="w-3.5 h-3.5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M8 7h8m-8 4h5m-5 4h8m-9 5h10a2 2 0 002-2V5a2 2 0 00-2-2H6a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
+                            </svg>
+                            复制诊断信息
+                        </button>
+                        <button type="button" @click="exportRequestDiagnostics('file')"
+                            class="inline-flex items-center text-xs px-3 py-1.5 rounded-lg bg-primary-600 hover:bg-primary-700 text-white font-medium border border-primary-600 transition-all active:scale-95 shadow-sm"
+                            title="导出最近活动日志为 JSON 文件，可用于开发者定位 bug。日志不含聊天明文。">
+                            <svg class="w-3.5 h-3.5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M12 10v6m0 0l-3-3m3 3l3-3m4 4H5a2 2 0 01-2-2V6a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414A1 1 0 0121 11v7a2 2 0 01-2 2z"></path>
+                            </svg>
+                            导出诊断日志
+                        </button>
+                    </div>
+                </div>
+
+                <div class="mb-4 rounded-lg border border-gray-200 bg-white p-3 text-[11px] leading-5 text-gray-500">
+                    <p><span class="font-semibold text-gray-600">诊断日志说明：</span>日志仅记录「行为摘要」（功能类型、耗时、字符数、哈希、短错误提示），<span class="font-semibold text-gray-700">不含聊天明文、思考过程或设定正文</span>，可安全发送给开发者用于定位 bug。文件名自动带时间戳，例如 <code class="px-1 rounded bg-gray-100">rph-diagnostics-YYYYMMDD-HHMMSS.json</code>。</p>
                 </div>
 
 

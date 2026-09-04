@@ -3752,11 +3752,28 @@ const __app = createApp({
             return signal;
         };
 
-        // --- Request diagnostics export (P3-11) ---
-        const requestDiagnosticsCount = computed(() => {
+        // --- Request diagnostics export (P3-11, upgraded to Activity Journal v1) ---
+        // Plan B: expose two counters side by side so users can see "pure chat
+        // requests" (original semantics from the chat-only era) alongside the
+        // new "all activities" tally.  This eliminates any ambiguity about
+        // what the number on the usage panel means.
+        const requestDiagnosticsAllRecords = computed(() => {
             const diagnostics = RPHRequestDiagnostics;
-            return diagnostics ? diagnostics.getAll().length : 0;
+            return diagnostics ? diagnostics.getAll() : [];
         });
+        // Total journal entries = chat generations + tool batches + update
+        // checks/downloads + TTS + memory extractions + UI template analysis.
+        const requestDiagnosticsCount = computed(() => requestDiagnosticsAllRecords.value.length);
+        // Chat-only counter matches the pre-v1 semantics: one entry per LLM
+        // HTTP generation flow (either `category === 'chat'` on the new API,
+        // or a legacy `start()`-style record whose compat section indicates a
+        // chat requestType).  Filter defensively because `getAll()` is
+        // projected (records are plain objects, not ReactiveProxy).
+        const chatDiagnosticsCount = computed(() => requestDiagnosticsAllRecords.value
+            .filter(r => r && (
+                r.category === 'chat'
+                || (r.requestType && typeof r.requestType === 'string' && r.requestType.startsWith('chat'))
+            )).length);
         const writeClipboardText = async (text) => {
             const native = window.Capacitor?.Plugins?.NativeStorage;
             if (native && typeof native.clipboardWrite === 'function') {
@@ -3769,23 +3786,100 @@ const __app = createApp({
             }
             return false;
         };
-        const exportRequestDiagnostics = async () => {
+        const buildDiagnosticsExportEnvelope = () => {
             const diagnostics = RPHRequestDiagnostics;
-            if (!diagnostics) { showToast('请求诊断不可用', 'error'); return; }
-            const records = diagnostics.getAll();
-            if (!records.length) { showToast('暂无诊断记录', 'info'); return; }
-            const payload = {
-                exportedAt: new Date().toISOString(),
-                app: 'roleplay-hub',
-                records
-            };
-            const json = JSON.stringify(payload, null, 2);
+            const appVersion = (appVersionName.value ? String(appVersionName.value) : '')
+                + (appVersionCode.value ? ` (${appVersionCode.value})` : '');
+            const buildType = appBuildType.value
+                ? String(appBuildType.value)
+                : (window.Capacitor ? 'capacitor' : 'web');
+            return diagnostics?.buildExportPayload
+                ? diagnostics.buildExportPayload({ appVersion, buildType })
+                : {
+                    schemaVersion: 1,
+                    exportedAt: new Date().toISOString(),
+                    appVersion,
+                    buildType,
+                    recordCount: (diagnostics?.getAll?.() || []).length,
+                    records: diagnostics?.getAll?.() || []
+                };
+        };
+        const exportRequestDiagnostics = async (mode = 'copy') => {
+            const diagnostics = RPHRequestDiagnostics;
+            if (!diagnostics) { showToast('请求诊断不可用', 'error'); return { ok: false }; }
+            const envelope = buildDiagnosticsExportEnvelope();
+            if (!envelope.records.length) {
+                showToast('暂无诊断记录', 'info');
+                return { ok: false, empty: true };
+            }
+            const json = JSON.stringify(envelope, null, 2);
+            // UTF-8 BOM so Windows Notepad etc. open Chinese app/build metadata
+            // without mojibake.  Safe to apply even to pure ASCII JSON.
+            const jsonWithBom = '\ufeff' + json;
             try {
-                const written = await writeClipboardText(json);
-                showToast(written ? '诊断信息已复制到剪贴板' : '复制失败，请稍后重试', written ? 'success' : 'error');
+                if (mode === 'copy') {
+                    const written = await writeClipboardText(jsonWithBom);
+                    showToast(
+                        written ? '诊断日志已复制到剪贴板' : '复制失败，请稍后重试',
+                        written ? 'success' : 'error'
+                    );
+                    return { ok: written, mode: 'copy' };
+                }
+                // File export (prefer native document picker; browser fallback
+                // keeps the settings-page button functional on desktop).
+                const ts = new Date();
+                const stamp = ts.getFullYear()
+                    + String(ts.getMonth() + 1).padStart(2, '0')
+                    + String(ts.getDate()).padStart(2, '0') + '-'
+                    + String(ts.getHours()).padStart(2, '0')
+                    + String(ts.getMinutes()).padStart(2, '0')
+                    + String(ts.getSeconds()).padStart(2, '0');
+                const fileName = `rph-diagnostics-${stamp}.json`;
+                const blob = new Blob([jsonWithBom], { type: 'application/json;charset=utf-8' });
+                let saved = false;
+                let target = 'unknown';
+                if (cardUtils && typeof cardUtils.downloadBlob === 'function') {
+                    try {
+                        const result = await cardUtils.downloadBlob(blob, fileName, { quiet: true });
+                        saved = !!(result && (result.saved || result.target));
+                        target = result?.target || target;
+                    } catch (downloadErr) {
+                        console.warn('[Diagnostics] cardUtils downloadBlob failed:', downloadErr);
+                        saved = false;
+                    }
+                }
+                // Non-Capacitor / legacy fallback: Blob + <a download> directly.
+                if (!saved && typeof document !== 'undefined' && typeof URL !== 'undefined') {
+                    try {
+                        const fallbackUrl = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = fallbackUrl;
+                        a.download = fileName;
+                        document.body.appendChild(a);
+                        a.click();
+                        setTimeout(() => {
+                            try { a.remove(); } catch (_) { /* no-op */ }
+                            try { URL.revokeObjectURL(fallbackUrl); } catch (_) { /* no-op */ }
+                        }, 0);
+                        saved = true;
+                        target = target || 'browser';
+                    } catch (fbErr) {
+                        console.warn('[Diagnostics] fallback file download failed:', fbErr);
+                    }
+                }
+                if (saved) {
+                    const envelopeCount = Number.isFinite(Number(envelope?.recordCount))
+                        ? envelope.recordCount
+                        : (Array.isArray(envelope?.records) ? envelope.records.length : 0);
+                    showToast(`已导出 ${envelopeCount} 条诊断日志为 ${fileName}`, 'success');
+                    return { ok: true, mode: 'file', fileName, target };
+                }
+                showToast('导出诊断日志失败，请稍后重试', 'error');
+                return { ok: false, mode: 'file' };
             } catch (error) {
                 console.warn('[Diagnostics] export failed:', error);
                 showToast('导出诊断失败: ' + String(error?.message || error), 'error');
+                return { ok: false, error };
             }
         };
 
@@ -7599,6 +7693,7 @@ const __app = createApp({
             normalizePreset,
             estimateTokens,
             estimateMessagesTokens,
+            getMaxOutputTokens,
             // world info / context assembly
             worldInfo,
             worldInfoSettings,
@@ -9723,7 +9818,7 @@ const __app = createApp({
             localTtsStatus, localTtsVoices, localTtsInstall, localTtsInstallPercent, localTtsVoiceOptions,
             refreshLocalTtsStatus, installLocalTtsVoice, cancelLocalTtsInstall, removeLocalTtsVoice,
             isZipVoiceVoice, localTtsSelectedVoiceIsClone, cloneVoiceReady, handleVoiceClipUpload, removeVoiceClip,
-            requestDiagnosticsCount, exportRequestDiagnostics,
+            requestDiagnosticsCount, chatDiagnosticsCount, buildDiagnosticsExportEnvelope, exportRequestDiagnostics,
             vectorMemorySearchQuery, vectorMemorySearchResults, vectorMemorySearchError, vectorMemorySearchSortMode, isVectorMemorySearching,
             searchVectorMemories, clearVectorMemorySearch, sliceBuildStatus, startVectorBatchMemoryExtraction,
             memoryGraphView, setMemoryGraphView,

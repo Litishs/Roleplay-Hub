@@ -19,6 +19,7 @@
 // Contract locks: tests/composables-contract.test.mjs.
 
 import { cleanupActiveToolCaptureState, stripActiveToolCallsFromAssistant } from '../modules/utils.mjs';
+import { RPHRequestDiagnostics } from '../modules/request-diagnostics.mjs';
 
 export function useActiveToolPipeline(deps) {
     const {
@@ -28,6 +29,7 @@ export function useActiveToolPipeline(deps) {
         activeToolContinuationPending,
         activeToolContinuationHasResponse,
         memorySettings,
+        currentCharacter,
         // shared guard bridge: the run AbortController lives in the app.mjs
         // chatState binding so stopGeneration can abort an in-flight queue
         getActiveToolQueueAbortController,
@@ -53,6 +55,7 @@ export function useActiveToolPipeline(deps) {
         markActiveToolInlineWorkCancelled,
         appendAssistantResponseError,
         saveChatHistoryNow,
+        getCurrentChatStorageScopeId,
         // late-bound generation entry (mutual recursion with useMessageSender)
         generateResponse
     } = deps;
@@ -60,6 +63,23 @@ export function useActiveToolPipeline(deps) {
     const ACTIVE_TOOL_MAX_AUTO_CONTINUE = 4;
 
         const handleActiveToolCallFromAssistant = async (assistantMessage, activeToolDepth = 0) => {
+            // Open a dedicated "tool execution" activity journal record that
+            // carries every per-tool behaviour.  We don't rely on the chat
+            // record because it may already be complete()'d by the time the
+            // tool pipeline runs; a standalone record keeps timings honest
+            // and avoids accidental coupling to the chat handle lifecycle.
+            const toolScope = {
+                characterId: currentCharacter?.value?.id || '',
+                characterName: currentCharacter?.value?.name || '',
+                chatScopeId: (typeof getCurrentChatStorageScopeId === 'function' ? getCurrentChatStorageScopeId() : '') || '',
+                assistantMessageId: assistantMessage?.id || '',
+                activeToolDepth
+            };
+            const toolJournal = (RPHRequestDiagnostics?.begin?.({
+                category: 'tool',
+                action: 'execute_batch',
+                scope: toolScope
+            })) || null;
             promoteActiveToolCallsFromAssistant(assistantMessage);
             let toolUis = Array.isArray(assistantMessage?.toolCalls)
                 ? assistantMessage.toolCalls.filter(toolCall => ['queued', 'running'].includes(toolCall?.status))
@@ -83,10 +103,18 @@ export function useActiveToolPipeline(deps) {
                 }
                 cleanupActiveToolCaptureState(assistantMessage);
                 activeToolHandoffPending.value = false;
+                toolJournal?.complete?.();
                 return false;
             }
 
+            toolJournal?.input?.({
+                kind: 'tool_batch',
+                chars: toolCalls.reduce((sum, tc) => sum + String(tc?.query || '').length, 0),
+                summary: `${toolCalls.length} tool call(s): ${toolCalls.slice(0, 3).map(tc => tc?.tool?.name || 'tool').join(', ')}`
+            });
+
             if (activeToolDepth >= ACTIVE_TOOL_MAX_AUTO_CONTINUE) {
+                toolJournal?.behavior?.({ name: 'tool_queue_gate', result: 'failed', summary: 'max auto-continue reached' });
                 if (toolUis.length === 0) {
                     stripActiveToolCallsFromAssistant(assistantMessage, toolCalls);
                 } else {
@@ -97,6 +125,7 @@ export function useActiveToolPipeline(deps) {
                 cleanupActiveToolCaptureState(assistantMessage);
                 activeToolHandoffPending.value = false;
                 await saveChatHistoryNow();
+                toolJournal?.fail?.(new Error('active tool max auto-continue depth reached'));
                 return false;
             }
 
@@ -106,6 +135,7 @@ export function useActiveToolPipeline(deps) {
             if (toolUis.length === 0) {
                 cleanupActiveToolCaptureState(assistantMessage);
                 activeToolHandoffPending.value = false;
+                toolJournal?.complete?.();
                 return false;
             }
             await saveChatHistoryNow();
@@ -125,6 +155,11 @@ export function useActiveToolPipeline(deps) {
             };
 
             const runActiveToolCallSafely = async (toolCall, toolUi, options = {}) => {
+                const toolName = toolCall?.tool?.name || 'unknown';
+                const toolMode = toolCall?.mode || (isKeywordActiveTool(toolCall?.tool) ? 'keyword'
+                    : isWebActiveTool(toolCall?.tool) ? 'web'
+                    : isVectorActiveTool(toolCall?.tool) ? 'vector' : 'unknown');
+                const startedAt = Date.now();
                 try {
                     if (toolAbort.signal.aborted) throw createAbortReason('Generation cancelled by user');
                     if (options.markRunning !== false) {
@@ -162,6 +197,17 @@ export function useActiveToolPipeline(deps) {
                     toolUi.status = 'done';
                     toolUi.resultCount = Array.isArray(results) ? results.length : 0;
                     toolUi.resultText = resultContext;
+                    toolJournal?.behavior?.({
+                        name: `tool_${toolName}`,
+                        result: 'ok',
+                        chars: String(resultContext || '').length,
+                        meta: {
+                            mode: toolMode,
+                            resultCount: toolUi.resultCount,
+                            durationMs: Math.max(0, Date.now() - startedAt),
+                            queryChars: String(toolCall?.query || '').length
+                        }
+                    });
                     await saveChatHistoryNow();
                     return {
                         ok: true,
@@ -171,6 +217,11 @@ export function useActiveToolPipeline(deps) {
                     };
                 } catch (err) {
                     if (err.name === 'AbortError') {
+                        toolJournal?.behavior?.({
+                            name: `tool_${toolName}`,
+                            result: 'cancelled',
+                            meta: { mode: toolMode, durationMs: Math.max(0, Date.now() - startedAt) }
+                        });
                         return { aborted: true, toolCall, toolUi };
                     }
                     const resultContext = formatActiveToolErrorContext(toolCall.tool, toolCall.query, err, toolCall.mode);
@@ -178,6 +229,17 @@ export function useActiveToolPipeline(deps) {
                     toolUi.error = err.message || '工具检索失败';
                     toolUi.resultCount = 0;
                     toolUi.resultText = resultContext;
+                    toolJournal?.behavior?.({
+                        name: `tool_${toolName}`,
+                        result: 'failed',
+                        chars: String(resultContext || '').length,
+                        meta: {
+                            mode: toolMode,
+                            durationMs: Math.max(0, Date.now() - startedAt),
+                            queryChars: String(toolCall?.query || '').length
+                        },
+                        summary: String(err?.message || 'tool error').slice(0, 80)
+                    });
                     await saveChatHistoryNow();
                     return { ok: true, toolCall, toolUi, resultContext, error: err };
                 }
@@ -221,10 +283,17 @@ export function useActiveToolPipeline(deps) {
                 }
                 await flushWebToolBatch(webBatch);
 
-                if (!hasToolResult || !continuationToolUi) return false;
+                if (!hasToolResult || !continuationToolUi) {
+                    toolJournal?.output?.({
+                        contentChars: 0
+                    });
+                    toolJournal?.complete?.();
+                    return false;
+                }
                 if (toolAbort.signal.aborted) {
                     markActiveToolInlineWorkCancelled();
                     await saveChatHistoryNow();
+                    toolJournal?.fail?.(new Error('tool queue aborted by user'));
                     return false;
                 }
 
@@ -235,6 +304,12 @@ export function useActiveToolPipeline(deps) {
                 activeToolQueueRunning.value = false;
                 activeToolContinuationPending.value = true;
                 await saveChatHistoryNow();
+                toolJournal?.behavior?.({
+                    name: 'tool_generate_continuation',
+                    result: 'ok',
+                    meta: { nextDepth: activeToolDepth + 1 }
+                });
+                toolJournal?.complete?.();
                 await generateResponse(Date.now(), {
                     activeToolDepth: activeToolDepth + 1,
                     continueAssistantMessageId: assistantMessage.id,
@@ -249,6 +324,7 @@ export function useActiveToolPipeline(deps) {
                 if (err.name === 'AbortError') {
                     markActiveToolInlineWorkCancelled();
                     await saveChatHistoryNow();
+                    toolJournal?.fail?.(err);
                     return false;
                 }
                 if (assistantMessage) {
@@ -257,6 +333,7 @@ export function useActiveToolPipeline(deps) {
                     activeToolContinuationHasResponse.value = true;
                     await saveChatHistoryNow();
                 }
+                toolJournal?.fail?.(err);
                 return false;
             } finally {
                 if (getActiveToolQueueAbortController() === toolAbort) {
