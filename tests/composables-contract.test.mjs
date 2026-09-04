@@ -602,6 +602,49 @@ test('useMessageSender returns callable generateResponse (runtime smoke)', async
     assert.notEqual(sender.generateResponse, other.generateResponse, 'independent closures per call');
 });
 
+test('useMessageSender sends max_tokens and guards reasoning-only replies without content', () => {
+    // 2026-08-31 regression: the main chat request never sent max_tokens, so a
+    // thinking model could exhaust its default output budget inside the reasoning
+    // phase and return only thinking with an empty body (then variable analysis
+    // ran on the empty reply). The request now carries the configured budget and
+    // a reasoning-only reply without pending tool calls is treated as degenerate.
+    assert.ok(senderSource.includes('max_tokens: getMaxOutputTokens()') || senderSource.includes('max_tokens:'), 'chat request sends the configured output budget');
+    assert.ok(app.includes('getMaxOutputTokens,'), 'app wires getMaxOutputTokens into useMessageSender deps');
+    // 2026-09-04 decision: bug2 auto-retry was rolled back. Detection still uses
+    // a single pure predicate (`isDegenerateReasoningOnlyReply`), but a
+    // degenerate reply is reported directly as an error for the user to retry
+    // manually — no sampling jitter, no automatic re-sends.
+    assert.ok(senderSource.includes('isDegenerateReasoningOnlyReply = ({'), 'shared degenerate-reply predicate is declared');
+    assert.ok(senderSource.includes('const degenerateEmptyReply = isDegenerateReasoningOnlyReply({'), 'postprocess guard uses the shared predicate');
+    assert.ok(senderSource.includes("请手动重试"), 'final banner asks the user to retry manually');
+    assert.ok(senderSource.includes('generatedAssistantMessageId = degenerateEmptyReply ? null : assistantMessage.id;'), 'skips post-generation steps for degenerate replies');
+    assert.ok(senderSource.includes('if (!degenerateEmptyReply && settings.uiTemplateEnabled && settings.uiTemplateMainModelAnalysis)'), 'skips variable analysis for degenerate replies');
+    // 2026-09-04 Scheme-2 anti-degenerate nudge: a short, model-agnostic Chinese
+    // reminder is appended to the last real user message in the request COPY, so
+    // a thinking-heavy model actually writes a body after thinking.  It must run
+    // on apiMessages (the fresh {role,name,content} map), never on the persisted
+    // chatHistory, and must skip injected active-tool results.
+    assert.ok(senderSource.includes('const appendDegeneratePreventionReminder = '), 'scheme-2 reminder helper is declared');
+    assert.ok(senderSource.includes("不要在思考之后只输出思考") || senderSource.includes('请在思考之后输出角色的正文回复'), 'reminder uses the anti-degenerate Chinese nudge');
+    assert.ok(senderSource.includes('appendDegeneratePreventionReminder(apiMessages);'), 'reminder is applied to the request copy');
+    assert.ok(senderSource.includes("!content.includes('<active_tool_results>')"), 'reminder skips active-tool result payloads');
+});
+
+test('useMessageSender does NOT auto-retry reasoning-only degenerate replies', () => {
+    // Bug2 real-device export from 2026-09-04 confirmed deepseek-v4-flash
+    // sometimes produced ~1100 reasoning tokens with zero content tokens.  We
+    // previously auto-retried up to 3 times with sampling jitter
+    // (temperature +0.2, max_tokens +50%), but that proved fragile across models
+    // and wasted tokens.  Decision: report the degenerate reply as an error and
+    // let the user retry manually.  No auto-retry marker / factory / loop wiring
+    // may exist.
+    assert.ok(!senderSource.includes('makeDegenerateRetryableError'), 'no degenerate retryable error factory');
+    assert.ok(!senderSource.includes('isDegenerateRetryableError'), 'no degenerate retryable error guard');
+    assert.ok(!senderSource.includes('degenerate_empty_reply_early_retry'), 'no early-retry diagnostic behavior');
+    assert.ok(!senderSource.includes('tempDelta'), 'no temperature delta on retry');
+    assert.ok(!senderSource.includes('maxTokensBoost'), 'no max_tokens boost on retry');
+});
+
 // --- useTemplateRenderer (Phase 2, roadmap 2.2): markdown/template rendering ---
 
 test('useTemplateRenderer composable holds the rendering pipeline', () => {

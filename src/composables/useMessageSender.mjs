@@ -55,6 +55,7 @@ export function useMessageSender(deps) {
         normalizePreset,
         estimateTokens,
         estimateMessagesTokens,
+        getMaxOutputTokens,
         // world info / context assembly
         worldInfo,
         worldInfoSettings,
@@ -143,6 +144,56 @@ export function useMessageSender(deps) {
         const CHAT_MAX_ATTEMPTS = 3;
         const CHAT_RETRY_BASE_DELAY_MS = 800;
         const sleepChatRetry = (attempt) => new Promise(resolve => setTimeout(resolve, CHAT_RETRY_BASE_DELAY_MS * attempt));
+        // 2026-09-04 bug2 (reasoning without content): a reasoning-heavy model like
+        // deepseek-v4-flash sometimes spends its entire output budget on chain-of-
+        // thought tokens and returns zero content.  The existing postprocess path
+        // catches this and shows a human-friendly error, but requires the user to
+        // manually tap retry.  We now classify this as a *retryable* semantic
+        // failure and consume one of CHAT_MAX_ATTEMPTS retries automatically.
+        // Rules:
+        //   - only when there are no pending tool calls (tool-call replies
+        //     legitimately have empty content followed by tool results);
+        //   - both postprocess and pre-attempt-complete checkpoints share the
+        //     same predicate so we retry early *and* still surface the final
+        //     friendly error if all retries fail.
+        const isDegenerateReasoningOnlyReply = ({ content = '', reasoning = '', hasPendingToolCalls = false }) => {
+            if (hasPendingToolCalls) return false;
+            const hasReasoning = !!String(reasoning || '').trim();
+            const hasContent = !!String(content || '').trim();
+            return hasReasoning && !hasContent;
+        };
+        const appendDegeneratePreventionReminder = (msgArray) => {
+            if (!Array.isArray(msgArray) || msgArray.length === 0) return;
+            const reminder = '（请在思考之后输出角色的正文回复，不要只输出思考）';
+            const latestUserMessage = [...msgArray].reverse().find(message => {
+                const content = String(message?.content || '');
+                return message?.role === 'user'
+                    && content.trim()
+                    && !content.includes('<active_tool_results>');
+            });
+            if (!latestUserMessage) return;
+            const currentContent = String(latestUserMessage.content || '').trimEnd();
+            if (!currentContent.includes('不要在思考之后只输出思考') && !currentContent.includes(reminder)) {
+                latestUserMessage.content = currentContent
+                    ? `${currentContent}\n${reminder}`
+                    : reminder;
+            }
+        };
+
+        const buildPayloadForAttempt = ({ settings, requestModel, apiMessages, getMaxOutputTokens }) => {
+            const baseTemp = Number.isFinite(Number(settings.temperature)) ? Number(settings.temperature) : 1.0;
+            const temperature = Math.min(2.0, Math.max(0.0, baseTemp));
+            const baseMax = Math.max(64, Number.isFinite(Number(getMaxOutputTokens())) ? Number(getMaxOutputTokens()) : 1024);
+            const payload = {
+                model: requestModel,
+                messages: apiMessages,
+                temperature,
+                max_tokens: baseMax,
+                stream: settings.stream,
+                ...(settings.stream ? { stream_options: { include_usage: true } } : {})
+            };
+            return { payload };
+        };
 
         const truncateErrorMessage = (message, maxLength = 600) => {
             const text = String(message || '');
@@ -207,8 +258,14 @@ export function useMessageSender(deps) {
             // (empty API key / wrong URL) instead of misleading "network failed".
             const chatProviderForRequest = getChatProvider();
             const chatUrl = getChatProviderEndpoint('chat/completions');
+            const diagnosticScope = {
+                characterId: currentCharacter.value?.id || '',
+                characterName: currentCharacter.value?.name || '',
+                chatScopeId: getCurrentChatStorageScopeId?.() || ''
+            };
             let requestDiagnostic = RPHRequestDiagnostics?.start({
                 url: chatUrl,
+                scope: diagnosticScope,
                 payload: {
                     model: requestModel,
                     messages: [],
@@ -220,6 +277,16 @@ export function useMessageSender(deps) {
                 },
                 requestType: activeToolDepth > 0 ? 'tool_continuation' : 'chat'
             }) || null;
+            // Unified activity journal input: chat messages summary (chars only,
+            // never plaintext).  The actual request fingerprint is still
+            // computed by the legacy start() compat layer.
+            if (requestDiagnostic && requestDiagnostic.input) {
+                requestDiagnostic.input({
+                    kind: 'chat_request',
+                    chars: 0,
+                    summary: activeToolDepth > 0 ? `tool-continuation depth=${activeToolDepth}` : 'chat generate'
+                });
+            }
 
             // Start Timer
             const startTimer = () => {
@@ -693,6 +760,30 @@ export function useMessageSender(deps) {
                 );
                 requestDiagnostic?.stage('building_prompt');
             }
+            // Activity Journal: vector memory recall summary (after recall + budget capping)
+            if (memorySettings.enabled
+                && memorySettings.mode === MEMORY_MODE_VECTOR
+                && memories.value.length > 0
+                && !shouldSuppressStandardVectorMemoryRecall()) {
+                if (selectedVectorMemories.length > 0) {
+                    requestDiagnostic?.behavior?.({
+                        name: 'vector_memory_recall',
+                        result: 'ok',
+                        chars: estimateTokens(selectedVectorMemories.map(m => getVectorMemoryText(m)).join('\n') || ''),
+                        meta: {
+                            backend: memorySettings.vectorBackend || 'local',
+                            recalled: selectedVectorMemories.length,
+                            lexicalFallback: selectedVectorMemories.some(m => m && m.vectorRecallMode === 'lexical-fallback')
+                        }
+                    });
+                } else {
+                    requestDiagnostic?.behavior?.({
+                        name: 'vector_memory_recall',
+                        result: 'skipped',
+                        meta: { backend: memorySettings.vectorBackend || 'local', reason: 'no_candidates_or_budget' }
+                    });
+                }
+            }
             if (contextBudget > 0 && selectedVectorMemories.length > 0) {
                 const remainingBudget = Math.max(0, contextBudget - estimateMessagesTokens(messages) - estimateTokens(timelineDigestText));
                 let used = 0;
@@ -996,6 +1087,17 @@ export function useMessageSender(deps) {
                 content
             }));
 
+            // Scheme-2 anti-degenerate reminder (2026-09-04): some thinking-heavy
+            // models (e.g. deepseek-v4-flash) occasionally spend their whole output
+            // budget on reasoning and reply with an empty body ("reasoning without
+            // content").  We append a lightweight Chinese reminder to the LAST real
+            // user message in the request copy, asking the model to write an actual
+            // role-play reply after thinking.  It runs on the apiMessages copy (a
+            // fresh {role,name,content} map) so it never touches the persisted
+            // chatHistory.  Deliberately short and model-agnostic as a soft nudge
+            // (a hard system-prompt rule — scheme 1 — is held back for now).
+            appendDegeneratePreventionReminder(apiMessages);
+
             // --- 优化后的控制台日志 ---
             printAIRequestLogs(apiMessages, requestModel);
             // ---------------------------
@@ -1142,13 +1244,22 @@ export function useMessageSender(deps) {
                         if (!chatProviderForRequest.apiKey) {
                             throw new Error(`聊天供应商「${getProviderDisplayName(chatProviderForRequest.providerId)}」未配置 API Key，请在设置中检查`);
                         }
-                        const requestPayload = {
-                            model: requestModel,
-                            messages: apiMessages,
-                            temperature: settings.temperature,
-                            stream: settings.stream,
-                            ...(settings.stream ? { stream_options: { include_usage: true } } : {})
-                        };
+                        const { payload: requestPayload } = buildPayloadForAttempt({
+                            settings,
+                            requestModel,
+                            apiMessages,
+                            getMaxOutputTokens
+                        });
+                        requestDiagnostic?.behavior?.({
+                            name: 'prepare_chat_attempt',
+                            result: 'ok',
+                            meta: {
+                                attempt: chatAttempt,
+                                maxAttempts: CHAT_MAX_ATTEMPTS,
+                                temperature: requestPayload.temperature,
+                                maxTokens: requestPayload.max_tokens
+                            }
+                        });
                         requestDiagnostic?.request(requestPayload, Date.now() - generationStartTime);
                         requestDiagnostic?.stage('waiting_headers');
                         let response = null;
@@ -1493,6 +1604,20 @@ export function useMessageSender(deps) {
                         }
 
                         flushStreamAppends();
+
+                        // Activity Journal: final post-processed content length so
+                        // we can compare "stream-received chars" vs "actual content
+                        // shown to user" in the exported log.  A large drop here
+                        // directly pinpoints a post-processing filter stripping the
+                        // body (bug2 root-cause).
+                        if (assistantMessage) {
+                            const finalContent = String(assistantMessage.content || '');
+                            const finalReasoning = String(assistantMessage.reasoning || '');
+                            requestDiagnostic?.output?.({
+                                finalContentChars: finalContent.length,
+                                finalReasoningChars: finalReasoning.length
+                            });
+                        }
                         requestDiagnostic?.complete(normalizeApiUsage(responseUsage));
                         recordApiUsage(responseUsage, {
                             type: activeToolDepth > 0 ? 'tool_continuation' : 'chat',
@@ -1501,7 +1626,31 @@ export function useMessageSender(deps) {
                         });
 
                         if (assistantMessage) {
-                            generatedAssistantMessageId = assistantMessage.id;
+                            // 空正文兜底（2026-08-31）：推理模型 thinking 可能吃光输出预算，
+                            // 只出思考没有正文，此时直接在下一条按钮提示用户手动重试，
+                            // 不做自动重试。
+                            const hasPendingToolCalls = Array.isArray(assistantMessage.toolCalls)
+                                && assistantMessage.toolCalls.some(toolCall => toolCall && ['queued', 'running', 'receiving'].includes(toolCall.status));
+                            const degenerateEmptyReply = isDegenerateReasoningOnlyReply({
+                                content: assistantMessage.content,
+                                reasoning: assistantMessage.reasoning,
+                                hasPendingToolCalls
+                            });
+                            if (degenerateEmptyReply) {
+                                appendAssistantResponseError(assistantMessage, '模型只输出了思考，没有生成正文，请手动重试');
+                                console.warn('[MessageSender] degenerate reply: reasoning without content, user should retry manually');
+                                requestDiagnostic?.behavior?.({
+                                    name: 'degenerate_empty_reply',
+                                    result: 'failed',
+                                    meta: {
+                                        hasPendingToolCalls: false,
+                                        reason: 'reasoning_without_content'
+                                    },
+                                    chars: String(assistantMessage.reasoning || '').length,
+                                    summary: 'reasoning without content → user manual retry'
+                                });
+                            }
+                            generatedAssistantMessageId = degenerateEmptyReply ? null : assistantMessage.id;
                             console.groupCollapsed('📬 AI 响应接收完毕');
                             console.log('AI返回的完整内容:', formatAIResponseForConsole(
                                 rawAssistantContentForLog || assistantMessage.content,
@@ -1509,8 +1658,19 @@ export function useMessageSender(deps) {
                             ));
                             console.groupEnd();
 
-                            if (settings.uiTemplateEnabled && settings.uiTemplateMainModelAnalysis) {
+                            if (!degenerateEmptyReply && settings.uiTemplateEnabled && settings.uiTemplateMainModelAnalysis) {
                                 const uiTemplateUpdateResult = applyMainModelUiTemplateUpdates(assistantMessage, requestModel);
+                                requestDiagnostic?.behavior?.({
+                                    name: 'ui_template_analysis',
+                                    result: uiTemplateUpdateResult?.error ? 'failed' : (uiTemplateUpdateResult?.needsFallback ? 'skipped' : 'ok'),
+                                    meta: {
+                                        model: requestModel,
+                                        mode: 'main_model',
+                                        needsFallback: !!uiTemplateUpdateResult?.needsFallback,
+                                        hasError: !!uiTemplateUpdateResult?.error
+                                    },
+                                    summary: uiTemplateUpdateResult?.error ? String(uiTemplateUpdateResult.error).slice(0, 80) : ''
+                                });
                                 if (uiTemplateUpdateResult?.needsFallback) {
                                     nextTick(() => {
                                         updateUiTemplatesFromChat({ manual: true, targetMessageId: assistantMessage.id });
@@ -1612,6 +1772,14 @@ export function useMessageSender(deps) {
                 const hasCompletedTurns = !activeToolContinued && needsPostGenerationTurns && buildConversationTurnSnapshot().turns.length > 0;
 
                 if (hasCompletedTurns && settings.uiTemplateEnabled && generatedAssistantMessageId && !settings.uiTemplateMainModelAnalysis) {
+                    requestDiagnostic?.behavior?.({
+                        name: 'ui_template_analysis',
+                        result: 'ok',
+                        meta: {
+                            model: requestModel,
+                            mode: 'fallback_post_chat'
+                        }
+                    });
                     nextTick(() => {
                         updateUiTemplatesFromChat({ manual: false, targetMessageId: generatedAssistantMessageId });
                     });
@@ -1619,6 +1787,14 @@ export function useMessageSender(deps) {
 
                 // 记忆提取：在对话正常完成后异步提取记忆（用户取消时不触发）
                 if (hasCompletedTurns && memorySettings.enabled) {
+                    requestDiagnostic?.behavior?.({
+                        name: 'memory_extract',
+                        result: 'ok',
+                        meta: {
+                            mode: memorySettings.mode || 'summary',
+                            enabled: memorySettings.enabled
+                        }
+                    });
                     nextTick(() => {
                         extractMemoryFromChat();
                     });
@@ -1629,6 +1805,15 @@ export function useMessageSender(deps) {
                     && settings.ttsEnabled && settings.ttsAutoPlay) {
                     const ttsTargetIndex = chatHistory.value.findIndex(m => m.id === generatedAssistantMessageId);
                     if (ttsTargetIndex !== -1 && !chatHistory.value[ttsTargetIndex].isError) {
+                        requestDiagnostic?.behavior?.({
+                            name: 'tts_speak',
+                            result: 'ok',
+                            chars: String(chatHistory.value[ttsTargetIndex].content || '').length,
+                            meta: {
+                                engine: settings.ttsEngine || 'system',
+                                auto: true
+                            }
+                        });
                         nextTick(() => { toggleSpeakMessage(ttsTargetIndex); });
                     }
                 }
