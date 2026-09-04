@@ -6,39 +6,39 @@ test('dark mode theme state machine is wired in app.js', async () => {
   const source = await readFile(new URL('../src/modules/app.mjs', import.meta.url), 'utf8');
   const settingsState = await readFile(new URL('../src/composables/useSettingsState.mjs', import.meta.url), 'utf8');
 
-  // 默认值煎０鏄庯紙loadData 鍙悎骞?settings 涓凡瀛樺湪鐨?key锛屽繀椤诲厛澹版槑锛?
+  // Default value must be declared first, since loadData only merges existing settings keys.
   assert.match(settingsState, /themeMode:\s*'system'/);
 
-  // 三选一规范化?
+  // Three-way normalization.
   assert.match(settingsState, /const THEME_MODES = \['system', 'light', 'dark'\]/);
   assert.match(settingsState, /const normalizeThemeMode = /);
   assert.match(settingsState, /const resolveTheme = /);
   assert.match(source, /const applyTheme = /);
 
-  // 跟随系统锛氱洃鍚?prefers-color-scheme
+  // Follow system: listen to prefers-color-scheme.
   assert.match(settingsState, /matchMedia\('\(prefers-color-scheme: dark\)'\)/);
   assert.match(source, /themeMedia\.addEventListener\('change'/);
 
-  // 驱动 CSS 覆盖规则
+  // Drive the CSS override rules.
   assert.match(source, /document\.documentElement\.dataset\.theme = theme/);
   assert.match(source, /document\.documentElement\.style\.colorScheme = theme/);
 
-  // Android 状态栏联动
+  // Keep Android status bar in sync.
   assert.match(source, /ThemeBridge\.setDark/);
 
-  // localStorage 双写（供 head 防闪脚本读取）?
+  // Dual-write to localStorage (read by the head anti-flicker script).
   assert.match(source, /localStorage\.setItem\('rph_theme_mode'/);
 
-  // watch immediate（setup 阶段先应用一次）
+  // watch immediate (apply once during setup phase).
   assert.match(source, /watch\(\(\) => settings\.themeMode, applyTheme, \{\s*immediate: true\s*\}\)/);
 
-  // 涓夐€夐」渚?custom-select 浣跨敤
+  // Three-way options rendered with custom-select.
   assert.match(settingsState, /const themeModeOptions = \[/);
   assert.match(settingsState, /value: 'system', label: '跟随系统'/);
   assert.match(settingsState, /value: 'light', label: '浅色'/);
   assert.match(settingsState, /value: 'dark', label: '深色'/);
 
-  // 导出到模板?
+  // Exposed to the template.
   assert.match(source, /themeModeOptions,/);
 });
 
@@ -46,11 +46,11 @@ test('index.html has head anti-flicker script and settings dropdown', async () =
   const html = await readFile(new URL('../index.html', import.meta.url), 'utf8');
   const advancedSettingsHtml = await readFile(new URL('../src/components/settings/AdvancedSettings.vue', import.meta.url), 'utf8');
 
-  // head 内联防闪脚本（Vue 加载前同步设 data-theme）?
+  // Head anti-flicker script (sync data-theme before Vue loads).
   assert.match(html, /localStorage\.getItem\('rph_theme_mode'\)/);
   assert.match(html, /document\.documentElement\.dataset\.theme = dark \? 'dark' : 'light'/);
 
-  // 设置页外观主题下拉?
+  // Appearance theme dropdown on the settings page.
   assert.match(advancedSettingsHtml, /v-model="settings\.themeMode" :options="themeModeOptions"/);
   assert.match(advancedSettingsHtml, /外观主题/);
 });
@@ -60,24 +60,27 @@ test('styles.css has dark override rules driven by data-theme', async () => {
 
   assert.match(css, /\[data-theme='dark'\]/);
   assert.match(css, /color-scheme: dark/);
-  // 楂橀鑳屾櫙绫昏鐩?
+  // High-priority background class override.
   assert.match(css, /\[data-theme='dark'\] \.bg-white\b/);
   assert.match(css, /\[data-theme='dark'\] \.bg-gray-50\b/);
-  // 鍗婇€忔槑绫昏鐩栵紙CSS 涓枩鏉犺浆涔変负 \/锛?
+  // Semi-transparent class override (in CSS the slash is escaped as \/).
   assert.ok(css.includes('.bg-white\\/70'), 'bg-white/70 dark override present');
-  // hover/focus 鍙樹綋瑕嗙洊
+  // hover/focus state overrides.
   assert.match(css, /\.hover\\:bg-gray-50:hover/);
   assert.match(css, /\.focus\\:bg-white:focus/);
-  // 渚ц竟鏍忚嚜甯︽祬鑹?background 娓愬彉锛屾繁鑹叉ā寮忓繀椤昏鐩栨暣涓畝鍐欏睘鎬э紝涓嶈兘鍙敼 background-color
+  // The sidebar carries its own light gradient background; in dark mode it must
+  // override the entire shorthand property, not just background-color.
   assert.match(css, /\[data-theme='dark'\] \.app-sidebar\s*\{[\s\S]*?background:\s*linear-gradient[\s\S]*?!important/);
-  // 閫変腑椤瑰湪娣辫摑搴曚笂浣跨敤浅色鏂囧瓧锛岄伩鍏嶆部鐢?text-primary-700 瀵艰嚧瀵规瘮搴︿笉瓒?
+  // Selected item uses light text on dark blue; avoid inheriting text-primary-700
+  // which would drop contrast.
   assert.match(css, /\[data-theme='dark'\] \.sidebar-nav-button\.bg-primary-50\s*\{[\s\S]*?color:\s*#93c5fd\s*!important/);
-  // 杈撳叆妗嗗厜鏍囪壊锛堟繁鑹蹭笅涓嶅彲瑙侀渶淇锛?
+  // Input caret color (invisible in dark mode, needs fixing).
   assert.match(css, /\[data-theme='dark'\] \.chat-input-box[\s\S]*?caret-color/);
 
-  // 鐢ㄦ埛娑堟伅姘旀场锛歜g-blue-50/85 娴呰摑搴曞繀椤昏深色瑕嗙洊锛岄伩鍏?text-gray-900 鐧藉瓧涓嶅彲璇?
+  // User message bubble: bg-blue-50/85 light-blue must be covered in dark mode,
+  // avoid white-invisible text from text-gray-900.
   assert.match(css, /\[data-theme='dark'\] \.bg-blue-50\\\/85/);
-  // 杈撳叆娴矝锛氭繁鑹蹭笅涓嶅緱淇濈暀 .input-island 纭紪鐮佺殑鐧借壊杈规
+  // Input island: dark mode must not keep .input-island's hardcoded white border.
   assert.match(css, /\[data-theme='dark'\] \.input-island[\s\S]*?border-color/);
 });
 
