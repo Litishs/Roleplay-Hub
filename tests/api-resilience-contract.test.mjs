@@ -18,9 +18,10 @@ const [app, sender, chatGuardSource, memoryFallbackSource, capConfig, java, uiSt
     readFile(new URL('../src/composables/useActiveToolPipeline.mjs', import.meta.url), 'utf8')
 ]);
     const appJs = readFileSync(new URL("../src/modules/app.mjs", import.meta.url), "utf8");
-const [updateCheckerHtml, usagePanelHtml, worldInfoHtml] = await Promise.all([
+const [updateCheckerHtml, usagePanelHtml, settingsPanelHtml, worldInfoHtml] = await Promise.all([
         readFile(new URL("../src/components/settings/UpdateChecker.vue", import.meta.url), "utf8"),
         readFile(new URL("../src/components/views/UsageStatsPanel.vue", import.meta.url), "utf8"),
+        readFile(new URL("../src/components/views/SettingsPanel.vue", import.meta.url), "utf8"),
         readFile(new URL("../src/components/views/WorldInfoPanel.vue", import.meta.url), "utf8")
     ]);
 
@@ -261,23 +262,40 @@ test('request diagnostics export copies JSON to clipboard', () => {
     // appVersion + buildType + recordCount to the exported payload).
     assert.ok(app.includes('buildDiagnosticsExportEnvelope'));
     assert.ok(app.includes('appVersion') && app.includes('buildType'));
+    // 2026-09-04: run-log clear action (SettingsPanel 运行日志 → 清空) is backed
+    // by RPHRequestDiagnostics.clear() through the exposed clearRequestDiagnostics.
+    assert.ok(/const clearRequestDiagnostics = \(\) => {/.test(app));
+    assert.ok(app.includes('\u786e\u5b9a\u8981\u6e05\u7a7a\u5168\u90e8\u8fd0\u884c\u65e5\u5fd7\u5417')); // 确定要清空全部运行日志吗
+    assert.ok(app.includes('diagnostics.clear()'));
+    assert.ok(app.includes('clearRequestDiagnostics,'));
+    // 2026-09-04: the journal is bridged into Vue reactivity via a revision
+    // counter + onChange subscription so UI counters recompute after clear().
+    assert.ok(app.includes('RPHRequestDiagnostics.onChange'));
+    assert.ok(app.includes('journalRevision.value += 1'));
+    assert.ok(requestDiagnostics.includes('const onChange = (listener) => {'));
+    assert.ok(requestDiagnostics.includes('getRevision'));
     assert.ok(java.includes('public void clipboardWrite(PluginCall call)'));
     assert.ok(java.includes('clipboard.setPrimaryClip(ClipData.newPlainText('));
 });
 
-test('usage view exposes a diagnostics export button', async () => {
-
-    assert.ok(usagePanelHtml.includes('requestDiagnosticsCount'));
-    // Plan B: panel also shows the chat-only counter so users can see the
-    // original "LLM request count" semantics alongside total activities.
-    assert.ok(usagePanelHtml.includes('chatDiagnosticsCount'));
-    assert.ok(usagePanelHtml.includes('\u5176\u4e2d LLM \u5bf9\u8bdd\u8bf7\u6c42')); // 其中 LLM 对话请求
-    // The button now dispatches both copy + file flows, so the Vue call site
-    // passes an explicit mode string.  Accept both the old bare () and the
-    // new ('copy')/'file') variants.
-    assert.ok(/exportRequestDiagnostics\((?:'copy'|'file'|)\)/.test(usagePanelHtml));
-    assert.ok(usagePanelHtml.includes('\u590d\u5236\u8bca\u65ad\u4fe1\u606f')); // 复制诊断信息
-    assert.ok(usagePanelHtml.includes('\u5bfc\u51fa\u8bca\u65ad\u65e5\u5fd7')); // 导出诊断日志
+test('settings panel exposes the run-log block (export + clear + help) instead of the usage view', async () => {
+    // 2026-09-04: the diagnostics export entry moved from the usage statistics
+    // view to the Settings → 本机数据 accordion (below DataManager). The run-log
+    // block is named 运行日志, shows both counters, an export button, a clear
+    // button, and a round help toggle that expands the privacy note on click.
+    assert.ok(settingsPanelHtml.includes('\u8fd0\u884c\u65e5\u5fd7')); // 运行日志
+    assert.ok(settingsPanelHtml.includes('requestDiagnosticsCount'));
+    assert.ok(settingsPanelHtml.includes('chatDiagnosticsCount'));
+    assert.ok(settingsPanelHtml.includes('\u5176\u4e2d LLM \u5bf9\u8bdd')); // 其中 LLM 对话
+    assert.ok(/exportRequestDiagnostics\('file'\)/.test(settingsPanelHtml));
+    assert.ok(settingsPanelHtml.includes('\u5bfc\u51fa\u65e5\u5fd7')); // 导出日志
+    assert.ok(settingsPanelHtml.includes('clearRequestDiagnostics'));
+    assert.ok(settingsPanelHtml.includes('diagnosticsHelpOpen'));
+    assert.ok(settingsPanelHtml.includes('\u4e0d\u542b\u804a\u5929\u660e\u6587')); // 不含聊天明文
+    // The usage view must no longer carry the old diagnostics block/counters.
+    assert.ok(!usagePanelHtml.includes('requestDiagnosticsCount'));
+    assert.ok(!usagePanelHtml.includes('chatDiagnosticsCount'));
+    assert.ok(!usagePanelHtml.includes('\u5bfc\u51fa\u8bca\u65ad\u65e5\u5fd7')); // 导出诊断日志
 });
 
 test('chat diagnostics record the pinned provider to spot mismatch with connection test', () => {

@@ -177,6 +177,49 @@
                             <div class="settings-collapse__inner">
                                 <div class="settings-collapse__content settings-panel-body">
                         <DataManager />
+                        <div class="mt-4 rounded-xl border border-gray-200 bg-white p-3">
+                            <div class="flex items-center justify-between gap-2">
+                                <div class="min-w-0">
+                                    <div class="flex items-center gap-1.5">
+                                        <span class="text-sm font-bold text-gray-700">运行日志</span>
+                                        <button type="button" @click="diagnosticsHelpOpen = !diagnosticsHelpOpen"
+                                            class="settings-help-trigger" :class="{ 'is-open': diagnosticsHelpOpen }"
+                                            :aria-expanded="diagnosticsHelpOpen" aria-label="查看运行日志说明"
+                                            title="运行日志说明">
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                    d="M9.1 9a3 3 0 115.8 1.1c-.6 1.1-1.9 1.3-2.5 2.2-.3.4-.4.8-.4 1.2M12 17h.01"></path>
+                                            </svg>
+                                        </button>
+                                    </div>
+                                    <div class="mt-0.5 text-[11px] text-gray-400">
+                                        最近 {{ requestDiagnosticsCount }} 条 / 其中 LLM 对话 {{ chatDiagnosticsCount }} 条
+                                    </div>
+                                </div>
+                                <div class="flex flex-shrink-0 items-center gap-2 flex-wrap justify-end">
+                                    <button type="button" @click="exportRequestDiagnostics('file')"
+                                        class="inline-flex items-center text-xs px-3 py-1.5 rounded-lg bg-primary-600 hover:bg-primary-700 text-white font-medium border border-primary-600 transition-all active:scale-95 shadow-sm">
+                                        <svg class="w-3.5 h-3.5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                d="M12 10v6m0 0l-3-3m3 3l3-3m4 4H5a2 2 0 01-2-2V6a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414A1 1 0 0121 11v7a2 2 0 01-2 2z"></path>
+                                        </svg>
+                                        导出日志
+                                    </button>
+                                    <button type="button" @click="clearRequestDiagnostics"
+                                        class="inline-flex items-center text-xs px-3 py-1.5 rounded-lg bg-gray-50 hover:bg-red-50 text-gray-500 hover:text-red-600 font-medium border border-gray-200 transition-all active:scale-95"
+                                        title="清空运行日志">
+                                        <svg class="w-3.5 h-3.5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                        </svg>
+                                        清空
+                                    </button>
+                                </div>
+                            </div>
+                            <div v-if="diagnosticsHelpOpen" class="mt-2 rounded-lg bg-gray-50 p-2.5 text-[11px] leading-5 text-gray-500">
+                                仅记录「行为摘要」（功能类型、耗时、字符数、哈希、短错误提示），不含聊天明文、思考过程或设定正文，可安全导出用于定位问题。
+                            </div>
+                        </div>
                                 </div>
                             </div>
                         </div>
@@ -189,7 +232,7 @@
 </template>
 
 <script>
-import { inject } from "vue";
+import { inject, ref } from "vue";
 import ApiConfig from "../settings/ApiConfig.vue";
 import PresetManager from "../settings/PresetManager.vue";
 import DataManager from "../settings/DataManager.vue";
@@ -202,7 +245,8 @@ export default {
   components: { ApiConfig, PresetManager, DataManager, UpdateChecker, AdvancedSettings, TtsSettings },
   setup() {
     const ctx = inject("appContext");
-    return ctx || {};
+    const diagnosticsHelpOpen = ref(false);
+    return { ...(ctx || {}), diagnosticsHelpOpen };
   }
 };
 </script>

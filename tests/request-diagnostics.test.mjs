@@ -473,3 +473,25 @@ test('getLatest returns null and getAll returns [] when journal is empty', async
   assert.equal(diagnostics.getLatest(), null);
   assert.equal(diagnostics.getAll().length, 0);
 });
+
+test('onChange/clear publishes a revision so reactive counters recompute', async () => {
+  const { diagnostics } = await loadDiagnostics();
+  assert.equal(typeof diagnostics.getRevision, 'function');
+  assert.equal(typeof diagnostics.onChange, 'function');
+
+  const revised = [];
+  diagnostics.onChange(() => revised.push(diagnostics.getRevision()));
+
+  const before = diagnostics.getRevision();
+  const handle = diagnostics.begin({ category: 'chat', action: 'generate' });
+  handle.complete({ contentChars: 10 });
+  await new Promise(resolve => setTimeout(resolve, 60)); // debounced persist flush
+
+  assert.ok(revised.length >= 1, 'a write must publish at least one change');
+  assert.ok(diagnostics.getRevision() > before, 'revision must increase after a write');
+
+  diagnostics.clear();
+  await new Promise(resolve => setTimeout(resolve, 60));
+  assert.ok(revised.length >= 2, 'clear() must publish a change too');
+  assert.equal(diagnostics.getAll().length, 0);
+});

@@ -63,6 +63,24 @@ const storageRemoveSession = (key) => {
 // back into caller code.
 let persistCooldownTimer = null;
 let persistScheduled = false;
+// Reactive-observer bridge: the journal's backing array is a plain module
+// array (not a Vue ref), so a Vue `computed` reading `getAll()` has no
+// dependency to invalidate on.  We publish a monotonically increasing revision
+// on every persisted write; UI code can translate that into a reactive ref.
+let journalRevision = 0;
+const revisionListeners = new Set();
+const bumpRevision = () => {
+    journalRevision += 1;
+    for (const listener of revisionListeners) {
+        try { listener(); } catch (_) { /* observer must not break the journal */ }
+    }
+};
+const getRevision = () => journalRevision;
+const onChange = (listener) => {
+    if (typeof listener !== 'function') return () => {};
+    revisionListeners.add(listener);
+    return () => revisionListeners.delete(listener);
+};
 const persistImmediate = () => {
     let attemptRecords = records.slice();
     while (attemptRecords.length > 0) {
@@ -99,6 +117,7 @@ const persist = () => {
         persistScheduled = false;
         persistCooldownTimer = null;
         persistImmediate();
+        bumpRevision(); // Published writes update any reactive observers (UI counters, etc.)
     };
     if (typeof globalThis.setTimeout === 'function') {
         persistCooldownTimer = setTimeout(flush, 40);
@@ -867,7 +886,9 @@ const RPHRequestDiagnostics = Object.freeze({
     maxRecords: MAX_RECORDS,
     storageKey: NEW_STORAGE_KEY,
     schemaVersion: SCHEMA_VERSION,
-    buildExportPayload
+    buildExportPayload,
+    getRevision,
+    onChange
 });
 
 if (typeof window !== 'undefined') window.RPHRequestDiagnostics = RPHRequestDiagnostics;

@@ -3757,7 +3757,16 @@ const __app = createApp({
         // requests" (original semantics from the chat-only era) alongside the
         // new "all activities" tally.  This eliminates any ambiguity about
         // what the number on the usage panel means.
+        // The module's backing array is plain (non-reactive), so we bridge it
+        // into Vue with a revision ref bumped on every persisted write.
+        // Reading .value here makes the computed depend on it; otherwise a
+        // clear() (or any record write) would never recompute the counters.
+        const journalRevision = ref(RPHRequestDiagnostics?.getRevision?.() ?? 0);
+        if (RPHRequestDiagnostics && typeof RPHRequestDiagnostics.onChange === 'function') {
+            RPHRequestDiagnostics.onChange(() => { journalRevision.value += 1; });
+        }
         const requestDiagnosticsAllRecords = computed(() => {
+            journalRevision.value; // establish reactivity dependency
             const diagnostics = RPHRequestDiagnostics;
             return diagnostics ? diagnostics.getAll() : [];
         });
@@ -3883,6 +3892,18 @@ const __app = createApp({
             }
         };
 
+
+        const clearRequestDiagnostics = () => {
+            confirmAction('确定要清空全部运行日志吗？此操作无法撤销。', async () => {
+                const diagnostics = RPHRequestDiagnostics;
+                if (!diagnostics || typeof diagnostics.clear !== 'function') {
+                    showToast('当前环境不支持清空运行日志', 'error');
+                    return;
+                }
+                diagnostics.clear();
+                showToast('运行日志已清空', 'success');
+            });
+        };
 
         const checkApiStatus = async () => {
             syncApiKeyInput();
@@ -9818,7 +9839,7 @@ const __app = createApp({
             localTtsStatus, localTtsVoices, localTtsInstall, localTtsInstallPercent, localTtsVoiceOptions,
             refreshLocalTtsStatus, installLocalTtsVoice, cancelLocalTtsInstall, removeLocalTtsVoice,
             isZipVoiceVoice, localTtsSelectedVoiceIsClone, cloneVoiceReady, handleVoiceClipUpload, removeVoiceClip,
-            requestDiagnosticsCount, chatDiagnosticsCount, buildDiagnosticsExportEnvelope, exportRequestDiagnostics,
+            requestDiagnosticsCount, chatDiagnosticsCount, buildDiagnosticsExportEnvelope, exportRequestDiagnostics, clearRequestDiagnostics,
             vectorMemorySearchQuery, vectorMemorySearchResults, vectorMemorySearchError, vectorMemorySearchSortMode, isVectorMemorySearching,
             searchVectorMemories, clearVectorMemorySearch, sliceBuildStatus, startVectorBatchMemoryExtraction,
             memoryGraphView, setMemoryGraphView,
