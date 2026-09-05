@@ -290,15 +290,15 @@
             <div class="pt-6 border-t border-gray-100 mt-6">
                 <div class="flex items-center justify-between gap-3">
                     <button type="button" @click="genSectionOpen = !genSectionOpen"
-                        class="flex items-center text-xs font-bold text-gray-400 uppercase tracking-wider text-left group">
-                        <svg class="w-4 h-4 mr-2 text-gray-400" fill="none" stroke="currentColor"
+                        class="flex flex-1 items-center rounded-lg py-1.5 text-xs font-bold text-gray-400 uppercase tracking-wider text-left transition-colors hover:text-gray-600 group">
+                        <svg class="w-4 h-4 mr-2 text-gray-400 transition-colors group-hover:text-gray-600" fill="none" stroke="currentColor"
                             viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                 d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4">
                             </path>
                         </svg>
                         <span>生成参数</span>
-                        <svg :class="['w-4 h-4 ml-1.5 text-gray-400 transition-transform duration-200', genSectionOpen ? 'rotate-180' : '']"
+                        <svg :class="['w-4 h-4 ml-1.5 text-gray-400 transition-all duration-300 group-hover:text-gray-600', genSectionOpen ? 'rotate-180' : '']"
                             fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                 d="M19 9l-7 7-7-7"></path>
@@ -309,7 +309,10 @@
                         获取生图密钥
                     </button>
                 </div>
-                <div v-show="genSectionOpen" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="grid"
+                    :style="{ gridTemplateRows: genSectionOpen ? '1fr' : '0fr', transition: 'grid-template-rows 300ms ease' }">
+                    <div class="overflow-hidden min-h-0">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4">
                     <!-- 温度 -->
                     <div
                         class="bg-gray-50/60 p-4 rounded-xl border border-gray-100 hover:bg-white hover:border-gray-200 hover:shadow-sm transition-all duration-200">
@@ -390,6 +393,8 @@
                             button-class="rounded-lg px-3 py-1.5 text-sm text-gray-700 focus:border-teal-400 focus:ring-teal-100"
                             menu-class="text-sm">
                         </custom-select>
+                    </div>
+                        </div>
                     </div>
                 </div>
             </div>

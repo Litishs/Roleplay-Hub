@@ -124,6 +124,8 @@ test('the generation settings section collapses as an in-page accordion', () => 
         'generation section starts collapsed');
     assert.match(apiConfigHtml, /@click="genSectionOpen = !genSectionOpen"/,
         'the section header toggles the accordion');
-    assert.match(apiConfigHtml, /v-show="genSectionOpen"/,
-        'cards stay mounted (v-show) so inputs keep their state');
+    assert.match(apiConfigHtml, /gridTemplateRows: genSectionOpen \? '1fr' : '0fr'/,
+        'cards stay mounted and animate open/closed via grid-template-rows');
+    assert.match(apiConfigHtml, /class="overflow-hidden min-h-0"/,
+        'collapsing clips the content so the row height animates cleanly');
 });
