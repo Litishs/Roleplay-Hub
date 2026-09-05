@@ -8858,18 +8858,11 @@ const __app = createApp({
             }
 
             await loadData();
-            fetchQuota(); // Fetch quota after saved settings are loaded
 
             // Normalize the image-gen provider after saved settings load: legacy
             // users may have persisted an empty/unknown imageGenProviderId.
             if (!getImageGenProviderById(settings.imageGenProviderId)) {
                 settings.imageGenProviderId = imageGenProviderOptions[0]?.id || '';
-            }
-
-            // 首次启动显示作者致谢公告（仅一次）
-            const authorNoticeSeen = await getStoredValue('author_notice_seen');
-            if (!authorNoticeSeen) {
-                showAuthorNoticeModal.value = true;
             }
 
             // --- 全局清理废弃正则 (思维隐藏及旧版画图迁移项已清理完毕，保留基础结构) ---
@@ -9059,9 +9052,6 @@ const __app = createApp({
             // 初始化守卫解除：此后 saveData 才允许写入 user / memorySettings
             _initComplete = true;
 
-            // v4：本地嵌入模型默认自动加载（记忆开启 + 后端为本地时）
-            ensureLocalEmbeddingReady();
-
             // Restore Last Active Session
             if (lastActiveCharacterId.value !== null && characters.value[lastActiveCharacterId.value]) {
                 // Restore character selection without clearing chat history (we load it from DB)
@@ -9120,12 +9110,30 @@ const __app = createApp({
                 selectCharacter(0);
             }
 
+            // Phase 4.3 startup optimization: everything below is
+            // non-critical for the first chat paint, so it runs after the
+            // session restore chain instead of ahead of it.
+
+            // 首次启动显示作者致谢公告（仅一次）
+            const authorNoticeSeen = await getStoredValue('author_notice_seen');
+            if (!authorNoticeSeen) {
+                showAuthorNoticeModal.value = true;
+            }
+
+            // Quota / model list / status probes are display-only network
+            // calls; they no longer compete with the restore I/O above.
+            fetchQuota();
             if (settings.autoFetchModels) {
                 fetchAllConfiguredProviderModels();
             }
 
             // Initial Status Check
             checkAllStatuses();
+
+            // v4：本地嵌入模型默认自动加载（记忆开启 + 后端为本地时）。
+            // transformers + 模型权重加载较重，延迟到启动链空闲后再开始，
+            // 不与首屏会话恢复抢 I/O/CPU；发送消息前若尚未就绪会按需等待。
+            setTimeout(() => { ensureLocalEmbeddingReady(); }, 3000);
 
             // --- Mobile Keyboard Adaptation (VisualViewport) ---
             if (window.visualViewport) {
