@@ -20,6 +20,7 @@ import { UiTemplateFrame } from './ui-template-frame.mjs';
 import { RPHubCardUtils } from './card-utils.mjs';
 import { RPHubCustomSelect } from './ui-select.mjs';
 import { RPHRequestDiagnostics } from './request-diagnostics.mjs';
+import { installGlobalErrorHandlers } from './global-error-handler.mjs';
 
 import { compareVersions, checkForUpdate, fetchLatestRelease, downloadApk, saveAndInstallApk, GITHUB_REPO, RELEASES_PAGE_URL } from './update-checker.mjs';
 const RPHUpdateChecker = { compareVersions, checkForUpdate, fetchLatestRelease, downloadApk, saveAndInstallApk, GITHUB_REPO, RELEASES_PAGE_URL };
@@ -10337,5 +10338,9 @@ const __app = createApp({
 // locally by each consuming SFC; the createApp({ components }) block above
 // keeps resolving the root index.html runtime template.
 
+
+// Phase 3.3 (2026-09-05): global runtime error sinks. Installed before mount
+// so errors thrown during initial component setup/render are captured too.
+installGlobalErrorHandlers(__app);
 
 __app.mount('#app');
