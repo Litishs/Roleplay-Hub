@@ -97,3 +97,15 @@ test('MessageInput panel hosts the stage-2 controls and usage bar', async () => 
   assert.match(messageInput, /title="输出 Token"[\s\S]*?formatLatestTokenCount\(latestMainTokenUsage\.outputTokens\)/);
   assert.match(messageInput, /title="合计 Token"[\s\S]*?formatLatestTokenCount\(latestMainTokenUsage\.totalTokens\)/);
 });
+
+test('immersive-mode toggle re-reveals bubbles whose reveal class was wiped', async () => {
+  const source = await readFile(new URL('../src/modules/app.mjs', import.meta.url), 'utf8');
+  // A dedicated watcher re-observes unrevealed bubbles after the immersive flip:
+  // Vue re-renders the rows and the class binding wipes the DOM-added reveal-active.
+  assert.match(source, /watch\(\(\) => settings\.immersiveMode, async \(\) => \{\s*await nextTick\(\);[\s\S]*?scrollRevealObserver\.unobserve\(el\);\s*scrollRevealObserver\.observe\(el\);/);
+});
+
+test('request diagnostics snapshot records the reasoning effort param', async () => {
+  const source = await readFile(new URL('../src/composables/useMessageSender.mjs', import.meta.url), 'utf8');
+  assert.match(source, /temperature: settings\.temperature,\s*reasoning_effort: settings\.reasoningEffort \|\| undefined,/);
+});

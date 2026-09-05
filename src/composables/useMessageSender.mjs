@@ -274,6 +274,7 @@ export function useMessageSender(deps) {
                     model: requestModel,
                     messages: [],
                     temperature: settings.temperature,
+                    reasoning_effort: settings.reasoningEffort || undefined,
                     stream: settings.stream,
                     providerId: chatProviderForRequest.providerId,
                     providerApiUrl: chatProviderForRequest.apiUrl,

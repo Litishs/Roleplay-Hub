@@ -2613,6 +2613,26 @@ const __app = createApp({
             isSidebarCollapsed.value = !!enabled;
         });
 
+        // Toggling immersive mode re-renders message rows, and the Vue class
+        // binding wipes the DOM-added reveal-active class (scroll-reveal-* sets
+        // opacity: 0), leaving already-visible bubbles invisible but still
+        // interactive. Re-observe every unrevealed bubble so the
+        // IntersectionObserver re-reveals the ones currently in view.
+        watch(() => settings.immersiveMode, async () => {
+            await nextTick();
+            if (!scrollRevealObserver) initScrollReveal();
+            if (!scrollRevealObserver) return;
+            (messageElements.value || []).forEach(el => {
+                if (el instanceof HTMLElement && !el.classList.contains('reveal-active')) {
+                    // observe() on an already-observed element is a no-op and the
+                    // intersection state did not change, so force a fresh callback.
+                    scrollRevealObserver.unobserve(el);
+                    scrollRevealObserver.observe(el);
+                }
+            });
+        });
+
+
         // Debounce function
         
         // Debounced Save
