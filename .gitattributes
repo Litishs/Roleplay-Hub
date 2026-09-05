@@ -1,0 +1,19 @@
+# Normalize line endings: LF everywhere in the repo and working tree.
+# Contract tests assert on raw file text, so on-disk content must be deterministic.
+* text=auto eol=lf
+
+# Windows-only scripts that conventionally keep CRLF
+*.ps1 text eol=crlf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Never touch binaries (explicit, though auto-detection already skips them)
+*.png binary
+*.jpg binary
+*.webp binary
+*.ico binary
+*.ttf binary
+*.woff binary
+*.woff2 binary
+*.apk binary
+*.tar.gz binary
