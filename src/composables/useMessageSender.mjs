@@ -289,7 +289,10 @@ export function useMessageSender(deps) {
                 requestDiagnostic.input({
                     kind: 'chat_request',
                     chars: 0,
-                    summary: activeToolDepth > 0 ? `tool-continuation depth=${activeToolDepth}` : 'chat generate'
+                    summary: (activeToolDepth > 0
+                        ? `tool-continuation depth=${activeToolDepth}`
+                        : 'chat generate')
+                        + (settings.reasoningEffort ? ` · effort=${settings.reasoningEffort}` : '')
                 });
             }
 

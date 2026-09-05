@@ -109,3 +109,8 @@ test('request diagnostics snapshot records the reasoning effort param', async ()
   const source = await readFile(new URL('../src/composables/useMessageSender.mjs', import.meta.url), 'utf8');
   assert.match(source, /temperature: settings\.temperature,\s*reasoning_effort: settings\.reasoningEffort \|\| undefined,/);
 });
+
+test('journal summary carries the reasoning effort tag for diagnostics exports', async () => {
+  const source = await readFile(new URL('../src/composables/useMessageSender.mjs', import.meta.url), 'utf8');
+  assert.match(source, /'chat generate'\)\s*\n\s*\+ \(settings\.reasoningEffort \? ` · effort=\$\{settings\.reasoningEffort\}` : ''\)/);
+});
