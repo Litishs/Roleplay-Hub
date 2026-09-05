@@ -55,10 +55,21 @@ test('app.mjs wires useMemorySystem with single call and site destructuring', ()
     assert.ok(app.includes('const { showNoMemoryNeededModal } = memorySystemState;'));
     assert.ok(app.includes('const { showMemorySettings } = memorySystemState;'));
     assert.ok(app.includes('memorySettings,'));
-    assert.ok(app.includes('const {\n            memoryFacts,'));
     // mutable guards use let-destructuring
     assert.ok(app.includes('let {\n            _summaryInFlight,'));
-    assert.ok(app.includes('let {\n            _factExtractAbort,'));
+});
+
+test('the legacy fact layer (schemaLib/RPHMemorySchema) is fully removed', () => {
+    // The producer (assets/js/memory-schema.js) was deleted in the P3
+    // refactor (4eb3bee) but its consumers silently survived until the
+    // 2026-09-06 audit removed them. Guard against any resurrection of the
+    // dead-reference pattern.
+    assert.ok(!app.includes('RPHMemorySchema'), 'no dead global reference');
+    assert.ok(!app.includes('schemaLib'), 'schemaLib helper removed');
+    for (const dead of ['loadMemoryFacts', 'saveMemoryFactsNow', 'startFactExtractionPatrol',
+        'runFactMaintenance', 'restoreArchivedFact', 'parseFactExtractionResponse']) {
+        assert.ok(!app.includes(dead), `${dead} removed from app.mjs`);
+    }
 });
 
 test('app.mjs no longer declares memory state inline', () => {
@@ -94,7 +105,7 @@ test('useMemorySystem returns live reactive state (runtime)', async () => {
     for (const key of [
         'classicMemories', 'classicMemoryPage', 'memorySummaries', 'memoryProfile',
         'summaryProgress', 'sliceBuildStatus', 'memoryGraphView', 'showNoMemoryNeededModal',
-        'showMemorySettings', 'memoryFacts', 'factBaselineStatus', 'factShowRecycleBin',
+        'showMemorySettings',
         'MEMORY_VECTOR_BATCH_SIZE', 'LIST_PAGE_SIZE', 'MEMORY_MODE_VECTOR',
         'MIN_CONTEXT_FLOORS', 'SUMMARY_BATCH_SIZE_DEFAULT'
     ]) {
@@ -103,7 +114,11 @@ test('useMemorySystem returns live reactive state (runtime)', async () => {
     assert.equal(state.MEMORY_VECTOR_BATCH_SIZE, 16);
     assert.equal(state.LIST_PAGE_SIZE, 10);
     assert.equal(state.MEMORY_MODE_VECTOR, 'vector');
-    assert.ok(isRef(state.memoryFacts) && Array.isArray(state.memoryFacts.value));
+    // fact layer removed (2026-09-06 audit): the composable must not expose it
+    for (const dead of ['memoryFacts', 'isFactExtracting', 'isFactMaintaining', 'factExtractProgress',
+        'factMaintenancePreview', 'factBaselineStatus', 'factShowRecycleBin']) {
+        assert.ok(!(dead in state), `${dead} must stay removed`);
+    }
 });
 
 test('useWorldInfo composable exists and is pure state', () => {
@@ -768,7 +783,9 @@ test('every showVueConfirmModal call site declares its own button labels', () =>
     const callCount = (combined.match(/showVueConfirmModal\(/g) || []).length;
     const confirmCount = (combined.match(/confirmLabel:\s*'/g) || []).length;
     const cancelCount = (combined.match(/cancelLabel:\s*'/g) || []).length;
-    assert.equal(callCount, 4, 'exactly four confirm call sites (restore + 3 retry prompts)');
+    // 2026-09-06: the fact-extraction retry prompt was removed with the dead
+    // fact layer; remaining sites are restore-backup + 2 memory patrol retries.
+    assert.equal(callCount, 3, 'exactly three confirm call sites (restore + 2 patrol retry prompts)');
     assert.equal(confirmCount, callCount, 'every call site must pass confirmLabel');
     assert.equal(cancelCount, callCount, 'every call site must pass cancelLabel');
     assert.ok(!combined.includes('取消中断'), 'mistranslated Cancel label must not reappear');
@@ -1131,6 +1148,12 @@ test('app.mjs wires useRegexPipeline at the original declaration site', () => {
 
 // --- useStoryBranching (Phase 3.0): story branch creation ---
 
+test('app.mjs activates the executable-iframe lifecycle limiter (active iframes ≤ 3)', () => {
+    // The module self-initializes on import: IntersectionObserver + MutationObserver
+    // pick up every iframe.executable-html-frame and suspend offscreen frames.
+    assert.ok(app.includes("import './html-frame-lifecycle.mjs';"), 'side-effect import wired');
+});
+
 test('app.mjs wires useStoryBranching after its last dep', () => {
     assert.ok(app.includes("import { useStoryBranching } from '../composables/useStoryBranching.mjs';"), 'import');
     assert.equal(app.split('useStoryBranching(').length - 1, 1, 'exactly one composable call per setup()');
@@ -1141,7 +1164,8 @@ test('app.mjs wires useStoryBranching after its last dep', () => {
     assert.ok(app.includes('openStoryBranchModal, createStoryBranch, switchStoryBranch,'));
     // guard setter bridges defined in app.mjs
     assert.ok(app.includes('const setMemoriesLoaded = (value) => { _memoriesLoaded = value; };'), 'memory guard setters');
-    assert.ok(app.includes('const setFactFragmentsLoaded = (value) => { _factFragmentsLoaded = value; };'), 'fact guard setters');
+    // fact-layer guard setters removed with the fact layer (2026-09-06 audit)
+    assert.ok(!app.includes('setFactFragmentsLoaded'), 'fact guard setters removed');
 });
 
 test('Phase 3.0 device-caught dep regressions stay locked', () => {
@@ -1150,7 +1174,8 @@ test('Phase 3.0 device-caught dep regressions stay locked', () => {
     assert.ok(app.includes('            _doBatchEmbedMemoryChunks,'), 'app.mjs passes it as a dep');
     // updateActiveToolResultContext: missing dep broke tool result bookkeeping
     assert.ok(activeToolPipelineSource.includes('        updateActiveToolResultContext,'), 'tool pipeline destructures updateActiveToolResultContext');
-    // cloneForStorage / memoryFacts: missing deps broke branch seeding and rollback
+    // cloneForStorage: missing dep broke branch seeding (device logcat);
+    // memoryFacts dep removed with the fact layer (2026-09-06 audit)
     assert.ok(branchingSource.includes('        cloneForStorage,'), 'branching destructures cloneForStorage');
-    assert.ok(branchingSource.includes('        memoryFacts,'), 'branching destructures memoryFacts');
+    assert.ok(!branchingSource.includes('memoryFacts'), 'fact dep stays removed');
 });

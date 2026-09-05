@@ -96,9 +96,10 @@ test('useStoryBranching owns createStoryBranch with rollback and guards', () => 
     // guards reached through setter bridges, never rebound locally
     assert.ok(branching.includes('setApplyingCharacterScopedData(true);'), 'apply guard set through bridge');
     assert.ok(branching.includes('setMemoriesLoaded(true);'), 'memories guard set through bridge');
-    assert.ok(branching.includes("setFactLoadedCharacterId('');"), 'fact guard reset through bridge');
+    // fact-layer guard resets removed with the fact layer (2026-09-06 audit)
+    assert.ok(!branching.includes('setFactLoadedCharacterId') && !branching.includes('memoryFacts'), 'fact reset removed');
     assert.ok(branching.includes('getDb() ? getDb().deleteFragments(createdBranch.branchScopeId) : Promise.resolve(),'), 'db reached through accessor');
-    assert.ok(!/_(isApplyingCharacterScopedData|memoriesLoaded|classicMemoriesLoaded|factFragmentsLoaded|factLoadedCharacterId)\b/.test(branching.replace(/^\/\/.*$/gm, '')), 'no direct guard access in code');
+    assert.ok(!/_(isApplyingCharacterScopedData|memoriesLoaded|classicMemoriesLoaded)\b/.test(branching.replace(/^\/\/.*$/gm, '')), 'no direct guard access in code');
     assert.ok(!branching.includes('\ndb ?') && !branching.includes(' db ? db.deleteFragments'), 'no direct db binding access');
     assert.ok(branching.includes('return { createStoryBranch };'));
 });
@@ -110,7 +111,9 @@ test('app.js scopes chat and memory persistence by branch', () => {
     assert.ok(app.includes('getUiTemplateRuntimeKey = (char = currentCharacter.value)'));
     assert.ok(app.includes('return getStoryBranchScopeId(char.uuid, activeStoryBranchId.value);'));
     assert.ok(app.includes('setScopedStoredValue(\'branches\', char.uuid'));
-    assert.ok(app.includes('db.applyFragments(getCurrentChatStorageScopeId()'));
+    // fact fragment persistence removed with the fact layer (2026-09-06 audit);
+    // db.applyFragments must not reappear without its schema module.
+    assert.ok(!app.includes('db.applyFragments'), 'fact fragment persistence stays removed');
 });
 
 test('app.js falls back to in-memory history when fork target is missing from storage', () => {
