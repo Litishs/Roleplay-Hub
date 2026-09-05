@@ -90,84 +90,84 @@
 
                             <!-- Quick Settings Button + Inline Control Panel (above send) -->
                             <div class="relative flex items-center">
-                                <button @click.stop="showChatModelSelector = !showChatModelSelector"
-                                    :class="[showChatModelSelector ? 'bg-primary-500 text-white shadow-primary-500/30 border-primary-500' : 'bg-white text-gray-500 hover:text-gray-700 hover:bg-gray-50 border-gray-200 shadow-sm']"
-                                    class="rounded-full w-8 h-8 flex items-center justify-center border transition-all active:scale-95"
-                                    title="快速设置" aria-label="快速设置">
-                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                            d="M4 6h5m4 0h7M9 4v4M4 12h10m4 0h2m-6-2v4M4 18h3m4 0h9m-13-2v4">
-                                        </path>
-                                    </svg>
-                                </button>
-                                <transition enter-active-class="transition-all duration-150 ease-out"
-                                    enter-from-class="opacity-0 translate-y-2 scale-95"
-                                    enter-to-class="opacity-100 translate-y-0 scale-100"
-                                    leave-active-class="transition-all duration-100 ease-in"
-                                    leave-from-class="opacity-100 translate-y-0 scale-100"
-                                    leave-to-class="opacity-0 translate-y-2 scale-95">
-                                    <div v-if="showChatModelSelector"
-                                        class="absolute bottom-full right-0 mb-3 z-50 pointer-events-auto w-[min(22rem,calc(100vw_-_3rem))] transform-gpu origin-bottom-right">
-                                        <div @click.stop
-                                            class="bg-white/95 backdrop-blur-xl border border-gray-200 shadow-xl rounded-2xl p-3 flex flex-col gap-3 ring-1 ring-black/5">
-                                            <!-- Model slots -->
-                                            <div class="flex flex-col gap-1.5">
-                                                <button v-for="(slot, slotIndex) in chatModelSlots" :key="slot.mode"
-                                                    type="button" @click="selectChatModelSlot(slot)"
-                                                    :disabled="!slot.model"
-                                                    :class="['flex min-w-0 items-center gap-3 rounded-xl border px-3 py-3 text-left transition-all',
-                                                        modelMode === slot.mode && slot.model
-                                                            ? 'border-primary-300/50 bg-white text-primary-600 shadow-sm'
-                                                            : 'border-gray-200 bg-white text-gray-500 hover:bg-gray-50',
-                                                        !slot.model ? 'cursor-not-allowed opacity-45' : 'active:scale-[0.98]']">
-                                                    <span class="flex-none text-xs font-bold">槽位 {{ slotIndex + 1 }}</span>
-                                                    <span class="min-w-0 flex-1 truncate text-right text-xs font-mono"
-                                                        :title="slot.model">{{ slot.model || '未配置' }}</span>
-                                                    <svg v-if="modelMode === slot.mode && slot.model"
-                                                        class="w-4 h-4 flex-none text-primary-600" fill="none"
-                                                        stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path stroke-linecap="round" stroke-linejoin="round"
-                                                            stroke-width="2" d="M5 13l4 4L19 7"></path>
-                                                    </svg>
-                                                </button>
-                                            </div>
-                                            <!-- Temperature -->
-                                            <div class="border-t border-gray-100 pt-3">
-                                                <div class="mb-2 flex items-center justify-between">
-                                                    <span class="text-xs font-bold text-gray-500">温度</span>
-                                                    <span
-                                                        class="text-xs font-mono font-semibold text-gray-500 tabular-nums">
-                                                        {{ Number(settings.temperature).toFixed(2) }}</span>
-                                                </div>
-                                                <input v-model.number="settings.temperature" type="range" min="0"
-                                                    max="1" step="0.01" aria-label="温度"
-                                                    class="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary-500">
-                                            </div>
-                                            <!-- Toggles -->
-                                            <div class="flex flex-col gap-2 border-t border-gray-100 pt-3">
-                                                <label
-                                                    class="flex cursor-pointer items-center justify-between gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-xs font-semibold text-gray-600 transition-colors hover:bg-gray-50">
-                                                    <span>流式输出</span>
-                                                    <span class="relative inline-flex flex-none items-center">
-                                                        <input type="checkbox" v-model="settings.stream"
-                                                            class="settings-toggle-input sr-only" aria-label="流式输出">
-                                                        <span
-                                                            class="settings-toggle settings-toggle--compact settings-toggle--solid"></span>
-                                                    </span>
-                                                </label>
-                                                <label
-                                                    class="flex cursor-pointer items-center justify-between gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-xs font-semibold text-gray-600 transition-colors hover:bg-gray-50">
-                                                    <span>沉浸模式</span>
-                                                    <span class="relative inline-flex flex-none items-center">
-                                                        <input type="checkbox" v-model="settings.immersiveMode"
-                                                            class="settings-toggle-input sr-only" aria-label="沉浸模式">
-                                                        <span
-                                                            class="settings-toggle settings-toggle--compact settings-toggle--solid"></span>
-                                                    </span>
-                                                </label>
-                                            </div>
-                                        </div>
-                                    </div>
+                                <button @click.stop="showChatModelSelector = !showChatModelSelector"
+                                    :class="[showChatModelSelector ? 'bg-primary-500 text-white shadow-primary-500/30 border-primary-500' : 'bg-white text-gray-500 hover:text-gray-700 hover:bg-gray-50 border-gray-200 shadow-sm']"
+                                    class="rounded-full w-8 h-8 flex items-center justify-center border transition-all active:scale-95"
+                                    title="快速设置" aria-label="快速设置">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M4 6h5m4 0h7M9 4v4M4 12h10m4 0h2m-6-2v4M4 18h3m4 0h9m-13-2v4">
+                                        </path>
+                                    </svg>
+                                </button>
+                                <transition enter-active-class="transition-all duration-150 ease-out"
+                                    enter-from-class="opacity-0 translate-y-2 scale-95"
+                                    enter-to-class="opacity-100 translate-y-0 scale-100"
+                                    leave-active-class="transition-all duration-100 ease-in"
+                                    leave-from-class="opacity-100 translate-y-0 scale-100"
+                                    leave-to-class="opacity-0 translate-y-2 scale-95">
+                                    <div v-if="showChatModelSelector"
+                                        class="absolute bottom-full right-0 mb-3 z-50 pointer-events-auto w-[min(22rem,calc(100vw_-_3rem))] transform-gpu origin-bottom-right">
+                                        <div @click.stop
+                                            class="bg-white/95 backdrop-blur-xl border border-gray-200 shadow-xl rounded-2xl p-3 flex flex-col gap-3 ring-1 ring-black/5">
+                                            <!-- Model slots -->
+                                            <div class="flex flex-col gap-1.5">
+                                                <button v-for="(slot, slotIndex) in chatModelSlots" :key="slot.mode"
+                                                    type="button" @click="selectChatModelSlot(slot)"
+                                                    :disabled="!slot.model"
+                                                    :class="['flex min-w-0 items-center gap-3 rounded-xl border px-3 py-3 text-left transition-all',
+                                                        modelMode === slot.mode && slot.model
+                                                            ? 'border-primary-300/50 bg-white text-primary-600 shadow-sm'
+                                                            : 'border-gray-200 bg-white text-gray-500 hover:bg-gray-50',
+                                                        !slot.model ? 'cursor-not-allowed opacity-45' : 'active:scale-[0.98]']">
+                                                    <span class="flex-none text-xs font-bold">槽位 {{ slotIndex + 1 }}</span>
+                                                    <span class="min-w-0 flex-1 truncate text-right text-xs font-mono"
+                                                        :title="slot.model">{{ slot.model || '未配置' }}</span>
+                                                    <svg v-if="modelMode === slot.mode && slot.model"
+                                                        class="w-4 h-4 flex-none text-primary-600" fill="none"
+                                                        stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round"
+                                                            stroke-width="2" d="M5 13l4 4L19 7"></path>
+                                                    </svg>
+                                                </button>
+                                            </div>
+                                            <!-- Temperature -->
+                                            <div class="border-t border-gray-100 pt-3">
+                                                <div class="mb-2 flex items-center justify-between">
+                                                    <span class="text-xs font-bold text-gray-500">温度</span>
+                                                    <span
+                                                        class="text-xs font-mono font-semibold text-gray-500 tabular-nums">
+                                                        {{ Number(settings.temperature).toFixed(2) }}</span>
+                                                </div>
+                                                <input v-model.number="settings.temperature" type="range" min="0"
+                                                    max="1" step="0.01" aria-label="温度"
+                                                    class="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary-500">
+                                            </div>
+                                            <!-- Toggles -->
+                                            <div class="flex flex-col gap-2 border-t border-gray-100 pt-3">
+                                                <label
+                                                    class="flex cursor-pointer items-center justify-between gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-xs font-semibold text-gray-600 transition-colors hover:bg-gray-50">
+                                                    <span>流式输出</span>
+                                                    <span class="relative inline-flex flex-none items-center">
+                                                        <input type="checkbox" v-model="settings.stream"
+                                                            class="settings-toggle-input sr-only" aria-label="流式输出">
+                                                        <span
+                                                            class="settings-toggle settings-toggle--compact settings-toggle--solid"></span>
+                                                    </span>
+                                                </label>
+                                                <label
+                                                    class="flex cursor-pointer items-center justify-between gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-xs font-semibold text-gray-600 transition-colors hover:bg-gray-50">
+                                                    <span>沉浸模式</span>
+                                                    <span class="relative inline-flex flex-none items-center">
+                                                        <input type="checkbox" v-model="settings.immersiveMode"
+                                                            class="settings-toggle-input sr-only" aria-label="沉浸模式">
+                                                        <span
+                                                            class="settings-toggle settings-toggle--compact settings-toggle--solid"></span>
+                                                    </span>
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </transition>
                             </div>
                         </div>
