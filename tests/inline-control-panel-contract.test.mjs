@@ -8,6 +8,14 @@ test('MessageInput hosts the inline quick-settings panel bound to existing setti
   // Trigger button next to the send button
   assert.match(messageInput, /@click\.stop="showChatModelSelector = !showChatModelSelector"/);
   assert.match(messageInput, /title="快速设置"/);
+  // Trigger lives in the top toolbar row (above the send key, level with the story-branch button)
+  assert.ok(
+    messageInput.indexOf('title="快速设置"') < messageInput.indexOf('ref="inputBox"'),
+    'quick-settings trigger should sit in the toolbar row above the input textarea',
+  );
+  const sendRow = messageInput.match(/<div class="flex-shrink-0 flex items-center gap-1">[\s\S]*?<\/div>\r?\n/)?.[0] || '';
+  assert.ok(sendRow.includes('sendMessage') && !sendRow.includes('showChatModelSelector'),
+    'send/stop row should not contain the quick-settings trigger');
 
   // Popover panel anchored above-right of the trigger
   assert.match(messageInput, /v-if="showChatModelSelector"/);
