@@ -9,12 +9,13 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-const [apiConfigHtml, modalDialogHtml, app, settingsStateSource, apiConfigSource] = await Promise.all([
+const [apiConfigHtml, modalDialogHtml, app, settingsStateSource, apiConfigSource, uiSelectSource] = await Promise.all([
     readFile(new URL('../src/components/settings/ApiConfig.vue', import.meta.url), 'utf8'),
     readFile(new URL('../src/components/common/ModalDialog.vue', import.meta.url), 'utf8'),
     readFile(new URL('../src/modules/app.mjs', import.meta.url), 'utf8'),
     readFile(new URL('../src/composables/useSettingsState.mjs', import.meta.url), 'utf8'),
     readFile(new URL('../src/composables/useApiConfig.mjs', import.meta.url), 'utf8'),
+    readFile(new URL('../src/modules/ui-select.mjs', import.meta.url), 'utf8'),
 ]);
 
 // --- Task A: merged slot selector ---
@@ -111,6 +112,17 @@ test('STA1N is the default API provider and the image-gen section recommends it'
     assert.match(app,
         /if \(!getImageGenProviderById\(settings\.imageGenProviderId\)\) \{\s+settings\.imageGenProviderId = imageGenProviderOptions\[0\]\?\.id \|\| '';/,
         'legacy persisted provider ids are normalized after settings load');
+});
+
+// --- custom-select dual-Vue-instance regression ---
+
+test('ui-select imports Vue APIs from the bundler, not the global Vue instance', () => {
+    assert.match(uiSelectSource, /import \{ ref, computed, nextTick, watch, onBeforeUnmount \} from 'vue';/,
+        'reactivity must come from the same Vue instance as the host component tree');
+    assert.ok(!uiSelectSource.includes('= Vue;'),
+        'no UMD-legacy destructuring of window.Vue: refs from the other instance never trigger the host render effect, freezing the dropdown');
+    assert.match(uiSelectSource, /export \{ RPHubCustomSelect \};/,
+        'the ESM export stays intact');
 });
 
 test('the "获取API" link only shows while the STA1N provider is selected', () => {

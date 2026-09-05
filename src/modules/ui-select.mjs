@@ -1,5 +1,10 @@
+import { ref, computed, nextTick, watch, onBeforeUnmount } from 'vue';
 
-    const { ref, computed, nextTick, watch, onBeforeUnmount } = Vue;
+// Import the Vue APIs explicitly: the component used to destructure the
+// global window.Vue (UMD legacy), which belongs to a DIFFERENT Vue instance
+// than the Vite-bundled app. Refs from one instance's reactivity system never
+// trigger the other instance's render effects, so the dropdown menu never
+// rendered on click (state changed, UI stayed frozen).
 
     const toOption = (option, index) => {
         if (!option || typeof option !== 'object') {
