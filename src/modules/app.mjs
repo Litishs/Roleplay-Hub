@@ -196,6 +196,8 @@ const __app = createApp({
             isSidebarCollapsed,
             isAdvancedNavOpen,
             toggleAdvancedNav,
+            isOnlineNavOpen,
+            toggleOnlineNav,
             showDescriptionPanel,
             showModelSelector,
             modelSelectionTarget,
@@ -9576,7 +9578,7 @@ const __app = createApp({
             editMessage, saveEditMessage, cancelEditMessage,
             createNewCharacter, editCharacter, saveCharacter, deleteCharacter, selectCharacter, beginCharacterCardPress, endCharacterCardPress, toggleCharacterFavorite, isCharacterFavorite,
             currentUiTemplates, activeUiTemplates, uiTemplateUpdateStatus, createUiTemplate, editUiTemplate, saveUiTemplate, deleteUiTemplate, importUiTemplates, updateUiTemplatesFromChat, renderEditingUiTemplatePreview, handleUiTemplateClick, formatUiTemplateChangeValue, hasUiTemplateScripts,
-            isBatchDeleteMode, isSidebarCollapsed, isAdvancedNavOpen, toggleAdvancedNav, selectedCharacterIndices, toggleBatchDeleteMode, toggleCharacterSelection, batchDeleteCharacters,
+            isBatchDeleteMode, isSidebarCollapsed, isAdvancedNavOpen, toggleAdvancedNav, isOnlineNavOpen, toggleOnlineNav, selectedCharacterIndices, toggleBatchDeleteMode, toggleCharacterSelection, batchDeleteCharacters,
             getCharacterWICount, getCharacterRegexCount,
             handleAvatarUpload, importCharacter,
             // 剧情分支

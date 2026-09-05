@@ -74,6 +74,19 @@ export function useUiState() {
         isAdvancedNavOpen.value = !isAdvancedNavOpen.value;
     };
 
+    // "在线" collapsible nav group (角色卡生成 / 万相广场) — same expand
+    // semantics as the 高级 group: clicking while the sidebar is collapsed
+    // expands the sidebar and opens the group in one step.
+    const isOnlineNavOpen = ref(false);
+    const toggleOnlineNav = () => {
+        if (isSidebarCollapsed.value) {
+            isSidebarCollapsed.value = false;
+            isOnlineNavOpen.value = true;
+            return;
+        }
+        isOnlineNavOpen.value = !isOnlineNavOpen.value;
+    };
+
     // --- App version display ---
     const appVersionName = ref('');
     const appVersionCode = ref('');
@@ -146,6 +159,8 @@ export function useUiState() {
         isSidebarCollapsed,
         isAdvancedNavOpen,
         toggleAdvancedNav,
+        isOnlineNavOpen,
+        toggleOnlineNav,
         appVersionName,
         appVersionCode,
         appBuildType,

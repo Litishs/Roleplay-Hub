@@ -592,13 +592,15 @@
             height: 1.35rem;
         }
 
-        .advanced-nav.is-open .advanced-nav-trigger {
+        .advanced-nav.is-open .advanced-nav-trigger,
+        .online-nav.is-open .online-nav-trigger {
             color: #374151;
             background: transparent;
             box-shadow: none;
         }
 
-        .advanced-nav.is-open .advanced-nav-trigger::before {
+        .advanced-nav.is-open .advanced-nav-trigger::before,
+        .online-nav.is-open .online-nav-trigger::before {
             display: none;
         }
 
@@ -611,19 +613,23 @@
             outline-offset: -1px;
         }
 
-        .advanced-nav-trigger .advanced-nav-chevron {
+        .advanced-nav-trigger .advanced-nav-chevron,
+        .online-nav-trigger .online-nav-chevron {
             transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
         }
 
-        .advanced-nav.is-open .advanced-nav-chevron {
+        .advanced-nav.is-open .advanced-nav-chevron,
+        .online-nav.is-open .online-nav-chevron {
             transform: rotate(90deg);
         }
 
-        .advanced-nav.is-open .advanced-nav-trigger:hover .advanced-nav-chevron {
+        .advanced-nav.is-open .advanced-nav-trigger:hover .advanced-nav-chevron,
+        .online-nav.is-open .online-nav-trigger:hover .online-nav-chevron {
             transform: rotate(90deg) translateY(-1px);
         }
 
-        .advanced-nav-panel {
+        .advanced-nav-panel,
+        .online-nav-panel {
             display: grid;
             grid-template-rows: 0fr;
             opacity: 0;
@@ -632,7 +638,8 @@
                 opacity 0.2s ease;
         }
 
-        .advanced-nav.is-open .advanced-nav-panel {
+        .advanced-nav.is-open .advanced-nav-panel,
+        .online-nav.is-open .online-nav-panel {
             grid-template-rows: 1fr;
             opacity: 1;
         }
@@ -1709,7 +1716,9 @@
 
         @media (prefers-reduced-motion: reduce) {
             .advanced-nav-trigger .advanced-nav-chevron,
+            .online-nav-trigger .online-nav-chevron,
             .advanced-nav-panel,
+            .online-nav-panel,
             .settings-collapse,
             .settings-collapse__content,
             .settings-collapse-chevron,
