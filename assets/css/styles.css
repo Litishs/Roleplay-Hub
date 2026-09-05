@@ -2022,8 +2022,16 @@
             }
 
             .app-sidebar {
-                width: min(18rem, 84vw);
-                max-width: 84vw;
+                width: calc(min(18rem, 84vw) + 8px);
+                max-width: calc(84vw + 8px);
+                /* Overscan the left edge: the drawer is a composited layer
+                   (will-change/backface-visibility), and on high-DPI WebViews
+                   edge anti-aliasing can expose the page behind by a hair.
+                   Extending 8px past the viewport edge means anything showing
+                   at x=0 is the drawer's own background. padding-left keeps
+                   the content at the same on-screen position. */
+                left: -8px;
+                padding-left: 8px;
                 border-top-right-radius: 1.5rem;
                 border-bottom-right-radius: 1.5rem;
                 transform: translate3d(-104%, 0, 0);
@@ -2930,6 +2938,11 @@ opacity: 0;
         [data-theme='dark'] .app-sidebar {
             background: linear-gradient(180deg, #1f2937 0%, #171f2b 100%) !important;
             border-color: var(--d-border) !important;
+            /* The mobile drawer paints a 72%-white 1px inner ring (light-theme
+               polish); in dark mode it reads as a light seam along the edges. */
+            box-shadow:
+                18px 0 54px -24px rgba(0, 0, 0, 0.6),
+                0 0 0 1px rgba(255, 255, 255, 0.06) inset !important;
         }
         [data-theme='dark'] .chat-input-box {
             caret-color: var(--d-text);
