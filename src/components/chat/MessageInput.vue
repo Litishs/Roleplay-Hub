@@ -117,7 +117,7 @@
                                     leave-from-class="opacity-100 translate-y-0 scale-100"
                                     leave-to-class="opacity-0 translate-y-2 scale-95">
                                     <div v-if="showChatModelSelector"
-                                        class="absolute bottom-full right-0 mb-3 z-50 pointer-events-auto w-[min(22rem,calc(100vw-3rem))] transform-gpu origin-bottom-right">
+                                        class="absolute bottom-full right-0 mb-3 z-50 pointer-events-auto w-[min(22rem,calc(100vw_-_3rem))] transform-gpu origin-bottom-right">
                                         <div @click.stop
                                             class="bg-white/95 backdrop-blur-xl border border-gray-200 shadow-xl rounded-2xl p-3 flex flex-col gap-3 ring-1 ring-black/5">
                                             <!-- Model slots -->
