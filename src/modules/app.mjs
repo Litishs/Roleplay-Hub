@@ -172,9 +172,9 @@ const __app = createApp({
         const systemRegexNames = ['Auto Replace {{user}}', 'NAI画图正则'];
         const { systemWorldInfoNames } = worldInfoState;
 
-        // --- 生图服务配置（暂不可用） ---
-        // 生图服务当前无可用提供商；后续接入新服务商时只需在 imageGenProviderOptions 增加条目，
-        // 例如：{ id: 'xxx', name: 'XXX', apiUrl: 'https://...', icon: '' }，再在设置页接入选择器即可。
+        // --- Image generation config ---
+        // Providers live in src/composables/useApiConfig.mjs (imageGenProviderOptions);
+        // add a new entry there to onboard another image service.
         const { imageGenProviderOptions, getImageGenProviderById, imageGenUnavailable } = apiConfigState;
 
         // --- Default API Configuration ---
@@ -2484,7 +2484,7 @@ const __app = createApp({
         // Auto Image Gen & Stream Linkage
         const isAutoImageGenEnabled = computed({
             get: () => {
-                if (imageGenUnavailable.value) return false; // 生图服务暂不可用，强制关闭
+                if (imageGenUnavailable.value) return false; // no provider configured: keep auto image gen off
                 const entry = worldInfo.value.find(w => w.comment === '自动生图');
                 return entry ? entry.enabled : false;
             },
@@ -2531,7 +2531,7 @@ const __app = createApp({
             const imageGenRegexName = 'NAI画图正则';
             let regex = regexScripts.value.find(r => r.name === imageGenRegexName);
             if (imageGenUnavailable.value) {
-                // 生图服务暂不可用：强制关闭已有画图正则，不修改其内容
+                // No provider configured: disable the existing image-gen regex without touching its content
                 if (regex) regex.enabled = false;
                 return [];
             }
