@@ -85,23 +85,6 @@ export function useMemorySystem() {
     const showNoMemoryNeededModal = ref(false);
     const showMemorySettings = ref(false);
 
-    // --- 差异式事实层（P1：抽取 / P2：整理） ---
-    const memoryFacts = ref([]);
-    const isFactExtracting = ref(false);
-    const isFactMaintaining = ref(false);
-    const factExtractProgress = ref({ current: 0, total: 0 });
-    const factMaintenancePreview = ref(null);
-    const factBaselineStatus = ref('none');
-    const factShowRecycleBin = ref(false);
-    const factArcRetainTurns = ref(60);
-    const factArcMinEvents = ref(3);
-    let _factExtractAbort = null;
-    let _factFragmentsLoaded = false;
-    let _factDirty = new Set();
-    let _factRemoved = new Set();
-    let _factMeta = null;
-    let _factLoadedCharacterId = '';
-
     return {
         // constants
         MEMORY_VECTOR_BATCH_SIZE,
@@ -153,22 +136,6 @@ export function useMemorySystem() {
         _classicMemoriesLoaded,
         // modal flags
         showNoMemoryNeededModal,
-        showMemorySettings,
-        // fact layer
-        memoryFacts,
-        isFactExtracting,
-        isFactMaintaining,
-        factExtractProgress,
-        factMaintenancePreview,
-        factBaselineStatus,
-        factShowRecycleBin,
-        factArcRetainTurns,
-        factArcMinEvents,
-        _factExtractAbort,
-        _factFragmentsLoaded,
-        _factDirty,
-        _factRemoved,
-        _factMeta,
-        _factLoadedCharacterId
+        showMemorySettings
     };
 }

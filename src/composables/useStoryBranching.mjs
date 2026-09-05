@@ -9,8 +9,8 @@
 // passed by value, so raw reassignment cannot reach the app.mjs bindings):
 // _isApplyingCharacterScopedData via the existing
 // setApplyingCharacterScopedData bridge, plus dedicated setters for
-// _memoriesLoaded / _classicMemoriesLoaded / _factFragmentsLoaded /
-// _factLoadedCharacterId; the storage handle is read through getDb()
+// _memoriesLoaded / _classicMemoriesLoaded; the storage handle is read
+// through getDb()
 // because app.mjs reassigns the db binding (same accessor pattern as
 // useCardOperations).
 //
@@ -38,15 +38,12 @@ export function useStoryBranching(deps) {
         activeStoryBranchId,
         storyBranchSwitching,
         memorySettings,
-        memoryFacts,
         globalUiTemplates,
         // shared guard bridges
         setApplyingCharacterScopedData,
         finishApplyingCharacterScopedData,
         setMemoriesLoaded,
         setClassicMemoriesLoaded,
-        setFactFragmentsLoaded,
-        setFactLoadedCharacterId,
         getDb,
         // storage layer
         flushCurrentBranchState,
@@ -198,9 +195,6 @@ export function useStoryBranching(deps) {
                     chatHistory.value = previousState.chatHistory;
                     memories.value = previousState.memories;
                     classicMemories.value = previousState.classicMemories;
-                    setFactFragmentsLoaded(false);
-                    setFactLoadedCharacterId('');
-                    memoryFacts.value = [];
                     if (memorySettings.emptyTurns) {
                         delete memorySettings.emptyTurns[getMemoryEmptyTurnsKey(createdBranch.branchScopeId)];
                     }
