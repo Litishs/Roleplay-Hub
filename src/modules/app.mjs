@@ -23,6 +23,10 @@ import { RPHRequestDiagnostics } from './request-diagnostics.mjs';
 
 import { compareVersions, checkForUpdate, fetchLatestRelease, downloadApk, saveAndInstallApk, GITHUB_REPO, RELEASES_PAGE_URL } from './update-checker.mjs';
 const RPHUpdateChecker = { compareVersions, checkForUpdate, fetchLatestRelease, downloadApk, saveAndInstallApk, GITHUB_REPO, RELEASES_PAGE_URL };
+
+// STA1N 生图服务地址（用于状态检测 + quota 查询）
+const IMAGE_GEN_BASE_URL = 'https://nai.sta1n.cn';
+
 import { RPHChatPersistence } from './chat-persistence.mjs';
 import { DEFAULT_PRESET_DEFINITIONS, DEFAULT_PRESET_DEFINITIONS_VERSION } from './default-presets.mjs';
 import { buildCotPresetContent } from './cot-builder.mjs';
@@ -209,9 +213,32 @@ const __app = createApp({
         const { quotaValue, quotaLoading, quotaError, backupInProgress } = uiState;
 
         const fetchQuota = async () => {
-            // 生图服务暂不可用：不再向任何生图服务商请求配额
-            quotaValue.value = 0;
+            quotaLoading.value = true;
             quotaError.value = false;
+            try {
+                const imageGenToken = settings.imageGenKey.trim();
+                if (!imageGenToken) {
+                    quotaValue.value = 0;
+                    return;
+                }
+                const response = await fetch(`${IMAGE_GEN_BASE_URL}/api/api/getUser`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ toUserId: imageGenToken })
+                });
+                const data = await response.json();
+                if (data.status === 'ok' && data.type === 'sta1n') {
+                    const val = Number.parseInt(data.data?.value, 10);
+                    quotaValue.value = Number.isFinite(val) ? val : 0;
+                } else {
+                    quotaError.value = true;
+                }
+            } catch (e) {
+                console.error('Quota fetch error:', e);
+                quotaError.value = true;
+            } finally {
+                quotaLoading.value = false;
+            }
         };
         // Update check state lives in useUiState; check/install logic stays here.
         const {
@@ -781,8 +808,6 @@ const __app = createApp({
                     settings.apiProviderKeys[provider.id] = '';
                 }
             });
-            // 清理已下架的 STA1N 提供商遗留 key，避免旧 key 串入其他提供商
-            delete settings.apiProviderKeys['sta1n'];
 
             let provider = getApiProviderById(settings.apiProviderId);
             if (!provider && !isCustomApiProviderId(settings.apiProviderId)) {
@@ -3670,6 +3695,21 @@ const __app = createApp({
             showModelSelector.value = false;
         };
 
+        // 槽位批量写入（quickModels 模式关闭弹窗时调用）
+        const selectQuickModels = (slotModels) => {
+            settings.qualityModel = slotModels[0] || '';
+            settings.balancedModel = slotModels[1] || '';
+            settings.fastModel = slotModels[2] || '';
+            // 自动切到第一个非空槽位（modelMode setter 会同步 settings.model）
+            const nonEmptyIdx = slotModels.findIndex(m => m);
+            if (nonEmptyIdx >= 0) {
+                const modeMap = ['quality', 'balanced', 'fast'];
+                modelMode.value = modeMap[nonEmptyIdx];
+            } else {
+                settings.model = '';
+            }
+        };
+
         const chatBindingLabel = computed(() => {
             const provider = getChatProvider();
             return `聊天：${getProviderDisplayName(provider.providerId)} · ${String(settings.model || '').trim() || '未选模型'}`;
@@ -3920,9 +3960,11 @@ const __app = createApp({
         };
 
         const checkImageGenStatus = async () => {
-            // 生图服务暂不可用：不发起探测请求，固定显示“暂不可用”
-            imageGenStatus.value = 'unavailable';
-            imageGenLatency.value = 0;
+            await checkConnectionStatus(
+                imageGenStatus, imageGenLatency, 'Image API',
+                signal => fetch(IMAGE_GEN_BASE_URL, { method: 'HEAD', mode: 'no-cors', signal }),
+                () => true
+            );
         };
 
         const checkAllStatuses = () => {
@@ -9317,6 +9359,12 @@ const __app = createApp({
             await loadData();
             fetchQuota(); // Fetch quota after saved settings are loaded
 
+            // Normalize the image-gen provider after saved settings load: legacy
+            // users may have persisted an empty/unknown imageGenProviderId.
+            if (!getImageGenProviderById(settings.imageGenProviderId)) {
+                settings.imageGenProviderId = imageGenProviderOptions[0]?.id || '';
+            }
+
             // 首次启动显示作者致谢公告（仅一次）
             const authorNoticeSeen = await getStoredValue('author_notice_seen');
             if (!authorNoticeSeen) {
@@ -10011,7 +10059,7 @@ const __app = createApp({
                 showToast(`成功导入 ${normalized.length} 个分片`, 'success');
             }, error => showToast(`导入失败: ${error.message || 'JSON 格式错误'}`, 'error')),
             toggleMobileMenu, closeMobileMenu,
-            fetchModels, selectModel, sendMessage, autoResizeInput, handleChatInput, handleChatCompositionStart, handleChatCompositionEnd, handleChatInputPaste, prepareChatInputSend, handleChatInputKeydown, handleChatInputFocus, handleChatInputBlur, stopGeneration, clearChat, toggleChatFullscreen,
+            fetchModels, selectModel, selectQuickModels, sendMessage, autoResizeInput, handleChatInput, handleChatCompositionStart, handleChatCompositionEnd, handleChatInputPaste, prepareChatInputSend, handleChatInputKeydown, handleChatInputFocus, handleChatInputBlur, stopGeneration, clearChat, toggleChatFullscreen,
             handleConfirm, handleCancel, // Export handlers
             showChatImportDialog, chatImportDialog, confirmChatImportOverwrite, confirmChatImportAppend, cancelChatImport,
             showImportPreview, importPreview, confirmImportPreview, cancelImportPreview,

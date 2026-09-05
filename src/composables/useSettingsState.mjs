@@ -41,9 +41,9 @@ export function useSettingsState() {
     const CONTEXT_TOKEN_BUDGET_MAX = 64000;
 
     // --- Default API configuration (consumed by settings defaults) ---
-    const DEFAULT_API_PROVIDER_ID = 'deepseek';
+    const DEFAULT_API_PROVIDER_ID = 'sta1n';
     const DEFAULT_API_CONFIG = {
-        apiUrl: 'https://api.deepseek.com/v1',
+        apiUrl: 'https://cdn.sta1n.cn/v1',
         apiKey: '',
         model: '', // Default selected
         qualityModel: '',
@@ -85,7 +85,7 @@ export function useSettingsState() {
         fontSize: window.innerWidth > 768 ? 16 : 14,
         themeMode: 'system',
         imageGenKey: '',
-        imageGenProviderId: '',
+        imageGenProviderId: 'sta1n',
         imageStyle: 'vertical',
         customImageArtists: '',
         imageSize: '竖图',

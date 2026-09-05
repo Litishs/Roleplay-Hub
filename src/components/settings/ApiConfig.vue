@@ -34,14 +34,25 @@
                 <!-- Image API Status -->
                 <div
                     class="model-setting-row">
-                    <div class="w-2.5 h-2.5 rounded-full mr-3 shadow-sm flex-shrink-0 bg-gray-300"></div>
+                    <div :class="['w-2.5 h-2.5 rounded-full mr-3 shadow-sm flex-shrink-0',
+                        imageGenStatus === 'connected' ? 'bg-green-500 shadow-green-200' :
+                        imageGenStatus === 'checking' ? 'bg-yellow-400 animate-pulse shadow-yellow-200' :
+                        imageGenStatus === 'error' ? 'bg-red-500 shadow-red-200' : 'bg-gray-300']"></div>
                     <div class="flex-1 min-w-0">
                         <div class="flex justify-between items-center mb-0.5">
                             <div class="flex items-center gap-1.5 min-w-0 text-xs font-bold text-gray-700 truncate">
                                 <span>生图服务</span>
                                 <span class="text-gray-400">·</span>
-                                <span class="text-gray-500 font-medium whitespace-nowrap">暂不可用</span>
+                                <span class="text-gray-500 font-medium whitespace-nowrap">
+                                    <span v-if="quotaLoading">获取中...</span>
+                                    <span v-else-if="quotaError || !settings.imageGenKey">
+                                        {{ settings.imageGenKey ? '查询失败' : '未配置密钥' }}
+                                    </span>
+                                    <span v-else>{{ quotaValue }} 次</span>
+                                </span>
                             </div>
+                            <span v-if="imageGenStatus === 'connected'"
+                                class="text-xs font-mono font-medium text-teal-600">{{ imageGenLatency }}ms</span>
                         </div>
                     </div>
                 </div>
@@ -51,9 +62,21 @@
         <!-- Main API Inputs -->
         <div class="grid grid-cols-1 gap-5">
             <div class="group">
-                <label
-                    class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 ml-1">API
-                    提供商</label>
+                <div class="mb-2 ml-1 flex items-center justify-between gap-3">
+                    <label
+                        class="text-xs font-bold text-gray-500 uppercase tracking-wider">API
+                        提供商</label>
+                    <button type="button" v-if="selectedApiProvider.id === 'sta1n'"
+                        @click="openExternal('https://cdn.sta1n.cn/keys')"
+                        class="text-teal-600 hover:text-teal-700 hover:underline cursor-pointer transition-colors text-xs normal-case font-medium flex items-center">
+                        <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14">
+                            </path>
+                        </svg>
+                        获取API
+                    </button>
+                </div>
                 <div class="relative mb-2 api-provider-selector-container">
                     <button type="button" @click="showApiProviderSelector = !showApiProviderSelector"
                         class="w-full h-12 bg-gray-50/60 border-2 border-gray-100 rounded-xl px-3 py-0 flex items-center justify-between text-left hover:bg-white hover:border-teal-300 hover:shadow-sm transition-all active:scale-[0.99]">
@@ -227,116 +250,66 @@
                 <div class="text-[10px] text-gray-400">在模型列表里选哪个供应商的模型，聊天/记忆就自动绑定该供应商；设置页切换浏览的供应商不影响已绑定。</div>
             </div>
 
-            <!-- Model Configuration Inputs -->
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-5 mt-5">
+            <!-- 聊天模型（合并槽位选择器） -->
+            <div class="mt-5">
                 <div class="group">
                     <label
-                        class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 ml-1">预设模型①</label>
-                    <div class="relative flex-1 group"
-                        @click="openModelSelector('qualityModel')">
+                        class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 ml-1">聊天模型</label>
+                    <div class="relative" @click="openModelSelector('quickModels')">
                         <div
-                            class="absolute left-4 top-0 bottom-0 flex items-center text-gray-400 group-hover:text-teal-500 transition-colors pointer-events-none z-10">
-                            <svg class="w-5 h-5" style="display:block" fill="none" stroke="currentColor"
-                                viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round"
-                                    stroke-width="2"
-                                    d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z">
-                                </path>
-                            </svg>
-                        </div>
-                        <div
-                            class="w-full bg-gray-50/60 border-2 border-gray-100 rounded-xl pl-11 pr-4 py-3 text-gray-800 font-medium flex items-center justify-between cursor-pointer hover:bg-white hover:border-teal-300 hover:shadow-md transition-all active:scale-[0.99]">
-                            <span class="truncate mr-2 font-mono text-sm">{{ settings.qualityModel
-                                || '请选择模型' }}</span>
+                            class="w-full bg-gray-50/60 border-2 border-gray-100 rounded-xl px-4 py-3 text-gray-800 font-medium
+                                   flex items-center justify-between cursor-pointer hover:bg-white hover:border-teal-300 hover:shadow-md
+                                   transition-all active:scale-[0.99]">
+                            <span class="truncate mr-2 text-sm">
+                                已配置 {{ [settings.qualityModel, settings.balancedModel, settings.fastModel].filter(Boolean).length }} / 3 个槽位
+                            </span>
                             <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor"
                                 viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round"
-                                    stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M19 9l-7 7-7-7"></path>
                             </svg>
                         </div>
                     </div>
                 </div>
-                <div class="group">
-                    <label
-                        class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 ml-1">预设模型②</label>
-                    <div class="relative flex-1 group"
-                        @click="openModelSelector('balancedModel')">
-                        <div
-                            class="absolute left-4 top-0 bottom-0 flex items-center text-gray-400 group-hover:text-teal-500 transition-colors pointer-events-none z-10">
-                            <svg class="w-5 h-5" style="display:block" fill="none" stroke="currentColor"
-                                viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round"
-                                    stroke-width="2"
-                                    d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3">
-                                </path>
-                            </svg>
-                        </div>
-                        <div
-                            class="w-full bg-gray-50/60 border-2 border-gray-100 rounded-xl pl-11 pr-4 py-3 text-gray-800 font-medium flex items-center justify-between cursor-pointer hover:bg-white hover:border-teal-300 hover:shadow-md transition-all active:scale-[0.99]">
-                            <span class="truncate mr-2 font-mono text-sm">{{ settings.balancedModel
-                                || '请选择模型' }}</span>
-                            <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor"
-                                viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round"
-                                    stroke-width="2" d="M19 9l-7 7-7-7"></path>
-                            </svg>
-                        </div>
-                    </div>
-                </div>
-                <div class="group">
-                    <label
-                        class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 ml-1">预设模型③</label>
-                    <div class="relative flex-1 group"
-                        @click="openModelSelector('fastModel')">
-                        <div
-                            class="absolute left-4 top-0 bottom-0 flex items-center text-gray-400 group-hover:text-teal-500 transition-colors pointer-events-none z-10">
-                            <svg class="w-5 h-5" style="display:block" fill="none" stroke="currentColor"
-                                viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round"
-                                    stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
-                            </svg>
-                        </div>
-                        <div
-                            class="w-full bg-gray-50/60 border-2 border-gray-100 rounded-xl pl-11 pr-4 py-3 text-gray-800 font-medium flex items-center justify-between cursor-pointer hover:bg-white hover:border-teal-300 hover:shadow-md transition-all active:scale-[0.99]">
-                            <span class="truncate mr-2 font-mono text-sm">{{ settings.fastModel ||
-                                '请选择模型' }}</span>
-                            <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor"
-                                viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round"
-                                    stroke-width="2" d="M19 9l-7 7-7-7"></path>
-                            </svg>
-                        </div>
-                    </div>
-                </div>
-                <div class="group col-span-1 md:col-span-2 mt-2">
-                    <button @pointerdown="syncApiKeyInput" @click="fetchModels(true)"
-                        class="w-full px-4 py-3 bg-white hover:bg-teal-50 text-gray-600 hover:text-teal-700 rounded-lg border border-gray-200 hover:border-teal-200 transition-all shadow-sm active:scale-95 whitespace-nowrap font-medium flex items-center justify-center text-sm"
-                        title="刷新列表">
-                        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor"
-                            viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15">
-                            </path>
-                        </svg>
-                        刷新可用模型列表
-                    </button>
-                </div>
+                <button @pointerdown="syncApiKeyInput" @click="fetchModels(true)"
+                    class="mt-3 w-full px-4 py-3 bg-white hover:bg-teal-50 text-gray-600 hover:text-teal-700 rounded-lg border border-gray-200 hover:border-teal-200 transition-all shadow-sm active:scale-95 whitespace-nowrap font-medium flex items-center justify-center text-sm"
+                    title="刷新列表">
+                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor"
+                        viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15">
+                        </path>
+                    </svg>
+                    刷新可用模型列表
+                </button>
             </div>
 
 
 
             <!-- Generation Settings (Integrated) -->
             <div class="pt-6 border-t border-gray-100 mt-6">
-                <h4 class="settings-section-heading">
-                    <svg class="w-4 h-4 mr-2 text-gray-400" fill="none" stroke="currentColor"
-                        viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4">
-                        </path>
-                    </svg>
-                    生成参数
-                </h4>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="flex items-center justify-between gap-3">
+                    <button type="button" @click="genSectionOpen = !genSectionOpen"
+                        class="flex items-center text-xs font-bold text-gray-400 uppercase tracking-wider text-left group">
+                        <svg class="w-4 h-4 mr-2 text-gray-400" fill="none" stroke="currentColor"
+                            viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4">
+                            </path>
+                        </svg>
+                        <span>生成参数</span>
+                        <svg :class="['w-4 h-4 ml-1.5 text-gray-400 transition-transform duration-200', genSectionOpen ? 'rotate-180' : '']"
+                            fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M19 9l-7 7-7-7"></path>
+                        </svg>
+                    </button>
+                    <button type="button" @click="openExternal('https://cdn.sta1n.cn/keys')"
+                        class="text-teal-600 hover:text-teal-700 hover:underline cursor-pointer transition-colors text-xs normal-case font-medium">
+                        获取生图密钥
+                    </button>
+                </div>
+                <div v-show="genSectionOpen" class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <!-- 温度 -->
                     <div
                         class="bg-gray-50/60 p-4 rounded-xl border border-gray-100 hover:bg-white hover:border-gray-200 hover:shadow-sm transition-all duration-200">
@@ -373,9 +346,13 @@
                         class="generation-setting-card">
                         <label
                             class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">自动生图密钥</label>
-                        <input v-model="settings.imageGenKey" type="password" :disabled="imageGenUnavailable"
+                        <input v-model="settings.imageGenKey" type="password"
                             class="w-full bg-white border border-gray-200 rounded-lg px-3 py-1.5 text-gray-700 text-sm focus:ring-2 focus:ring-teal-100 focus:border-teal-400 focus:outline-none transition-all shadow-sm disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-400"
-                            placeholder="生图服务暂不可用">
+                            placeholder="STA1N-...">
+                        <div class="text-[10px] text-gray-400 mt-1.5">推荐 STA1N 生图服务（nai.sta1n.cn），密钥可在
+                            <button type="button" @click="openExternal('https://cdn.sta1n.cn/keys')"
+                                class="text-teal-600 hover:underline cursor-pointer">cdn.sta1n.cn</button>
+                            获取</div>
                     </div>
 
                     <!-- Image Style -->
@@ -422,7 +399,7 @@
 </template>
 
 <script>
-import { inject } from "vue";
+import { inject, ref } from "vue";
 import { RPHubCustomSelect as CustomSelect } from "../../modules/ui-select.mjs";
 // 2026-08-28 Phase 1.6: shared components are declared locally now that the
 // app-level global registration workaround has been removed.
@@ -430,7 +407,13 @@ export default {
   components: { CustomSelect },
     setup() {
         const ctx = inject("appContext");
-        return ctx || {};
+        const openExternal = async (url) => {
+            const browser = window.Capacitor?.Plugins?.Browser;
+            if (browser) await browser.open({ url });
+            else window.open(url, '_blank', 'noopener,noreferrer');
+        };
+        const genSectionOpen = ref(false);
+        return { ...(ctx || {}), openExternal, genSectionOpen };
     }
 };
 </script>

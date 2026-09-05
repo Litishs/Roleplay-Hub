@@ -23,13 +23,32 @@
 import { ref, reactive, computed } from 'vue';
 
 export function useApiConfig() {
-    // --- Image generation provider options (extension point, currently empty) ---
-    const imageGenProviderOptions = [];
-    const getImageGenProviderById = (id) => imageGenProviderOptions.find(provider => provider.id === id);
-    const imageGenUnavailable = computed(() => imageGenProviderOptions.length === 0);
+// --- Image generation provider options (STA1N image-hosting service) ---
+// enforceSpecialRules (useSpecialRules.mjs) resolves the provider through
+// getImageGenProviderById(<persisted imageGenProviderId>) and reads .apiUrl as
+// the /generate base; a resolvable provider here is what unlocks the
+// image-gen controls, the NAI画图正则 and the 自动生图 world info entry.
+const imageGenProviderOptions = [
+    {
+        id: 'sta1n',
+        name: 'STA1N 生图',
+        apiUrl: 'https://nai.sta1n.cn',
+        models: [
+            { value: 'nai-diffusion-4-5-full', label: 'NAI Diffusion 4.5 Full' }
+        ]
+    }
+];
+const getImageGenProviderById = (id) => imageGenProviderOptions.find(provider => provider.id === id);
+const imageGenUnavailable = computed(() => imageGenProviderOptions.length === 0);
 
     // --- Named API provider catalogue ---
     const apiProviderOptions = [
+        {
+            id: 'sta1n',
+            name: 'STA1N API',
+            apiUrl: 'https://cdn.sta1n.cn/v1',
+            icon: 'https://picui.ogmua.cn/s1/2026/08/21/6a87a751bf871.webp'
+        },
         {
             id: 'deepseek',
             name: 'DeepSeek',
@@ -65,7 +84,7 @@ export function useApiConfig() {
     // --- Connection status display state ---
     const apiStatus = ref('unknown'); // 'unknown', 'checking', 'connected', 'error'
     const apiLatency = ref(0);
-    const imageGenStatus = ref('unavailable');
+    const imageGenStatus = ref('unknown');
     const imageGenLatency = ref(0);
 
     // --- API key input (sync/validation logic stays in app.mjs) ---

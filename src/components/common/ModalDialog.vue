@@ -6,8 +6,8 @@
             <div
                 class="bg-white rounded-xl border border-gray-200 w-full max-w-2xl max-h-[90vh] h-[90vh] flex flex-col shadow-2xl transform transition-all scale-100">
                 <div class="p-4 border-b border-gray-100 flex justify-between items-center">
-                    <h3 class="text-lg font-bold text-gray-800">选择模型</h3>
-                    <button @click="showModelSelector = false"
+                    <h3 class="text-lg font-bold text-gray-800">{{ isSlotMode ? '聊天模型' : '选择模型' }}</h3>
+                    <button @click="closeModelSelector"
                         class="text-gray-400 hover:text-gray-600 focus:outline-none transition-colors">
                         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -48,6 +48,21 @@
                         </button>
                     </div>
                 </div>
+                <!-- 槽位 tab 栏（仅 quickModels 模式） -->
+                <div v-if="isSlotMode" class="flex gap-2 p-4 border-b border-gray-100">
+                    <button v-for="(_, idx) in draftSlotModels" :key="idx"
+                        type="button" @click="activeSlot = idx"
+                        :class="[
+                            'flex-1 min-w-0 rounded-xl border px-3 py-2.5 text-left transition-colors',
+                            activeSlot === idx
+                                ? 'border-primary-300 bg-primary-50 text-primary-700 shadow-sm'
+                                : 'border-gray-200 bg-white text-gray-500 hover:bg-gray-50'
+                        ]">
+                        <span class="block text-xs font-bold mb-1">槽位 {{ idx + 1 }}</span>
+                        <span class="block truncate text-[11px] font-mono"
+                              :title="draftSlotModels[idx]">{{ draftSlotModels[idx] || '未选择' }}</span>
+                    </button>
+                </div>
                 <div class="flex-1 overflow-y-auto p-2 min-h-[300px]">
                     <div v-if="filteredModels.length === 0"
                         class="flex flex-col items-center justify-center py-12 text-gray-400">
@@ -60,7 +75,8 @@
                         未找到模型或正在加载...
                     </div>
                     <div class="space-y-1">
-                        <button v-for="model in filteredModels" :key="model._providerId + ':' + model.id" @click="selectModel(model.id, model._providerId)"
+                        <button v-for="model in filteredModels" :key="model._providerId + ':' + model.id"
+                            @click="isSlotMode ? chooseSlotModel(model.id) : selectModel(model.id, model._providerId)"
                             class="w-full text-left px-4 py-3 rounded-xl hover:bg-gray-50 hover:shadow-[0_2px_4px_rgba(0,0,0,0.02)] transition-colors flex justify-between items-center group border border-transparent hover:border-gray-100 active:bg-gray-100">
                             <span class="min-w-0">
                                 <span
@@ -70,7 +86,9 @@
                                     getProviderDisplayName(model._providerId) }}</span>
                             </span>
                             <span
-                                v-if="(modelSelectionTarget === 'memoryEmbeddingModel' ? memorySettings.embeddingModel : (modelSelectionTarget === 'memoryClassicModel' ? memorySettings.classicModel : settings[modelSelectionTarget])) === model.id"
+                                v-if="isSlotMode
+                                    ? isSlotSelected(model.id)
+                                    : (modelSelectionTarget === 'memoryEmbeddingModel' ? memorySettings.embeddingModel : (modelSelectionTarget === 'memoryClassicModel' ? memorySettings.classicModel : settings[modelSelectionTarget])) === model.id"
                                 class="text-primary-600 bg-primary-50 p-1 rounded-full shadow-sm">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -443,11 +461,56 @@
 </template>
 
 <script>
-import { inject } from "vue";
+import { inject, computed, ref, watch } from "vue";
 export default {
   setup() {
-    const ctx = inject("appContext");
-    return ctx || {};
+    const ctx = inject("appContext") || {};
+
+    // --- quickModels 双模式支持 ---
+    // 模型选择器同时支持：单模型模式（默认，target !== 'quickModels'）
+    // 槽位批量模式（target === 'quickModels'，顶部 tab 栏 + 批量分配）
+    const isSlotMode = computed(() => ctx.modelSelectionTarget && ctx.modelSelectionTarget.value === 'quickModels');
+    const activeSlot = ref(0);
+    const draftSlotModels = ref(['', '', '']);
+
+    // 弹窗打开时初始化槽位草稿
+    watch(ctx.showModelSelector, (visible) => {
+      if (visible && isSlotMode.value) {
+        draftSlotModels.value = [
+          (ctx.settings && ctx.settings.qualityModel) || '',
+          (ctx.settings && ctx.settings.balancedModel) || '',
+          (ctx.settings && ctx.settings.fastModel) || ''
+        ];
+        activeSlot.value = 0;
+      }
+    });
+
+    const chooseSlotModel = (modelId) => {
+      const idx = activeSlot.value;
+      draftSlotModels.value = [...draftSlotModels.value];
+      draftSlotModels.value[idx] = draftSlotModels.value[idx] === modelId ? '' : modelId;
+    };
+
+    const closeModelSelector = () => {
+      if (isSlotMode.value) {
+        ctx.selectQuickModels?.([...draftSlotModels.value]);
+      }
+      if (ctx.showModelSelector) ctx.showModelSelector.value = false;
+    };
+
+    // 槽位模式下的 ✓ 判定：当前激活 tab 绑定的模型 === 被点击模型
+    const isSlotSelected = (modelId) =>
+      isSlotMode.value && draftSlotModels.value[activeSlot.value] === modelId;
+
+    return {
+      ...ctx,
+      isSlotMode,
+      activeSlot,
+      draftSlotModels,
+      chooseSlotModel,
+      closeModelSelector,
+      isSlotSelected,
+    };
   }
 };
 </script>

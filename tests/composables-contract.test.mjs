@@ -378,8 +378,9 @@ test('useSettingsState returns live reactive state (runtime)', async () => {
     assert.equal(state.MAX_CONTEXT_SIZE, 1000000);
     assert.equal(state.CONTEXT_TOKEN_BUDGET_MIN, 8000);
     assert.equal(state.CONTEXT_TOKEN_BUDGET_MAX, 64000);
-    assert.equal(state.DEFAULT_API_PROVIDER_ID, 'deepseek');
-    assert.equal(state.DEFAULT_API_CONFIG.apiUrl, 'https://api.deepseek.com/v1');
+    assert.equal(state.DEFAULT_API_PROVIDER_ID, 'sta1n');
+    assert.equal(state.DEFAULT_API_CONFIG.apiUrl, 'https://cdn.sta1n.cn/v1');
+    assert.equal(state.settings.imageGenProviderId, 'sta1n', 'image-gen defaults to the STA1N provider');
     assert.ok(isRef(state.userProfiles) && Array.isArray(state.userProfiles.value));
     assert.ok(isRef(state.activeProfileId) && state.activeProfileId.value === null);
     assert.ok(isReactive(state.settingsSectionsOpen), 'settingsSectionsOpen is reactive');
@@ -450,13 +451,18 @@ test('useApiConfig returns live reactive state (runtime)', async () => {
     const other = useApiConfig();
     assert.notEqual(state.availableModels, other.availableModels, 'independent instances per call');
 
-    assert.equal(state.apiProviderOptions.length, 5);
+    assert.equal(state.apiProviderOptions.length, 6);
     assert.ok(state.apiProviderOptions.every(p => 'id' in p && 'name' in p && 'apiUrl' in p));
-    assert.equal(state.apiProviderOptions[0].id, 'deepseek');
-    assert.equal(state.imageGenProviderOptions.length, 0, 'image gen extension point stays empty');
-    assert.equal(state.imageGenUnavailable.value, true);
+    assert.equal(state.apiProviderOptions[0].id, 'sta1n');
+    assert.equal(state.apiProviderOptions[0].name, 'STA1N API');
+    assert.equal(state.apiProviderOptions[0].apiUrl, 'https://cdn.sta1n.cn/v1');
+    assert.equal(state.imageGenProviderOptions.length, 1, 'STA1N image-gen provider is provisioned');
+    assert.equal(state.imageGenProviderOptions[0].id, 'sta1n');
+    assert.equal(state.imageGenProviderOptions[0].apiUrl, 'https://nai.sta1n.cn');
+    assert.equal(state.getImageGenProviderById('sta1n').name, 'STA1N 生图');
+    assert.equal(state.imageGenUnavailable.value, false, 'image-gen controls unlock once a provider exists');
     assert.equal(state.apiStatus.value, 'unknown');
-    assert.equal(state.imageGenStatus.value, 'unavailable');
+    assert.equal(state.imageGenStatus.value, 'unknown');
     assert.equal(state.currentModelMode.value, 'quality');
     assert.equal(state.activeModelTag.value, 'all');
     assert.equal(state.popularModelFamilies.length, 8);
