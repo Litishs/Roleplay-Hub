@@ -1,5 +1,5 @@
 import * as Vue from 'vue';
-const { createApp, ref, reactive, computed, onMounted, onBeforeUnmount, watch, nextTick, provide, h, markRaw, toRaw, isRef, watchEffect, shallowRef, triggerRef, defineComponent, withScopeId, Suspense, Teleport, Transition, TransitionGroup, KeepAlive } = Vue;
+const { createApp, ref, reactive, computed, onMounted, onBeforeUnmount, watch, nextTick, provide, h, markRaw, toRaw, isRef, watchEffect, shallowRef, triggerRef, defineComponent, withScopeId, Suspense, Teleport, Transition, TransitionGroup, KeepAlive, defineAsyncComponent } = Vue;
 
 // Configure marked to disable indented code blocks
 // This allows indented HTML (like details/summary) to be rendered as HTML instead of code
@@ -53,26 +53,29 @@ import SideNav from '../components/common/SideNav.vue';
 import ToastNotification from '../components/common/ToastNotification.vue';
 import ConfirmDialog from '../components/common/ConfirmDialog.vue';
 import ModalDialog from '../components/common/ModalDialog.vue';
-import CharacterPanel from '../components/views/CharacterPanel.vue';
-import GeneratorPanel from '../components/views/GeneratorPanel.vue';
-import SquarePanel from '../components/views/SquarePanel.vue';
-import SettingsPanel from '../components/views/SettingsPanel.vue';
-import UpdateChecker from '../components/settings/UpdateChecker.vue';
-import DataManager from '../components/settings/DataManager.vue';
-import PresetManager from '../components/settings/PresetManager.vue';
-import ApiConfig from '../components/settings/ApiConfig.vue';
-import AdvancedSettings from '../components/settings/AdvancedSettings.vue';
-import TtsSettings from '../components/settings/TtsSettings.vue';
-import PresetsPanel from '../components/views/PresetsPanel.vue';
-import UiTemplatePanel from '../components/views/UiTemplatePanel.vue';
-import RegexPanel from '../components/views/RegexPanel.vue';
-import ToolsPanel from '../components/views/ToolsPanel.vue';
-import UsageStatsPanel from '../components/views/UsageStatsPanel.vue';
-import MemoryPanel from '../components/views/MemoryPanel.vue';
 import WorldInfoPanel from '../components/views/WorldInfoPanel.vue';
 import CharacterInfo from '../components/chat/CharacterInfo.vue';
 import MessageList from '../components/chat/MessageList.vue';
 import MessageInput from '../components/chat/MessageInput.vue';
+
+// Phase 4.2 build optimization: view panels only render behind
+// `v-if="currentView === ..."` (index.html), so they are async components and
+// load as separate chunks on first navigation instead of inflating the
+// startup bundle. WorldInfoPanel stays synchronous: it is always mounted and
+// hosts the shared editor modals (preset/regex/tool/world-info editors,
+// import/export dialogs). Settings sub-panels (UpdateChecker, DataManager,
+// PresetManager, ApiConfig, AdvancedSettings, TtsSettings) are imported
+// directly by SettingsPanel.vue, so they ride along in its async chunk.
+const AsyncCharacterPanel = defineAsyncComponent(() => import('../components/views/CharacterPanel.vue'));
+const AsyncGeneratorPanel = defineAsyncComponent(() => import('../components/views/GeneratorPanel.vue'));
+const AsyncSquarePanel = defineAsyncComponent(() => import('../components/views/SquarePanel.vue'));
+const AsyncSettingsPanel = defineAsyncComponent(() => import('../components/views/SettingsPanel.vue'));
+const AsyncPresetsPanel = defineAsyncComponent(() => import('../components/views/PresetsPanel.vue'));
+const AsyncUiTemplatePanel = defineAsyncComponent(() => import('../components/views/UiTemplatePanel.vue'));
+const AsyncRegexPanel = defineAsyncComponent(() => import('../components/views/RegexPanel.vue'));
+const AsyncToolsPanel = defineAsyncComponent(() => import('../components/views/ToolsPanel.vue'));
+const AsyncUsageStatsPanel = defineAsyncComponent(() => import('../components/views/UsageStatsPanel.vue'));
+const AsyncMemoryPanel = defineAsyncComponent(() => import('../components/views/MemoryPanel.vue'));
 import { generateUUID, parseCot } from './utils.mjs';
 import { useMemorySystem } from '../composables/useMemorySystem.mjs';
 import { useWorldInfo } from '../composables/useWorldInfo.mjs';
@@ -99,7 +102,7 @@ import { extractVectorQueryTerms, factPreviewText, getClassicMemoryKey, getMemor
 
 const __app = createApp({
     components: {
-        CharacterPanel, GeneratorPanel, SquarePanel, SettingsPanel, PresetsPanel, UiTemplatePanel, RegexPanel, ToolsPanel, UsageStatsPanel, MemoryPanel, WorldInfoPanel,
+        CharacterPanel: AsyncCharacterPanel, GeneratorPanel: AsyncGeneratorPanel, SquarePanel: AsyncSquarePanel, SettingsPanel: AsyncSettingsPanel, PresetsPanel: AsyncPresetsPanel, UiTemplatePanel: AsyncUiTemplatePanel, RegexPanel: AsyncRegexPanel, ToolsPanel: AsyncToolsPanel, UsageStatsPanel: AsyncUsageStatsPanel, MemoryPanel: AsyncMemoryPanel, WorldInfoPanel,
         UiTemplatePending, EmbeddedViewContent, GenerationTimer, SettingsPageHeader,
         SideNav, ToastNotification, ConfirmDialog, ModalDialog,
         CharacterInfo, MessageList, MessageInput,
