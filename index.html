@@ -22,10 +22,14 @@
     <link rel="stylesheet" href="assets/css/fonts.css">
     <link rel="stylesheet" href="assets/generated/tailwind.css">
     <link rel="stylesheet" href="assets/css/styles.css">
-    <script src="assets/vendor/vue.global.prod.js"></script>
-    <script src="assets/vendor/marked.umd.js"></script>
-    <script src="assets/vendor/purify.min.js"></script>
-    <script src="assets/vendor/Sortable.min.js"></script>
+    <!-- Vendor globals: deferred so body parsing/first paint is not blocked.
+         Defer scripts and module scripts execute in document order, so marked/
+         DOMPurify/Sortable are still defined before src/main.js runs. The UMD
+         vue.global.prod.js is NOT loaded here (the Vite bundle ships its own
+         Vue); character/index.html still loads it for the workshop page. -->
+    <script defer src="assets/vendor/marked.umd.js"></script>
+    <script defer src="assets/vendor/purify.min.js"></script>
+    <script defer src="assets/vendor/Sortable.min.js"></script>
     <script type="module" src="/src/main.js"></script>
 </head>
 <body class="bg-gray-50 text-gray-900 font-sans selection:bg-primary-200 selection:text-primary-900">
