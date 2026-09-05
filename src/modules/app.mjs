@@ -1060,6 +1060,17 @@ const __app = createApp({
             }
         });
 
+        // Inline control panel: three chat model slots derived from settings
+        const chatModelSlots = computed(() => [
+            { mode: 'quality', model: settings.qualityModel || '' },
+            { mode: 'balanced', model: settings.balancedModel || '' },
+            { mode: 'fast', model: settings.fastModel || '' },
+        ]);
+        const selectChatModelSlot = (slot) => {
+            if (!slot || !slot.model) return;
+            modelMode.value = slot.mode;
+        };
+
 
         const { characters, showAddCharacterMenu, currentCharacterIndex } = characterState;
 
@@ -9862,7 +9873,7 @@ const __app = createApp({
             filteredTokenUsageHistory, tokenUsageStats, displayedTokenUsageHistory,
             formatTokenCount, formatTokenAggregate, formatTokenUsageTime, getTokenUsageTypeLabel, clearTokenUsageHistory,
             showCharacterExportModal, openCharacterExportModal, confirmCharacterExport, // Character Export Modal
-            showConfirmModal, confirmMessage, modelMode, showNoMemoryNeededModal, // Export for template
+            showConfirmModal, confirmMessage, modelMode, chatModelSlots, selectChatModelSlot, showNoMemoryNeededModal, // Export for template
             showAuthorNoticeModal, closeAuthorNoticeModal, // Author Notice Modal
             isGenerating, isRemoteGenerating, remoteEstimatedTime, isReceiving, isThinking, hasActiveToolInlineWork, isConversationBusy, activeToolContinuationMessageId, activeToolContinuationHasResponse, userInput, modelSearchQuery, activeModelTag, modelTags, characterSearchQuery, filteredModels, filteredCharacters,
             user, settings, apiProviderOptions, selectedApiProvider, isCustomApiProvider, customApiProviderOptions, showApiProviderSelector, selectApiProvider, characters, currentCharacter, currentCharacterIndex, chatHistory, displayedChatMessages, chatTopSpacerHeight, chatBottomSpacerHeight, handleChatScroll, presets, presetRoleOptions, fontFamilyOptions, themeModeOptions, imageStyleOptions, imageSizeOptions, imageGenCountOptions, scopeOptions, uiTemplatePlacementOptions, worldInfoPositionOptions, getPresetRoleLabel, getPresetRoleDisplayLabel, getPresetRoleBadgeClass, regexScripts, worldInfo,
