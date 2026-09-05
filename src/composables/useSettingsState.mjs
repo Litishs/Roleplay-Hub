@@ -66,8 +66,11 @@ export function useSettingsState() {
         worldInfoTokenBudget: 4000,     // 世界书 token 预算（0=不限）
         chatProviderId: '',             // 聊天供应商，空=回退设置页当前浏览的供应商
         temperature: 1.0,
+        reasoningEffort: '',            // inline panel: '', none, low, medium, high, max
         autoFetchModels: true,
         stream: true,
+        styleFilterEnabled: true,       // inline panel: strip AI-cliché fragments from replies
+        showLatestUsageBar: false,      // inline panel: latest request token usage bar
         activeToolAggressiveness: 'adaptive',
         activeToolAggressivenessVersion: 2,
 

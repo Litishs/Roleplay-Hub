@@ -66,6 +66,13 @@ export const formatTokenAggregate = (value, reports) => reports > 0 && value > 0
 
 export const formatTokenCount = (value) => Number.isFinite(value) ? value.toLocaleString() : '0';
 
+// Inline panel usage bar: compact "7.18k"-style token counts.
+export const formatLatestTokenCount = (value) => {
+    const count = Number(value);
+    if (!Number.isFinite(count) || count <= 0) return '0';
+    return count >= 1000 ? `${(count / 1000).toFixed(2)}k` : String(count);
+};
+
 export const getTokenUsageCategory = (type) => {
             if (['summary', 'embedding'].includes(type)) return 'memory';
             if (type === 'ui_template') return 'variables';

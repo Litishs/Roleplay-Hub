@@ -25,6 +25,7 @@ import { RPHRequestDiagnostics } from '../modules/request-diagnostics.mjs';
 import { RPHRuntimePolicy } from '../modules/runtime-policy.mjs';
 import { create as createChatRequestGuard } from '../modules/chat-request-guard.mjs';
 import { generateUUID, parseCot } from '../modules/utils.mjs';
+import { filterBlockedStyleText } from '../modules/style-filter.mjs';
 
 export function useMessageSender(deps) {
     const {
@@ -190,7 +191,10 @@ export function useMessageSender(deps) {
                 temperature,
                 max_tokens: baseMax,
                 stream: settings.stream,
-                ...(settings.stream ? { stream_options: { include_usage: true } } : {})
+                ...(settings.stream ? { stream_options: { include_usage: true } } : {}),
+                // Inline panel reasoning strength; providers that don't support the
+                // parameter ignore it server-side, so we only add it when set.
+                ...(settings.reasoningEffort ? { reasoning_effort: settings.reasoningEffort } : {})
             };
             return { payload };
         };
@@ -1604,6 +1608,17 @@ export function useMessageSender(deps) {
                         }
 
                         flushStreamAppends();
+
+                        // Style filter (upstream STA1N parity): strip blocked-style
+                        // fragments from the finalized assistant body before the
+                        // activity journal and usage accounting see it. Hits are
+                        // kept as a runtime-only counter on the message.
+                        if (assistantMessage && settings.styleFilterEnabled) {
+                            const styleFilterHits = [];
+                            assistantMessage.content = filterBlockedStyleText(
+                                assistantMessage.content, { collect: styleFilterHits });
+                            if (styleFilterHits.length) assistantMessage.styleFilterHits = styleFilterHits;
+                        }
 
                         // Activity Journal: final post-processed content length so
                         // we can compare "stream-received chars" vs "actual content

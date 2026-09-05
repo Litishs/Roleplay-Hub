@@ -89,7 +89,7 @@ import { useRegexPipeline } from '../composables/useRegexPipeline.mjs';
 import { useStoryBranching } from '../composables/useStoryBranching.mjs';
 import { useDataIO } from '../composables/useDataIO.mjs';
 import { useBackupRestore } from '../composables/useBackupRestore.mjs';
-import { buildExecutableHtmlDocument, buildKeywordToolSnippet, bytesToBase64, checkConnectionStatus, cleanActiveToolCallReason, cleanupActiveToolCaptureState, collapseNativeReasoning, debounce, escapeRegexText, escapeXmlAttribute, escapeXmlText, estimateTokens, formatAIResponseForConsole, formatTokenAggregate, formatTokenCount, formatTokenUsageTime, getConversationTurnAtIndexFromSnapshot, getTokenUsageCategory, indentXmlText, isDatabaseClosingError, isDesktopSidebarViewport, isEditableElement, isMobileViewport, normalizePresetRole, normalizeTavilyExtractUrl, printAIRequestLogs, readUsageNumber, removeActiveToolCallRawsFromText, requestTavily, resizeChatInputElement, runWithConcurrency, stringifyErrorDetail, stringifyUiSchema, stripActiveToolCallsFromAssistant, stripCodeBlocksForToolDetection, stripUiTemplateContextInjection, throwApiError, yieldToBrowser, yieldToUi } from './utils.mjs';
+import { buildExecutableHtmlDocument, buildKeywordToolSnippet, bytesToBase64, checkConnectionStatus, cleanActiveToolCallReason, cleanupActiveToolCaptureState, collapseNativeReasoning, debounce, escapeRegexText, escapeXmlAttribute, escapeXmlText, estimateTokens, formatAIResponseForConsole, formatTokenAggregate, formatTokenCount, formatLatestTokenCount, formatTokenUsageTime, getConversationTurnAtIndexFromSnapshot, getTokenUsageCategory, indentXmlText, isDatabaseClosingError, isDesktopSidebarViewport, isEditableElement, isMobileViewport, normalizePresetRole, normalizeTavilyExtractUrl, printAIRequestLogs, readUsageNumber, removeActiveToolCallRawsFromText, requestTavily, resizeChatInputElement, runWithConcurrency, stringifyErrorDetail, stringifyUiSchema, stripActiveToolCallsFromAssistant, stripCodeBlocksForToolDetection, stripUiTemplateContextInjection, throwApiError, yieldToBrowser, yieldToUi } from './utils.mjs';
 import { extractVectorQueryTerms, factPreviewText, getClassicMemoryKey, getMemoryEmptyTurnsKey, getMemoryVectorExtractedKey, getTimelineCharCount, getVectorLexicalMatch, isEmbeddingLike, mergeSmallMemoryParagraphs, normalizeKeepFloors, normalizeVectorMemoryFingerprintText, shouldSuppressStandardVectorMemoryRecall, sortVectorMemoriesByTime, splitLongMemoryParagraph, toScoredVectorMemory, trimMemoryText, yieldMemoryStorageWork } from './memory-utils.mjs';
 
 const __app = createApp({
@@ -1070,6 +1070,28 @@ const __app = createApp({
             if (!slot || !slot.model) return;
             modelMode.value = slot.mode;
         };
+
+        // Inline control panel: reasoning effort slider (upstream STA1N parity).
+        // Empty value = provider default; request layer omits reasoning_effort.
+        const reasoningEffortOptions = [
+            { value: 'none', label: '关闭' },
+            { value: 'low', label: '低（low）' },
+            { value: 'medium', label: '中（medium）' },
+            { value: 'high', label: '高（high）' },
+            { value: 'max', label: '最高（max）' },
+            { value: '', label: '默认' }
+        ];
+        const reasoningEffortSlider = computed({
+            get: () => Math.max(0, reasoningEffortOptions.findIndex(option => option.value === settings.reasoningEffort)),
+            set: index => { settings.reasoningEffort = reasoningEffortOptions[index]?.value || ''; }
+        });
+        const reasoningEffortLabel = computed(() => reasoningEffortOptions[reasoningEffortSlider.value].label);
+
+        // Inline control panel "latest usage" bar: most recent main-chat request
+        // (tool continuations, summary/embedding/ui-template records excluded).
+        const latestMainTokenUsage = computed(() => (
+            tokenUsageHistory.value.find(entry => entry.type === 'chat') || null
+        ));
 
 
         const { characters, showAddCharacterMenu, currentCharacterIndex } = characterState;
@@ -2138,7 +2160,8 @@ const __app = createApp({
 
         const CHAT_RUNTIME_ONLY_FIELDS = new Set([
             'shouldAnimate', 'skipReveal', 'isEditing_Message', 'editContent',
-            'isCotOpen', 'isReasoningOpen', 'isReasoningUserToggled', 'isReasoningAutoCollapsed'
+            'isCotOpen', 'isReasoningOpen', 'isReasoningUserToggled', 'isReasoningAutoCollapsed',
+            'styleFilterHits'
         ]);
 
         const serializeChatMessage = (message, statusOverride = null) => {
@@ -9871,9 +9894,9 @@ const __app = createApp({
             tokenUsageHistory, tokenUsagePage, tokenUsagePageCount, tokenUsageFilter, tokenUsageTimeFilter,
             showTokenUsageTimeFilter, tokenUsageTimeFilterOptions, tokenUsageTimeFilterLabel,
             filteredTokenUsageHistory, tokenUsageStats, displayedTokenUsageHistory,
-            formatTokenCount, formatTokenAggregate, formatTokenUsageTime, getTokenUsageTypeLabel, clearTokenUsageHistory,
+            formatTokenCount, formatLatestTokenCount, formatTokenAggregate, formatTokenUsageTime, getTokenUsageTypeLabel, clearTokenUsageHistory,
             showCharacterExportModal, openCharacterExportModal, confirmCharacterExport, // Character Export Modal
-            showConfirmModal, confirmMessage, modelMode, chatModelSlots, selectChatModelSlot, showNoMemoryNeededModal, // Export for template
+            showConfirmModal, confirmMessage, modelMode, chatModelSlots, selectChatModelSlot, reasoningEffortSlider, reasoningEffortLabel, latestMainTokenUsage, showNoMemoryNeededModal, // Export for template
             showAuthorNoticeModal, closeAuthorNoticeModal, // Author Notice Modal
             isGenerating, isRemoteGenerating, remoteEstimatedTime, isReceiving, isThinking, hasActiveToolInlineWork, isConversationBusy, activeToolContinuationMessageId, activeToolContinuationHasResponse, userInput, modelSearchQuery, activeModelTag, modelTags, characterSearchQuery, filteredModels, filteredCharacters,
             user, settings, apiProviderOptions, selectedApiProvider, isCustomApiProvider, customApiProviderOptions, showApiProviderSelector, selectApiProvider, characters, currentCharacter, currentCharacterIndex, chatHistory, displayedChatMessages, chatTopSpacerHeight, chatBottomSpacerHeight, handleChatScroll, presets, presetRoleOptions, fontFamilyOptions, themeModeOptions, imageStyleOptions, imageSizeOptions, imageGenCountOptions, scopeOptions, uiTemplatePlacementOptions, worldInfoPositionOptions, getPresetRoleLabel, getPresetRoleDisplayLabel, getPresetRoleBadgeClass, regexScripts, worldInfo,

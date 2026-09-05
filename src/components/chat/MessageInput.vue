@@ -4,6 +4,26 @@
                     class="absolute bottom-0 left-0 right-0 w-full p-2 md:p-3 z-30 pointer-events-none flex justify-center flex-shrink-0 transition-all duration-300 input-area-mobile">
                     <div
                         class="w-full max-w-lg pointer-events-auto p-2.5 md:p-3 bg-white/90 backdrop-blur-xl border border-white/40 shadow-lg rounded-3xl ring-1 ring-black/5 transition-all duration-300 flex flex-col input-island">
+                        <!-- Latest usage bar (inline panel toggle) -->
+                        <div v-if="settings.showLatestUsageBar && latestMainTokenUsage"
+                            class="mx-1 mb-1 grid py-0.5 text-xs text-gray-500"
+                            style="grid-template-columns: 4fr 3fr 4fr;">
+                            <span class="flex min-w-0 items-center justify-center gap-1 whitespace-nowrap px-1" title="输入 Token">
+                                <span class="h-1.5 w-1.5 flex-none rounded-full bg-primary-500"></span>
+                                <span class="font-mono font-semibold tabular-nums text-gray-700">
+                                    {{ formatLatestTokenCount(latestMainTokenUsage.inputTokens) }}</span>
+                            </span>
+                            <span class="flex min-w-0 items-center justify-center gap-1 whitespace-nowrap px-1" title="输出 Token">
+                                <span class="h-1.5 w-1.5 flex-none rounded-full bg-yellow-400"></span>
+                                <span class="font-mono font-semibold tabular-nums text-gray-700">
+                                    {{ formatLatestTokenCount(latestMainTokenUsage.outputTokens) }}</span>
+                            </span>
+                            <span class="flex min-w-0 items-center justify-center gap-1 whitespace-nowrap px-1" title="合计 Token">
+                                <span class="h-1.5 w-1.5 flex-none rounded-full bg-green-500"></span>
+                                <span class="font-mono font-semibold tabular-nums text-gray-700">
+                                    {{ formatLatestTokenCount(latestMainTokenUsage.totalTokens) }}</span>
+                            </span>
+                        </div>
                         <div class="relative w-full flex justify-between items-center mb-2 px-1">
                             <!-- Left controls: AutoImage -->
                             <div class="flex items-center gap-2">
@@ -131,6 +151,16 @@
                                                     </svg>
                                                 </button>
                                             </div>
+                                            <!-- Reasoning effort -->
+                                            <div class="rounded-xl border border-gray-200 bg-white px-3 py-2.5">
+                                                <div class="mb-2 flex items-center justify-between">
+                                                    <span class="text-xs font-bold text-gray-500">推理强度</span>
+                                                    <span class="text-xs font-semibold text-gray-500">{{ reasoningEffortLabel }}</span>
+                                                </div>
+                                                <input v-model.number="reasoningEffortSlider" type="range" min="0"
+                                                    max="5" step="1" aria-label="推理强度"
+                                                    class="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary-500">
+                                            </div>
                                             <!-- Temperature -->
                                             <div class="border-t border-gray-100 pt-3">
                                                 <div class="mb-2 flex items-center justify-between">
@@ -161,6 +191,26 @@
                                                     <span class="relative inline-flex flex-none items-center">
                                                         <input type="checkbox" v-model="settings.immersiveMode"
                                                             class="settings-toggle-input sr-only" aria-label="沉浸模式">
+                                                        <span
+                                                            class="settings-toggle settings-toggle--compact settings-toggle--solid"></span>
+                                                    </span>
+                                                </label>
+                                                <label
+                                                    class="flex cursor-pointer items-center justify-between gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-xs font-semibold text-gray-600 transition-colors hover:bg-gray-50">
+                                                    <span>最新用量</span>
+                                                    <span class="relative inline-flex flex-none items-center">
+                                                        <input type="checkbox" v-model="settings.showLatestUsageBar"
+                                                            class="settings-toggle-input sr-only" aria-label="最新用量">
+                                                        <span
+                                                            class="settings-toggle settings-toggle--compact settings-toggle--solid"></span>
+                                                    </span>
+                                                </label>
+                                                <label
+                                                    class="flex cursor-pointer items-center justify-between gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-xs font-semibold text-gray-600 transition-colors hover:bg-gray-50">
+                                                    <span>文风过滤</span>
+                                                    <span class="relative inline-flex flex-none items-center">
+                                                        <input type="checkbox" v-model="settings.styleFilterEnabled"
+                                                            class="settings-toggle-input sr-only" aria-label="文风过滤">
                                                         <span
                                                             class="settings-toggle settings-toggle--compact settings-toggle--solid"></span>
                                                     </span>

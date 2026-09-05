@@ -44,5 +44,5 @@ test('app.mjs defines and exposes chatModelSlots and selectChatModelSlot', async
   assert.match(source, /const selectChatModelSlot = \(slot\) => \{\s*if \(!slot \|\| !slot\.model\) return;\s*modelMode\.value = slot\.mode;\s*\};/);
 
   // Exposed to appContext so MessageInput.vue (full ctx passthrough) can use them
-  assert.match(source, /modelMode, chatModelSlots, selectChatModelSlot, showNoMemoryNeededModal/);
+  assert.match(source, /modelMode, chatModelSlots, selectChatModelSlot, reasoningEffortSlider, reasoningEffortLabel, latestMainTokenUsage, showNoMemoryNeededModal/);
 });
