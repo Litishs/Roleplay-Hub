@@ -114,3 +114,15 @@ test('journal summary carries the reasoning effort tag for diagnostics exports',
   const source = await readFile(new URL('../src/composables/useMessageSender.mjs', import.meta.url), 'utf8');
   assert.match(source, /'chat generate'\)\s*\n\s*\+ \(settings\.reasoningEffort \? ` · effort=\$\{settings\.reasoningEffort\}` : ''\)/);
 });
+
+test('journal records server-reported reasoning tokens for effort verification', async () => {
+  const [diag, sender] = await Promise.all([
+    readFile(new URL('../src/modules/request-diagnostics.mjs', import.meta.url), 'utf8'),
+    readFile(new URL('../src/composables/useMessageSender.mjs', import.meta.url), 'utf8')
+  ]);
+  // usage() channel stores token numbers only (null-safe, no plaintext)
+  assert.match(diag, /usage\(usage\) \{[\s\S]*?'inputTokens', 'outputTokens', 'totalTokens', 'reasoningTokens', 'cacheReadTokens'[\s\S]*?record\.outputs\.usage = entry;/);
+  assert.match(diag, /usage\(\) \{ \/\* no-op \*\/ \}/);
+  // sender feeds the normalized API usage into the journal before completing
+  assert.match(sender, /requestDiagnostic\?\.usage\?\.\(normalizeApiUsage\(responseUsage\)\);\s*requestDiagnostic\?\.complete\(/);
+});

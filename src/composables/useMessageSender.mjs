@@ -1637,6 +1637,7 @@ export function useMessageSender(deps) {
                                 finalReasoningChars: finalReasoning.length
                             });
                         }
+                        requestDiagnostic?.usage?.(normalizeApiUsage(responseUsage));
                         requestDiagnostic?.complete(normalizeApiUsage(responseUsage));
                         recordApiUsage(responseUsage, {
                             type: activeToolDepth > 0 ? 'tool_continuation' : 'chat',

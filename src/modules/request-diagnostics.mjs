@@ -431,6 +431,30 @@ const makeHandle = (record) => {
             }
         },
 
+        // Server-reported token accounting (from the API usage payload). Numbers
+        // only, null when the provider does not report the field — lets exports
+        // correlate the requested reasoning effort with actual reasoning spend.
+        usage(usage) {
+            try {
+                if (!markLive() || finished) return;
+                const source = usage && typeof usage === 'object' ? usage : {};
+                const pick = (value) => {
+                    const n = Number(value);
+                    return Number.isFinite(n) && n >= 0 ? n : null;
+                };
+                const entry = {};
+                ['inputTokens', 'outputTokens', 'totalTokens', 'reasoningTokens', 'cacheReadTokens']
+                    .forEach(key => {
+                        const v = pick(source[key]);
+                        if (v !== null) entry[key] = v;
+                    });
+                if (Object.keys(entry).length) record.outputs.usage = entry;
+                persist();
+            } catch (e) {
+                console.warn('[ActivityJournal] usage() failed:', e?.message || e);
+            }
+        },
+
         fail(error) {
             try {
                 if (!markLive() || finished) return;
@@ -644,6 +668,7 @@ const begin = (options = {}) => {
             output() { /* no-op */ },
             stage() { /* no-op */ },
             complete() { /* no-op */ },
+            usage() { /* no-op */ },
             fail() { /* no-op */ },
             request() { /* no-op */ },
             responseHeaders() { /* no-op */ },
@@ -697,6 +722,7 @@ const start = (options = {}) => {
             reasoning() { /* no-op */ },
             content() { /* no-op */ },
             complete() { /* no-op */ },
+            usage() { /* no-op */ },
             fail() { /* no-op */ },
             input() { /* no-op */ },
             behavior() { /* no-op */ },
