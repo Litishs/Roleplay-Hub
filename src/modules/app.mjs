@@ -1,5 +1,5 @@
 import * as Vue from 'vue';
-const { createApp, ref, reactive, computed, onMounted, onBeforeUnmount, watch, nextTick, provide, h, markRaw, toRaw, isRef, watchEffect, shallowRef, triggerRef, defineComponent, withScopeId, Suspense, Teleport, Transition, TransitionGroup, KeepAlive } = Vue;
+const { createApp, ref, reactive, computed, onMounted, onBeforeUnmount, watch, nextTick, provide, h, markRaw, toRaw, isRef, watchEffect, shallowRef, triggerRef, defineComponent, withScopeId, Suspense, Teleport, Transition, TransitionGroup, KeepAlive, defineAsyncComponent } = Vue;
 
 // Configure marked to disable indented code blocks
 // This allows indented HTML (like details/summary) to be rendered as HTML instead of code
@@ -53,26 +53,29 @@ import SideNav from '../components/common/SideNav.vue';
 import ToastNotification from '../components/common/ToastNotification.vue';
 import ConfirmDialog from '../components/common/ConfirmDialog.vue';
 import ModalDialog from '../components/common/ModalDialog.vue';
-import CharacterPanel from '../components/views/CharacterPanel.vue';
-import GeneratorPanel from '../components/views/GeneratorPanel.vue';
-import SquarePanel from '../components/views/SquarePanel.vue';
-import SettingsPanel from '../components/views/SettingsPanel.vue';
-import UpdateChecker from '../components/settings/UpdateChecker.vue';
-import DataManager from '../components/settings/DataManager.vue';
-import PresetManager from '../components/settings/PresetManager.vue';
-import ApiConfig from '../components/settings/ApiConfig.vue';
-import AdvancedSettings from '../components/settings/AdvancedSettings.vue';
-import TtsSettings from '../components/settings/TtsSettings.vue';
-import PresetsPanel from '../components/views/PresetsPanel.vue';
-import UiTemplatePanel from '../components/views/UiTemplatePanel.vue';
-import RegexPanel from '../components/views/RegexPanel.vue';
-import ToolsPanel from '../components/views/ToolsPanel.vue';
-import UsageStatsPanel from '../components/views/UsageStatsPanel.vue';
-import MemoryPanel from '../components/views/MemoryPanel.vue';
 import WorldInfoPanel from '../components/views/WorldInfoPanel.vue';
 import CharacterInfo from '../components/chat/CharacterInfo.vue';
 import MessageList from '../components/chat/MessageList.vue';
 import MessageInput from '../components/chat/MessageInput.vue';
+
+// Phase 4.2 build optimization: view panels only render behind
+// `v-if="currentView === ..."` (index.html), so they are async components and
+// load as separate chunks on first navigation instead of inflating the
+// startup bundle. WorldInfoPanel stays synchronous: it is always mounted and
+// hosts the shared editor modals (preset/regex/tool/world-info editors,
+// import/export dialogs). Settings sub-panels (UpdateChecker, DataManager,
+// PresetManager, ApiConfig, AdvancedSettings, TtsSettings) are imported
+// directly by SettingsPanel.vue, so they ride along in its async chunk.
+const AsyncCharacterPanel = defineAsyncComponent(() => import('../components/views/CharacterPanel.vue'));
+const AsyncGeneratorPanel = defineAsyncComponent(() => import('../components/views/GeneratorPanel.vue'));
+const AsyncSquarePanel = defineAsyncComponent(() => import('../components/views/SquarePanel.vue'));
+const AsyncSettingsPanel = defineAsyncComponent(() => import('../components/views/SettingsPanel.vue'));
+const AsyncPresetsPanel = defineAsyncComponent(() => import('../components/views/PresetsPanel.vue'));
+const AsyncUiTemplatePanel = defineAsyncComponent(() => import('../components/views/UiTemplatePanel.vue'));
+const AsyncRegexPanel = defineAsyncComponent(() => import('../components/views/RegexPanel.vue'));
+const AsyncToolsPanel = defineAsyncComponent(() => import('../components/views/ToolsPanel.vue'));
+const AsyncUsageStatsPanel = defineAsyncComponent(() => import('../components/views/UsageStatsPanel.vue'));
+const AsyncMemoryPanel = defineAsyncComponent(() => import('../components/views/MemoryPanel.vue'));
 import { generateUUID, parseCot } from './utils.mjs';
 import { useMemorySystem } from '../composables/useMemorySystem.mjs';
 import { useWorldInfo } from '../composables/useWorldInfo.mjs';
@@ -99,7 +102,7 @@ import { extractVectorQueryTerms, factPreviewText, getClassicMemoryKey, getMemor
 
 const __app = createApp({
     components: {
-        CharacterPanel, GeneratorPanel, SquarePanel, SettingsPanel, PresetsPanel, UiTemplatePanel, RegexPanel, ToolsPanel, UsageStatsPanel, MemoryPanel, WorldInfoPanel,
+        CharacterPanel: AsyncCharacterPanel, GeneratorPanel: AsyncGeneratorPanel, SquarePanel: AsyncSquarePanel, SettingsPanel: AsyncSettingsPanel, PresetsPanel: AsyncPresetsPanel, UiTemplatePanel: AsyncUiTemplatePanel, RegexPanel: AsyncRegexPanel, ToolsPanel: AsyncToolsPanel, UsageStatsPanel: AsyncUsageStatsPanel, MemoryPanel: AsyncMemoryPanel, WorldInfoPanel,
         UiTemplatePending, EmbeddedViewContent, GenerationTimer, SettingsPageHeader,
         SideNav, ToastNotification, ConfirmDialog, ModalDialog,
         CharacterInfo, MessageList, MessageInput,
@@ -193,6 +196,8 @@ const __app = createApp({
             isSidebarCollapsed,
             isAdvancedNavOpen,
             toggleAdvancedNav,
+            isOnlineNavOpen,
+            toggleOnlineNav,
             showDescriptionPanel,
             showModelSelector,
             modelSelectionTarget,
@@ -8855,18 +8860,11 @@ const __app = createApp({
             }
 
             await loadData();
-            fetchQuota(); // Fetch quota after saved settings are loaded
 
             // Normalize the image-gen provider after saved settings load: legacy
             // users may have persisted an empty/unknown imageGenProviderId.
             if (!getImageGenProviderById(settings.imageGenProviderId)) {
                 settings.imageGenProviderId = imageGenProviderOptions[0]?.id || '';
-            }
-
-            // 首次启动显示作者致谢公告（仅一次）
-            const authorNoticeSeen = await getStoredValue('author_notice_seen');
-            if (!authorNoticeSeen) {
-                showAuthorNoticeModal.value = true;
             }
 
             // --- 全局清理废弃正则 (思维隐藏及旧版画图迁移项已清理完毕，保留基础结构) ---
@@ -9056,9 +9054,6 @@ const __app = createApp({
             // 初始化守卫解除：此后 saveData 才允许写入 user / memorySettings
             _initComplete = true;
 
-            // v4：本地嵌入模型默认自动加载（记忆开启 + 后端为本地时）
-            ensureLocalEmbeddingReady();
-
             // Restore Last Active Session
             if (lastActiveCharacterId.value !== null && characters.value[lastActiveCharacterId.value]) {
                 // Restore character selection without clearing chat history (we load it from DB)
@@ -9117,12 +9112,30 @@ const __app = createApp({
                 selectCharacter(0);
             }
 
+            // Phase 4.3 startup optimization: everything below is
+            // non-critical for the first chat paint, so it runs after the
+            // session restore chain instead of ahead of it.
+
+            // 首次启动显示作者致谢公告（仅一次）
+            const authorNoticeSeen = await getStoredValue('author_notice_seen');
+            if (!authorNoticeSeen) {
+                showAuthorNoticeModal.value = true;
+            }
+
+            // Quota / model list / status probes are display-only network
+            // calls; they no longer compete with the restore I/O above.
+            fetchQuota();
             if (settings.autoFetchModels) {
                 fetchAllConfiguredProviderModels();
             }
 
             // Initial Status Check
             checkAllStatuses();
+
+            // v4：本地嵌入模型默认自动加载（记忆开启 + 后端为本地时）。
+            // transformers + 模型权重加载较重，延迟到启动链空闲后再开始，
+            // 不与首屏会话恢复抢 I/O/CPU；发送消息前若尚未就绪会按需等待。
+            setTimeout(() => { ensureLocalEmbeddingReady(); }, 3000);
 
             // --- Mobile Keyboard Adaptation (VisualViewport) ---
             if (window.visualViewport) {
@@ -9565,7 +9578,7 @@ const __app = createApp({
             editMessage, saveEditMessage, cancelEditMessage,
             createNewCharacter, editCharacter, saveCharacter, deleteCharacter, selectCharacter, beginCharacterCardPress, endCharacterCardPress, toggleCharacterFavorite, isCharacterFavorite,
             currentUiTemplates, activeUiTemplates, uiTemplateUpdateStatus, createUiTemplate, editUiTemplate, saveUiTemplate, deleteUiTemplate, importUiTemplates, updateUiTemplatesFromChat, renderEditingUiTemplatePreview, handleUiTemplateClick, formatUiTemplateChangeValue, hasUiTemplateScripts,
-            isBatchDeleteMode, isSidebarCollapsed, isAdvancedNavOpen, toggleAdvancedNav, selectedCharacterIndices, toggleBatchDeleteMode, toggleCharacterSelection, batchDeleteCharacters,
+            isBatchDeleteMode, isSidebarCollapsed, isAdvancedNavOpen, toggleAdvancedNav, isOnlineNavOpen, toggleOnlineNav, selectedCharacterIndices, toggleBatchDeleteMode, toggleCharacterSelection, batchDeleteCharacters,
             getCharacterWICount, getCharacterRegexCount,
             handleAvatarUpload, importCharacter,
             // 剧情分支

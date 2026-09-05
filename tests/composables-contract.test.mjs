@@ -307,7 +307,7 @@ test('useUiState returns live reactive state (runtime)', async () => {
     assert.ok(state.toasts.value instanceof Array);
 
     for (const key of [
-        'appVersionName', 'appVersionCode', 'appBuildType', 'isAdvancedNavOpen', 'showModelSelector',
+        'appVersionName', 'appVersionCode', 'appBuildType', 'isAdvancedNavOpen', 'isOnlineNavOpen', 'showModelSelector',
         'showPresetEditor', 'showUiTemplateEditor', 'showRegexEditor', 'showUserSetupModal',
         'quotaValue', 'backupInProgress', 'updateAvailable', 'downloadingUpdate',
         'showConfirmModal', 'confirmMessage', 'confirmCallback', 'updateNoticeDismissedToday'
@@ -324,6 +324,20 @@ test('useUiState returns live reactive state (runtime)', async () => {
     assert.equal(state.isAdvancedNavOpen.value, true);
     state.toggleAdvancedNav();
     assert.equal(state.isAdvancedNavOpen.value, false);
+
+    // toggleOnlineNav flips only the online-nav flag
+    state.isSidebarCollapsed.value = false;
+    state.toggleOnlineNav();
+    assert.equal(state.isOnlineNavOpen.value, true);
+    state.toggleOnlineNav();
+    assert.equal(state.isOnlineNavOpen.value, false);
+
+    // toggleOnlineNav while collapsed expands the sidebar and opens the group
+    state.isSidebarCollapsed.value = true;
+    state.isOnlineNavOpen.value = false;
+    state.toggleOnlineNav();
+    assert.equal(state.isSidebarCollapsed.value, false, 'collapsed sidebar is expanded first');
+    assert.equal(state.isOnlineNavOpen.value, true, 'group opens in the same step');
 
     // showVueConfirmModal resolves through the shared modal ref
     const pending = state.showVueConfirmModal('t', 'm');

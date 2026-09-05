@@ -91,27 +91,57 @@
                 </svg>
                 <span v-show="!isSidebarCollapsed" class="whitespace-nowrap overflow-hidden">角色卡管理</span>
             </button>
-            <button @click="currentView = 'generator'; closeMobileMenu()"
-                title="角色卡生成"
-                :class="['sidebar-nav-button flex items-center rounded-xl transition-all duration-200 font-medium', currentView === 'generator' ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900', isSidebarCollapsed ? 'w-12 h-12 mx-auto justify-center p-0' : 'w-full px-3 py-2.5']">
-                <svg class="w-5 h-5" :class="isSidebarCollapsed ? 'mr-0' : 'mr-3'" fill="none" stroke="currentColor"
-                    viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M13 10V3L4 14h7v7l9-11h-7z"></path>
-                </svg>
-                <span v-show="!isSidebarCollapsed" class="whitespace-nowrap overflow-hidden">角色卡生成</span>
-            </button>
-            <button @click="currentView = 'square'; closeMobileMenu()"
-                title="万相广场"
-                :class="['sidebar-nav-button flex items-center rounded-xl transition-all duration-200 font-medium', currentView === 'square' ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900', isSidebarCollapsed ? 'w-12 h-12 mx-auto justify-center p-0' : 'w-full px-3 py-2.5']">
-                <svg class="w-5 h-5" :class="isSidebarCollapsed ? 'mr-0' : 'mr-3'" fill="none" stroke="currentColor"
-                    viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9">
-                    </path>
-                </svg>
-                <span v-show="!isSidebarCollapsed" class="whitespace-nowrap overflow-hidden">万相广场</span>
-            </button>
+            <div class="online-nav"
+                :class="{ 'is-open': isOnlineNavOpen && !isSidebarCollapsed }">
+                <button @click="toggleOnlineNav"
+                    class="sidebar-nav-button online-nav-trigger flex items-center rounded-xl transition-all duration-200 font-medium"
+                    :class="[['generator', 'square'].includes(currentView) ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900', isSidebarCollapsed ? 'w-12 h-12 mx-auto justify-center p-0' : 'w-full px-3 py-2.5']"
+                    title="在线"
+                    aria-controls="online-nav-panel"
+                    :aria-expanded="isOnlineNavOpen && !isSidebarCollapsed">
+                    <svg class="w-5 h-5" :class="isSidebarCollapsed ? 'mr-0' : 'mr-3'" fill="none"
+                        stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9">
+                        </path>
+                    </svg>
+                    <span v-show="!isSidebarCollapsed" class="whitespace-nowrap overflow-hidden">在线</span>
+                    <svg v-show="!isSidebarCollapsed" class="online-nav-chevron ml-auto w-4 h-4" fill="none"
+                        stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                    </svg>
+                </button>
+
+                <div id="online-nav-panel" class="online-nav-panel"
+                    :aria-hidden="!(isOnlineNavOpen && !isSidebarCollapsed)"
+                    :inert="!(isOnlineNavOpen && !isSidebarCollapsed)">
+                    <div class="advanced-nav-panel-inner">
+                        <div class="advanced-nav-list">
+                            <button @click="currentView = 'generator'; closeMobileMenu()"
+                                class="sidebar-nav-button advanced-nav-item transition-all duration-200"
+                                :class="currentView === 'generator' ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'"
+                                title="角色卡生成">
+                                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"
+                                        d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                                </svg>
+                                <span>角色卡生成</span>
+                            </button>
+                            <button @click="currentView = 'square'; closeMobileMenu()"
+                                class="sidebar-nav-button advanced-nav-item transition-all duration-200"
+                                :class="currentView === 'square' ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'"
+                                title="万相广场">
+                                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"
+                                        d="M4 5a2 2 0 012-2h3a2 2 0 012 2v3a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm9 0a2 2 0 012-2h3a2 2 0 012 2v3a2 2 0 01-2 2h-3a2 2 0 01-2-2V5zm-9 9a2 2 0 012-2h3a2 2 0 012 2v3a2 2 0 01-2 2H6a2 2 0 01-2-2v-3zm9 0a2 2 0 012-2h3a2 2 0 012 2v3a2 2 0 01-2 2h-3a2 2 0 01-2-2v-3z">
+                                    </path>
+                                </svg>
+                                <span>万相广场</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
 
             <div class="advanced-nav"
                 :class="{ 'is-open': isAdvancedNavOpen && !isSidebarCollapsed }">

@@ -75,8 +75,55 @@ export function useDataLoader(deps) {
         try {
                 await initDB();
 
+                // Phase 4.3 startup optimization: all storage reads are
+                // independent (literal keys, no read depends on another read's
+                // result), so they are issued as one parallel batch instead of
+                // ~19 sequential IndexedDB round-trips. The synchronous
+                // processing below keeps the original sequential order and is
+                // semantically identical to the previous per-key awaits.
+                const [
+                    savedChars,
+                    savedSettings,
+                    savedPresets,
+                    savedPresetGroups,
+                    savedPresetVersion,
+                    savedDeletedDefaultPresets,
+                    savedGlobalRegex,
+                    savedRegex,
+                    savedGlobalWI,
+                    savedWI,
+                    savedGlobalUiTemplates,
+                    savedActiveTools,
+                    savedWISettings,
+                    savedUser,
+                    savedProfiles,
+                    savedActiveId,
+                    lastCharIndex,
+                    savedMemorySettings,
+                    savedTokenUsageHistory
+                ] = await Promise.all([
+                    getStoredValue('characters'),
+                    getStoredValue('settings'),
+                    getStoredValue('presets'),
+                    getStoredValue('preset_groups'),
+                    getStoredValue('preset_definitions_version'),
+                    getStoredValue('deleted_default_presets'),
+                    getStoredValue('global_regex'),
+                    getStoredValue('regex'),
+                    getStoredValue('global_worldinfo'),
+                    getStoredValue('worldinfo'),
+                    getStoredValue('global_ui_templates'),
+                    getStoredValue('active_tools'),
+                    getStoredValue('worldinfo_settings'),
+                    getStoredValue('user'),
+                    getStoredValue('user_profiles'),
+                    getStoredValue('active_profile_id'),
+                    getStoredValue('last_active_char'),
+                    getStoredValue('memory_settings'),
+                    getStoredValue('token_usage_history')
+                ]);
+
                 // Load from DB
-                const savedChars = await getStoredValue('characters');
                 if (savedChars) {
                     // Migration: Ensure all characters have a UUID and createdAt
                     let migrated = false;
@@ -116,7 +163,6 @@ export function useDataLoader(deps) {
                     }
                 }
 
-                const savedSettings = await getStoredValue('settings');
                 if (savedSettings) {
                     Object.keys(savedSettings).forEach(key => {
                         if (Object.prototype.hasOwnProperty.call(settings, key)) {
@@ -144,10 +190,8 @@ export function useDataLoader(deps) {
                 normalizeActiveToolAggressivenessSettings();
                 syncChatModelFromPresets();
 
-                const savedPresets = await getStoredValue('presets');
                 if (savedPresets) presets.value = savedPresets.map(normalizePreset);
 
-                const savedPresetGroups = await getStoredValue('preset_groups');
                 if (Array.isArray(savedPresetGroups) && savedPresetGroups.length > 0) {
                     presetGroups.value = savedPresetGroups
                         .filter(g => g && typeof g.id === 'string' && g.id)
@@ -159,43 +203,34 @@ export function useDataLoader(deps) {
                         }));
                 }
 
-                const savedPresetVersion = await getStoredValue('preset_definitions_version');
                 if (typeof savedPresetVersion === 'number') {
                     presetDefinitionsVersionApplied.value = savedPresetVersion;
                 }
 
-                const savedDeletedDefaultPresets = await getStoredValue('deleted_default_presets');
                 if (Array.isArray(savedDeletedDefaultPresets)) {
                     deletedDefaultPresetNames.value = savedDeletedDefaultPresets.filter(name => typeof name === 'string');
                 }
 
-                const savedGlobalRegex = await getStoredValue('global_regex');
                 if (savedGlobalRegex) globalRegexScripts.value = savedGlobalRegex.map(script => normalizeRegexScript(script, 'global'));
 
-                const savedRegex = await getStoredValue('regex');
                 if (savedGlobalRegex) {
                     regexScripts.value = JSON.parse(JSON.stringify(globalRegexScripts.value)).map(script => normalizeRegexScript(script, 'global'));
                 } else if (savedRegex) {
                     regexScripts.value = savedRegex.map(script => normalizeRegexScript(script, 'character'));
                 }
 
-                const savedGlobalWI = await getStoredValue('global_worldinfo');
                 if (savedGlobalWI) globalWorldInfo.value = savedGlobalWI.map(entry => normalizeWorldInfoEntry({ ...entry, scope: 'global' }));
 
-                const savedWI = await getStoredValue('worldinfo');
                 if (savedGlobalWI) {
                     worldInfo.value = JSON.parse(JSON.stringify(globalWorldInfo.value)).map(entry => normalizeWorldInfoEntry({ ...entry, scope: 'global' }));
                 } else if (savedWI) {
                     worldInfo.value = savedWI.map(normalizeWorldInfoEntry);
                 }
 
-                const savedGlobalUiTemplates = await getStoredValue('global_ui_templates');
                 if (savedGlobalUiTemplates) globalUiTemplates.value = savedGlobalUiTemplates.map(template => normalizeUiTemplate({ ...template, scope: 'global' }));
 
-                const savedActiveTools = await getStoredValue('active_tools');
                 normalizeActiveTools(savedActiveTools || activeTools.value);
 
-                const savedWISettings = await getStoredValue('worldinfo_settings');
                 if (savedWISettings) {
                     ['scanDepth', 'maxDepth'].forEach(key => {
                         if (savedWISettings[key] !== undefined) worldInfoSettings[key] = savedWISettings[key];
@@ -205,12 +240,8 @@ export function useDataLoader(deps) {
                 // const savedRecentTimes = await getStoredValue('recent_times'); // Deprecated
                 // if (savedRecentTimes) recentGenerationTimes.value = savedRecentTimes;
 
-                const savedUser = await getStoredValue('user');
                 if (savedUser) Object.assign(user, savedUser);
                 if (!user.uuid) user.uuid = generateUUID(); // Ensure UUID
-
-                const savedProfiles = await getStoredValue('user_profiles');
-                const savedActiveId = await getStoredValue('active_profile_id');
 
                 if (savedProfiles && savedProfiles.length > 0) {
                     userProfiles.value = savedProfiles;
@@ -230,17 +261,14 @@ export function useDataLoader(deps) {
                 }
 
                 // Load Last Active Character Index
-                const lastCharIndex = await getStoredValue('last_active_char');
                 if (lastCharIndex !== undefined) {
                     lastActiveCharacterId.value = lastCharIndex;
                 }
 
                 // Load Memory Settings
-                const savedMemorySettings = await getStoredValue('memory_settings');
                 if (savedMemorySettings) Object.assign(memorySettings, savedMemorySettings);
                 normalizeMemorySettings();
 
-                const savedTokenUsageHistory = await getStoredValue('token_usage_history');
                 if (Array.isArray(savedTokenUsageHistory)) {
                     tokenUsageHistory.value = savedTokenUsageHistory
                         .filter(record => record && typeof record === 'object')
