@@ -4,7 +4,7 @@
   "webDir": "dist",
   "android": {
     "minWebViewVersion": 83,
-    "allowMixedContent": false,
+    "allowMixedContent": true,
     "captureInput": false,
     "webContentsDebuggingEnabled": false
   },

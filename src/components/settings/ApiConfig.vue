@@ -224,31 +224,8 @@
                 </div>
             </div>
 
-            <!-- 当前绑定（聊天/记忆供应商与模型） -->
-            <div class="api-binding-summary mt-4 rounded-xl border border-teal-100 bg-teal-50/50 px-3 py-2.5 text-[11px] text-gray-600 space-y-1">
-                <div class="flex items-center justify-between gap-2">
-                    <span class="font-bold text-gray-700">{{ chatBindingLabel }}</span>
-                    <button type="button" @click="openModelSelector('model')"
-                        class="text-[10px] px-2 py-0.5 rounded bg-white border border-teal-200 text-teal-700 font-bold transition-all leading-none" style="line-height:1">
-                        换聊天模型
-                    </button>
-                </div>
-                <div class="flex items-center justify-between gap-2">
-                    <span class="font-bold text-gray-700 truncate">记忆模型：{{ memoryProviderLabel }} · {{ memorySettings.classicModel || '未选' }}</span>
-                    <button type="button" @click="openModelSelector('memoryClassicModel')"
-                        class="text-[10px] px-2 py-0.5 rounded bg-white border border-teal-200 text-teal-700 font-bold transition-all leading-none" style="line-height:1">
-                        换
-                    </button>
-                </div>
-                <div class="flex items-center justify-between gap-2">
-                    <span class="font-bold text-gray-700 truncate">向量嵌入：{{ embeddingBindingLabel }}</span>
-                    <button v-if="memorySettings.embeddingBackend !== 'local'" type="button" @click="openModelSelector('memoryEmbeddingModel')"
-                        class="text-[10px] px-2 py-0.5 rounded bg-white border border-teal-200 text-teal-700 font-bold transition-all leading-none" style="line-height:1">
-                        换
-                    </button>
-                </div>
-                <div class="text-[10px] text-gray-400">在模型列表里选哪个供应商的模型，聊天/记忆就自动绑定该供应商；设置页切换浏览的供应商不影响已绑定。</div>
-            </div>
+            <!-- 2026-09-06: removed the teal "当前绑定" summary card — it duplicated
+                 the quick-settings slot selector and the two could disagree. -->
 
             <!-- 聊天模型（合并槽位选择器） -->
             <div class="mt-5">

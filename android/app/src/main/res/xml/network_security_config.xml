@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Allow cleartext HTTP to reach locally-deployed API servers on the LAN.
+     Android 9+ blocks cleartext by default; most local model servers (Ollama,
+     LM Studio, OneAPI, vLLM) only speak HTTP on a private IP.  Android's
+     network-security-config does NOT support CIDR ranges in <domain> entries,
+     so the requested ranges (192.168.0.0/16, 10.0.0.0/8, 172.16.0.0/12) cannot
+     be expressed individually.  base-config permits all cleartext, which
+     covers every private range.  HTTPS certificate validation is unaffected:
+     trust anchors are system CAs only (no user-installed certs). -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

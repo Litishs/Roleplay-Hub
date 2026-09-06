@@ -14,11 +14,11 @@ if (-not $env:JAVA_HOME) {
 }
 $env:GRADLE_USER_HOME = Join-Path $projectRoot '.toolchains\gradle-home'
 
-# --- Release version: advance by +1, mirroring debug builds ---
-# Release and debug now share the same versionCode derivation (+1 each build)
-# so version.properties stays consistent regardless of which build runs. The
-# canonical release version is set by the git tag in CI; this local script only
-# produces a release APK for testing the signed-build flow.
+# --- Release version: read-only (2026-09-06) ---
+# The canonical release version is set by the git tag in CI (which rewrites
+# version.properties before building).  Local release builds used to +1 the
+# file too, which polluted the tracked baseline; they now read it as-is and
+# only produce a signed APK for testing the release flow.
 $versionFile = Join-Path $projectRoot 'android\version.properties'
 $versionProps = @{}
 if (Test-Path -LiteralPath $versionFile) {
@@ -28,11 +28,8 @@ if (Test-Path -LiteralPath $versionFile) {
         }
     }
 }
-$currentVersionCode = if ($versionProps.ContainsKey('versionCode')) { [int]$versionProps['versionCode'] } else { 0 }
-$releaseVersionCode = $currentVersionCode + 1
-$releaseMajor = [int]([math]::Floor($releaseVersionCode / 100) + 1)
-$releaseMinor = [int]($releaseVersionCode % 100)
-$releaseVersionName = '{0}.{1:D2}' -f $releaseMajor, $releaseMinor
+$releaseVersionCode = if ($versionProps.ContainsKey('versionCode')) { [int]$versionProps['versionCode'] } else { 0 }
+$releaseVersionName = if ($versionProps.ContainsKey('versionName')) { $versionProps['versionName'] } else { '0.0' }
 
 # --- Release signing config check ---
 $keystorePropsFile = Join-Path $projectRoot 'android\keystore.properties'
@@ -40,8 +37,6 @@ if (-not (Test-Path -LiteralPath $keystorePropsFile)) {
     throw 'android\keystore.properties is missing. Generate android\keystore\roleplay-hub-release.keystore and configure it first.'
 }
 
-$versionFileContent = "versionCode=$releaseVersionCode`nversionName=$releaseVersionName"
-Set-Content -LiteralPath $versionFile -Value $versionFileContent -Encoding ASCII
 Write-Host "Building release version $releaseVersionName (versionCode $releaseVersionCode)"
 
 Push-Location (Join-Path $projectRoot 'android')

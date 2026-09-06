@@ -3768,18 +3768,11 @@ const __app = createApp({
             }
         };
 
-        const chatBindingLabel = computed(() => {
-            const provider = getChatProvider();
-            return `聊天：${getProviderDisplayName(provider.providerId)} · ${String(settings.model || '').trim() || '未选模型'}`;
-        });
-        const embeddingBindingLabel = computed(() => {
-            if (memorySettings.embeddingBackend === 'local') {
-                return `本地模型 · ${String(memorySettings.localEmbeddingModel || 'bge-small-zh-v1.5').trim()}`;
-            }
-            return `${memoryProviderLabel.value} · ${String(memorySettings.embeddingModel || '').trim() || '未选'}`;
-        });
+        // 2026-09-06: chatBindingLabel / embeddingBindingLabel removed along
+        // with the ApiConfig "当前绑定" teal card (duplicated the quick-settings
+        // slot selector and could disagree with it).
 
-        
+
         const createAbortReason = (message = 'Operation aborted') => {
             if (typeof DOMException === 'function') return new DOMException(message, 'AbortError');
             const error = new Error(message);
@@ -3822,10 +3815,6 @@ const __app = createApp({
 
         const friendlyNetworkErrorMessage = (error, url = '') => {
             const message = String(error?.message || error || '');
-            const target = String(url || '');
-            if (/^http:\/\//i.test(target)) {
-                return '检测到明文 HTTP 地址，Android 默认禁止明文流量，请改用 https:// 地址';
-            }
             if (error?.name === 'AbortError' && /timed out/i.test(message)) {
                 return '请求超时（长时间无响应），请检查网络或稍后重试';
             }
@@ -9364,7 +9353,7 @@ const __app = createApp({
             currentView, showDescriptionPanel, showModelSelector, modelSelectionTarget, openModelSelector, showChatModelSelector, showCharacterEditor, showAddCharacterMenu, showPresetEditor, showUiTemplateEditor,
             memoryProviderSelectOptions, memoryProviderLabel,
             memorySummaries, memoryProfile, summaryProgress, retryRollingSummary, clearSummaryProgress, runRollingSummaryCheck,
-            chatBindingLabel, embeddingBindingLabel, providerTags, activeProviderTag, getProviderDisplayName,
+            providerTags, activeProviderTag, getProviderDisplayName,
             showActiveToolEditor,
             showExportModal, sysInstruction, showInstructionPanel, exportItems, selectedExportIndices, // Export Modal
             showContextViewerModal, lastContextMessages, lastTriggeredWorldInfos, lastContextTotalLength, // Context Viewer

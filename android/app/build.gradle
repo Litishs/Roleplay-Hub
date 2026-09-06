@@ -13,7 +13,10 @@ android {
     namespace "com.roleplayhub.app"
     compileSdk rootProject.ext.compileSdkVersion
 
-    // 从 android/version.properties 读取版本号：scripts/build-android-debug.ps1 每次构建前自动 +1。
+    // Reads android/version.properties (the release baseline).  Build scripts
+    // can override via -PrphVersionCode / -PrphVersionName: the debug script
+    // uses that for its 10000+ "baseline-debug.N" scheme without dirtying the
+    // tracked file; CI rewrites version.properties from the git tag instead.
     def versionProperties = new Properties()
     def versionPropertiesFile = file('../version.properties')
     if (versionPropertiesFile.exists()) {
@@ -21,8 +24,8 @@ android {
             versionProperties.load(stream)
         }
     }
-    def appVersionCode = versionProperties.getProperty('versionCode', '1').toInteger()
-    def appVersionName = versionProperties.getProperty('versionName', '1.0')
+    def appVersionCode = (project.findProperty('rphVersionCode') ?: versionProperties.getProperty('versionCode', '1')).toString().toInteger()
+    def appVersionName = (project.findProperty('rphVersionName') ?: versionProperties.getProperty('versionName', '1.0')).toString()
 
     signingConfigs {
         release {

@@ -141,3 +141,25 @@ test('the generation settings section collapses as an in-page accordion', () => 
     assert.match(apiConfigHtml, /class="overflow-hidden min-h-0"/,
         'collapsing clips the content so the row height animates cleanly');
 });
+// --- 2026-09-06: removed the "当前绑定" teal summary card ---
+// The card duplicated the quick-settings slot selector (槽位 1/2/3) and the
+// two could disagree in practice, so it was removed outright.  Lock the
+// removal and its dead computed properties.
+
+test('ApiConfig.vue no longer renders the duplicate binding summary card', () => {
+    assert.ok(!apiConfigHtml.includes('api-binding-summary'),
+        'the teal binding summary card must stay removed');
+    assert.ok(!apiConfigHtml.includes('换聊天模型'),
+        'the card\'s model-switch shortcut must not come back');
+    assert.ok(!apiConfigHtml.includes('chatBindingLabel'),
+        'chatBindingLabel has no other consumer and must stay removed');
+    assert.ok(!apiConfigHtml.includes('embeddingBindingLabel'),
+        'embeddingBindingLabel has no other consumer and must stay removed');
+    assert.ok(!app.includes('const chatBindingLabel = computed('),
+        'app.mjs must not define the removed chatBindingLabel computed');
+    assert.ok(!app.includes('const embeddingBindingLabel = computed('),
+        'app.mjs must not define the removed embeddingBindingLabel computed');
+    // memoryProviderLabel survives — MemoryPanel.vue still consumes it.
+    assert.ok(app.includes('memoryProviderSelectOptions, memoryProviderLabel,'),
+        'memoryProviderLabel must stay exposed for MemoryPanel.vue');
+});

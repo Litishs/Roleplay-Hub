@@ -12,6 +12,7 @@ android/keystore.properties
 android/keystore/
 *.log
 *.apk
+debug_apk/
 .trae/
 .zcode/
 .tmp-*.db

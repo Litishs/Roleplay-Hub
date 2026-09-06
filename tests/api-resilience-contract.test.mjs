@@ -139,26 +139,39 @@ test('offline chat flow no longer pops toasts (UI template analysis + auto model
     assert.ok(uiHtml.includes("uiTemplateUpdateStatus.state === 'error'"));
 });
 
-test('each debug build bumps version (1.9 -> 1.10 -> 1.11 ...) and exposes it in-app', () => {
+test('release baseline stays clean; debug builds use the 10000+ -debug.N scheme', () => {
+    // 2026-09-06: build scripts no longer auto-bump android/version.properties.
+    // The old "+1 per build" rule inflated the tracked file to 2.69 (code 169)
+    // while the actual shipped release was v2.60.  The file is now a
+    // hand-maintained release baseline (bumped only by release commits); CI
+    // derives the real version from the git tag and rewrites it.
     const versionProps = readFileSync(new URL('../android/version.properties', import.meta.url), 'utf8');
     const codeMatch = versionProps.match(/^versionCode=(\d+)$/m);
     const nameMatch = versionProps.match(/^versionName=(\d+\.\d+)$/m);
     assert.ok(codeMatch && Number(codeMatch[1]) >= 9, 'versionCode must be initialized at >= 9');
-    assert.ok(nameMatch, 'versionName must look like 1.x');
+    assert.ok(codeMatch && Number(codeMatch[1]) < 10000, 'release baseline versionCode must stay below the 10000+ debug range');
+    assert.ok(nameMatch, 'versionName must look like X.Y (no -debug suffix in the baseline)');
 
     const buildGradle = readFileSync(new URL('../android/app/build.gradle', import.meta.url), 'utf8');
     assert.ok(buildGradle.includes("file('../version.properties')"));
+    assert.ok(buildGradle.includes("project.findProperty('rphVersionCode')"));
+    assert.ok(buildGradle.includes("project.findProperty('rphVersionName')"));
     assert.ok(buildGradle.includes('versionCode appVersionCode'));
     assert.ok(buildGradle.includes('versionName appVersionName'));
 
+    // Debug builds: baseline + untracked counter in debug_apk/ (10000+ range),
+    // passed to gradle via -P overrides; version.properties is never written.
     const script = readFileSync(new URL('../scripts/build-android-debug.ps1', import.meta.url), 'utf8');
-    assert.ok(script.includes('$nextVersionCode = $currentVersionCode + 1'));
-    assert.ok(script.includes("$nextVersionName = '{0}.{1:D2}' -f $nextMajor, $nextMinor"));
-    assert.ok(script.includes('Roleplay-Hub-$nextVersionName-debug.apk'));
+    assert.ok(script.includes('$nextVersionCode = 10001'), 'debug counter starts above every legacy auto-bumped code');
+    assert.ok(script.includes("$nextVersionName = '{0}-debug.{1}' -f $baselineVersionName"));
+    assert.ok(script.includes('"-PrphVersionCode=$nextVersionCode"'));
+    assert.ok(script.includes('"-PrphVersionName=$nextVersionName"'));
+    assert.ok(script.includes('Roleplay-Hub-$nextVersionName.apk'));
+    assert.ok(!script.includes('Set-Content -LiteralPath $versionFile'), 'debug builds must not rewrite version.properties');
 
+    // Release builds: read-only too; the canonical version comes from the tag in CI.
     const releaseScript = readFileSync(new URL('../scripts/build-android-release.ps1', import.meta.url), 'utf8');
-    assert.ok(releaseScript.includes('$releaseVersionCode = $currentVersionCode + 1'));
-    assert.ok(releaseScript.includes("$releaseVersionName = '{0}.{1:D2}' -f $releaseMajor, $releaseMinor"));
+    assert.ok(!releaseScript.includes('Set-Content -LiteralPath $versionFile'), 'release builds must not rewrite version.properties');
     assert.ok(releaseScript.includes('Roleplay-Hub-$releaseVersionName-release.apk'));
 
     // 设置页展示版本号
@@ -181,7 +194,11 @@ test('chat request retries transient failures (429/5xx/network) with backoff', (
 
 test('chat errors get friendly network hints and are truncated', () => {
     assert.ok(app.includes('const friendlyNetworkErrorMessage = (error, url = \'\') => {'));
-    assert.ok(app.includes('\u68c0\u6d4b\u5230\u660e\u6587 HTTP'));   // ????? HTTP
+    // 2026-09-06: Android now permits cleartext HTTP via
+    // network_security_config.xml, so friendlyNetworkErrorMessage must NOT
+    // flag http:// endpoints anymore (the old hint misblocked LAN model
+    // servers).  Assert the stale guard stays deleted.
+    assert.ok(!app.includes('\u68c0\u6d4b\u5230\u660e\u6587 HTTP'));   // stale cleartext-HTTP hint (removed)
     assert.ok(app.includes('CORS \u9650\u5236'));                        // CORS ??
     assert.ok(sender.includes('\u8bf7\u6c42\u8fc7\u4e8e\u9891\u7e41\uff08429\uff09')); // ???????429?
     assert.ok(sender.includes('const truncateErrorMessage = (message, maxLength = 600) => {'));
