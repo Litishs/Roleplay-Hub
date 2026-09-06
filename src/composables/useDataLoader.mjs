@@ -181,6 +181,23 @@ export function useDataLoader(deps) {
                 if ((!savedSettings || Number(savedSettings.fontFamilyVersion || 0) < 4) && settings.fontFamily === 'serif') {
                     settings.fontFamily = 'modern';
                 }
+                // One-time migration (2026-09-06): quick-settings slots gained
+                // per-slot provider bindings.  Slots saved by older builds hold
+                // bare model names that would silently switch the model without
+                // switching the chat provider, so wipe them once — API
+                // connection data (urls/keys/provider ids) is untouched — and
+                // let users rebind through the model picker, which records the
+                // provider from the start.
+                if (Number(savedSettings?.slotProviderBindingVersion || 0) < 1) {
+                    settings.model = '';
+                    settings.qualityModel = '';
+                    settings.balancedModel = '';
+                    settings.fastModel = '';
+                    settings.qualityModelProvider = '';
+                    settings.balancedModelProvider = '';
+                    settings.fastModelProvider = '';
+                }
+                settings.slotProviderBindingVersion = 1;
                 settings.fontFamily = normalizeFontFamily(settings.fontFamily);
                 settings.fontFamilyVersion = 4;
                 applyFontFamily(settings.fontFamily);

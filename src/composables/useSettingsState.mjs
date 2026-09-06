@@ -107,7 +107,11 @@ export function useSettingsState() {
         ttsMaxChars: 2000,
         qualityModel: DEFAULT_API_CONFIG.qualityModel,
         balancedModel: DEFAULT_API_CONFIG.balancedModel,
-        fastModel: DEFAULT_API_CONFIG.fastModel
+        fastModel: DEFAULT_API_CONFIG.fastModel,
+        qualityModelProvider: '',       // slot-bound chat provider; '' = model name only (legacy slots)
+        balancedModelProvider: '',
+        fastModelProvider: '',
+        slotProviderBindingVersion: 0   // one-time migration flag (see useDataLoader)
     });
 
     // --- Token budget getters (pure reads of settings) ---

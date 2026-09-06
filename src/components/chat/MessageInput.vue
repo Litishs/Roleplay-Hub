@@ -142,7 +142,10 @@
                                                         !slot.model ? 'cursor-not-allowed opacity-45' : 'active:scale-[0.98]']">
                                                     <span class="flex-none text-xs font-bold">槽位 {{ slotIndex + 1 }}</span>
                                                     <span class="min-w-0 flex-1 truncate text-right text-xs font-mono"
-                                                        :title="slot.model">{{ slot.model || '未配置' }}</span>
+                                                        :title="slot.providerLabel ? `${slot.providerLabel} · ${slot.model}` : slot.model"><template
+                                                            v-if="slot.providerLabel"><span
+                                                                class="font-sans text-[10px] text-gray-400">{{ slot.providerLabel }}
+                                                            </span>· </template>{{ slot.model || '未配置' }}</span>
                                                     <svg v-if="modelMode === slot.mode && slot.model"
                                                         class="w-4 h-4 flex-none text-primary-600" fill="none"
                                                         stroke="currentColor" viewBox="0 0 24 24">

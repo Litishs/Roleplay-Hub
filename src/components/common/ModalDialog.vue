@@ -76,7 +76,7 @@
                     </div>
                     <div class="space-y-1">
                         <button v-for="model in filteredModels" :key="model._providerId + ':' + model.id"
-                            @click="isSlotMode ? chooseSlotModel(model.id) : selectModel(model.id, model._providerId)"
+                            @click="isSlotMode ? chooseSlotModel(model.id, model._providerId) : selectModel(model.id, model._providerId)"
                             class="w-full text-left px-4 py-3 rounded-xl hover:bg-gray-50 hover:shadow-[0_2px_4px_rgba(0,0,0,0.02)] transition-colors flex justify-between items-center group border border-transparent hover:border-gray-100 active:bg-gray-100">
                             <span class="min-w-0">
                                 <span
@@ -472,6 +472,7 @@ export default {
     const isSlotMode = computed(() => ctx.modelSelectionTarget && ctx.modelSelectionTarget.value === 'quickModels');
     const activeSlot = ref(0);
     const draftSlotModels = ref(['', '', '']);
+    const draftSlotProviders = ref(['', '', '']);
 
     // 弹窗打开时初始化槽位草稿
     watch(ctx.showModelSelector, (visible) => {
@@ -481,19 +482,27 @@ export default {
           (ctx.settings && ctx.settings.balancedModel) || '',
           (ctx.settings && ctx.settings.fastModel) || ''
         ];
+        draftSlotProviders.value = [
+          (ctx.settings && ctx.settings.qualityModelProvider) || '',
+          (ctx.settings && ctx.settings.balancedModelProvider) || '',
+          (ctx.settings && ctx.settings.fastModelProvider) || ''
+        ];
         activeSlot.value = 0;
       }
     });
 
-    const chooseSlotModel = (modelId) => {
+    const chooseSlotModel = (modelId, providerId = '') => {
       const idx = activeSlot.value;
       draftSlotModels.value = [...draftSlotModels.value];
-      draftSlotModels.value[idx] = draftSlotModels.value[idx] === modelId ? '' : modelId;
+      draftSlotProviders.value = [...draftSlotProviders.value];
+      const sameModel = draftSlotModels.value[idx] === modelId;
+      draftSlotModels.value[idx] = sameModel ? '' : modelId;
+      draftSlotProviders.value[idx] = sameModel ? '' : String(providerId || '').trim();
     };
 
     const closeModelSelector = () => {
       if (isSlotMode.value) {
-        ctx.selectQuickModels?.([...draftSlotModels.value]);
+        ctx.selectQuickModels?.([...draftSlotModels.value], [...draftSlotProviders.value]);
       }
       if (ctx.showModelSelector) ctx.showModelSelector.value = false;
     };

@@ -37,24 +37,35 @@ test('ModalDialog.vue supports the slot-batch mode next to single-model mode', (
         'slot mode is derived solely from modelSelectionTarget === quickModels');
     assert.match(modalDialogHtml, /const draftSlotModels = ref\(\[\'', '', ''\]\)/,
         'slot drafts preload as three empty strings');
-    assert.match(modalDialogHtml, /const chooseSlotModel = \(modelId\) => \{/);
-    assert.match(modalDialogHtml, /draftSlotModels\.value\[idx\] = draftSlotModels\.value\[idx\] === modelId \? '' : modelId;/,
+    assert.match(modalDialogHtml, /const chooseSlotModel = \(modelId, providerId = ''\) => \{/,
+        'slot drafts record which provider each model came from');
+    assert.match(modalDialogHtml, /draftSlotModels\.value\[idx\] = sameModel \? '' : modelId;/,
         'clicking the same model again clears the slot');
-    assert.match(modalDialogHtml, /ctx\.selectQuickModels\?\.\(\[\.\.\.draftSlotModels\.value\]\)/,
-        'closing the picker commits drafts via appContext selectQuickModels');
-    assert.match(modalDialogHtml, /@click="isSlotMode \? chooseSlotModel\(model\.id\) : selectModel\(model\.id, model\._providerId\)"/,
-        'single-model mode keeps using selectModel');
+    assert.match(modalDialogHtml, /ctx\.selectQuickModels\?\.\(\[\.\.\.draftSlotModels\.value\], \[\.\.\.draftSlotProviders\.value\]\)/,
+        'closing the picker commits drafts (models + providers) via appContext selectQuickModels');
+    assert.match(modalDialogHtml, /@click="isSlotMode \? chooseSlotModel\(model\.id, model\._providerId\) : selectModel\(model\.id, model\._providerId\)"/,
+        'both modes pass the model\'s source provider');
 });
 
 test('app.mjs exposes selectQuickModels and commits all three slots', () => {
-    assert.match(app, /const selectQuickModels = \(slotModels\) => \{/);
+    assert.match(app, /const selectQuickModels = \(slotModels, slotProviders = \[\]\) => \{/);
     assert.match(app, /settings\.qualityModel = slotModels\[0\] \|\| '';/);
     assert.match(app, /settings\.balancedModel = slotModels\[1\] \|\| '';/);
     assert.match(app, /settings\.fastModel = slotModels\[2\] \|\| '';/);
+    assert.match(app, /const slotProviderKeys = \['qualityModelProvider', 'balancedModelProvider', 'fastModelProvider'\];/,
+        'batch commits also persist each slot\'s provider binding');
     assert.match(app, /modelMode\.value = modeMap\[nonEmptyIdx\];/,
         'the active chat mode follows the first non-empty slot');
+    assert.match(app, /if \(isValidChatProviderId\(boundProviderId\)\) \{\s*settings\.chatProviderId = boundProviderId;/,
+        'auto-switching to the first non-empty slot rebinds the chat provider');
     assert.match(app, /fetchModels, selectModel, selectQuickModels, sendMessage/,
         'selectQuickModels is exposed through appContext for ModalDialog');
+});
+
+test('single-model picks record per-slot provider bindings', () => {
+    assert.match(app, /const slotProviderTargets = \{\s*qualityModel: 'qualityModelProvider',\s*balancedModel: 'balancedModelProvider',\s*fastModel: 'fastModelProvider'\s*\};/,
+        'selectModel maps slot targets to their provider fields');
+    assert.match(app, /settings\[slotProviderTargets\[modelSelectionTarget\.value\]\] = selectedProviderId;/);
 });
 
 // --- Task B: image-gen status + quota ---

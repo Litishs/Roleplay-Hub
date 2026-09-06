@@ -896,6 +896,10 @@ test('useDataLoader composable owns loadData', () => {
     assert.ok(dataLoaderSource.includes('Migrated characters to UUID and timestamp system'), 'character UUID migration kept');
     assert.ok(dataLoaderSource.includes("normalizeRegexScript(script, 'character')"), 'character regex normalization kept');
     assert.ok(dataLoaderSource.includes('Migrate single user to profiles'), 'user profile migration kept');
+    assert.ok(dataLoaderSource.includes("Number(savedSettings?.slotProviderBindingVersion || 0) < 1"),
+        'one-time slot-provider migration: legacy slots wiped once on load');
+    assert.ok(dataLoaderSource.includes('settings.slotProviderBindingVersion = 1;'),
+        'migration flag is bumped so the wipe runs exactly once');
     assert.ok(dataLoaderSource.includes('return { loadData };'));
 });
 

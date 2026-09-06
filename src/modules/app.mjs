@@ -1070,15 +1070,27 @@ const __app = createApp({
             }
         });
 
-        // Inline control panel: three chat model slots derived from settings
+        // Inline control panel: three chat model slots derived from settings.
+        // Each slot carries its own provider binding (2026-09-06): switching
+        // slots swaps both the model and the chat provider, so a slot can jump
+        // between e.g. DeepSeek and a LAN server in one tap.  A slot recorded
+        // before this change has providerId '' and keeps the legacy behavior
+        // (model switch only, provider unchanged).
         const chatModelSlots = computed(() => [
-            { mode: 'quality', model: settings.qualityModel || '' },
-            { mode: 'balanced', model: settings.balancedModel || '' },
-            { mode: 'fast', model: settings.fastModel || '' },
+            { mode: 'quality', model: settings.qualityModel || '', providerId: settings.qualityModelProvider || '', providerLabel: getProviderDisplayName(settings.qualityModelProvider) },
+            { mode: 'balanced', model: settings.balancedModel || '', providerId: settings.balancedModelProvider || '', providerLabel: getProviderDisplayName(settings.balancedModelProvider) },
+            { mode: 'fast', model: settings.fastModel || '', providerId: settings.fastModelProvider || '', providerLabel: getProviderDisplayName(settings.fastModelProvider) },
         ]);
+        const isValidChatProviderId = (providerId) => {
+            const id = String(providerId || '').trim();
+            return Boolean(id) && (Boolean(getApiProviderById(id)) || isCustomApiProviderId(id));
+        };
         const selectChatModelSlot = (slot) => {
             if (!slot || !slot.model) return;
             modelMode.value = slot.mode;
+            if (isValidChatProviderId(slot.providerId)) {
+                settings.chatProviderId = slot.providerId;
+            }
         };
 
         // Inline control panel: reasoning effort slider (upstream STA1N parity).
@@ -3741,6 +3753,16 @@ const __app = createApp({
 
             settings[modelSelectionTarget.value] = modelId;
             if (selectedProviderId) settings.chatProviderId = selectedProviderId;
+            // Slot targets remember their provider so the quick-settings panel
+            // can swap provider+model together (see selectChatModelSlot).
+            const slotProviderTargets = {
+                qualityModel: 'qualityModelProvider',
+                balancedModel: 'balancedModelProvider',
+                fastModel: 'fastModelProvider'
+            };
+            if (slotProviderTargets[modelSelectionTarget.value] && selectedProviderId) {
+                settings[slotProviderTargets[modelSelectionTarget.value]] = selectedProviderId;
+            }
 
             if (
                 (modelSelectionTarget.value === 'qualityModel' && currentModelMode.value === 'quality') ||
@@ -3753,16 +3775,26 @@ const __app = createApp({
             showModelSelector.value = false;
         };
 
-        // 槽位批量写入（quickModels 模式关闭弹窗时调用）
-        const selectQuickModels = (slotModels) => {
+        // 槽位批量写入（quickModels 模式关闭弹窗时调用）；slotProviders 可选，
+        // 与 slotModels 一一对应（空串=该槽位不绑定供应商，保持现状）。
+        const selectQuickModels = (slotModels, slotProviders = []) => {
             settings.qualityModel = slotModels[0] || '';
             settings.balancedModel = slotModels[1] || '';
             settings.fastModel = slotModels[2] || '';
+            const slotProviderKeys = ['qualityModelProvider', 'balancedModelProvider', 'fastModelProvider'];
+            slotProviderKeys.forEach((key, idx) => {
+                const providerId = String(slotProviders?.[idx] || '').trim();
+                if (providerId) settings[key] = providerId;
+            });
             // 自动切到第一个非空槽位（modelMode setter 会同步 settings.model）
             const nonEmptyIdx = slotModels.findIndex(m => m);
             if (nonEmptyIdx >= 0) {
                 const modeMap = ['quality', 'balanced', 'fast'];
                 modelMode.value = modeMap[nonEmptyIdx];
+                const boundProviderId = String(slotProviders?.[nonEmptyIdx] || '').trim();
+                if (isValidChatProviderId(boundProviderId)) {
+                    settings.chatProviderId = boundProviderId;
+                }
             } else {
                 settings.model = '';
             }

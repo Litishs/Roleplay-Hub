@@ -22,11 +22,13 @@ test('MessageInput hosts the inline quick-settings panel bound to existing setti
   assert.match(messageInput, /absolute bottom-full right-0 mb-3 z-50/);
   assert.match(messageInput, /@click\.stop\s+class="bg-white\/95 backdrop-blur-xl/);
 
-  // Model slots wired to the app-level computed/select pair
+  // Model slots wired to the app-level computed/select pair; each row shows
+  // the slot's bound provider label when one is recorded
   assert.match(messageInput, /v-for="\(slot, slotIndex\) in chatModelSlots"/);
   assert.match(messageInput, /@click="selectChatModelSlot\(slot\)"/);
   assert.match(messageInput, /:disabled="!slot\.model"/);
   assert.match(messageInput, /modelMode === slot\.mode && slot\.model/);
+  assert.match(messageInput, /slot\.providerLabel/, 'slot rows surface the bound provider display name');
 
   // Temperature slider and toggles bind to existing settings fields
   assert.match(messageInput, /v-model\.number="settings\.temperature" type="range" min="0"\s*\n\s*max="1" step="0\.01"/);
@@ -37,12 +39,23 @@ test('MessageInput hosts the inline quick-settings panel bound to existing setti
 test('app.mjs defines and exposes chatModelSlots and selectChatModelSlot', async () => {
   const source = await readFile(new URL('../src/modules/app.mjs', import.meta.url), 'utf8');
 
-  // Slots derived from the three configured slot models
-  assert.match(source, /const chatModelSlots = computed\(\(\) => \[[\s\S]*?mode: 'quality', model: settings\.qualityModel \|\| ''[\s\S]*?mode: 'balanced', model: settings\.balancedModel \|\| ''[\s\S]*?mode: 'fast', model: settings\.fastModel \|\| ''[\s\S]*?\]\);/);
+  // Slots derived from the three configured slot models, each carrying its
+  // bound chat provider (2026-09-06: slots swap provider+model together)
+  assert.match(source, /const chatModelSlots = computed\(\(\) => \[[\s\S]*?mode: 'quality', model: settings\.qualityModel \|\| '', providerId: settings\.qualityModelProvider \|\| ''[\s\S]*?mode: 'balanced', model: settings\.balancedModel \|\| '', providerId: settings\.balancedModelProvider \|\| ''[\s\S]*?mode: 'fast', model: settings\.fastModel \|\| '', providerId: settings\.fastModelProvider \|\| ''[\s\S]*?\]\);/);
 
-  // Selection delegates to modelMode, whose setter syncs settings.model
-  assert.match(source, /const selectChatModelSlot = \(slot\) => \{\s*if \(!slot \|\| !slot\.model\) return;\s*modelMode\.value = slot\.mode;\s*\};/);
+  // Selection delegates to modelMode, whose setter syncs settings.model, and
+  // rebinds chatProviderId when the slot carries a valid provider binding
+  assert.match(source, /const selectChatModelSlot = \(slot\) => \{\s*if \(!slot \|\| !slot\.model\) return;\s*modelMode\.value = slot\.mode;\s*if \(isValidChatProviderId\(slot\.providerId\)\) \{\s*settings\.chatProviderId = slot\.providerId;\s*\}\s*\};/);
+
+  // Slot provider bindings are only written for known provider ids
+  assert.match(source, /const isValidChatProviderId = \(providerId\) => \{/);
 
   // Exposed to appContext so MessageInput.vue (full ctx passthrough) can use them
   assert.match(source, /modelMode, chatModelSlots, selectChatModelSlot, reasoningEffortSlider, reasoningEffortLabel, latestMainTokenUsage, showNoMemoryNeededModal/);
+});
+
+test('slot provider bindings persist in settings state', async () => {
+  const settingsState = await readFile(new URL('../src/composables/useSettingsState.mjs', import.meta.url), 'utf8');
+  assert.match(settingsState, /qualityModelProvider: '',[^\n]*\n\s*balancedModelProvider: '',\s*fastModelProvider: ''/,
+      "the three slot provider fields default to '' (legacy slots = model-only)");
 });
