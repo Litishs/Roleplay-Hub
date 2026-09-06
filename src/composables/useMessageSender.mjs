@@ -32,6 +32,7 @@ export function useMessageSender(deps) {
         // chat state / generation flags
         abortController,
         chatHistory,
+        appendMessageImageDescriptions,
         isGenerating,
         isReceiving,
         isRemoteGenerating,
@@ -1089,10 +1090,14 @@ export function useMessageSender(deps) {
             // Store overall triggered entries based on actual injection order in the prompt
             lastTriggeredWorldInfos.value = globalInjectedWIs;
 
-            const apiMessages = messages.map(({ role, name, content }) => ({
-                role,
-                name,
-                content
+            const apiMessages = messages.map((message) => ({
+                role: message.role,
+                name: message.name,
+                // Attached-image descriptions (<user_image_context>) join the
+                // message text at request-build time only; the stored message
+                // keeps its original content.  _sourceIndexes resolve back to
+                // chatHistory so merged turns keep their attachments.
+                content: appendMessageImageDescriptions(message, message.content)
             }));
 
             // Scheme-2 anti-degenerate reminder (2026-09-04): some thinking-heavy

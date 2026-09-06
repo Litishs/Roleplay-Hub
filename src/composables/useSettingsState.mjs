@@ -65,6 +65,7 @@ export function useSettingsState() {
         maxOutputTokens: 4096,
         worldInfoTokenBudget: 4000,     // 世界书 token 预算（0=不限）
         chatProviderId: '',             // 聊天供应商，空=回退设置页当前浏览的供应商
+        visionModel: '',                // 识图模型：用户发送图片时用聊天供应商调用它生成图片描述
         temperature: 1.0,
         reasoningEffort: '',            // inline panel: '', none, low, medium, high, max
         autoFetchModels: true,

@@ -98,6 +98,14 @@
                                         'bg-white/70 text-gray-800 border border-white/40 shadow-card',
                                         'backdrop-blur-md glass-stabilize msg-bubble-glass']">
 
+                                        <!-- Attached image thumbnails (user messages) -->
+                                        <div v-if="msg.role === 'user' && Array.isArray(msg.imageAttachments) && msg.imageAttachments.length"
+                                            :class="['grid gap-1.5 p-1.5', msg.imageAttachments.length === 1 ? 'grid-cols-1 w-fit' : 'grid-cols-2 w-[min(24rem,78vw)]']">
+                                            <img v-for="(image, imageIndex) in msg.imageAttachments" :key="imageIndex"
+                                                :src="image.dataUrl" :alt="`图片 ${imageIndex + 1}`"
+                                                :class="['block rounded-xl bg-white', msg.imageAttachments.length === 1 ? 'justify-self-start w-auto max-w-[min(24rem,78vw)] h-auto max-h-[26rem] object-contain' : ('w-full ' + (msg.imageAttachments.length === 3 && imageIndex === 0 ? 'col-span-2 h-48 object-cover' : 'h-36 object-cover'))]" />
+                                        </div>
+
                                         <div v-if="msg.isEditing_Message"
                                             class="relative z-10 animate-fade-in w-full p-3 md:p-4">
                                             <textarea v-model="msg.editMessageContent"

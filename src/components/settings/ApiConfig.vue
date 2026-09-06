@@ -227,8 +227,8 @@
             <!-- 2026-09-06: removed the teal "当前绑定" summary card — it duplicated
                  the quick-settings slot selector and the two could disagree. -->
 
-            <!-- 聊天模型（合并槽位选择器） -->
-            <div class="mt-5">
+            <!-- 聊天模型 + 识图模型 -->
+            <div class="mt-5 grid grid-cols-1 md:grid-cols-2 gap-5">
                 <div class="group">
                     <label
                         class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 ml-1">聊天模型</label>
@@ -248,18 +248,38 @@
                         </div>
                     </div>
                 </div>
-                <button @pointerdown="syncApiKeyInput" @click="fetchModels(true)"
-                    class="mt-3 w-full px-4 py-3 bg-white hover:bg-teal-50 text-gray-600 hover:text-teal-700 rounded-lg border border-gray-200 hover:border-teal-200 transition-all shadow-sm active:scale-95 whitespace-nowrap font-medium flex items-center justify-center text-sm"
-                    title="刷新列表">
-                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor"
-                        viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15">
-                        </path>
-                    </svg>
-                    刷新可用模型列表
-                </button>
+                <div class="group">
+                    <label
+                        class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 ml-1">识图模型</label>
+                    <div class="relative" @click="openModelSelector('visionModel')">
+                        <div
+                            class="w-full bg-gray-50/60 border-2 border-gray-100 rounded-xl px-4 py-3 text-gray-800 font-medium
+                                   flex items-center justify-between cursor-pointer hover:bg-white hover:border-teal-300 hover:shadow-md
+                                   transition-all active:scale-[0.99]">
+                            <span class="truncate mr-2 text-sm font-mono" :class="{ 'text-gray-400': !settings.visionModel }">
+                                {{ settings.visionModel || '请选择模型' }}
+                            </span>
+                            <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor"
+                                viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.269 2.943 9.542 7-1.273 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z M15 12a3 3 0 11-6 0 3 3 0 016 0z">
+                                </path>
+                            </svg>
+                        </div>
+                    </div>
+                </div>
             </div>
+            <button @pointerdown="syncApiKeyInput" @click="fetchModels(true)"
+                class="mt-3 w-full px-4 py-3 bg-white hover:bg-teal-50 text-gray-600 hover:text-teal-700 rounded-lg border border-gray-200 hover:border-teal-200 transition-all shadow-sm active:scale-95 whitespace-nowrap font-medium flex items-center justify-center text-sm"
+                title="刷新列表">
+                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor"
+                    viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15">
+                    </path>
+                </svg>
+                刷新可用模型列表
+            </button>
 
 
 
@@ -274,7 +294,7 @@
                                 d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4">
                             </path>
                         </svg>
-                        <span>生成参数</span>
+                        <span>生图设置</span>
                         <svg :class="['w-4 h-4 ml-1.5 text-gray-400 transition-all duration-300 group-hover:text-gray-600', genSectionOpen ? 'rotate-180' : '']"
                             fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"

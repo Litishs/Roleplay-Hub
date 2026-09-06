@@ -3,7 +3,7 @@
                 <div v-show="!isExternalInputFocused"
                     class="absolute bottom-0 left-0 right-0 w-full p-2 md:p-3 z-30 pointer-events-none flex justify-center flex-shrink-0 transition-all duration-300 input-area-mobile">
                     <div
-                        class="w-full max-w-lg pointer-events-auto p-2.5 md:p-3 bg-white/90 backdrop-blur-xl border border-white/40 shadow-lg rounded-3xl ring-1 ring-black/5 transition-all duration-300 flex flex-col input-island">
+                        class="relative w-full max-w-lg pointer-events-auto p-2.5 md:p-3 bg-white/90 backdrop-blur-xl border border-white/40 shadow-lg rounded-3xl ring-1 ring-black/5 transition-all duration-300 flex flex-col input-island">
                         <!-- Latest usage bar (inline panel toggle) -->
                         <div v-if="settings.showLatestUsageBar && latestMainTokenUsage"
                             class="mx-1 mb-1 grid py-0.5 text-xs text-gray-500"
@@ -24,9 +24,49 @@
                                     {{ formatLatestTokenCount(latestMainTokenUsage.totalTokens) }}</span>
                             </span>
                         </div>
+                        <!-- Pending chat image attachments -->
+                        <div v-if="pendingChatImages.length"
+                            class="absolute left-3 bottom-[calc(100%+0.65rem)] z-[2] flex flex-nowrap gap-2.5 w-max max-w-[calc(100%-1.5rem)] overflow-x-auto py-1 pr-1">
+                            <div v-for="image in pendingChatImages" :key="image.id"
+                                class="relative w-24 h-24 md:w-[7.5rem] md:h-[7.5rem] flex-none overflow-hidden rounded-xl bg-transparent shadow-lg"
+                                :title="image.status === 'ready' ? image.description : (image.error || '正在识别图片')">
+                                <img :src="image.dataUrl" :alt="image.name" class="w-full h-full object-cover">
+                                <div v-if="image.status !== 'ready'"
+                                    :class="['absolute inset-0 flex flex-col items-center justify-center gap-1 text-[10px] font-semibold text-white', image.status === 'error' ? 'bg-red-700/75' : 'bg-slate-900/55']">
+                                    <svg v-if="image.status === 'analyzing'"
+                                        class="generated-image-spinner" style="width: 2.75rem; height: 2.75rem"
+                                        viewBox="0 0 50 50" aria-label="正在识别图片">
+                                        <circle class="generated-image-spinner-path" cx="25" cy="25" r="20"
+                                            fill="none" stroke-width="2"></circle>
+                                    </svg>
+                                    <span v-else>识别失败</span>
+                                </div>
+                                <button type="button" @click.stop="removePendingChatImage(image.id)" title="移除图片"
+                                    class="absolute top-1 right-1 z-[2] flex items-center justify-center w-5 h-5 rounded-full bg-slate-900/70 text-white shadow-sm"
+                                    aria-label="移除图片">
+                                    <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"
+                                            d="M6 18L18 6M6 6l12 12"></path>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
                         <div class="relative w-full flex justify-between items-center mb-2 px-1">
-                            <!-- Left controls: AutoImage -->
+                            <!-- Left controls: SendImage / AutoImage -->
                             <div class="flex items-center gap-2">
+                                <!-- Send Image Button -->
+                                <button type="button" @click="requestChatImageSelection($refs.chatImageInput)"
+                                    :disabled="isConversationBusy"
+                                    class="relative rounded-full w-8 h-8 flex items-center justify-center border transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed bg-white text-gray-500 hover:text-primary-600 hover:bg-gray-50 border-gray-200 shadow-sm"
+                                    :title="`发送图片（${pendingChatImages.length + pendingChatImageReadCount}/3）`">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M18.375 12.739l-7.693 7.693a4.5 4.5 0 01-6.364-6.364l10.94-10.94a3 3 0 114.243 4.243L8.552 18.32a1.5 1.5 0 01-2.121-2.121l7.693-7.693">
+                                        </path>
+                                    </svg>
+                                </button>
+                                <input ref="chatImageInput" type="file" accept="image/*" multiple class="hidden"
+                                    @change="handleChatImageSelection">
                                 <!-- Auto Image Button -->
                                 <button @click="toggleAutoImageGen" :disabled="imageGenUnavailable"
                                     :class="[isAutoImageGenEnabled ? 'bg-primary-500 text-white shadow-primary-500/30 border-primary-500' : 'bg-white text-gray-500 hover:text-gray-700 hover:bg-gray-50 border-gray-200 shadow-sm']"
@@ -235,6 +275,7 @@
 
                             <div class="flex-shrink-0 flex items-center gap-1">
                                 <button v-if="!isConversationBusy" @pointerdown="prepareChatInputSend" @click="sendMessage"
+                                    :disabled="isRecognizingImages || pendingChatImages.some(image => image.status !== 'ready')"
                                     class="p-2 md:p-2.5 bg-primary-600 text-white rounded-2xl md:hover:bg-primary-700 md:hover:shadow-lg md:hover:-translate-y-0.5 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:translate-y-0 transition-all shadow-md flex items-center justify-center w-[44px] h-[44px] md:w-[46px] md:h-[46px]"
                                     title="发送">
                                     <svg class="w-5 h-5 transform rotate-90" fill="none"
