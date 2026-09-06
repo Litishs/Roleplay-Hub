@@ -23,7 +23,7 @@
             const output = {};
             Object.entries(item).forEach(([key, entry]) => {
                 const entryPath = `${path}/${key}`;
-                if (/^(apiKey|imageGenKey|apiProviderKeys|tavilyApiKey)$/i.test(key)) {
+                if (/^(apiKey|imageGenKey|apiProviderKeys|tavilyApiKey|ttsCloudApiKey)$/i.test(key)) {
                     secrets[entryPath] = entry;
                     output[key] = Array.isArray(entry) ? [] : (entry && typeof entry === 'object' ? {} : '');
                 } else {

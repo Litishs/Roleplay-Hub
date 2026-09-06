@@ -39,6 +39,7 @@ import { RPHStorage } from './storage-repository.mjs';
 import { RPHRuntimePolicy } from './runtime-policy.mjs';
 import { RPHLocalEmbedding } from './local-embedding.mjs';
 import RPHTts from './tts-engine.mjs';
+import RPHCloudTts from './tts-cloud-engine.mjs';
 import RPHTtsText from './tts-text.mjs';
 import { MAIN_ID, SCOPE_SEPARATOR, createId, getScopeId, getOwnerId, isBranchScopeId, defaultBranchName, createMainBranch, normalizeBranches, collectSubtreeIds, buildBranchTree, formatWordCount } from './story-branch.mjs';
 import * as RPHMemorySummary from './memory-summary.mjs';
@@ -736,7 +737,7 @@ const __app = createApp({
             .reduce((sum, message) => sum + estimateTokens(message?.content), 0);
 
 
-        const { apiKeyInput, apiKeyVisible, toggleApiKeyVisibility } = apiConfigState;
+        const { apiKeyInput, apiKeyVisible, toggleApiKeyVisibility, ttsProviderOptions, getTtsProviderById } = apiConfigState;
         const syncApiKeyInput = event => {
             const eventTarget = event?.target;
             const input = eventTarget?.tagName === 'INPUT' ? eventTarget : apiKeyInput.value;
@@ -4700,13 +4701,14 @@ const __app = createApp({
             }
         };
 
-        // --- TTS 语音朗读（P0：Android 系统语音引擎） ---
+        // --- TTS 语音朗读（系统语音 + 云端 API 引擎） ---
         const ttsStatus = ref({ available: false, engineLabel: '', state: 'idle', error: '', checked: false });
         const ttsPlayingMessageId = ref(null);
         const ttsSettingsExpanded = ref(false);
         const { settingsSectionsOpen } = settingsState;
         const ttsServiceOptions = [
-            { id: 'system', name: '系统语音', desc: 'Android 系统引擎，无需下载', available: true }
+            { id: 'system', name: '系统语音', desc: 'Android 系统引擎，无需下载', available: true },
+            { id: 'cloud', name: '云端 API', desc: 'OpenAI 兼容接口，按量计费', available: true }
         ];
         let ttsStateListener = null;
 
@@ -4721,7 +4723,40 @@ const __app = createApp({
                 ttsStateListener = handleEnd;
                 systemEngine.onState(ttsStateListener);
             }
+            if (RPHCloudTts?.onState) RPHCloudTts.onState(handleEnd);
         };
+
+        // Push the persisted cloud provider fields into the engine. The API
+        // key is restored into settings from secure storage by the settings
+        // loader; it only ever rides the runtime request header.
+        const syncCloudTtsConfig = () => {
+            RPHCloudTts.configure({
+                baseUrl: settings.ttsCloudBaseUrl,
+                apiKey: settings.ttsCloudApiKey,
+                model: settings.ttsCloudModel,
+                format: 'mp3'
+            });
+            return RPHCloudTts.isAvailable();
+        };
+
+        // Provider preset switching prefills baseUrl/model/voice once; the
+        // user can then override any field freely.
+        const onTtsCloudProviderChange = () => {
+            const provider = getTtsProviderById(settings.ttsCloudProviderId);
+            if (!provider) return;
+            settings.ttsCloudBaseUrl = provider.baseUrl || '';
+            settings.ttsCloudModel = provider.models?.[0] || '';
+            settings.ttsCloudVoice = provider.voices?.[0] || '';
+        };
+
+        const ttsCloudVoiceOptions = computed(() => getTtsProviderById(settings.ttsCloudProviderId)?.voices || []);
+        const ttsCloudModelOptions = computed(() => getTtsProviderById(settings.ttsCloudProviderId)?.models || []);
+
+        // Keep the engine's provider snapshot and the settings status line in
+        // step while the user edits cloud fields.
+        watch(() => [settings.ttsCloudBaseUrl, settings.ttsCloudApiKey, settings.ttsCloudModel, settings.ttsCloudProviderId], () => {
+            if (settings.ttsService === 'cloud') refreshTtsStatus();
+        });
 
         const refreshSystemTtsStatus = async () => {
             const engine = RPHTts;
@@ -4738,6 +4773,17 @@ const __app = createApp({
         };
 
         const refreshTtsStatus = async () => {
+            if (settings.ttsService === 'cloud') {
+                const available = syncCloudTtsConfig();
+                ttsStatus.value = {
+                    available,
+                    engineLabel: '云端 API',
+                    state: RPHCloudTts.getStatus().state,
+                    error: available ? '' : '未配置 Base URL',
+                    checked: true
+                };
+                return available;
+            }
             const engine = RPHTts;
             if (!engine) {
                 ttsStatus.value = { available: false, engineLabel: '', state: 'idle', error: '', checked: true };
@@ -4752,6 +4798,11 @@ const __app = createApp({
 
         const ttsStatusLabel = computed(() => {
             const info = ttsStatus.value;
+            if (settings.ttsService === 'cloud') {
+                if (!info.available) return '云端语音未配置（需填写 Base URL）';
+                if (info.state === 'speaking') return '正在朗读…';
+                return '云端语音引擎已就绪';
+            }
             if (!info.checked && !info.available) return '语音引擎检测中…';
             if (!info.available) return '系统语音引擎不可用（仅 Android 设备支持）';
             if (info.state === 'speaking') return '正在朗读…';
@@ -4763,6 +4814,10 @@ const __app = createApp({
             if (!service || !service.available || settings.ttsService === id) return;
             stopSpeaking();
             settings.ttsService = id;
+            if (id === 'cloud') {
+                syncCloudTtsConfig();
+                refreshTtsStatus();
+            }
         };
 
         const ttsReadMode = computed({
@@ -4803,7 +4858,29 @@ const __app = createApp({
             return true;
         };
 
+        const speakTtsTextViaCloud = async (text) => {
+            if (!syncCloudTtsConfig()) throw new Error('云端语音未配置 Base URL');
+            const characterVoice = currentCharacter.value?.ttsVoice;
+            const voice = (typeof characterVoice === 'string' && characterVoice)
+                ? characterVoice
+                : (settings.ttsCloudVoice || '');
+            await RPHCloudTts.speak({
+                text,
+                voice,
+                speed: Number(settings.ttsCloudSpeed) || 1
+            });
+            return true;
+        };
+
         const speakTtsText = async (text) => {
+            if (settings.ttsService === 'cloud') {
+                try {
+                    return await speakTtsTextViaCloud(text);
+                } catch (error) {
+                    console.warn('[TTS] cloud engine failed, falling back to system TTS:', error);
+                    showToast('云端语音失败，改用系统语音朗读', 'info');
+                }
+            }
             return speakTtsTextViaSystem(text);
         };
 
@@ -4838,6 +4915,9 @@ const __app = createApp({
             const systemEngine = RPHTts;
             if (systemEngine) {
                 try { await systemEngine.stop(); } catch (_) { /* 忽略停止异常 */ }
+            }
+            if (RPHCloudTts) {
+                try { await RPHCloudTts.stop(); } catch (_) { /* ignore stop errors */ }
             }
         };
 
@@ -9212,6 +9292,7 @@ const __app = createApp({
             localEmbeddingModelOptions, localEmbeddingStatusLabel,
             ttsStatus, ttsStatusLabel, ttsPlayingMessageId, ttsSettingsExpanded, ttsServiceOptions, ttsReadMode,
             settingsSectionsOpen, selectTtsService, refreshTtsStatus, testTtsVoice, ttsSpeakTextFor, toggleSpeakMessage, stopSpeaking,
+            ttsCloudProviderOptions: ttsProviderOptions, ttsCloudVoiceOptions, ttsCloudModelOptions, onTtsCloudProviderChange,
             requestDiagnosticsCount, chatDiagnosticsCount, buildDiagnosticsExportEnvelope, exportRequestDiagnostics, clearRequestDiagnostics,
             vectorMemorySearchQuery, vectorMemorySearchResults, vectorMemorySearchError, vectorMemorySearchSortMode, isVectorMemorySearching,
             searchVectorMemories, clearVectorMemorySearch, sliceBuildStatus, startVectorBatchMemoryExtraction,

@@ -41,6 +41,28 @@ const imageGenProviderOptions = [
 const getImageGenProviderById = (id) => imageGenProviderOptions.find(provider => provider.id === id);
 const imageGenUnavailable = computed(() => imageGenProviderOptions.length === 0);
 
+// --- Cloud TTS provider options (OpenAI-compatible /audio/speech format) ---
+// The 'custom' entry is the generic escape hatch: user supplies baseUrl,
+// model and voice by hand (relay stations, fish-speech OpenAI mode, LAN
+// gateways). Presets prefill baseUrl/models/voices but stay overridable.
+const ttsProviderOptions = [
+    {
+        id: 'openai',
+        name: 'OpenAI',
+        baseUrl: 'https://api.openai.com/v1',
+        models: ['tts-1', 'tts-1-hd', 'gpt-4o-mini-tts'],
+        voices: ['alloy', 'ash', 'ballad', 'coral', 'echo', 'fable', 'onyx', 'nova', 'sage', 'shimmer']
+    },
+    {
+        id: 'custom',
+        name: '自定义（OpenAI 兼容）',
+        baseUrl: '',
+        models: [],
+        voices: []
+    }
+];
+const getTtsProviderById = (id) => ttsProviderOptions.find(provider => provider.id === id);
+
     // --- Named API provider catalogue ---
     const apiProviderOptions = [
         {
@@ -133,6 +155,8 @@ const imageGenUnavailable = computed(() => imageGenProviderOptions.length === 0)
         imageGenProviderOptions,
         getImageGenProviderById,
         imageGenUnavailable,
+        ttsProviderOptions,
+        getTtsProviderById,
         apiProviderOptions,
         apiStatus,
         apiLatency,
