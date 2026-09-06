@@ -23,12 +23,6 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Cache sherpa-onnx AAR
-        uses: actions/cache@v4
-        with:
-          path: android/app/libs/sherpa-onnx.aar
-          key: sherpa-onnx-aar-1.13.5
-
       - name: Build web assets & vendor
         run: npm run build:web
 

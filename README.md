@@ -7,7 +7,7 @@
 
 > 一款本地优先的 AI 角色扮演对话工具。应用本体与数据在本地运行，对话、角色卡与设置均保存在设备本地；调用大模型 API 时需联网。
 
-支持角色扮演对话、角色卡管理、记忆系统、世界书与正则引擎、本地语音合成，以及多 API 服务商接入。
+支持角色扮演对话、角色卡管理、记忆系统、世界书与正则引擎、系统/云端双 TTS 语音朗读，以及多 API 服务商接入。
 
 ## 功能特性
 
@@ -24,10 +24,15 @@
 - 世界书（情境注入）与正则脚本引擎
 - 记忆系统：滚动总结 + 向量记忆召回（本地 embedding 模型，离线可用）+ 固定信息卡（角色状态 / 有向关系 / 未决伏笔）
 
+**多模态与生图**
+
+- 聊天发图与识图：消息可附加图片（≤3 张），由识图模型转述后以 `<user_image_context>` 注入对话上下文
+- AI 生图：STA1N 生图（NAI Diffusion 4.5），支持生图版本、比例与风格选择
+
 **语音与接入**
 
 - 双 TTS 引擎：系统 TTS 与云端 API TTS（OpenAI 兼容 /audio/speech 格式，支持自定义中转端点）
-- 多 API 服务商：DeepSeek / OpenRouter / SiliconFlow / 阿里百炼 / 智谱，以及自定义 OpenAI 兼容端点；分供应商保存 API Key，密钥经 AndroidKeyStore 加密存储
+- 多 API 服务商：STA1N API（默认）/ DeepSeek / OpenRouter / SiliconFlow / 阿里百炼 / 智谱，以及自定义 OpenAI 兼容端点；分供应商保存 API Key，密钥经 AndroidKeyStore 加密存储
 
 **数据与运维**
 
@@ -37,7 +42,7 @@
 
 ## 架构概览
 
-Android WebView 壳（Capacitor 7，3 个自定义原生插件：NativeStorage / ThemeBridge / TTSSpeech）承载 Vue 3 + Vite 构建的 Web 应用本体，所有数据经存储仓库门面落入设备本地 SQLite，不经过任何第三方服务。
+Android WebView 壳（Capacitor 7，4 个自定义原生插件：NativeStorage / ThemeBridge / TTSSpeech / BuildInfo）承载 Vue 3 + Vite 构建的 Web 应用本体，所有数据经存储仓库门面落入设备本地 SQLite，不经过任何第三方服务。
 
 ```
 ┌─ Android 原生壳（Capacitor 7 + 自定义插件）
@@ -46,8 +51,8 @@ Android WebView 壳（Capacitor 7，3 个自定义原生插件：NativeStorage /
 │   ├─ src/composables/       状态域 ×7（useChatState / useCharacterState / useSettingsState …）
 │   │                         业务管线 ×5（useMessageSender / useTemplateRenderer / useCardOperations
 │   │                         / useDataIO / useBackupRestore，deps 注入逻辑工厂模式）
-│   ├─ src/modules/           25+ 纯函数业务模块（记忆引擎 / 故事分支 / TTS / 请求看门狗 / utils …）
-│   └─ src/components/        26 个 Vue SFC（views / chat / settings / common）
+│   ├─ src/modules/           26 个纯函数业务模块（记忆引擎 / 故事分支 / TTS / 请求看门狗 / utils …）
+│   └─ src/components/        29 个 Vue SFC（views / chat / settings / common）
 └─ 存储层：SQLite（WAL）+ 媒体文件 + AndroidKeyStore 加密密钥
 ```
 
