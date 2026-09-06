@@ -3,7 +3,7 @@
                                         <div class="flex items-center justify-between mb-4">
                                             <div>
                                                 <div class="text-sm font-bold text-gray-700">启用语音朗读</div>
-                                                <div class="text-[10px] text-gray-400 mt-0.5">使用语音引擎朗读角色回复，本地运行，无需联网与密钥。</div>
+                                                <div class="text-[10px] text-gray-400 mt-0.5">使用语音引擎朗读角色回复。</div>
                                             </div>
                                             <label class="relative inline-flex items-center cursor-pointer">
                                                 <input type="checkbox" v-model="settings.ttsEnabled" class="settings-toggle-input sr-only">
@@ -21,14 +21,14 @@
                                                         <div class="text-sm font-bold" :class="settings.ttsService === 'system' ? 'text-teal-700' : 'text-gray-700'">系统语音</div>
                                                         <div class="text-[10px] text-gray-400 mt-0.5">Android 系统引擎，无需下载</div>
                                                     </button>
-                                                    <button type="button" @click="selectTtsService('local')"
-                                                        :class="['p-3 rounded-xl border-2 text-left transition-all', settings.ttsService === 'local' ? 'border-teal-400 bg-teal-50/60' : 'border-gray-100']">
-                                                        <div class="text-sm font-bold text-gray-700">本地模型</div>
-                                                        <div class="text-[10px] text-gray-400 mt-0.5">On-device neural TTS, voices download on demand</div>
+                                                    <button type="button" @click="selectTtsService('cloud')"
+                                                        :class="['p-3 rounded-xl border-2 text-left transition-all', settings.ttsService === 'cloud' ? 'border-teal-400 bg-teal-50/60' : 'border-gray-100 hover:border-gray-200']">
+                                                        <div class="text-sm font-bold" :class="settings.ttsService === 'cloud' ? 'text-teal-700' : 'text-gray-700'">云端 API</div>
+                                                        <div class="text-[10px] text-gray-400 mt-0.5">OpenAI 兼容接口，按量计费</div>
                                                     </button>
                                                 </div>
                                             </div>
-    
+
                                             <!-- 引擎设置：所选引擎的专属选项 -->
                                             <div>
                                                 <label class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 ml-1">引擎设置</label>
@@ -40,67 +40,57 @@
                                                 </div>
                                                 <div v-else class="bg-gray-50/60 p-3 rounded-xl border border-gray-100 space-y-3">
                                                     <div class="flex items-center justify-between">
-                                                        <span class="text-xs font-medium text-gray-500">Engine status</span>
+                                                        <span class="text-xs font-medium text-gray-500">引擎状态</span>
                                                         <span class="text-xs font-bold" :class="ttsStatus.available ? 'text-emerald-600' : 'text-red-500'">{{ ttsStatusLabel }}</span>
                                                     </div>
-                                                    <div v-if="!localTtsStatus.checked" class="text-xs text-gray-400">Checking local engine...</div>
-                                                    <div v-else-if="!localTtsStatus.available" class="text-xs text-gray-500">Local neural TTS is only available in the Android app.</div>
-                                                    <div v-else>
-                                                        <div v-for="voice in localTtsVoices" :key="voice.id"
-                                                            class="flex items-center justify-between gap-2 p-2.5 rounded-lg border border-gray-100 bg-white/80">
-                                                            <div class="min-w-0">
-                                                                <div class="text-xs font-bold text-gray-700 truncate">
-                                                                    {{ voice.name }}
-                                                                    <span class="font-mono text-[10px] font-normal text-gray-400 ml-1">~{{ voice.sizeMb }}MB</span>
-                                                                </div>
-                                                                <div class="text-[10px] text-gray-400 truncate">{{ voice.desc }}</div>
-                                                            </div>
-                                                            <div class="flex items-center gap-1.5 flex-shrink-0">
-                                                                <span v-if="voice.installed" class="text-[10px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-100 px-1.5 py-0.5 rounded">Installed</span>
-                                                                <button v-if="voice.installed" type="button" @click="removeLocalTtsVoice(voice.id)"
-                                                                    class="px-2 py-1 text-[10px] font-bold text-red-500 bg-red-50 border border-red-100 hover:bg-red-100 rounded-lg transition-all active:scale-95">Clear</button>
-                                                                <button v-else-if="localTtsInstall && localTtsInstall.voiceId === voice.id" type="button" @click="cancelLocalTtsInstall"
-                                                                    class="px-2 py-1 text-[10px] font-bold text-gray-500 bg-gray-100 hover:bg-gray-200 rounded-lg transition-all active:scale-95">Cancel</button>
-                                                                <button v-else type="button" :disabled="!!localTtsInstall" @click="installLocalTtsVoice(voice.id)"
-                                    class="px-2 py-1 text-[10px] font-bold text-white bg-teal-500 hover:bg-teal-600 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg shadow-sm transition-all active:scale-95">Install</button>
-                                                            </div>
+                                                    <div>
+                                                        <label class="block text-xs font-medium text-gray-500 mb-1">服务商</label>
+                                                        <select v-model="settings.ttsCloudProviderId" @change="onTtsCloudProviderChange"
+                                                            class="w-full bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-teal-300">
+                                                            <option v-for="provider in ttsCloudProviderOptions" :key="provider.id" :value="provider.id">{{ provider.name }}</option>
+                                                        </select>
+                                                    </div>
+                                                    <div>
+                                                        <label class="block text-xs font-medium text-gray-500 mb-1">Base URL</label>
+                                                        <input type="text" v-model.trim="settings.ttsCloudBaseUrl" placeholder="https://api.example.com/v1"
+                                                            class="w-full bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-teal-300">
+                                                    </div>
+                                                    <div>
+                                                        <label class="block text-xs font-medium text-gray-500 mb-1">API Key</label>
+                                                        <input type="password" v-model="settings.ttsCloudApiKey" autocomplete="off" placeholder="sk-...（留空表示无密钥端点）"
+                                                            class="w-full bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-teal-300">
+                                                        <div class="text-[10px] text-gray-400 mt-0.5">密钥经系统安全存储加密，不入备份。</div>
+                                                    </div>
+                                                    <div>
+                                                        <label class="block text-xs font-medium text-gray-500 mb-1">模型</label>
+                                                        <select v-if="ttsCloudModelOptions.length" v-model="settings.ttsCloudModel"
+                                                            class="w-full bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-teal-300">
+                                                            <option v-for="model in ttsCloudModelOptions" :key="model" :value="model">{{ model }}</option>
+                                                        </select>
+                                                        <input v-else type="text" v-model.trim="settings.ttsCloudModel" placeholder="tts-1"
+                                                            class="w-full bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-teal-300">
+                                                    </div>
+                                                    <div>
+                                                        <label class="block text-xs font-medium text-gray-500 mb-1">音色</label>
+                                                        <select v-if="ttsCloudVoiceOptions.length" v-model="settings.ttsCloudVoice"
+                                                            class="w-full bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-teal-300">
+                                                            <option v-for="voice in ttsCloudVoiceOptions" :key="voice" :value="voice">{{ voice }}</option>
+                                                        </select>
+                                                        <input v-else type="text" v-model.trim="settings.ttsCloudVoice" placeholder="音色 id，取决于服务商"
+                                                            class="w-full bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-teal-300">
+                                                        <div class="text-[10px] text-gray-400 mt-0.5">角色设置里的「角色音色」填写相同格式的音色 id 可按角色覆盖。</div>
+                                                    </div>
+                                                    <div>
+                                                        <div class="flex justify-between items-center mb-1.5">
+                                                            <label class="text-xs font-medium text-gray-500">语速</label>
+                                                            <span class="text-xs font-mono text-teal-600 bg-teal-50 px-1.5 py-0.5 rounded border border-teal-100">{{ (Number(settings.ttsCloudSpeed) || 1).toFixed(2) }}</span>
                                                         </div>
-                                                        <div v-if="localTtsInstall" class="space-y-1">
-                                                            <div class="flex items-center justify-between text-[10px] text-gray-500">
-                                                                <span class="font-bold">{{ localTtsInstall.phase === 'extract' ? 'Extracting...' : 'Downloading...' }}</span>
-                                                                <span class="font-mono">{{ localTtsInstallPercent }}%</span>
-                                                            </div>
-                                                            <div class="h-1.5 bg-gray-200 rounded-full overflow-hidden">
-                                                                <div class="h-full bg-teal-500 transition-all" :style="{ width: localTtsInstallPercent + '%' }"></div>
-                                                            </div>
-                                                        </div>
-                                                        <div v-if="localTtsVoiceOptions.length" class="flex items-center justify-between gap-2">
-                                                            <span class="text-xs font-medium text-gray-500 flex-shrink-0">Default voice</span>
-                                                            <select v-model="settings.ttsLocalVoice"
-                                                                class="flex-1 max-w-[60%] bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-teal-300">
-                                                                <option value="">Auto (first installed)</option>
-                                                                <option v-for="voice in localTtsVoiceOptions" :key="voice.id" :value="voice.id">{{ voice.name }}</option>
-                                                            </select>
-                                                        </div>
-                                                        <div v-if="localTtsSelectedVoiceIsClone" class="space-y-2 p-3 rounded-lg border border-purple-100 bg-purple-50/40">
-                                                            <div class="flex items-center justify-between">
-                                                                <span class="text-xs font-bold text-purple-700">Clone voice reference</span>
-                                                                <button v-if="settings.ttsCloneReferenceUri" type="button" @click="removeVoiceClip"
-                                                                    class="px-2 py-1 text-[10px] font-bold text-purple-500 bg-purple-50 border border-purple-100 hover:bg-purple-100 rounded-lg transition-all active:scale-95">Remove</button>
-                                                            </div>
-                                                            <input type="file" accept="audio/*" @change="handleVoiceClipUpload"
-                                                                class="block w-full text-xs text-gray-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-purple-100 file:text-purple-700 hover:file:bg-purple-200 file:cursor-pointer">
-                                                            <textarea v-model="settings.ttsCloneReferenceText" rows="2" maxlength="500"
-                                                                placeholder="Reference transcript — the exact text spoken in the clip"
-                                                                class="w-full bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-purple-300"></textarea>
-                                                            <div class="text-[10px]" :class="cloneVoiceReady ? 'text-emerald-600' : 'text-gray-400'">
-                                                                {{ cloneVoiceReady ? 'Reference clip and transcript ready.' : 'Upload a clean 3-10s clip and type its exact transcript.' }}
-                                                            </div>
-                                                        </div>
-                                                        <div class="text-[10px] text-gray-400 leading-relaxed">Voice models download on demand and stay on this device. The pitch slider is only approximated during playback for neural voices.</div>
-                                                                </div>
+                                                        <input type="range" v-model.number="settings.ttsCloudSpeed" min="0.25" max="4" step="0.05"
+                                                            class="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-teal-500">
+                                                    </div>
+                                                    <div class="text-[10px] text-gray-400 leading-relaxed">通过 OpenAI 兼容的 /audio/speech 接口合成，按句分段请求、顺序播放；合成失败自动回落系统语音。</div>
                                                 </div>
-                                                </div>
+                                            </div>
                                             </div>
     
                                             <!-- 朗读偏好：所有引擎通用 -->
@@ -131,7 +121,9 @@
                                                             <span class="text-xs font-mono text-teal-600 bg-teal-50 px-1.5 py-0.5 rounded border border-teal-100">{{ (Number(settings.ttsPitch) || 1).toFixed(2) }}</span>
                                                         </div>
                                                         <input type="range" v-model.number="settings.ttsPitch" min="0.5" max="2" step="0.05"
-                                                            class="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-teal-500">
+                                                            :disabled="settings.ttsService === 'cloud'"
+                                                            :class="['w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-teal-500', settings.ttsService === 'cloud' ? 'opacity-40' : '']">
+                                                        <div v-if="settings.ttsService === 'cloud'" class="text-[10px] text-gray-400 mt-0.5">云端引擎不支持音调调节。</div>
                                                     </div>
                                                 </div>
                                                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">

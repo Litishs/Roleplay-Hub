@@ -97,7 +97,44 @@
             return truncate(text, maxChars);
         };
 
-        const __exports = Object.freeze({ extractSpeakText });
+        // Split ready-to-speak text into sentence-bounded chunks for cloud
+        // synthesis. Chinese/English sentence punctuation (plus newlines) is
+        // the preferred cut point; trailing closing quotes/brackets stay
+        // attached to the sentence they close. Oversized sentences without
+        // any boundary are hard-split at maxChars so every chunk fits one
+        // request. Returns [] for empty input.
+        const splitSpeechChunks = (text, maxChars = 200) => {
+            const max = Math.max(1, Number(maxChars) || 200);
+            const source = String(text || '').trim();
+            if (!source) return [];
+            if (source.length <= max) return [source];
+
+            const boundary = new Set(['。', '！', '？', '；', '!', '?', ';', '\n']);
+            const closer = new Set(['」', '』', '”', '’', '"', ')', '）', ']', '】', '》', '…']);
+            const chunks = [];
+            let start = 0;
+            while (start < source.length) {
+                if (source.length - start <= max) {
+                    const rest = source.slice(start).trim();
+                    if (rest) chunks.push(rest);
+                    break;
+                }
+                let cut = -1;
+                for (let index = start + max; index > start + Math.floor(max * 0.5); index -= 1) {
+                    if (boundary.has(source[index - 1]) || (closer.has(source[index - 1]) && index >= 2)) {
+                        cut = index;
+                        break;
+                    }
+                }
+                if (cut === -1) cut = start + max;
+                const piece = source.slice(start, cut).trim();
+                if (piece) chunks.push(piece);
+                start = cut;
+            }
+            return chunks;
+        };
+
+        const __exports = Object.freeze({ extractSpeakText, splitSpeechChunks });
     
 
 export default __exports;

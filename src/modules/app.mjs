@@ -39,7 +39,7 @@ import { RPHStorage } from './storage-repository.mjs';
 import { RPHRuntimePolicy } from './runtime-policy.mjs';
 import { RPHLocalEmbedding } from './local-embedding.mjs';
 import RPHTts from './tts-engine.mjs';
-import RPHLocalTts from './tts-local-engine.mjs';
+import RPHCloudTts from './tts-cloud-engine.mjs';
 import RPHTtsText from './tts-text.mjs';
 import { MAIN_ID, SCOPE_SEPARATOR, createId, getScopeId, getOwnerId, isBranchScopeId, defaultBranchName, createMainBranch, normalizeBranches, collectSubtreeIds, buildBranchTree, formatWordCount } from './story-branch.mjs';
 import * as RPHMemorySummary from './memory-summary.mjs';
@@ -737,7 +737,7 @@ const __app = createApp({
             .reduce((sum, message) => sum + estimateTokens(message?.content), 0);
 
 
-        const { apiKeyInput, apiKeyVisible, toggleApiKeyVisibility } = apiConfigState;
+        const { apiKeyInput, apiKeyVisible, toggleApiKeyVisibility, ttsProviderOptions, getTtsProviderById } = apiConfigState;
         const syncApiKeyInput = event => {
             const eventTarget = event?.target;
             const input = eventTarget?.tagName === 'INPUT' ? eventTarget : apiKeyInput.value;
@@ -4883,21 +4883,16 @@ const __app = createApp({
             }
         };
 
-        // --- TTS 语音朗读（P0：Android 系统语音引擎） ---
+        // --- TTS 语音朗读（系统语音 + 云端 API 引擎） ---
         const ttsStatus = ref({ available: false, engineLabel: '', state: 'idle', error: '', checked: false });
         const ttsPlayingMessageId = ref(null);
         const ttsSettingsExpanded = ref(false);
         const { settingsSectionsOpen } = settingsState;
         const ttsServiceOptions = [
             { id: 'system', name: '系统语音', desc: 'Android 系统引擎，无需下载', available: true },
-            { id: 'local', name: '本地模型', desc: 'On-device neural TTS, voices download on demand', available: true }
+            { id: 'cloud', name: '云端 API', desc: 'OpenAI 兼容接口，按量计费', available: true }
         ];
-        const localTtsStatus = ref({ available: false, ready: false, engineLabel: '', state: 'idle', error: '', checked: false, installed: [] });
-        const localTtsVoices = ref([]);
-        const localTtsInstall = ref(null);
         let ttsStateListener = null;
-        let localTtsStateListener = null;
-        let localTtsProgressListener = null;
 
         const ensureTtsEngineListeners = () => {
             const handleEnd = (payload) => {
@@ -4910,43 +4905,40 @@ const __app = createApp({
                 ttsStateListener = handleEnd;
                 systemEngine.onState(ttsStateListener);
             }
-            const localEngine = RPHLocalTts;
-            if (!localTtsStateListener && localEngine?.onState) {
-                localTtsStateListener = handleEnd;
-                localEngine.onState(localTtsStateListener);
-            }
-            if (!localTtsProgressListener && localEngine?.onProgress) {
-                localTtsProgressListener = () => {
-                    const snapshot = localEngine.getStatus();
-                    localTtsInstall.value = snapshot.install;
-                    localTtsVoices.value = localEngine.voices();
-                    if (snapshot.install === null) {
-                        localTtsStatus.value = { ...localTtsStatus.value, installed: snapshot.installed, ready: snapshot.installed.length > 0 };
-                    }
-                };
-                localEngine.onProgress(localTtsProgressListener);
-            }
+            if (RPHCloudTts?.onState) RPHCloudTts.onState(handleEnd);
         };
 
-        const refreshLocalTtsStatus = async () => {
-            const engine = RPHLocalTts;
-            if (!engine) {
-                localTtsStatus.value = { available: false, ready: false, engineLabel: '', state: 'idle', error: '', checked: true, installed: [] };
-                localTtsVoices.value = [];
-                return false;
-            }
-            try {
-                const info = await engine.refreshStatus();
-                localTtsStatus.value = { ...info };
-                localTtsVoices.value = engine.voices();
-                ensureTtsEngineListeners();
-                return !!(info.available && info.ready);
-            } catch (error) {
-                console.warn('[TTS] local status refresh failed:', error);
-                localTtsStatus.value = { available: false, ready: false, engineLabel: '', state: 'idle', error: String(error?.message || error), checked: true, installed: [] };
-                return false;
-            }
+        // Push the persisted cloud provider fields into the engine. The API
+        // key is restored into settings from secure storage by the settings
+        // loader; it only ever rides the runtime request header.
+        const syncCloudTtsConfig = () => {
+            RPHCloudTts.configure({
+                baseUrl: settings.ttsCloudBaseUrl,
+                apiKey: settings.ttsCloudApiKey,
+                model: settings.ttsCloudModel,
+                format: 'mp3'
+            });
+            return RPHCloudTts.isAvailable();
         };
+
+        // Provider preset switching prefills baseUrl/model/voice once; the
+        // user can then override any field freely.
+        const onTtsCloudProviderChange = () => {
+            const provider = getTtsProviderById(settings.ttsCloudProviderId);
+            if (!provider) return;
+            settings.ttsCloudBaseUrl = provider.baseUrl || '';
+            settings.ttsCloudModel = provider.models?.[0] || '';
+            settings.ttsCloudVoice = provider.voices?.[0] || '';
+        };
+
+        const ttsCloudVoiceOptions = computed(() => getTtsProviderById(settings.ttsCloudProviderId)?.voices || []);
+        const ttsCloudModelOptions = computed(() => getTtsProviderById(settings.ttsCloudProviderId)?.models || []);
+
+        // Keep the engine's provider snapshot and the settings status line in
+        // step while the user edits cloud fields.
+        watch(() => [settings.ttsCloudBaseUrl, settings.ttsCloudApiKey, settings.ttsCloudModel, settings.ttsCloudProviderId], () => {
+            if (settings.ttsService === 'cloud') refreshTtsStatus();
+        });
 
         const refreshSystemTtsStatus = async () => {
             const engine = RPHTts;
@@ -4963,17 +4955,16 @@ const __app = createApp({
         };
 
         const refreshTtsStatus = async () => {
-            if (settings.ttsService === 'local') {
-                const localReady = await refreshLocalTtsStatus();
-                const info = localTtsStatus.value;
+            if (settings.ttsService === 'cloud') {
+                const available = syncCloudTtsConfig();
                 ttsStatus.value = {
-                    available: localReady,
-                    engineLabel: info.engineLabel || 'Local neural TTS',
-                    state: info.state,
-                    error: info.error,
+                    available,
+                    engineLabel: '云端 API',
+                    state: RPHCloudTts.getStatus().state,
+                    error: available ? '' : '未配置 Base URL',
                     checked: true
                 };
-                return localReady;
+                return available;
             }
             const engine = RPHTts;
             if (!engine) {
@@ -4988,15 +4979,12 @@ const __app = createApp({
         };
 
         const ttsStatusLabel = computed(() => {
-            if (settings.ttsService === 'local') {
-                const localInfo = localTtsStatus.value;
-                if (!localInfo.checked && !localInfo.available) return 'Checking local TTS engine...';
-                if (!localInfo.available) return 'Local TTS unavailable (Android app only)';
-                if (!localInfo.ready) return 'No voice model installed';
-                if (localInfo.state === 'speaking') return 'Speaking (local model)';
-                return 'Local neural TTS ready';
-            }
             const info = ttsStatus.value;
+            if (settings.ttsService === 'cloud') {
+                if (!info.available) return '云端语音未配置（需填写 Base URL）';
+                if (info.state === 'speaking') return '正在朗读…';
+                return '云端语音引擎已就绪';
+            }
             if (!info.checked && !info.available) return '语音引擎检测中…';
             if (!info.available) return '系统语音引擎不可用（仅 Android 设备支持）';
             if (info.state === 'speaking') return '正在朗读…';
@@ -5008,7 +4996,10 @@ const __app = createApp({
             if (!service || !service.available || settings.ttsService === id) return;
             stopSpeaking();
             settings.ttsService = id;
-            if (id === 'local') refreshLocalTtsStatus();
+            if (id === 'cloud') {
+                syncCloudTtsConfig();
+                refreshTtsStatus();
+            }
         };
 
         const ttsReadMode = computed({
@@ -5035,14 +5026,6 @@ const __app = createApp({
             return (typeof characterVoice === 'string' && characterVoice) ? characterVoice : (settings.ttsVoice || '');
         };
 
-        const getLocalTtsVoice = () => {
-            const installed = Array.isArray(localTtsStatus.value.installed) ? localTtsStatus.value.installed : [];
-            const characterVoice = currentCharacter.value?.ttsVoice;
-            if (typeof characterVoice === 'string' && installed.includes(characterVoice)) return characterVoice;
-            if (typeof settings.ttsLocalVoice === 'string' && installed.includes(settings.ttsLocalVoice)) return settings.ttsLocalVoice;
-            return installed[0] || '';
-        };
-
         const speakTtsTextViaSystem = async (text) => {
             const engine = RPHTts;
             if (!engine) throw new Error('语音引擎不可用');
@@ -5057,38 +5040,27 @@ const __app = createApp({
             return true;
         };
 
+        const speakTtsTextViaCloud = async (text) => {
+            if (!syncCloudTtsConfig()) throw new Error('云端语音未配置 Base URL');
+            const characterVoice = currentCharacter.value?.ttsVoice;
+            const voice = (typeof characterVoice === 'string' && characterVoice)
+                ? characterVoice
+                : (settings.ttsCloudVoice || '');
+            await RPHCloudTts.speak({
+                text,
+                voice,
+                speed: Number(settings.ttsCloudSpeed) || 1
+            });
+            return true;
+        };
+
         const speakTtsText = async (text) => {
-            if (settings.ttsService === 'local') {
-                const engine = RPHLocalTts;
-                if (engine) {
-                    await refreshLocalTtsStatus();
-                    if (engine.getStatus().installed.length) {
-                        try {
-                            const voiceId = getLocalTtsVoice();
-                            const isCloneVoice = isZipVoiceVoice(voiceId);
-                            const speakParams = {
-                                text,
-                                voice: voiceId,
-                                rate: Number(settings.ttsRate) || 1,
-                                pitch: Number(settings.ttsPitch) || 1
-                            };
-                            if (isCloneVoice) {
-                                if (!settings.ttsCloneReferenceUri || !settings.ttsCloneReferenceText) {
-                                    showToast('Clone voice needs a reference audio clip and transcript', 'info');
-                                    return speakTtsTextViaSystem(text);
-                                }
-                                speakParams.referenceUri = settings.ttsCloneReferenceUri;
-                                speakParams.referenceText = settings.ttsCloneReferenceText;
-                            }
-                            await engine.speak(speakParams);
-                            return true;
-                        } catch (error) {
-                            console.warn('[TTS] local engine failed, falling back to system TTS:', error);
-                            showToast('Local TTS failed, switching to system voice', 'info');
-                        }
-                    } else {
-                        showToast('No local voice installed yet, using system voice', 'info');
-                    }
+            if (settings.ttsService === 'cloud') {
+                try {
+                    return await speakTtsTextViaCloud(text);
+                } catch (error) {
+                    console.warn('[TTS] cloud engine failed, falling back to system TTS:', error);
+                    showToast('云端语音失败，改用系统语音朗读', 'info');
                 }
             }
             return speakTtsTextViaSystem(text);
@@ -5126,9 +5098,8 @@ const __app = createApp({
             if (systemEngine) {
                 try { await systemEngine.stop(); } catch (_) { /* 忽略停止异常 */ }
             }
-            const localEngine = RPHLocalTts;
-            if (localEngine) {
-                try { await localEngine.stop(); } catch (_) { /* ignore stop errors */ }
+            if (RPHCloudTts) {
+                try { await RPHCloudTts.stop(); } catch (_) { /* ignore stop errors */ }
             }
         };
 
@@ -5146,103 +5117,8 @@ const __app = createApp({
             }
         };
 
-        const localTtsInstallPercent = computed(() => {
-            const info = localTtsInstall.value;
-            if (!info || !info.total) return 0;
-            return Math.min(100, Math.round((info.received / info.total) * 100));
-        });
-
-        const localTtsVoiceOptions = computed(() => localTtsVoices.value.filter((voice) => voice.installed));
-
-        const installLocalTtsVoice = async (voiceId) => {
-            const engine = RPHLocalTts;
-            if (!engine) {
-                showToast('Local TTS plugin unavailable', 'error');
-                return;
-            }
-            try {
-                await engine.install(voiceId);
-                showToast('Downloading voice model...', 'info');
-            } catch (error) {
-                console.warn('[TTS] voice install failed:', error);
-                showToast('Download failed: ' + String(error?.message || error), 'error');
-            }
-        };
-
-        const cancelLocalTtsInstall = () => {
-            const engine = RPHLocalTts;
-            if (engine?.cancelInstall) engine.cancelInstall();
-        };
-
-        const removeLocalTtsVoice = async (voiceId) => {
-            const engine = RPHLocalTts;
-            if (!engine) return;
-            try {
-                await engine.remove(voiceId);
-                await refreshLocalTtsStatus();
-                if (settings.ttsLocalVoice === voiceId) settings.ttsLocalVoice = '';
-                showToast('Voice model removed', 'info');
-            } catch (error) {
-                console.warn('[TTS] voice remove failed:', error);
-                showToast('Remove failed: ' + String(error?.message || error), 'error');
-            }
-        };
-
-        const isZipVoiceVoice = (voiceId) => {
-            const engine = RPHLocalTts;
-            if (!engine || !engine.VOICES) return false;
-            const voice = engine.VOICES.find((v) => v.id === voiceId);
-            return voice != null && voice.type === 'zipvoice';
-        };
-
-        const handleVoiceClipUpload = async (event) => {
-            const file = event?.target?.files?.[0];
-            if (!file) return;
-            const reader = new FileReader();
-            reader.onload = async (e) => {
-                const dataUrl = e.target?.result;
-                if (!dataUrl || !dataUrl.startsWith('data:')) return;
-                try {
-                    const plugin = globalThis.Capacitor?.Plugins?.NativeStorage;
-                    if (!plugin?.mediaWriteDataUrl) {
-                        showToast('Storage plugin unavailable', 'error');
-                        return;
-                    }
-                    const result = await plugin.mediaWriteDataUrl({ dataUrl, preferredName: file.name });
-                    const uri = result?.uri || '';
-                    if (uri) {
-                        settings.ttsCloneReferenceUri = uri;
-                        showToast('Reference clip saved', 'info');
-                    } else {
-                        showToast('Failed to save reference clip', 'error');
-                    }
-                } catch (error) {
-                    console.warn('[TTS] voice clip save failed:', error);
-                    showToast('Save failed: ' + String(error?.message || error), 'error');
-                }
-            };
-            reader.readAsDataURL(file);
-            event.target.value = '';
-        };
-
-        const removeVoiceClip = () => {
-            settings.ttsCloneReferenceUri = '';
-            settings.ttsCloneReferenceText = '';
-            const plugin = globalThis.Capacitor?.Plugins?.LocalTTS;
-            if (plugin?.ttsLocalClearReference) {
-                plugin.ttsLocalClearReference().catch(() => { /* ignore */ });
-            }
-        };
-
-        const cloneVoiceReady = computed(() => {
-            return !!(settings.ttsCloneReferenceUri && settings.ttsCloneReferenceText.trim());
-        });
-
-        const localTtsSelectedVoiceIsClone = computed(() => isZipVoiceVoice(getLocalTtsVoice()));
-
         nextTick(() => {
             refreshTtsStatus();
-            refreshLocalTtsStatus();
         });
 
         const getOpenAICompatUrl = (endpoint) => getApiEndpoint(endpoint);
@@ -9601,9 +9477,7 @@ const __app = createApp({
             localEmbeddingModelOptions, localEmbeddingStatusLabel,
             ttsStatus, ttsStatusLabel, ttsPlayingMessageId, ttsSettingsExpanded, ttsServiceOptions, ttsReadMode,
             settingsSectionsOpen, selectTtsService, refreshTtsStatus, testTtsVoice, ttsSpeakTextFor, toggleSpeakMessage, stopSpeaking,
-            localTtsStatus, localTtsVoices, localTtsInstall, localTtsInstallPercent, localTtsVoiceOptions,
-            refreshLocalTtsStatus, installLocalTtsVoice, cancelLocalTtsInstall, removeLocalTtsVoice,
-            isZipVoiceVoice, localTtsSelectedVoiceIsClone, cloneVoiceReady, handleVoiceClipUpload, removeVoiceClip,
+            ttsCloudProviderOptions: ttsProviderOptions, ttsCloudVoiceOptions, ttsCloudModelOptions, onTtsCloudProviderChange,
             requestDiagnosticsCount, chatDiagnosticsCount, buildDiagnosticsExportEnvelope, exportRequestDiagnostics, clearRequestDiagnostics,
             vectorMemorySearchQuery, vectorMemorySearchResults, vectorMemorySearchError, vectorMemorySearchSortMode, isVectorMemorySearching,
             searchVectorMemories, clearVectorMemorySearch, sliceBuildStatus, startVectorBatchMemoryExtraction,

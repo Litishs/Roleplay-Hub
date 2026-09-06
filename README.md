@@ -26,7 +26,7 @@
 
 **语音与接入**
 
-- 双 TTS 引擎：系统 TTS 与本地神经 TTS（sherpa-onnx 离线运行，模型按需下载）
+- 双 TTS 引擎：系统 TTS 与云端 API TTS（OpenAI 兼容 /audio/speech 格式，支持自定义中转端点）
 - 多 API 服务商：DeepSeek / OpenRouter / SiliconFlow / 阿里百炼 / 智谱，以及自定义 OpenAI 兼容端点；分供应商保存 API Key，密钥经 AndroidKeyStore 加密存储
 
 **数据与运维**
@@ -37,7 +37,7 @@
 
 ## 架构概览
 
-Android WebView 壳（Capacitor 7，4 个自定义原生插件：NativeStorage / ThemeBridge / TTSSpeech / LocalTTS）承载 Vue 3 + Vite 构建的 Web 应用本体，所有数据经存储仓库门面落入设备本地 SQLite，不经过任何第三方服务。
+Android WebView 壳（Capacitor 7，3 个自定义原生插件：NativeStorage / ThemeBridge / TTSSpeech）承载 Vue 3 + Vite 构建的 Web 应用本体，所有数据经存储仓库门面落入设备本地 SQLite，不经过任何第三方服务。
 
 ```
 ┌─ Android 原生壳（Capacitor 7 + 自定义插件）
@@ -76,7 +76,7 @@ npm run android:release     # 构建正式包 -> 仓库根目录
 
 ## 项目渊源
 
-本仓库最初 fork 自 **STA1N** 的开源项目 [STA1N156/RP-Hub](https://github.com/STA1N156/RP-Hub)，在保留原始项目全部能力的基础上，进行了 Android 应用封装、本地向量记忆、本地 TTS 引擎、UI 模板系统、API 服务商扩展、正式包构建流程与大规模模块化架构重构等工作。原始项目的页面设计、角色卡系统与核心功能构思均出自原作者之手，原始代码与设计的全部版权归 STA1N 所有。
+本仓库最初 fork 自 **STA1N** 的开源项目 [STA1N156/RP-Hub](https://github.com/STA1N156/RP-Hub)，在保留原始项目全部能力的基础上，进行了 Android 应用封装、本地向量记忆、系统 TTS 朗读、UI 模板系统、API 服务商扩展、正式包构建流程与大规模模块化架构重构等工作。原始项目的页面设计、角色卡系统与核心功能构思均出自原作者之手，原始代码与设计的全部版权归 STA1N 所有。
 
 ## 致谢
 

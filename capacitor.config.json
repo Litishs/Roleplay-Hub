@@ -6,7 +6,8 @@
     "minWebViewVersion": 83,
     "allowMixedContent": true,
     "captureInput": false,
-    "webContentsDebuggingEnabled": false
+    "webContentsDebuggingEnabled": false,
+    "mediaPlaybackRequiresUserGesture": false
   },
   "server": {
     "allowNavigation": [

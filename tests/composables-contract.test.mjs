@@ -458,7 +458,7 @@ test('app.mjs wires useApiConfig with single call and site destructuring', () =>
     assert.ok(app.includes('const { imageGenProviderOptions, getImageGenProviderById, imageGenUnavailable } = apiConfigState;'));
     assert.ok(app.includes('const { apiProviderOptions } = apiConfigState;'));
     assert.ok(app.includes('const { apiStatus, apiLatency, imageGenStatus, imageGenLatency } = apiConfigState;'));
-    assert.ok(app.includes('const { apiKeyInput, apiKeyVisible, toggleApiKeyVisibility } = apiConfigState;'));
+    assert.ok(app.includes('const { apiKeyInput, apiKeyVisible, toggleApiKeyVisibility, ttsProviderOptions, getTtsProviderById } = apiConfigState;'));
     assert.ok(app.includes('const { currentModelMode } = apiConfigState;'));
     // settings-dependent logic and computed stay in app.mjs
     assert.ok(app.includes('const selectedApiProviderId = ref(DEFAULT_API_PROVIDER_ID);'));

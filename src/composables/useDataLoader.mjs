@@ -200,6 +200,10 @@ export function useDataLoader(deps) {
                     settings.fastModelProvider = '';
                 }
                 settings.slotProviderBindingVersion = 1;
+                // The on-device neural TTS engine was removed (2026-09-06, see
+                // documents/TTS云端API引擎方案.md). Builds saved with the old
+                // engine selection fall back to the system voice.
+                if (settings.ttsService === 'local') settings.ttsService = 'system';
                 settings.fontFamily = normalizeFontFamily(settings.fontFamily);
                 // Image-gen settings normalization (upstream STA1N parity):
                 // unknown 生图版本 falls back to V4.5; legacy composite sizes
