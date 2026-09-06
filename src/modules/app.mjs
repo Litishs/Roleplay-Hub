@@ -1172,7 +1172,8 @@ const __app = createApp({
         ];
         const {
             fontFamilyOptions, themeModeOptions,
-            imageStyleOptions, imageSizeOptions, imageGenCountOptions
+            imageStyleOptions, imageModelOptions, availableImageStyleOptions, imageSizeOptions, imageGenCountOptions,
+            getImageModelName, v5UnsupportedImageStyles
         } = settingsState;
         const uiTemplatePlacementOptions = [
             { value: 'top', label: '对话顶部' },
@@ -2570,6 +2571,7 @@ const __app = createApp({
                 newReplacement = oldReplacement.replace(/artist=[^&]+/, 'artist=' + encodedTargetArtists);
             }
             newReplacement = newReplacement.replace(/size=[^&]+/, 'size=' + settings.imageSize);
+            newReplacement = newReplacement.replace(/model=[^&]+/, 'model=' + settings.imageModel);
             regex.replacement = newReplacement;
 
             let messages = [];
@@ -2625,6 +2627,19 @@ const __app = createApp({
                 showToast('生图比例已切换：' + messages.join('，'), 'success');
             }
         });
+
+        // Upstream parity: switching to V5 resets an unsupported artist style
+        // immediately (sync flush, before the imageStyle watcher fires), and
+        // the generated-image regex URL follows the selected NAI model.
+        watch(() => settings.imageModel, (imageModel) => {
+            if (imageModel === 'nai-diffusion-5-full' && v5UnsupportedImageStyles.has(settings.imageStyle)) {
+                settings.imageStyle = 'vertical';
+            }
+            const messages = updateImageGenRegexState({ enableRegex: isAutoImageGenEnabled.value });
+            if (isAutoImageGenEnabled.value && messages && messages.length > 0) {
+                showToast(`生图版本已切换：${getImageModelName(imageModel)}`, 'success');
+            }
+        }, { flush: 'sync' });
 
         watch(() => settings.imageGenCount, () => {
             enforceSpecialRules();
@@ -3556,19 +3571,6 @@ const __app = createApp({
             setTimeout(() => {
                 toasts.value = toasts.value.filter(t => t.id !== id);
             }, duration);
-        };
-
-        // Open an external http(s) link: prefer the Capacitor Browser plugin
-        // (in-app sheet on Android), fall back to a new browser tab.  Non-http
-        // targets (data:/blob:) are ignored — call sites must handle those.
-        const openExternal = async (url) => {
-            const target = String(url || '');
-            if (!/^https?:\/\//i.test(target)) return;
-            const Browser = window.Capacitor?.Plugins?.Browser;
-            if (Browser && typeof Browser.open === 'function') {
-                try { await Browser.open({ url: target }); return; } catch (_) { /* fall through */ }
-            }
-            window.open(target, '_blank', 'noopener');
         };
 
         // Backup/restore lives in useBackupRestore (Phase 2.2); called here because
@@ -8553,6 +8555,8 @@ const __app = createApp({
         const { loadData } = useDataLoader({
             // storage layer
             initDB,
+            imageModelOptions,
+            imageSizeOptions,
             getStoredValue,
             setStoredValue,
             getScopedStoredValue,
@@ -9578,7 +9582,7 @@ const __app = createApp({
             showConfirmModal, confirmMessage, modelMode, chatModelSlots, selectChatModelSlot, reasoningEffortSlider, reasoningEffortLabel, latestMainTokenUsage, showNoMemoryNeededModal, // Export for template
             showAuthorNoticeModal, closeAuthorNoticeModal, // Author Notice Modal
             isGenerating, isRemoteGenerating, remoteEstimatedTime, isReceiving, isThinking, hasActiveToolInlineWork, isConversationBusy, activeToolContinuationMessageId, activeToolContinuationHasResponse, userInput, modelSearchQuery, activeModelTag, modelTags, characterSearchQuery, filteredModels, filteredCharacters,
-            user, settings, apiProviderOptions, selectedApiProvider, isCustomApiProvider, customApiProviderOptions, showApiProviderSelector, selectApiProvider, characters, currentCharacter, currentCharacterIndex, chatHistory, displayedChatMessages, chatTopSpacerHeight, chatBottomSpacerHeight, handleChatScroll, presets, presetRoleOptions, fontFamilyOptions, themeModeOptions, imageStyleOptions, imageSizeOptions, imageGenCountOptions, scopeOptions, uiTemplatePlacementOptions, worldInfoPositionOptions, getPresetRoleLabel, getPresetRoleDisplayLabel, getPresetRoleBadgeClass, regexScripts, worldInfo,
+            user, settings, apiProviderOptions, selectedApiProvider, isCustomApiProvider, customApiProviderOptions, showApiProviderSelector, selectApiProvider, characters, currentCharacter, currentCharacterIndex, chatHistory, displayedChatMessages, chatTopSpacerHeight, chatBottomSpacerHeight, handleChatScroll, presets, presetRoleOptions, fontFamilyOptions, themeModeOptions, imageStyleOptions, imageModelOptions, availableImageStyleOptions, imageSizeOptions, imageGenCountOptions, scopeOptions, uiTemplatePlacementOptions, worldInfoPositionOptions, getPresetRoleLabel, getPresetRoleDisplayLabel, getPresetRoleBadgeClass, regexScripts, worldInfo,
             activeTools, activeToolAggressivenessOptions: ACTIVE_TOOL_AGGRESSIVENESS_OPTIONS, editingActiveTool, normalizeActiveTools, isWebActiveTool, getActiveToolDisplayDescription, getActiveToolResultCountMin, getActiveToolResultCountMax,
             getToolCallModeText, hasThinkingOrTools, isMessageThinkingOrRunning, isThinkingSummaryOpen, toggleThinkingSummary, markThinkingSummaryDetailOpened, getTimelineSteps,
             chatRoundStats, conversationBodyLength, summaryCompressedBodyLength,
@@ -9774,7 +9778,6 @@ const __app = createApp({
             toggleMobileMenu, closeMobileMenu,
             fetchModels, selectModel, selectQuickModels, sendMessage, autoResizeInput, handleChatInput, handleChatCompositionStart, handleChatCompositionEnd, handleChatInputPaste, prepareChatInputSend, handleChatInputKeydown, handleChatInputFocus, handleChatInputBlur, stopGeneration, clearChat, toggleChatFullscreen,
             pendingChatImages, pendingChatImageReadCount, isRecognizingImages, requestChatImageSelection, handleChatImageSelection, removePendingChatImage,
-            openExternal,
             handleConfirm, handleCancel, // Export handlers
             showChatImportDialog, chatImportDialog, confirmChatImportOverwrite, confirmChatImportAppend, cancelChatImport,
             showImportPreview, importPreview, confirmImportPreview, cancelImportPreview,

@@ -52,6 +52,8 @@ export function useDataLoader(deps) {
         // settings / provider constants + resolvers
         DEFAULT_API_PROVIDER_ID,
         MAX_CONTEXT_SIZE,
+        imageModelOptions,
+        imageSizeOptions,
         getApiProviderByUrl,
         normalizeApiProviderSettings,
         normalizeFontFamily,
@@ -199,6 +201,17 @@ export function useDataLoader(deps) {
                 }
                 settings.slotProviderBindingVersion = 1;
                 settings.fontFamily = normalizeFontFamily(settings.fontFamily);
+                // Image-gen settings normalization (upstream STA1N parity):
+                // unknown 生图版本 falls back to V4.5; legacy composite sizes
+                // (2K竖图 / 4K方图 …) collapse to 竖图/横图/方图; count clamps to 2..8.
+                if (!imageModelOptions.some(option => option.value === settings.imageModel)) {
+                    settings.imageModel = imageModelOptions[0].value;
+                }
+                if (!imageSizeOptions.some(option => option.value === settings.imageSize)) {
+                    const legacySize = String(settings.imageSize || '');
+                    settings.imageSize = legacySize.includes('横') ? '横图' : legacySize.includes('方') ? '方图' : '竖图';
+                }
+                settings.imageGenCount = Math.min(8, Math.max(2, Math.round(Number(settings.imageGenCount) || 2)));
                 settings.fontFamilyVersion = 4;
                 applyFontFamily(settings.fontFamily);
                 delete settings.renderLayerLimit;

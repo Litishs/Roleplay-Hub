@@ -353,7 +353,7 @@ test('useUiState returns live reactive state (runtime)', async () => {
 });
 
 test('useSettingsState composable exists and is pure state', () => {
-    assert.ok(settingsStateSource.includes("import { ref, reactive } from 'vue';"), 'imports vue reactivity');
+    assert.ok(settingsStateSource.includes("import { ref, reactive, computed } from 'vue';"), 'imports vue reactivity');
     assert.ok(settingsStateSource.includes('export function useSettingsState()'), 'named export');
     assert.ok(!settingsStateSource.includes('fetch('), 'no network calls');
     assert.ok(!settingsStateSource.includes('watch('), 'no watchers (belong to app.mjs for now)');
@@ -432,8 +432,13 @@ test('useSettingsState returns live reactive state (runtime)', async () => {
     assert.equal(state.normalizeFontFamily('bogus'), 'modern');
     assert.equal(state.themeModeOptions.length, 3);
     assert.equal(state.imageStyleOptions.length, 7);
-    assert.equal(state.imageSizeOptions.length, 9);
-    assert.equal(state.imageGenCountOptions.length, 6);
+    assert.equal(state.imageModelOptions.length, 2, 'V4.5 / V5 完整版 (upstream parity)');
+    assert.equal(state.availableImageStyleOptions.value.length, 7, 'V4.5 shows every style');
+    state.settings.imageModel = 'nai-diffusion-5-full';
+    assert.equal(state.availableImageStyleOptions.value.length, 4, 'V5 hides r18/lolita25d/anime');
+    state.settings.imageModel = 'nai-diffusion-4-5-full';
+    assert.equal(state.imageSizeOptions.length, 3, '竖图/横图/方图 (credit cost moved to 生图版本)');
+    assert.equal(state.imageGenCountOptions.length, 7);
 });
 
 test('useApiConfig composable exists and is pure state', () => {
@@ -970,6 +975,11 @@ test('useDataLoader restores data end-to-end with mocked storage (runtime)', asy
         tokenUsageHistory: { value: [] },
         DEFAULT_API_PROVIDER_ID: 'default',
         MAX_CONTEXT_SIZE: 64,
+        imageModelOptions: [
+            { value: 'nai-diffusion-4-5-full', label: 'V4.5 完整版（-1）' },
+            { value: 'nai-diffusion-5-full', label: 'V5 完整版（-5）' }
+        ],
+        imageSizeOptions: [{ value: '竖图', label: '竖图' }, { value: '横图', label: '横图' }, { value: '方图', label: '方图' }],
         getApiProviderByUrl,
         normalizeApiProviderSettings,
         normalizeFontFamily,

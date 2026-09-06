@@ -20,7 +20,7 @@
 // - Token estimation utilities (estimateTokens/estimateMessagesTokens) and
 //   the API key editing helpers stay in app.mjs until their own roadmap step.
 
-import { ref, reactive } from 'vue';
+import { ref, reactive, computed } from 'vue';
 
 export function useSettingsState() {
     // --- User persona + profiles ---
@@ -89,6 +89,7 @@ export function useSettingsState() {
         fontSize: window.innerWidth > 768 ? 16 : 14,
         themeMode: 'system',
         imageGenKey: '',
+        imageModel: 'nai-diffusion-4-5-full',   // 生图版本（NAI model id，-1/-5 为每次生成扣点）
         imageGenProviderId: 'sta1n',
         imageStyle: 'vertical',
         customImageArtists: '',
@@ -163,18 +164,24 @@ export function useSettingsState() {
         { value: 'galgame', label: 'GalGame风' },
         { value: 'custom', label: '自定义' }
     ];
-    const imageSizeOptions = [
-        { value: '竖图', label: '竖图(-1)' },
-        { value: '横图', label: '横图(-1)' },
-        { value: '方图', label: '方图(-1)' },
-        { value: '2K竖图', label: '2K竖图(-15)' },
-        { value: '2K横图', label: '2K横图(-15)' },
-        { value: '2K方图', label: '2K方图(-15)' },
-        { value: '4K竖图', label: '4K竖图(-25)' },
-        { value: '4K横图', label: '4K横图(-25)' },
-        { value: '4K方图', label: '4K方图(-25)' }
+    // 生图版本（upstream STA1N parity）：V4.5 每张 -1 点，V5 每张 -5 点
+    const imageModelOptions = [
+        { value: 'nai-diffusion-4-5-full', label: 'V4.5 完整版（-1）' },
+        { value: 'nai-diffusion-5-full', label: 'V5 完整版（-5）' }
     ];
-    const imageGenCountOptions = [1, 2, 3, 4, 5, 6].map(count => ({
+    // V5 尚不支持这些画风的 artist 串，选中 V5 时从下拉里隐藏
+    const v5UnsupportedImageStyles = new Set(['r18', 'lolita25d', 'anime']);
+    const getImageModelName = (value) => (imageModelOptions.find(option => option.value === value)?.label
+        || imageModelOptions[0].label).replace(/（[^）]*）$/, '');
+    const availableImageStyleOptions = computed(() => settings.imageModel === 'nai-diffusion-5-full'
+        ? imageStyleOptions.filter(option => !v5UnsupportedImageStyles.has(option.value))
+        : imageStyleOptions);
+    const imageSizeOptions = [
+        { value: '竖图', label: '竖图' },
+        { value: '横图', label: '横图' },
+        { value: '方图', label: '方图' }
+    ];
+    const imageGenCountOptions = [2, 3, 4, 5, 6, 7, 8].map(count => ({
         value: count,
         label: `${count} 张`
     }));
@@ -211,6 +218,10 @@ export function useSettingsState() {
         fontFamilyOptions,
         themeModeOptions,
         imageStyleOptions,
+        imageModelOptions,
+        availableImageStyleOptions,
+        getImageModelName,
+        v5UnsupportedImageStyles,
         imageSizeOptions,
         imageGenCountOptions,
         settingsHelpTopic,

@@ -94,3 +94,49 @@ test('useMessageSender injects image descriptions at request-build time', () => 
         'apiMessages mapping appends the vision descriptions');
     assert.match(sender, /\/\/ chatHistory\b/, 'chatHistory stays available for _sourceIndexes resolution');
 });
+
+// --- 生图设置 sync (2026-09-06): 生图版本 selector + simplified 生图比例 ---
+
+test('生图版本 (imageModel) drives the generate URL and the style list', async () => {
+    const [specialRules, dataLoader] = await Promise.all([
+        readFile(new URL('../src/composables/useSpecialRules.mjs', import.meta.url), 'utf8'),
+        readFile(new URL('../src/composables/useDataLoader.mjs', import.meta.url), 'utf8'),
+    ]);
+
+    // settings default + API options
+    assert.match(settingsState, /imageModel: 'nai-diffusion-4-5-full',/,
+        'settings.imageModel defaults to the V4.5 full model');
+    assert.match(settingsState, /nai-diffusion-4-5-full', label: 'V4\.5 完整版（-1）'/);
+    assert.match(settingsState, /nai-diffusion-5-full', label: 'V5 完整版（-5）'/);
+    assert.match(settingsState, /v5UnsupportedImageStyles = new Set\(\['r18', 'lolita25d', 'anime'\]\)/,
+        'V5-unsupported styles match the upstream set');
+
+    // the NAI画图正则 replacement URL uses the configured model, not a hardcoded one
+    assert.match(specialRules, /&model=' \+ settings\.imageModel \+ '&artist=/,
+        'the generate URL model parameter follows settings.imageModel');
+    assert.ok(!specialRules.includes('model=nai-diffusion-4-5-full'),
+        'the hardcoded V4.5 model id is gone');
+
+    // request-URL rewriting tracks model changes like size changes
+    assert.match(app, /newReplacement = newReplacement\.replace\(\/model=\[\^&\]\+\/, 'model=' \+ settings\.imageModel\);/,
+        'updateImageGenRegexState rewrites the model parameter');
+    assert.match(app, /watch\(\(\) => settings\.imageModel, \(imageModel\) => \{\s*if \(imageModel === 'nai-diffusion-5-full' && v5UnsupportedImageStyles\.has\(settings\.imageStyle\)\) \{\s*settings\.imageStyle = 'vertical';/,
+        'switching to V5 resets an unsupported style (upstream parity)');
+
+    // load-time normalization: unknown model → V4.5, legacy 2K/4K sizes → 竖图/横图/方图
+    assert.match(dataLoader, /if \(!imageModelOptions\.some\(option => option\.value === settings\.imageModel\)\) \{\s*settings\.imageModel = imageModelOptions\[0\]\.value;/);
+    assert.match(dataLoader, /legacySize\.includes\('横'\) \? '横图' : legacySize\.includes\('方'\) \? '方图' : '竖图'/,
+        'legacy 2K/4K size values migrate to the plain ratios');
+    assert.match(dataLoader, /settings\.imageGenCount = Math\.min\(8, Math\.max\(2,/);
+});
+
+test('ApiConfig.vue renders the 生图版本 card above 生图风格', () => {
+    const modelCard = apiConfigHtml.indexOf('生图版本');
+    const styleCard = apiConfigHtml.indexOf('生图风格');
+    assert.ok(modelCard !== -1 && styleCard !== -1, 'both cards exist');
+    assert.ok(modelCard < styleCard, '生图版本 sits between 密钥 and 风格 (upstream order)');
+    assert.match(apiConfigHtml, /v-model="settings\.imageModel" :options="imageModelOptions"/,
+        'the 版本 select binds settings.imageModel');
+    assert.match(apiConfigHtml, /v-model="settings\.imageStyle" :options="availableImageStyleOptions"/,
+        'the style select consumes the V5-filtered option list');
+});

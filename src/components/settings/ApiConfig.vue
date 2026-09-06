@@ -355,12 +355,23 @@
                             获取</div>
                     </div>
 
+                    <!-- Image Model (生图版本) -->
+                    <div
+                        class="generation-setting-card">
+                        <label
+                            class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">生图版本</label>
+                        <custom-select v-model="settings.imageModel" :options="imageModelOptions" :disabled="imageGenUnavailable"
+                            button-class="rounded-lg px-3 py-1.5 text-sm text-gray-700 focus:border-teal-400 focus:ring-teal-100"
+                            menu-class="text-sm">
+                        </custom-select>
+                    </div>
+
                     <!-- Image Style -->
                     <div
                         class="generation-setting-card">
                         <label
                             class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">生图风格</label>
-                        <custom-select v-model="settings.imageStyle" :options="imageStyleOptions" :disabled="imageGenUnavailable"
+                        <custom-select v-model="settings.imageStyle" :options="availableImageStyleOptions" :disabled="imageGenUnavailable"
                             button-class="rounded-lg px-3 py-1.5 text-sm text-gray-700 focus:border-teal-400 focus:ring-teal-100"
                             menu-class="text-sm">
                         </custom-select>
