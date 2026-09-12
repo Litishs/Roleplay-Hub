@@ -42,7 +42,6 @@ export function useUiTemplatePipeline(deps) {
         // api plumbing
         getChatProvider,
         getChatProviderEndpoint,
-        getMaxOutputTokens,
         recordApiUsage,
         getApiUsagePayload,
         // template attachment / persistence
@@ -61,6 +60,16 @@ export function useUiTemplatePipeline(deps) {
     const UI_TEMPLATE_ANALYSIS_CONCURRENCY = 3;
     const UI_TEMPLATE_BATCH_MAX_TEMPLATES = 5;
     const UI_TEMPLATE_BATCH_MAX_PAYLOAD_BYTES = 200 * 1024;
+
+    // Sub-model analysis has its own output budget (uiTemplateMaxOutputTokens,
+    // default 4096) decoupled from the chat maxOutputTokens, so a thinking-heavy
+    // chat model no longer starves the analysis JSON.
+    const getUiTemplateAnalysisMaxTokens = () => {
+        const value = Number(settings.uiTemplateMaxOutputTokens);
+        return Number.isFinite(value)
+            ? Math.max(1024, Math.min(16384, Math.round(value)))
+            : 4096;
+    };
 
         const markUiTemplateStatus = (state, message, remaining = 0, targetMessageId = null) => {
             uiTemplateUpdateStatus.state = state;
@@ -300,7 +309,7 @@ export function useUiTemplatePipeline(deps) {
                                 body: JSON.stringify({
                                     model: batchModel,
                                     temperature: 0.2,
-                                    max_tokens: getMaxOutputTokens(),
+                                    max_tokens: getUiTemplateAnalysisMaxTokens(),
                                     ...(settings.uiTemplateJsonMode !== false ? { response_format: { type: 'json_object' } } : {}),
                                     stream: false,
                                     messages: buildBatchMessages()
@@ -397,7 +406,7 @@ export function useUiTemplatePipeline(deps) {
                                     body: JSON.stringify({
                                         model,
                                         temperature: 0.2,
-                                        max_tokens: getMaxOutputTokens(),
+                                        max_tokens: getUiTemplateAnalysisMaxTokens(),
                                         ...(settings.uiTemplateJsonMode !== false ? { response_format: { type: 'json_object' } } : {}),
                                         stream: false,
                                         messages: buildAnalysisMessages()
