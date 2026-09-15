@@ -99,3 +99,20 @@ test('novel build wiring: tailwind config, build:css third pass, build-web copy'
     const buildWeb = await read(new URL('../scripts/build-web.mjs', import.meta.url));
     assert.match(buildWeb, /path\.join\(root, 'novel'\)/, 'build-web must copy the novel page into dist');
 });
+
+test('host app answers the novel storage bridge with a strict whitelist', async () => {
+    const app = await read(APP);
+    for (const marker of ['NOVEL_STORAGE_GET', 'NOVEL_STORAGE_SET', 'NOVEL_STORAGE_RESULT']) {
+        assert.ok(app.includes(marker), `host listener must implement ${marker}`);
+    }
+    assert.match(app, /const NOVEL_STORAGE_ALLOWED_KEYS = \['novel_library', 'novel_settings'\];/, 'host must whitelist exactly the two novel keys');
+    assert.ok(app.includes("document.querySelector('iframe[src*=\"novel/index.html\"]')"), 'host must verify the sender is the novel iframe');
+    assert.ok(app.includes('window.addEventListener(\'message\', handleNovelStorageRequest)'), 'bridge listener must be registered');
+    assert.ok(app.includes('await RPHStorage.get(data.key)'), 'GET must round-trip through RPHStorage');
+    assert.ok(app.includes('await RPHStorage.set(data.key, data.value)'), 'SET must round-trip through RPHStorage');
+});
+
+test('novel_settings rides the secret channel (storage-repository gate)', async () => {
+    const repo = await read(new URL('../src/modules/storage-repository.mjs', import.meta.url));
+    assert.match(repo, /isSecretBearingKey = key => [^\n]*novel_settings/, 'secret-bearing gate must include novel_settings');
+});

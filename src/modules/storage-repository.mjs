@@ -49,7 +49,12 @@
         return result;
     };
 
-    const isSecretBearingKey = key => /rp_hub_(settings|active_tools)$/.test(String(key));
+    // Secret-bearing keys get field-level extraction (apiKey/apiProviderKeys/…)
+    // into the native secret channel before the value reaches plain SQLite.
+    // novel_settings (墨韵·造梦 workshop config, written through the novel
+    // storage bridge) rides the same channel so page-side API keys never
+    // persist in plain SQLite nor enter full backups.
+    const isSecretBearingKey = key => /^(rp_hub_(settings|active_tools)|novel_settings)$/.test(String(key));
 
     const repository = {
         get isNative() { return !!nativePlugin(); },

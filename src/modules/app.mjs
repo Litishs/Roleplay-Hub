@@ -1028,6 +1028,47 @@ const __app = createApp({
             }
         });
 
+        // Novel workshop storage bridge (novel/index.html): the embedded page
+        // round-trips its library and API settings through postMessage into the
+        // host SQLite kv store. Only the novel iframe may call it and only the
+        // two whitelisted keys are served. Settings objects carry
+        // apiKey/apiProviderKeys fields, which RPHStorage.set() extracts into
+        // the native secret channel, so keys never land in plain SQLite or in
+        // full backups (documents/墨韵造梦移植工程方案.md §4/§5).
+        const NOVEL_STORAGE_ALLOWED_KEYS = ['novel_library', 'novel_settings'];
+        const handleNovelStorageRequest = (event) => {
+            const data = event.data;
+            if (!data || typeof data !== 'object') return;
+            if (data.type !== 'NOVEL_STORAGE_GET' && data.type !== 'NOVEL_STORAGE_SET') return;
+            const novelFrame = document.querySelector('iframe[src*="novel/index.html"]');
+            if (!novelFrame || event.source !== novelFrame.contentWindow) return;
+            const respond = (payload) => {
+                try {
+                    novelFrame.contentWindow.postMessage({ type: 'NOVEL_STORAGE_RESULT', requestId: data.requestId, ...payload }, '*');
+                } catch (replyError) {
+                    console.error('[Novel] storage bridge reply failed:', replyError);
+                }
+            };
+            if (!NOVEL_STORAGE_ALLOWED_KEYS.includes(data.key)) {
+                respond({ error: 'Key not allowed' });
+                return;
+            }
+            (async () => {
+                try {
+                    if (data.type === 'NOVEL_STORAGE_GET') {
+                        respond({ value: (await RPHStorage.get(data.key)) ?? null });
+                    } else {
+                        await RPHStorage.set(data.key, data.value);
+                        respond({});
+                    }
+                } catch (error) {
+                    console.error('[Novel] storage bridge error:', error);
+                    respond({ error: String(error?.message || error) });
+                }
+            })();
+        };
+        window.addEventListener('message', handleNovelStorageRequest);
+
         watch(() => [settings.apiUrl, settings.apiKey, settings.model], ([, , newModel]) => {
             if (newModel !== settings.fastModel && newModel !== settings.balancedModel) {
                 settings.qualityModel = newModel; // 确保 qualityModel 也同步更新
