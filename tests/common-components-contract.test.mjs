@@ -75,23 +75,25 @@ test("SideNav user profile click opens the user setup modal", async () => {
   assert.match(vue, /showUserSetupModal = true/, "must reference the exposed showUserSetupModal");
 });
 
-test("SideNav groups 角色卡生成 and 万相广场 behind a collapsible 在线 nav", async () => {
+test("SideNav groups 角色卡生成, 小说生成 and 万相广场 behind a collapsible 在线 nav", async () => {
   const vue = await readFile(new URL("./SideNav.vue", COMMON_DIR), "utf8");
   // trigger: globe icon + chevron, active when either child view is current
   assert.match(vue, /class="online-nav"/, "online nav wrapper must exist");
   assert.match(vue, /@click="toggleOnlineNav"/, "trigger must toggle the online nav");
   assert.match(vue, /title="在线"/, "trigger label must be 在线");
-  assert.match(vue, /\[\s*'generator',\s*'square'\s*\]\.includes\(currentView\)/, "trigger highlights when generator or square is active");
+  assert.match(vue, /\[\s*'generator',\s*'square',\s*'novel'\s*\]\.includes\(currentView\)/, "trigger highlights when generator, square or novel is active");
   assert.match(vue, /aria-controls="online-nav-panel"/, "trigger must reference the panel");
   // children live inside the panel and navigate to their views
   const panelIdx = vue.indexOf('id="online-nav-panel"');
   const genIdx = vue.indexOf("currentView = 'generator'");
   const sqIdx = vue.indexOf("currentView = 'square'");
+  const novelIdx = vue.indexOf("currentView = 'novel'");
   assert.ok(panelIdx > 0, "online nav panel must exist");
-  assert.ok(genIdx > panelIdx && sqIdx > genIdx, "generator and square buttons must live inside the panel, after the panel opens");
+  assert.ok(genIdx > panelIdx && sqIdx > genIdx && novelIdx > sqIdx, "generator, square and novel buttons must live inside the panel, after the panel opens");
   // the old top-level standalone buttons are gone (no direct generator/square buttons outside the panel)
   const standalone = /<button[^>]*@click="currentView = 'generator'; closeMobileMenu\(\)"\s*\n\s*title="角色卡生成"/;
   assert.ok(!standalone.test(vue), "generator must not be a standalone top-level button anymore");
   assert.match(vue, /<span>角色卡生成<\/span>/, "generator child item keeps its label");
   assert.match(vue, /<span>万相广场<\/span>/, "square child item keeps its label");
+  assert.match(vue, /<span>小说生成<\/span>/, "novel child item keeps its label");
 });

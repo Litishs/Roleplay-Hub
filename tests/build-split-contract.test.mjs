@@ -9,7 +9,7 @@ import { readFile } from 'node:fs/promises';
 // never by app.mjs.
 
 const ASYNC_PANELS = [
-    'CharacterPanel', 'GeneratorPanel', 'SquarePanel', 'SettingsPanel',
+    'CharacterPanel', 'GeneratorPanel', 'SquarePanel', 'NovelPanel', 'SettingsPanel',
     'PresetsPanel', 'UiTemplatePanel', 'RegexPanel', 'ToolsPanel',
     'UsageStatsPanel', 'MemoryPanel',
 ];

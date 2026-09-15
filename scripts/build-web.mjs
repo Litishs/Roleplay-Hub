@@ -35,6 +35,13 @@ if (existsSync(charSrc)) {
   await cp(charSrc, charDst, { recursive: true });
 }
 
+// Copy novel workshop page ("墨韵·造梦", separate entry, not processed by Vite)
+const novelSrc = path.join(root, 'novel');
+const novelDst = path.join(output, 'novel');
+if (existsSync(novelSrc)) {
+  await cp(novelSrc, novelDst, { recursive: true });
+}
+
 // Copy LICENSE
 const licenseSrc = path.join(root, 'LICENSE');
 const licenseDst = path.join(output, 'LICENSE');
