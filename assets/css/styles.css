@@ -1024,27 +1024,42 @@
         }
 
         .advanced-nav-list {
+            position: relative;
             display: grid;
             gap: 0.125rem;
-            margin-top: 0.125rem;
+            /* Indent the whole subtree under the parent trigger icon (icon center ≈ 1.375rem). */
+            margin: 0.25rem 0 0 1.375rem;
+            padding-left: 0.5rem;
+        }
+
+        .advanced-nav-list::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0.2rem;
+            bottom: 0.3rem;
+            width: 2px;
+            border-radius: 999px;
+            background: linear-gradient(180deg, rgba(148, 163, 184, 0.5), rgba(148, 163, 184, 0.14));
+            pointer-events: none;
         }
 
         .advanced-nav-item {
             display: flex;
             align-items: center;
             width: 100%;
-            min-height: 2.75rem;
-            padding: 0.625rem 0.75rem;
-            border-radius: 0.75rem;
-            font-size: 1rem;
-            line-height: 1.5rem;
+            min-height: 2.375rem;
+            padding: 0.5rem 0.625rem;
+            border-radius: 0.65rem;
+            font-size: 0.9375rem;
+            line-height: 1.375rem;
             text-align: left;
         }
 
         .advanced-nav-item svg {
-            width: 1.25rem;
-            height: 1.25rem;
-            margin-right: 0.75rem;
+            width: 1.125rem;
+            height: 1.125rem;
+            margin-right: 0.625rem;
             flex-shrink: 0;
         }
 
@@ -1303,6 +1318,35 @@
         .item-action-button--delete:hover {
             background: #fef2f2;
             color: #dc2626;
+        }
+
+        /* —— Narrow-viewport two-row item layout: the name owns the first row and
+           toggles/actions drop to a second, right-aligned row. On phone portrait
+           the fixed-width controls (toggle + divider + action buttons + drag
+           handle ≈ 230px) squeezed the truncated title down to a few characters;
+           stacking restores near-full-width names. ≥640px keeps the single row. */
+        @media (max-width: 639px) {
+            .management-item-card {
+                display: grid;
+                grid-template-columns: minmax(0, 1fr);
+                grid-template-areas:
+                    "name"
+                    "controls";
+                row-gap: 0.625rem;
+                align-items: center;
+            }
+
+            .management-item-name {
+                grid-area: name;
+                margin-right: 0;
+            }
+
+            .management-item-controls {
+                grid-area: controls;
+                justify-content: flex-end;
+                padding-top: 0.5rem;
+                border-top: 1px dashed rgba(229, 231, 235, 0.9);
+            }
         }
 
         .pagination-button {
@@ -2968,6 +3012,12 @@ opacity: 0;
             box-shadow:
                 inset 0 0 0 1px rgba(59, 130, 246, 0.2),
                 0 8px 22px -18px rgba(37, 99, 235, 0.5);
+        }
+        [data-theme='dark'] .advanced-nav-list::before {
+            background: linear-gradient(180deg, rgba(71, 85, 105, 0.65), rgba(71, 85, 105, 0.2));
+        }
+        [data-theme='dark'] .management-item-controls {
+            border-top-color: rgba(55, 65, 81, 0.9);
         }
         [data-theme='dark'] .settings-toggle {
             background: var(--d-surface-3);

@@ -196,6 +196,34 @@
                                     step="1"
                                     class="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary-500">
                             </div>
+                            <div class="relative bg-gray-50/60 p-3 rounded-xl border border-gray-100">
+                                <div class="flex justify-between items-center mb-2">
+                                    <div class="relative flex items-center">
+                                        <label class="text-xs font-medium text-gray-500">分析输出上限</label>
+                                        <button type="button"
+                                            @click.stop="settingsHelpTopic = settingsHelpTopic === 'analysisBudget' ? '' : 'analysisBudget'"
+                                            class="settings-help-trigger"
+                                            :class="{ 'is-open': settingsHelpTopic === 'analysisBudget' }"
+                                            :aria-expanded="settingsHelpTopic === 'analysisBudget'"
+                                            aria-label="查看分析输出上限说明">
+                                            <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                    d="M9.1 9a3 3 0 115.8 1.1c-.6 1.1-1.9 1.3-2.5 2.2-.3.4-.4.8-.4 1.2M12 17h.01"></path>
+                                            </svg>
+                                        </button>
+                                        <div v-if="settingsHelpTopic === 'analysisBudget'" class="settings-help-popover is-above">
+                                            <span class="settings-help-popover-content">分析请求独立于聊天输出上限的 token 预算。思考型模型会先用思考占用预算，值偏小时变量更新 JSON 可能被截断；调大可减少截断，但每次分析消耗更多 token。</span>
+                                        </div>
+                                    </div>
+                                    <span
+                                        class="text-xs font-mono text-primary-600 bg-primary-50 px-1.5 py-0.5 rounded border border-primary-100">
+                                        {{ settings.uiTemplateMaxOutputTokens }} tok
+                                    </span>
+                                </div>
+                                <input type="range" v-model.number="settings.uiTemplateMaxOutputTokens" min="1024" max="16384"
+                                    step="256"
+                                    class="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary-500">
+                            </div>
                         </div>
                     </div>
                     </div>

@@ -83,8 +83,8 @@
 
                 <div id="worldinfo-list" class="space-y-4">
                     <div v-for="(entry, index) in worldInfo" :key="(entry.comment || '') + '_' + index"
-                        class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-all flex justify-between items-center">
-                        <div class="flex-1 min-w-0 mr-4 flex items-center">
+                        class="management-item-card bg-white p-4 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-all flex justify-between items-center">
+                        <div class="management-item-name flex-1 min-w-0 mr-4 flex items-center">
                             <div class="cursor-move text-gray-400 mr-3 hover:text-gray-600" title="拖动排序">
                                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -101,7 +101,7 @@
                                 </div>
                             </div>
                         </div>
-                        <div class="flex items-center space-x-4 flex-shrink-0">
+                        <div class="management-item-controls flex items-center space-x-4 flex-shrink-0">
                             <label class="relative inline-flex items-center cursor-pointer">
                                 <input type="checkbox" :checked="entry.enabled"
                                     @change="setWorldInfoEnabled(entry, $event.target.checked, $event)" class="settings-toggle-input sr-only">

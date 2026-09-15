@@ -257,6 +257,23 @@
                                                 class="ui-template-message-block ui-template-message-block-top">
                                                 <ui-template-pending></ui-template-pending>
                                             </div>
+                                            <div v-if="msg.role === 'assistant' && uiTemplateUpdateStatus.state === 'error' && uiTemplateUpdateStatus.targetMessageId === msg.id"
+                                                class="ui-template-message-block ui-template-message-block-top">
+                                                <div
+                                                    class="flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold shadow-sm border bg-rose-50 border-rose-200 text-rose-700">
+                                                    <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor"
+                                                        viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                            d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z">
+                                                        </path>
+                                                    </svg>
+                                                    <span class="truncate">变量分析失败：{{ uiTemplateUpdateStatus.message }}</span>
+                                                    <button type="button" @click="updateUiTemplatesFromChat({ manual: true, targetMessageId: msg.id })"
+                                                        class="ml-auto flex-shrink-0 px-2 py-0.5 rounded-lg bg-rose-100 text-rose-700 hover:bg-rose-200 transition-colors">
+                                                        重试
+                                                    </button>
+                                                </div>
+                                            </div>
                                             <!-- CoT Part -->
                                             <!-- Main Part -->
                                             <template v-if="parseCot(msg.content).main">

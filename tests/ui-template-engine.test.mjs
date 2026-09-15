@@ -200,3 +200,29 @@ test('app.js: UI模板变量分析请求不使用未声明的裸 apiKey', async 
     '批量与单模板分析请求都应使用 chatProviderForAnalysis.apiKey'
   );
 });
+
+test('sub-model analysis uses its own output budget decoupled from chat', async () => {
+  // 2026-09-12: analysis requests no longer reuse the chat maxOutputTokens;
+  // they read settings.uiTemplateMaxOutputTokens (default 4096, clamped
+  // 1024..16384) so a thinking-heavy chat model cannot starve the JSON.
+  const settingsState = await read('src/composables/useSettingsState.mjs');
+  const pipeline = await read('src/composables/useUiTemplatePipeline.mjs');
+  assert.match(settingsState, /uiTemplateMaxOutputTokens: 4096/,
+    'the analysis budget defaults to 4096, independent of chat maxOutputTokens');
+  assert.match(pipeline, /const getUiTemplateAnalysisMaxTokens = \(\) => \{/,
+    'pipeline defines a dedicated analysis budget helper');
+  assert.doesNotMatch(pipeline, /max_tokens: getMaxOutputTokens\(\)/,
+    'no analysis request reuses the chat output budget');
+  assert.match(pipeline, /max_tokens: getUiTemplateAnalysisMaxTokens\(\)/,
+    'analysis requests use the dedicated budget');
+});
+
+test('failed analysis shows an inline error with a manual retry in the message list', async () => {
+  // Failures are surfaced next to the last assistant message with a retry
+  // button instead of auto-retrying or silently dropping.
+  const messageList = await read('src/components/chat/MessageList.vue');
+  assert.match(messageList, /uiTemplateUpdateStatus\.state === 'error' && uiTemplateUpdateStatus\.targetMessageId === msg\.id/,
+    'MessageList renders an inline error block for the target message');
+  assert.match(messageList, /updateUiTemplatesFromChat\(\{ manual: true, targetMessageId: msg\.id \}\)/,
+    'the error block offers a manual retry');
+});

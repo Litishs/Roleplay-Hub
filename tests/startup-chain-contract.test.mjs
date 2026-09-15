@@ -37,8 +37,19 @@ test('display-only network probes run after the restore chain', async () => {
     }
 });
 
-test('local embedding autoload is deferred off the startup chain', async () => {
+test('local embedding autoload is deferred off the startup chain and idle-scheduled', async () => {
     const app = await read(new URL('../src/modules/app.mjs', import.meta.url));
-    assert.match(app, /setTimeout\(\(\) => \{ ensureLocalEmbeddingReady\(\); \}, 3000\)/,
-        'embedding autoload must be deferred (setTimeout) instead of starting mid-restore');
+    const defIdx = app.indexOf('const scheduleLocalEmbeddingAutoload = () => {');
+    assert.ok(defIdx > 0, 'embedding autoload scheduler must be defined in app.mjs');
+    const callIdx = app.indexOf('scheduleLocalEmbeddingAutoload();');
+    assert.ok(callIdx > defIdx, 'embedding autoload scheduler must be invoked after its definition');
+    const scheduler = app.slice(defIdx, callIdx);
+    assert.ok(scheduler.includes('requestIdleCallback'),
+        'scheduler must prefer a browser idle slot before loading the WASM weights');
+    assert.match(scheduler, /if \(isConversationBusy\.value\)/,
+        'scheduler must defer the load while a conversation is generating');
+    assert.match(scheduler, /setTimeout\(attempt, 2000\)/,
+        'scheduler must retry after a delay while the conversation stays busy');
+    assert.ok(!scheduler.includes('setTimeout(() => { ensureLocalEmbeddingReady(); }, 3000)'),
+        'the fixed 3s embedding timer must be gone');
 });

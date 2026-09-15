@@ -21,8 +21,8 @@
                 </settings-page-header>
                 <div id="regex-list" class="grid grid-cols-1 gap-4">
                     <div v-for="(script, index) in regexScripts" :key="script.name + index"
-                        class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-all flex justify-between items-center group">
-                        <div class="flex-1 min-w-0 mr-4 flex items-center">
+                        class="management-item-card bg-white p-4 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-all flex justify-between items-center group">
+                        <div class="management-item-name flex-1 min-w-0 mr-4 flex items-center">
                             <div class="cursor-move text-gray-400 mr-3 hover:text-gray-600" title="拖动排序">
                                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -39,7 +39,7 @@
                                 </div>
                             </div>
                         </div>
-                        <div class="flex items-center space-x-4 flex-shrink-0">
+                        <div class="management-item-controls flex items-center space-x-4 flex-shrink-0">
                             <label class="relative inline-flex items-center cursor-pointer">
                                 <input type="checkbox" v-model="script.enabled" class="settings-toggle-input sr-only" :true-value="true"
                                     :false-value="false">

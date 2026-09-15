@@ -55,9 +55,9 @@
 
                 <div id="active-tools-list" class="space-y-4">
                     <div v-for="(tool, index) in activeTools" :key="tool.id || index"
-                        class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-all flex justify-between items-center">
+                        class="management-item-card bg-white p-4 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-all flex justify-between items-center">
                         <button type="button" @click="editActiveTool(index)"
-                            class="flex-1 min-w-0 mr-4 flex items-center text-left">
+                            class="management-item-name flex-1 min-w-0 mr-4 flex items-center text-left">
                             <div class="text-primary-600 bg-primary-50 mr-3 rounded-lg w-10 h-10 flex items-center justify-center flex-shrink-0">
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -78,7 +78,7 @@
                                 </div>
                             </div>
                         </button>
-                        <div class="flex items-center space-x-4 flex-shrink-0">
+                        <div class="management-item-controls flex items-center space-x-4 flex-shrink-0">
                             <label class="relative inline-flex items-center cursor-pointer" @click.stop>
                                 <input type="checkbox" v-model="tool.enabled" @change="normalizeActiveTools()"
                                     class="settings-toggle-input sr-only">

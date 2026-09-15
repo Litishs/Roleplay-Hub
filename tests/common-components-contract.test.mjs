@@ -95,3 +95,47 @@ test("SideNav groups 角色卡生成 and 万相广场 behind a collapsible 在�
   assert.match(vue, /<span>角色卡生成<\/span>/, "generator child item keeps its label");
   assert.match(vue, /<span>万相广场<\/span>/, "square child item keeps its label");
 });
+
+test("subnav child items are indented under their group with a tree guide line", async () => {
+  const css = await readFile(new URL("../assets/css/styles.css", import.meta.url), "utf8");
+  // shared list for both 在线 and 高级 groups: indented from the parent trigger icon column
+  const listIdx = css.indexOf(".advanced-nav-list {");
+  assert.ok(listIdx > 0, "advanced-nav-list rule must exist");
+  const listBlock = css.slice(listIdx, css.indexOf("}", listIdx));
+  assert.match(listBlock, /margin:\s*[^;]*1\.375rem/, "subnav list must be indented under the parent icon column");
+  assert.match(listBlock, /padding-left:\s*0\.5rem/, "subnav list keeps inner padding for the guide line");
+  // tree guide line drawn by the list itself
+  assert.match(css, /\.advanced-nav-list::before[\s\S]*?background:\s*linear-gradient/, "subnav list draws a vertical guide line");
+  // child items are visually smaller than top-level entries
+  const itemIdx = css.indexOf(".advanced-nav-item {");
+  assert.ok(itemIdx > 0, "advanced-nav-item rule must exist");
+  const itemBlock = css.slice(itemIdx, css.indexOf("}", itemIdx));
+  assert.match(itemBlock, /font-size:\s*0\.9375rem/, "subnav items render one step smaller than top-level nav");
+  // dark mode keeps the guide line visible but muted
+  assert.match(css, /\[data-theme='dark'\] \.advanced-nav-list::before/, "dark mode overrides the guide line color");
+});
+
+test("management item rows stack name above controls on narrow viewports", async () => {
+  const [css, presets, regex, worldinfo, tools] = await Promise.all([
+    readFile(new URL("../assets/css/styles.css", import.meta.url), "utf8"),
+    readFile(new URL("../src/components/views/PresetsPanel.vue", import.meta.url), "utf8"),
+    readFile(new URL("../src/components/views/RegexPanel.vue", import.meta.url), "utf8"),
+    readFile(new URL("../src/components/views/WorldInfoPanel.vue", import.meta.url), "utf8"),
+    readFile(new URL("../src/components/views/ToolsPanel.vue", import.meta.url), "utf8"),
+  ]);
+  // all four management panels share the same semantic row markers
+  for (const [name, src] of [["PresetsPanel", presets], ["RegexPanel", regex], ["WorldInfoPanel", worldinfo], ["ToolsPanel", tools]]) {
+    assert.match(src, /management-item-card/, `${name} marks its item card`);
+    assert.match(src, /management-item-name/, `${name} marks the name zone`);
+    assert.match(src, /management-item-controls/, `${name} marks the controls zone`);
+  }
+  // narrow viewports switch the row to a stacked grid: name row on top, controls below
+  const mqIdx = css.indexOf("@media (max-width: 639px)");
+  assert.ok(mqIdx > 0, "narrow-viewport media query must exist");
+  const mqBlock = css.slice(mqIdx, css.indexOf("}", css.indexOf(".management-item-controls", mqIdx)));
+  assert.match(mqBlock, /\.management-item-card[\s\S]*?display:\s*grid/, "item card becomes a grid on narrow viewports");
+  assert.match(mqBlock, /grid-template-areas:[\s\S]*?"name"[\s\S]*?"controls"/, "name row stacks above the controls row");
+  assert.match(mqBlock, /\.management-item-controls[\s\S]*?justify-content:\s*flex-end/, "controls row right-aligns under the name");
+  // dark mode keeps the divider visible but muted
+  assert.match(css, /\[data-theme='dark'\] \.management-item-controls/, "dark mode overrides the controls divider color");
+});

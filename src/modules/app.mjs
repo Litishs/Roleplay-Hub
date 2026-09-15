@@ -9215,9 +9215,23 @@ const __app = createApp({
             checkAllStatuses();
 
             // v4：本地嵌入模型默认自动加载（记忆开启 + 后端为本地时）。
-            // transformers + 模型权重加载较重，延迟到启动链空闲后再开始，
-            // 不与首屏会话恢复抢 I/O/CPU；发送消息前若尚未就绪会按需等待。
-            setTimeout(() => { ensureLocalEmbeddingReady(); }, 3000);
+            // transformers + 模型权重在主线程编译加载较重，延迟到恢复链之后再
+            // 开始，并只在浏览器空闲槽启动：刚进房用户正在滚动/打字/生成时不抢
+            // 主线程，忙碌则顺延重试。发送消息前若尚未就绪仍会按需等待。
+            const scheduleLocalEmbeddingAutoload = () => {
+                const attempt = () => {
+                    if (isConversationBusy.value) {
+                        setTimeout(attempt, 2000);
+                        return;
+                    }
+                    ensureLocalEmbeddingReady();
+                };
+                const whenIdle = (typeof window.requestIdleCallback === 'function')
+                    ? (callback) => window.requestIdleCallback(callback, { timeout: 15000 })
+                    : (callback) => setTimeout(callback, 5000);
+                whenIdle(attempt);
+            };
+            scheduleLocalEmbeddingAutoload();
 
             // --- Mobile Keyboard Adaptation (VisualViewport) ---
             if (window.visualViewport) {

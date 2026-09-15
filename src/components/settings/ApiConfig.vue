@@ -281,35 +281,10 @@
                 刷新可用模型列表
             </button>
 
-
-
-            <!-- Generation Settings (Integrated) -->
-            <div class="pt-6 border-t border-gray-100 mt-6">
-                <div class="flex items-center justify-between gap-3">
-                    <button type="button" @click="genSectionOpen = !genSectionOpen"
-                        class="flex flex-1 items-center rounded-lg py-1.5 text-xs font-bold text-gray-400 uppercase tracking-wider text-left transition-colors hover:text-gray-600 group">
-                        <svg class="w-4 h-4 mr-2 text-gray-400 transition-colors group-hover:text-gray-600" fill="none" stroke="currentColor"
-                            viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4">
-                            </path>
-                        </svg>
-                        <span>生图设置</span>
-                        <svg :class="['w-4 h-4 ml-1.5 text-gray-400 transition-all duration-300 group-hover:text-gray-600', genSectionOpen ? 'rotate-180' : '']"
-                            fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M19 9l-7 7-7-7"></path>
-                        </svg>
-                    </button>
-                    <button type="button" @click="openExternal('https://cdn.sta1n.cn/keys')"
-                        class="text-teal-600 hover:text-teal-700 hover:underline cursor-pointer transition-colors text-xs normal-case font-medium">
-                        获取生图密钥
-                    </button>
-                </div>
-                <div class="grid"
-                    :style="{ gridTemplateRows: genSectionOpen ? '1fr' : '0fr', transition: 'grid-template-rows 300ms ease' }">
-                    <div class="overflow-hidden min-h-0">
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4">
+            <!-- 聊天参数（温度 / 输出长度上限） -->
+            <div class="pt-5 border-t border-gray-100 mt-5">
+                <div class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">聊天参数</div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <!-- 温度 -->
                     <div
                         class="bg-gray-50/60 p-4 rounded-xl border border-gray-100 hover:bg-white hover:border-gray-200 hover:shadow-sm transition-all duration-200">
@@ -340,7 +315,36 @@
                             class="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-teal-500 hover:accent-teal-400 transition-all">
                         <div class="text-[10px] text-gray-400 mt-1">单次回复的最大输出 token 数，按你的需求设定上限。</div>
                     </div>
+                </div>
+            </div>
 
+            <!-- Generation Settings (Integrated) -->
+            <div class="pt-6 border-t border-gray-100 mt-6">
+                <div class="flex items-center justify-between gap-3">
+                    <button type="button" @click="genSectionOpen = !genSectionOpen"
+                        class="flex flex-1 items-center rounded-lg py-1.5 text-xs font-bold text-gray-400 uppercase tracking-wider text-left transition-colors hover:text-gray-600 group">
+                        <svg class="w-4 h-4 mr-2 text-gray-400 transition-colors group-hover:text-gray-600" fill="none" stroke="currentColor"
+                            viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4">
+                            </path>
+                        </svg>
+                        <span>生图设置</span>
+                        <svg :class="['w-4 h-4 ml-1.5 text-gray-400 transition-all duration-300 group-hover:text-gray-600', genSectionOpen ? 'rotate-180' : '']"
+                            fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M19 9l-7 7-7-7"></path>
+                        </svg>
+                    </button>
+                    <button type="button" @click="openExternal('https://cdn.sta1n.cn/keys')"
+                        class="text-teal-600 hover:text-teal-700 hover:underline cursor-pointer transition-colors text-xs normal-case font-medium">
+                        获取生图密钥
+                    </button>
+                </div>
+                <div class="grid"
+                    :style="{ gridTemplateRows: genSectionOpen ? '1fr' : '0fr', transition: 'grid-template-rows 300ms ease' }">
+                    <div class="overflow-hidden min-h-0">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4">
                     <!-- Image Key -->
                     <div
                         class="generation-setting-card">

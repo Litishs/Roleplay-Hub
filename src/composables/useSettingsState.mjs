@@ -84,6 +84,7 @@ export function useSettingsState() {
         uiTemplateMainModelAnalysis: true,
         uiTemplateBatchMode: true,
         uiTemplateJsonMode: true,
+        uiTemplateMaxOutputTokens: 4096, // sub-model analysis budget, decoupled from chat maxOutputTokens
         fontFamily: 'modern',
         fontFamilyVersion: 4,
         fontSize: window.innerWidth > 768 ? 16 : 14,
