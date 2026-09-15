@@ -114,3 +114,28 @@ test("subnav child items are indented under their group with a tree guide line",
   // dark mode keeps the guide line visible but muted
   assert.match(css, /\[data-theme='dark'\] \.advanced-nav-list::before/, "dark mode overrides the guide line color");
 });
+
+test("management item rows stack name above controls on narrow viewports", async () => {
+  const [css, presets, regex, worldinfo, tools] = await Promise.all([
+    readFile(new URL("../assets/css/styles.css", import.meta.url), "utf8"),
+    readFile(new URL("../src/components/views/PresetsPanel.vue", import.meta.url), "utf8"),
+    readFile(new URL("../src/components/views/RegexPanel.vue", import.meta.url), "utf8"),
+    readFile(new URL("../src/components/views/WorldInfoPanel.vue", import.meta.url), "utf8"),
+    readFile(new URL("../src/components/views/ToolsPanel.vue", import.meta.url), "utf8"),
+  ]);
+  // all four management panels share the same semantic row markers
+  for (const [name, src] of [["PresetsPanel", presets], ["RegexPanel", regex], ["WorldInfoPanel", worldinfo], ["ToolsPanel", tools]]) {
+    assert.match(src, /management-item-card/, `${name} marks its item card`);
+    assert.match(src, /management-item-name/, `${name} marks the name zone`);
+    assert.match(src, /management-item-controls/, `${name} marks the controls zone`);
+  }
+  // narrow viewports switch the row to a stacked grid: name row on top, controls below
+  const mqIdx = css.indexOf("@media (max-width: 639px)");
+  assert.ok(mqIdx > 0, "narrow-viewport media query must exist");
+  const mqBlock = css.slice(mqIdx, css.indexOf("}", css.indexOf(".management-item-controls", mqIdx)));
+  assert.match(mqBlock, /\.management-item-card[\s\S]*?display:\s*grid/, "item card becomes a grid on narrow viewports");
+  assert.match(mqBlock, /grid-template-areas:[\s\S]*?"name"[\s\S]*?"controls"/, "name row stacks above the controls row");
+  assert.match(mqBlock, /\.management-item-controls[\s\S]*?justify-content:\s*flex-end/, "controls row right-aligns under the name");
+  // dark mode keeps the divider visible but muted
+  assert.match(css, /\[data-theme='dark'\] \.management-item-controls/, "dark mode overrides the controls divider color");
+});

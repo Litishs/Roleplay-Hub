@@ -1320,6 +1320,35 @@
             color: #dc2626;
         }
 
+        /* —— Narrow-viewport two-row item layout: the name owns the first row and
+           toggles/actions drop to a second, right-aligned row. On phone portrait
+           the fixed-width controls (toggle + divider + action buttons + drag
+           handle ≈ 230px) squeezed the truncated title down to a few characters;
+           stacking restores near-full-width names. ≥640px keeps the single row. */
+        @media (max-width: 639px) {
+            .management-item-card {
+                display: grid;
+                grid-template-columns: minmax(0, 1fr);
+                grid-template-areas:
+                    "name"
+                    "controls";
+                row-gap: 0.625rem;
+                align-items: center;
+            }
+
+            .management-item-name {
+                grid-area: name;
+                margin-right: 0;
+            }
+
+            .management-item-controls {
+                grid-area: controls;
+                justify-content: flex-end;
+                padding-top: 0.5rem;
+                border-top: 1px dashed rgba(229, 231, 235, 0.9);
+            }
+        }
+
         .pagination-button {
             display: flex;
             align-items: center;
@@ -2986,6 +3015,9 @@ opacity: 0;
         }
         [data-theme='dark'] .advanced-nav-list::before {
             background: linear-gradient(180deg, rgba(71, 85, 105, 0.65), rgba(71, 85, 105, 0.2));
+        }
+        [data-theme='dark'] .management-item-controls {
+            border-top-color: rgba(55, 65, 81, 0.9);
         }
         [data-theme='dark'] .settings-toggle {
             background: var(--d-surface-3);
