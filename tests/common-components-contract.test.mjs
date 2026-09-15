@@ -95,3 +95,22 @@ test("SideNav groups 角色卡生成 and 万相广场 behind a collapsible 在�
   assert.match(vue, /<span>角色卡生成<\/span>/, "generator child item keeps its label");
   assert.match(vue, /<span>万相广场<\/span>/, "square child item keeps its label");
 });
+
+test("subnav child items are indented under their group with a tree guide line", async () => {
+  const css = await readFile(new URL("../assets/css/styles.css", import.meta.url), "utf8");
+  // shared list for both 在线 and 高级 groups: indented from the parent trigger icon column
+  const listIdx = css.indexOf(".advanced-nav-list {");
+  assert.ok(listIdx > 0, "advanced-nav-list rule must exist");
+  const listBlock = css.slice(listIdx, css.indexOf("}", listIdx));
+  assert.match(listBlock, /margin:\s*[^;]*1\.375rem/, "subnav list must be indented under the parent icon column");
+  assert.match(listBlock, /padding-left:\s*0\.5rem/, "subnav list keeps inner padding for the guide line");
+  // tree guide line drawn by the list itself
+  assert.match(css, /\.advanced-nav-list::before[\s\S]*?background:\s*linear-gradient/, "subnav list draws a vertical guide line");
+  // child items are visually smaller than top-level entries
+  const itemIdx = css.indexOf(".advanced-nav-item {");
+  assert.ok(itemIdx > 0, "advanced-nav-item rule must exist");
+  const itemBlock = css.slice(itemIdx, css.indexOf("}", itemIdx));
+  assert.match(itemBlock, /font-size:\s*0\.9375rem/, "subnav items render one step smaller than top-level nav");
+  // dark mode keeps the guide line visible but muted
+  assert.match(css, /\[data-theme='dark'\] \.advanced-nav-list::before/, "dark mode overrides the guide line color");
+});
