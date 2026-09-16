@@ -33,6 +33,7 @@ const RPHUpdateChecker = { compareVersions, checkForUpdate, fetchLatestRelease, 
 const IMAGE_GEN_BASE_URL = 'https://nai.sta1n.cn';
 
 import { RPHChatPersistence } from './chat-persistence.mjs';
+import { initSwipes, captureActiveCandidate, appendSwipeCandidate, normalizeSwipes, swipeMaxCandidates } from './swipe-candidates.mjs';
 import { DEFAULT_PRESET_DEFINITIONS, DEFAULT_PRESET_DEFINITIONS_VERSION } from './default-presets.mjs';
 import { buildCotPresetContent } from './cot-builder.mjs';
 import { RPHStorage } from './storage-repository.mjs';
@@ -4428,6 +4429,10 @@ const __app = createApp({
                     finalContent = msg.originalCot + '\n\n' + finalContent;
                 }
                 msg.content = finalContent;
+                // Swipe contract (design doc §3.3): an edited message is the user's authoritative
+                // version, so the whole candidate set is retired.
+                delete msg.swipes;
+                delete msg.activeSwipeIndex;
                 msg.isEditing_Message = false;
                 delete msg.editMessageContent;
                 delete msg.editMessageHeight;
@@ -4582,6 +4587,178 @@ const __app = createApp({
             });
         };
 
+        // ------------------------------------------------------------------
+        // Swipe candidates (design doc §5.1/§5.2): the last-floor assistant
+        // message can hold multiple candidates; regeneration appends instead
+        // of overwriting, and the user switches between them.
+        // ------------------------------------------------------------------
+        let pendingSwipeBase = null;
+
+        // Character/branch switches abandon an unfinished merge (§6.3); the composable
+        // reaches this through a dep because pendingSwipeBase is app.mjs-local state.
+        const discardPendingSwipeBase = (reason = 'scope switch') => {
+            if (!pendingSwipeBase) return;
+            pendingSwipeBase = null;
+            console.warn(`[Swipe] Pending swipe base discarded on ${reason}`);
+        };
+
+        // Mirror of pruneUiTemplateChangesFromTurn's segment filter, but READ-only:
+        // extract the changeLog segment (turn >= turnIndex) without touching the live logs.
+        const extractUiTemplateTurnSegment = (turnIndex) => {
+            if (!Number.isFinite(turnIndex) || turnIndex < 1) return [];
+            const segment = [];
+            currentUiTemplates.value.forEach(template => {
+                (Array.isArray(template.changeLog) ? template.changeLog : [])
+                    .filter(log => (log.turn || 0) >= turnIndex)
+                    .forEach(log => segment.push({
+                        ...JSON.parse(JSON.stringify(log)),
+                        templateId: template.id
+                    }));
+            });
+            return segment;
+        };
+
+        // Swap a captured changeLog segment back in as a whole (design doc §9):
+        // replace the live tail segment (turn >= segmentTurn) with the given one,
+        // then rebuild every template's variable state from the resulting logs.
+        // When the target candidate carries no captured segment, fallbackTurn strips
+        // the live tail instead — "no segment" means "this candidate made no changes".
+        const swapUiTemplateTurn = (segment, fallbackTurn = null) => {
+            const entries = Array.isArray(segment) ? segment : [];
+            const segmentTurns = entries.map(log => Number(log.turn || 0)).filter(Number.isFinite);
+            const boundaryTurn = segmentTurns.length ? Math.min(...segmentTurns) : fallbackTurn;
+            currentUiTemplates.value.forEach(template => {
+                const allLogs = Array.isArray(template.changeLog) ? template.changeLog : [];
+                let remainingLogs = boundaryTurn === null || !Number.isFinite(boundaryTurn)
+                    ? allLogs
+                    : allLogs.filter(log => (log.turn || 0) < boundaryTurn);
+                const templateEntries = entries
+                    .filter(log => log.templateId === template.id)
+                    .map(({ templateId, ...log }) => log);
+                if (templateEntries.length) remainingLogs = [...remainingLogs, ...templateEntries];
+                rebuildUiTemplateStateFromLogs(template, remainingLogs, remainingLogs);
+                template.changeLog = remainingLogs;
+            });
+        };
+
+        // Swap the recentGenerationTimes record that belongs to a message id.
+        const swapTimingRecord = (timing) => {
+            // The record's id field no longer matters here: regenerateMessage removed the
+            // old id's record and the new message gets its own on completion. Swapping a
+            // captured record therefore means dropping the live one and restoring the
+            // captured duration under the current message id.
+            recentGenerationTimes.value = recentGenerationTimes.value.filter(t => t.id !== swipeTimingMessageId);
+            if (timing && typeof timing === 'object' && Number.isFinite(Number(timing.duration))) {
+                recentGenerationTimes.value.push({ id: swipeTimingMessageId, duration: Number(timing.duration) });
+            }
+        };
+
+        // Capture-while-swapping helper: the id-bound timing record must be looked up
+        // before the message id changes hands, so swapTimingRecord is wrapped per call.
+        let swipeTimingMessageId = null;
+        const swapTimingForMessage = (messageId, timing) => {
+            swipeTimingMessageId = messageId;
+            try {
+                swapTimingRecord(timing);
+            } finally {
+                swipeTimingMessageId = null;
+            }
+        };
+
+        // Rollback helper (design doc §8.1): put a snapshot back as the last message.
+        const restoreLastMessage = (tailSnapshot) => {
+            if (!tailSnapshot) return;
+            chatHistory.value = [...chatHistory.value, reactive(JSON.parse(JSON.stringify(tailSnapshot)))];
+        };
+
+        // mergeOrRestore after a swipe-style regeneration (design doc §6):
+        // - merge: the new reply becomes the last candidate of the fresh message;
+        // - restore: generation failed/early-exited -> put the old message back verbatim.
+        const mergeOrRestoreSwipedGeneration = async () => {
+            const base = pendingSwipeBase;
+            pendingSwipeBase = null;
+            if (!base) return;
+            const tail = chatHistory.value[chatHistory.value.length - 1];
+            const isFreshAssistantReply = tail
+                && tail.role === 'assistant'
+                && !tail.isError
+                && tail.id !== base.message.id;
+            if (isFreshAssistantReply) {
+                const baseSwipes = Array.isArray(base.swipes) && base.swipes.length ? base.swipes : [{ content: base.message.content || '', reasoning: base.message.reasoning || '' }];
+                tail.swipes = [...baseSwipes, { content: tail.content || '', reasoning: tail.reasoning || '' }];
+                tail.activeSwipeIndex = tail.swipes.length - 1;
+                const evicted = tail.swipes.length - swipeMaxCandidates();
+                if (evicted > 0) {
+                    tail.swipes = tail.swipes.slice(evicted);
+                    tail.activeSwipeIndex = tail.swipes.length - 1;
+                }
+                await saveConversationMutationNow({ saveTemplateRuntime: true });
+            } else {
+                restoreLastMessage(base.message);
+                showToast('重新生成失败，已恢复原回复', 'error', 5000);
+                await saveConversationMutationNow({ saveTemplateRuntime: false });
+            }
+        };
+
+        // Candidate switching (design doc §5.2): lazy-capture the outgoing candidate,
+        // swap the whole template changeLog segment + blocks + timing, then mirror the
+        // incoming candidate into msg.content/msg.reasoning. Any failure rolls the
+        // last message back and keeps swipes/activeSwipeIndex consistent.
+        const activateCandidate = async (index, target) => {
+            if (isConversationBusy.value) return;
+            if (index !== chatHistory.value.length - 1) return;
+            const msg = chatHistory.value[index];
+            if (!msg || msg.role !== 'assistant' || !Array.isArray(msg.swipes) || msg.swipes.length === 0) return;
+            if (!Number.isInteger(target) || target < 0 || target >= msg.swipes.length) return;
+            if (target === msg.activeSwipeIndex) return;
+            abortUiTemplateUpdate();
+            const previousTail = JSON.parse(JSON.stringify(unwrapForStorage(msg)));
+            try {
+                // 1. Lazy-capture the outgoing active candidate before it leaves the mirror
+                const capturedBlocks = msg.uiTemplateBlocks
+                    ? JSON.parse(JSON.stringify(msg.uiTemplateBlocks))
+                    : undefined;
+                const snapshot = buildConversationTurnSnapshot();
+                const turnIndex = getConversationTurnAtIndexFromSnapshot(snapshot, index);
+                const capturedTurn = extractUiTemplateTurnSegment(turnIndex);
+                const capturedTiming = (() => {
+                    const record = recentGenerationTimes.value.find(t => (t.id || t) === msg.id);
+                    return record ? JSON.parse(JSON.stringify(record)) : undefined;
+                })();
+                captureActiveCandidate(msg, {
+                    uiTemplateBlocks: capturedBlocks,
+                    uiTemplateTurn: capturedTurn,
+                    timing: capturedTiming
+                });
+                // 2. Whole-segment swap to the target candidate
+                const next = msg.swipes[target];
+                swapUiTemplateTurn(next.uiTemplateTurn, turnIndex);
+                if (next.uiTemplateBlocks) {
+                    msg.uiTemplateBlocks = JSON.parse(JSON.stringify(next.uiTemplateBlocks));
+                } else if (msg.uiTemplateBlocks) {
+                    delete msg.uiTemplateBlocks;
+                }
+                msg.content = String(next.content ?? '');
+                msg.reasoning = String(next.reasoning ?? '');
+                swapTimingForMessage(msg.id, next.timing);
+                msg.activeSwipeIndex = target;
+                msg.shouldAnimate = false;
+                await saveConversationMutationNow({ saveTemplateRuntime: true });
+            } catch (error) {
+                console.error('Swipe candidate switch failed:', error);
+                // Roll back only when the last floor is still the message we mutated;
+                // if new messages arrived meanwhile, leave them untouched.
+                if (chatHistory.value.length === index + 1 && chatHistory.value[index]?.id === previousTail.id) {
+                    chatHistory.value = chatHistory.value.slice(0, index);
+                    restoreLastMessage(previousTail);
+                }
+                showToast('切换失败：' + (error?.message || '未知错误'), 'error', 5000);
+            }
+        };
+
+        const swipePrev = (index) => activateCandidate(index, (chatHistory.value[index]?.activeSwipeIndex ?? 0) - 1);
+        const swipeNext = (index) => activateCandidate(index, (chatHistory.value[index]?.activeSwipeIndex ?? 0) + 1);
+
         const regenerateMessage = async (index) => {
             if (isGenerating.value) return;
 
@@ -4609,27 +4786,59 @@ const __app = createApp({
                 await Promise.all([saveMemoriesNow(), saveClassicMemoriesNow()]);
                 await generateResponse(startTime, { reuseGeneratingState: true });
             } else {
-                // 如果是 AI 消息，删除它（及之后）然后重新生成
-                confirmAction('确定要重新生成这条消息吗？该楼层的记忆将被清除。', async () => {
-                    startRegenerationStatus();
-                    abortUiTemplateUpdate();
-                    abortVectorBatchExtraction();
-                    abortClassicBatchExtraction();
-                    // 计算被删除区间的 assistant 轮次，只删除 >= 该轮次的记忆
-                    const snapshot = buildConversationTurnSnapshot();
-                    const turnAtIndex = getConversationTurnAtIndexFromSnapshot(snapshot, index);
-                    const uiTurnAtIndex = turnAtIndex;
-                    await filterMemoriesAsync(m => (m.turn || 0) < turnAtIndex);
-                    await removeClassicMemoriesFromTurn(snapshot, turnAtIndex);
-                    const uiCleanup = pruneUiTemplateChangesFromTurn(uiTurnAtIndex);
-                    // Remove timing record for the message being regenerated
-                    if (msg && msg.id) {
-                        recentGenerationTimes.value = recentGenerationTimes.value.filter(t => (t.id || t) !== msg.id);
-                    }
-                    chatHistory.value = chatHistory.value.slice(0, index);
-                    await saveConversationMutationNow({ saveTemplateRuntime: uiCleanup.logs > 0 || uiCleanup.blocks > 0 });
-                    await generateResponse(startTime, { reuseGeneratingState: true });
+                // AI message branch: swipe-style regeneration — the existing reply is kept as a
+                // candidate, the new reply is appended as another one, and the user can switch
+                // between candidates afterwards (design doc §5.1). Only the last message is
+                // supported (the action button is rendered on the last floor only).
+                if (index !== chatHistory.value.length - 1) return;
+                startRegenerationStatus();
+                abortUiTemplateUpdate();
+                abortVectorBatchExtraction();
+                abortClassicBatchExtraction();
+                // 计算被删除区间的 assistant 轮次，只删除 >= 该轮次的记忆
+                const snapshot = buildConversationTurnSnapshot();
+                const turnAtIndex = getConversationTurnAtIndexFromSnapshot(snapshot, index);
+                const uiTurnAtIndex = turnAtIndex;
+                // ① Lazy-capture the currently active candidate BEFORE any pruning (design doc
+                //    D-4: template segments are written asynchronously after generation and must
+                //    be read only after the async window closes, i.e. when leaving the candidate).
+                const capturedBlocks = msg.uiTemplateBlocks
+                    ? JSON.parse(JSON.stringify(msg.uiTemplateBlocks))
+                    : undefined;
+                const capturedTurn = extractUiTemplateTurnSegment(uiTurnAtIndex);
+                const capturedTiming = (() => {
+                    const record = recentGenerationTimes.value.find(t => (t.id || t) === msg.id);
+                    return record ? JSON.parse(JSON.stringify(record)) : undefined;
+                })();
+                captureActiveCandidate(msg, {
+                    uiTemplateBlocks: capturedBlocks,
+                    uiTemplateTurn: capturedTurn,
+                    timing: capturedTiming
                 });
+                // ② Two-handed preparation: hold the old message snapshot for either merging
+                //    into the freshly generated reply or restoring it on failure.
+                pendingSwipeBase = {
+                    swipes: JSON.parse(JSON.stringify(msg.swipes || [])),
+                    activeSwipeIndex: Number(msg.activeSwipeIndex) || 0,
+                    message: JSON.parse(JSON.stringify(unwrapForStorage(msg)))
+                };
+                await filterMemoriesAsync(m => (m.turn || 0) < turnAtIndex);
+                await removeClassicMemoriesFromTurn(snapshot, turnAtIndex);
+                const uiCleanup = pruneUiTemplateChangesFromTurn(uiTurnAtIndex);
+                // Remove timing record for the message being regenerated (the candidate's own
+                // timing was captured into the swipe slot above)
+                if (msg && msg.id) {
+                    recentGenerationTimes.value = recentGenerationTimes.value.filter(t => (t.id || t) !== msg.id);
+                }
+                chatHistory.value = chatHistory.value.slice(0, index);
+                await saveConversationMutationNow({ saveTemplateRuntime: uiCleanup.logs > 0 || uiCleanup.blocks > 0 });
+                try {
+                    await generateResponse(startTime, { reuseGeneratingState: true });
+                } finally {
+                    // mergeOrRestore must run even if generation throws unexpectedly,
+                    // otherwise the old reply stays sliced off with no restore path.
+                    await mergeOrRestoreSwipedGeneration();
+                }
             }
         };
 
@@ -7766,6 +7975,7 @@ const __app = createApp({
             .filter(msg => msg !== null && msg !== undefined)
             .map(msg => {
                 if (!msg.id) msg.id = generateUUID();
+                if (msg.role === 'assistant') normalizeSwipes(msg);
                 if (msg.isSelf === undefined) {
                     msg.isSelf = msg.role === 'user';
                 }
@@ -8139,6 +8349,11 @@ const __app = createApp({
             storyBranchSwitching.value = true;
             try {
                 abortRollingSummary();
+                // Abandon an unfinished swipe merge when leaving the current branch (§6.3).
+                if (pendingSwipeBase) {
+                    pendingSwipeBase = null;
+                    console.warn('[Swipe] Pending swipe base discarded on branch switch');
+                }
                 if (!await flushCurrentBranchState()) return;
                 const targetScopeId = getStoryBranchScopeId(char.uuid, branchId);
                 const [savedChat, savedMemories, savedClassicMemories] = await Promise.all([
@@ -8532,6 +8747,7 @@ const __app = createApp({
             // app.mjs orchestration (persistence / confirm / toast / chat view)
             saveChatHistoryNow,
             flushPendingChatHistorySave,
+            discardPendingSwipeBase,
             confirmAction,
             showToast,
             scrollChatToBottom,
@@ -9669,7 +9885,7 @@ const __app = createApp({
             handleConfirm, handleCancel, // Export handlers
             showChatImportDialog, chatImportDialog, confirmChatImportOverwrite, confirmChatImportAppend, cancelChatImport,
             showImportPreview, importPreview, confirmImportPreview, cancelImportPreview,
-            copyMessage, deleteMessage, regenerateMessage,
+            copyMessage, deleteMessage, regenerateMessage, swipePrev, swipeNext,
             editMessage, saveEditMessage, cancelEditMessage,
             createNewCharacter, editCharacter, saveCharacter, deleteCharacter, selectCharacter, beginCharacterCardPress, endCharacterCardPress, toggleCharacterFavorite, isCharacterFavorite,
             currentUiTemplates, activeUiTemplates, uiTemplateUpdateStatus, createUiTemplate, editUiTemplate, saveUiTemplate, deleteUiTemplate, importUiTemplates, updateUiTemplatesFromChat, renderEditingUiTemplatePreview, handleUiTemplateClick, formatUiTemplateChangeValue, hasUiTemplateScripts,

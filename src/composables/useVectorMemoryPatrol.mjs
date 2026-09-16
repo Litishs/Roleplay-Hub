@@ -80,7 +80,11 @@ export function useVectorMemoryPatrol(deps) {
                 while (getBatchExtractAbort() === batchController && !batchController.signal.aborted) {
                     setVectorBatchRescanRequested(false);
                     const snapshot = buildConversationTurnSnapshot(chatHistory.value, { includeSystem: false });
-                    const safeTurns = isConversationBusy.value ? snapshot.turns.slice(0, -1) : snapshot.turns;
+                    // Swipe-era contract: the newest turn is NEVER extracted while it can still be
+                    // regenerated (swipe candidates would otherwise leak inactive candidates into
+                    // vector memory). Unconditionally exclude the last turn; it becomes eligible
+                    // once a newer turn exists. (design doc §4)
+                    const safeTurns = snapshot.turns.slice(0, -1);
                     const emptyTurnSet = new Set(emptyLog);
                     let lastExtracted = Number(memorySettings.vectorExtractedTurns[extractedKey]) || 0;
                     let chunks = safeTurns

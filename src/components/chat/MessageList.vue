@@ -338,10 +338,33 @@
                                     <!-- Message Actions -->
                                     <div v-if="!msg.isEditing_Message && !isMessageThinkingOrRunning(msg) && !(index === chatHistory.length - 1 && !msg.isSelf && (isGenerating || isRemoteGenerating)) && !(msg.isSelf && isConversationBusy && !chatHistory.slice(index + 1).some(m => m.isSelf))"
                                         :class="['message-action-bar absolute bottom-0 -mb-11 md:-mb-12 flex items-center opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-200', msg.isSelf ? 'right-0' : 'left-0']">
+                                        <!-- Swipe candidate switcher: last-floor assistant messages only -->
+                                        <div v-if="msg.role === 'assistant' && index === chatHistory.length - 1 && msg.swipes && msg.swipes.length > 1 && !isConversationBusy"
+                                            class="flex items-center mr-1 rounded-lg border border-gray-200 bg-white/80 shadow-sm overflow-hidden">
+                                            <button @click="swipePrev(index)"
+                                                :disabled="msg.activeSwipeIndex <= 0"
+                                                class="message-action-button !border-0 !bg-transparent"
+                                                :class="{ 'opacity-40': msg.activeSwipeIndex <= 0 }"
+                                                title="上一个候选">
+                                                <svg class="w-3.5 h-3.5 md:w-4 md:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+                                                </svg>
+                                            </button>
+                                            <span class="text-[11px] font-mono text-gray-500 select-none px-0.5 min-w-[2.2rem] text-center">{{ msg.activeSwipeIndex + 1 }}/{{ msg.swipes.length }}</span>
+                                            <button @click="swipeNext(index)"
+                                                :disabled="msg.activeSwipeIndex >= msg.swipes.length - 1"
+                                                class="message-action-button !border-0 !bg-transparent"
+                                                :class="{ 'opacity-40': msg.activeSwipeIndex >= msg.swipes.length - 1 }"
+                                                title="下一个候选">
+                                                <svg class="w-3.5 h-3.5 md:w-4 md:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                                                </svg>
+                                            </button>
+                                        </div>
                                         <button v-if="index === chatHistory.length - 1"
                                             @click="regenerateMessage(index)"
                                             class="message-action-button"
-                                            title="重新生成">
+                                            title="重新生成（追加候选）">
                                             <svg class="w-3.5 h-3.5 md:w-4 md:h-4" fill="none" stroke="currentColor"
                                                 viewBox="0 0 24 24">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"

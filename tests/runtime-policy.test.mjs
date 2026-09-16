@@ -53,7 +53,8 @@ test('runtime limits match the APK performance contract', async () => {
       renderCache: 100,
       activeIframes: 3,
       streamFlushMs: 50,
-      draftSaveMs: 2000
+      draftSaveMs: 2000,
+      swipeMaxCandidates: 5
     }
   );
 });
