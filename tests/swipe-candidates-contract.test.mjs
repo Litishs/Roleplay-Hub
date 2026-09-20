@@ -173,6 +173,11 @@ test('editMessage save retires the candidate set', () => {
 test('M0 memory patrol: the newest turn is unconditionally excluded from vector extraction', () => {
     assert.ok(vectorPatrol.includes('const safeTurns = snapshot.turns.slice(0, -1);'), 'unconditional last-turn exclusion');
     assert.ok(!vectorPatrol.includes('isConversationBusy.value ? snapshot.turns.slice(0, -1)'), 'busy-conditional exclusion removed');
+    // 2026-09-18 regression fix: the "conversation changed" rescan check must use the
+    // same last-turn-excluded basis as scannedTurnCount, otherwise an empty-chunk patrol
+    // spins a synchronous busy loop and freezes the renderer on device boot.
+    assert.ok(vectorPatrol.includes('const currentTurnCount = Math.max(0, buildConversationTurnSnapshot(chatHistory.value, { includeSystem: false }).turns.length - 1);'), 'rescan comparison on the safe basis');
+    assert.ok(!vectorPatrol.includes('.turns.length;\n                    if (added > 0'), 'old full-count comparison removed');
 });
 
 test('MessageList.vue: swipe switcher wired with arrows, counter, render conditions and regenerate title', () => {
