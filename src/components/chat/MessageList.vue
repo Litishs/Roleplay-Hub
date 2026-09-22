@@ -115,10 +115,10 @@
                                 <!-- Message Bubble -->
                                 <div class="group relative"
                                     :class="{'w-full': messageUsesWideLayout(msg)}"
-                                    :style="swipeBubbleStyle(msg, index)"
                                     @touchstart="canSwipeGesture(msg, index) ? onBubbleTouchStart($event, index) : null"
-                                    @touchmove.passive="swipeGestureOnIndex(index) ? onBubbleTouchMove($event, index) : null"
-                                    @touchend="onBubbleTouchEnd($event, index)">
+                                    @touchmove="onBubbleTouchMove($event, index)"
+                                    @touchend="onBubbleTouchEnd($event, index)"
+                                    @touchcancel="onBubbleTouchCancel($event, index)">
                                     <div
                                         :class="['p-0 rounded-2xl shadow-sm text-sm md:text-base leading-relaxed overflow-hidden',
                                         msg.shouldAnimate && !(msg.role === 'assistant' && msg.reasoning) ? 'animate-message-in' : '',
@@ -515,36 +515,37 @@ export default {
   components: { UiTemplateFrame, GenerationTimer, UiTemplatePending },
   setup() {
     const ctx = inject("appContext");
-    // Swipe-gesture local state (M3 optional feature from the swipe design doc):
-    // horizontal touch tracking on the last-floor bubble with ST-style drag animation —
-    // the bubble follows the finger during the drag, then either flies off and swaps
-    // the candidate, or springs back. Guards exclude multi-touch (pinch), vertical
-    // scrolling, and text-selection touches inside the bubble.
-    let bubbleTouch = null;
-    const swipeDrag = { index: -1, dx: 0, phase: 'idle' };
+    // Swipe-gesture local state (M3): horizontal drag on the last-floor bubble with
+    // ST-style animation. The bubble transform is applied IMPERATIVELY via DOM style
+    // (no Vue re-render per move frame — smooth 60fps drag), and cleared with a CSS
+    // transition for the spring-back. Guards exclude multi-touch, vertical scrolling,
+    // and text-selection / interactive elements inside the bubble.
+    let bubbleTouch = null;   // { index, x, y, time, el, decided }
+    let dragging = null;      // { index, dx } while the horizontal drag is active
     const canSwipeGesture = (msg, index) => {
-      if (!msg || msg.role !== 'assistant' || index !== ctx.chatHistory.length - 1) return false;
+      if (!msg || msg.role !== 'assistant' || !ctx.chatHistory) return false;
+      if (index !== ctx.chatHistory.length - 1) return false;
       if (!msg.swipes || msg.swipes.length < 2) return false;
       if (ctx.isConversationBusy && ctx.isConversationBusy.value) return false;
       return true;
     };
-    const swipeGestureOnIndex = (index) => swipeDrag.index === index && swipeDrag.phase === 'drag';
-    const swipeBubbleStyle = (msg, index) => {
-      if (swipeGestureOnIndex(index)) {
-        return { transform: `translateX(${swipeDrag.dx}px)`, transition: 'none' };
-      }
-      return { transform: 'translateX(0)', transition: 'transform 260ms cubic-bezier(0.22, 0.61, 0.36, 1)' };
+    const setBubbleTransform = (el, dx, animate) => {
+      if (!el) return;
+      el.style.transition = animate ? 'transform 260ms cubic-bezier(0.22, 0.61, 0.36, 1)' : 'none';
+      el.style.transform = dx === 0 ? '' : `translateX(${dx}px)`;
+      if (dx === 0 && animate) setTimeout(() => { el.style.transition = ''; el.style.transform = ''; }, 300);
     };
     const onBubbleTouchStart = (event, index) => {
       if (!canSwipeGesture(ctx.chatHistory[index], index)) return;
-      if (!event.touches || event.touches.length !== 1) { bubbleTouch = null; return; }
+      if (!event.touches || event.touches.length !== 1) return;
       const t = event.touches[0];
       const target = t.target;
       // text selection / link taps inside the bubble must not trigger swipes
-      if (target && target.closest && target.closest('a, button, details, summary, textarea, input, select, [contenteditable]')) { bubbleTouch = null; return; }
+      if (target && target.closest && target.closest('a, button, details, summary, textarea, input, select, [contenteditable]')) return;
       const sel = window.getSelection && window.getSelection();
-      if (sel && sel.type === 'Range') { bubbleTouch = null; return; }
-      bubbleTouch = { index, x: t.clientX, y: t.clientY, time: Date.now() };
+      if (sel && sel.type === 'Range') return;
+      const bubbleEl = event.currentTarget;
+      bubbleTouch = { index, x: t.clientX, y: t.clientY, time: Date.now(), el: bubbleEl, decided: false };
     };
     const onBubbleTouchMove = (event, index) => {
       if (!bubbleTouch || bubbleTouch.index !== index) return;
@@ -553,57 +554,71 @@ export default {
       const dx = t.clientX - bubbleTouch.x;
       const dy = t.clientY - bubbleTouch.y;
       // decide once per gesture whether this is a horizontal swipe
-      if (swipeDrag.phase === 'idle' || swipeDrag.index !== index) {
-        if (Math.abs(dx) < 14) return; // jitter band
+      if (!bubbleTouch.decided) {
+        if (Math.abs(dx) < 12) return; // jitter band
         if (Math.abs(dy) > Math.abs(dx)) { bubbleTouch = null; return; } // vertical scroll wins
         const msg = ctx.chatHistory[index];
         const dirOk = dx > 0 ? msg.activeSwipeIndex > 0 : msg.activeSwipeIndex < msg.swipes.length - 1;
-        if (!dirOk) { bubbleTouch = null; return; } // at the end, no animation either
-        swipeDrag.index = index;
-        swipeDrag.phase = 'drag';
+        if (!dirOk) { bubbleTouch = null; return; } // at the end, no drag
+        bubbleTouch.decided = true;
+        dragging = { index, dx: 0 };
+        // prevent the page scroll from fighting the horizontal drag
+        if (event.cancelable) event.preventDefault();
       }
-      if (swipeDrag.phase !== 'drag') return;
+      if (!dragging || dragging.index !== index) return;
       const msg = ctx.chatHistory[index];
       // rubber-band beyond the edge candidate
       const goingNext = dx < 0;
       const atEdge = goingNext ? msg.activeSwipeIndex >= msg.swipes.length - 1 : msg.activeSwipeIndex <= 0;
-      swipeDrag.dx = atEdge ? dx * 0.25 : dx;
+      const effective = atEdge ? dx * 0.25 : dx;
+      dragging.dx = effective;
+      setBubbleTransform(bubbleTouch.el, effective, false);
     };
-    const finishSwipeDrag = (event, index, cancelled) => {
-      const wasDragging = swipeDrag.index === index && swipeDrag.phase === 'drag';
-      let dx = swipeDrag.dx;
-      swipeDrag.index = -1;
-      swipeDrag.dx = 0;
-      swipeDrag.phase = 'idle';
-      if (!bubbleTouch) return;
-      const start = bubbleTouch;
+    const endGesture = (event, index, cancelled) => {
+      const touch = bubbleTouch;
+      const drag = dragging;
       bubbleTouch = null;
-      const touch = event && event.changedTouches && event.changedTouches[0];
-      const relDx = touch ? touch.clientX - start.x : dx;
-      const relDy = touch ? touch.clientY - start.y : 0;
-      const dt = Date.now() - start.time;
+      dragging = null;
+      if (!touch || touch.index !== index) return;
+      const el = touch.el;
+      const t = event && event.changedTouches && event.changedTouches[0];
+      const relDx = t ? t.clientX - touch.x : (drag ? drag.dx : 0);
+      const relDy = t ? t.clientY - touch.y : 0;
+      const dt = Date.now() - touch.time;
       const msg = ctx.chatHistory[index];
-      if (!msg || msg.role !== 'assistant') return;
-      // Flick: quick short swipe should also switch (but not during a pure drag-release)
+      if (!msg || msg.role !== 'assistant') { setBubbleTransform(el, 0, true); return; }
       const flick = !cancelled && dt < 260 && Math.abs(relDx) > 32 && Math.abs(relDy) < 36;
-      const dragPass = Math.abs(relDx) > 56 && Math.abs(relDy) < 40;
+      const dragPass = !cancelled && Math.abs(relDx) > 56 && Math.abs(relDy) < 40;
       const dir = relDx < 0 ? 'next' : 'prev';
-      if (flick || dragPass) {
-        const atEdge = dir === 'next' ? msg.activeSwipeIndex >= msg.swipes.length - 1 : msg.activeSwipeIndex <= 0;
-        if (!atEdge) {
+      const atEdge = dir === 'next' ? msg.activeSwipeIndex >= msg.swipes.length - 1 : msg.activeSwipeIndex <= 0;
+      if ((flick || dragPass) && !atEdge) {
+        // animate the old bubble out, swap, then animate back from the opposite side
+        const outPx = dir === 'next' ? -160 : 160;
+        el.style.transition = 'transform 140ms ease-in, opacity 140ms ease-in';
+        el.style.transform = `translateX(${outPx}px)`;
+        el.style.opacity = '0.25';
+        setTimeout(() => {
           if (dir === 'next') ctx.swipeNext(index); else ctx.swipePrev(index);
-        }
+          el.style.transition = 'none';
+          el.style.transform = `translateX(${dir === 'next' ? 160 : -160}px)`;
+          el.style.opacity = '0.25';
+          requestAnimationFrame(() => requestAnimationFrame(() => {
+            el.style.transition = 'transform 220ms cubic-bezier(0.22, 0.61, 0.36, 1), opacity 220ms ease-out';
+            el.style.transform = '';
+            el.style.opacity = '';
+            setTimeout(() => { el.style.transition = ''; el.style.transform = ''; el.style.opacity = ''; }, 260);
+          }));
+        }, 150);
+      } else {
+        // spring back
+        setBubbleTransform(el, 0, true);
       }
-      // else: bubble springs back via the transition on the cleared drag state
     };
-    const onBubbleTouchEnd = (event, index) => {
-      const wasMine = bubbleTouch && bubbleTouch.index === index;
-      if (!wasMine && swipeDrag.index !== index) return;
-      finishSwipeDrag(event, index, false);
-    };
+    const onBubbleTouchEnd = (event, index) => endGesture(event, index, false);
+    const onBubbleTouchCancel = (event, index) => endGesture(event, index, true);
     const onSwipeBarTouchStart = () => {};
     const onSwipeBarTouchEnd = () => {};
-    return { ...(ctx || {}), canSwipeGesture, swipeGestureOnIndex, swipeBubbleStyle, onBubbleTouchStart, onBubbleTouchMove, onBubbleTouchEnd, onSwipeBarTouchStart, onSwipeBarTouchEnd };
+    return { ...(ctx || {}), canSwipeGesture, onBubbleTouchStart, onBubbleTouchMove, onBubbleTouchEnd, onBubbleTouchCancel, onSwipeBarTouchStart, onSwipeBarTouchEnd };
   }
 };
 </script>

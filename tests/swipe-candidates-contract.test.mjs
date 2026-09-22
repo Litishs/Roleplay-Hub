@@ -197,17 +197,20 @@ test('MessageList.vue: candidate bar anchored above the bubble + bubble swipe ge
     // bubble horizontal swipe gesture wired with touch guards
     assert.ok(messageList.includes('onBubbleTouchStart($event, index)'), 'bubble touchstart wired');
     assert.ok(messageList.includes('onBubbleTouchEnd($event, index)'), 'bubble touchend wired');
+    assert.ok(messageList.includes('onBubbleTouchMove($event, index)'), 'bubble touchmove wired');
+    assert.ok(messageList.includes('onBubbleTouchCancel($event, index)'), 'bubble touchcancel wired');
     assert.ok(messageList.includes("target.closest('a, button, details, summary, textarea, input, select, [contenteditable]')"), 'interactive-element guard');
     assert.ok(messageList.includes("sel.type === 'Range'"), 'text-selection guard');
     assert.ok(messageList.includes('Math.abs(relDx) > 56'), 'horizontal distance threshold');
     assert.ok(messageList.includes("if (dir === 'next') ctx.swipeNext(index); else ctx.swipePrev(index);"), 'swipe-left -> next, swipe-right -> prev');
-    // drag-follow animation: bubble tracks the finger, springs back on cancel
-    assert.ok(messageList.includes('swipeBubbleStyle(msg, index)'), 'drag transform binding');
-    assert.ok(messageList.includes("translateX(${swipeDrag.dx}px)"), 'bubble follows the finger');
-    assert.ok(messageList.includes("transition: 'transform 260ms cubic-bezier(0.22, 0.61, 0.36, 1)'"), 'spring-back transition');
+    // drag animation applied imperatively via DOM style (no per-move Vue re-render)
+    assert.ok(messageList.includes('setBubbleTransform(bubbleTouch.el, effective, false)'), 'drag follows the finger via DOM transform');
+    assert.ok(messageList.includes("'transform 260ms cubic-bezier(0.22, 0.61, 0.36, 1)'"), 'spring-back transition');
     assert.ok(messageList.includes('dx * 0.25'), 'rubber-band at the edge candidate');
     assert.ok(messageList.includes('Math.abs(dy) > Math.abs(dx)'), 'vertical scroll wins over swipe');
     assert.ok(messageList.includes('dt < 260 && Math.abs(relDx) > 32'), 'flick gesture supported');
+    assert.ok(messageList.includes('translateX('), 'fly-out / fly-in animation');
+    assert.ok(messageList.includes("el.style.opacity = '0.25'"), 'fade during candidate swap');
     // gesture state stays local to the component (no ctx pollution)
     assert.ok(messageList.includes('return { ...(ctx || {}), canSwipeGesture'), 'ctx spread with local handlers');
 });
