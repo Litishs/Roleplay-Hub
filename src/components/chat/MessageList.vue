@@ -85,9 +85,40 @@
                                     :class="['text-[10px] font-bold text-gray-600 mb-1 select-none px-1.5 py-0.5 rounded-md bg-white/50 backdrop-blur-sm border border-white/20 w-fit shadow-sm truncate max-w-[150px] md:max-w-[250px] msg-name-tag', msg.isSelf ? 'ml-auto mr-1' : 'mr-auto ml-1', msg.shouldAnimate ? 'animate-message-fade-in' : '']">
                                     {{ msg.name || (msg.role === 'user' ? user.name : (currentCharacter?.name || 'Unknown')) }}
                                 </div>
+                                <!-- Swipe candidate bar (top position): anchored above the bubble so it stays
+                                     visible for tall candidates where the bottom action bar falls off-screen -->
+                                <div v-if="msg.role === 'assistant' && index === chatHistory.length - 1 && msg.swipes && msg.swipes.length > 1 && !isConversationBusy"
+                                    class="flex items-center gap-1 mb-1 select-none"
+                                    @touchstart="onSwipeBarTouchStart($event, index)"
+                                    @touchend="onSwipeBarTouchEnd($event, index)">
+                                    <div class="flex items-center rounded-lg border border-gray-200 bg-white/85 shadow-sm overflow-hidden">
+                                        <button @click="swipePrev(index)"
+                                            :disabled="msg.activeSwipeIndex <= 0"
+                                            class="px-2 py-1 text-gray-600 disabled:opacity-30 active:bg-gray-100 transition-colors"
+                                            title="上一个候选">
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+                                            </svg>
+                                        </button>
+                                        <span class="text-[11px] font-mono text-gray-500 px-1 min-w-[2.2rem] text-center">{{ msg.activeSwipeIndex + 1 }}/{{ msg.swipes.length }}</span>
+                                        <button @click="swipeNext(index)"
+                                            :disabled="msg.activeSwipeIndex >= msg.swipes.length - 1"
+                                            class="px-2 py-1 text-gray-600 disabled:opacity-30 active:bg-gray-100 transition-colors"
+                                            title="下一个候选">
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                                            </svg>
+                                        </button>
+                                    </div>
+                                    <span class="text-[10px] text-gray-400">滑动气泡也可切换</span>
+                                </div>
                                 <!-- Message Bubble -->
                                 <div class="group relative"
-                                    :class="{'w-full': messageUsesWideLayout(msg)}">
+                                    :class="{'w-full': messageUsesWideLayout(msg)}"
+                                    :style="swipeBubbleStyle(msg, index)"
+                                    @touchstart="canSwipeGesture(msg, index) ? onBubbleTouchStart($event, index) : null"
+                                    @touchmove.passive="swipeGestureOnIndex(index) ? onBubbleTouchMove($event, index) : null"
+                                    @touchend="onBubbleTouchEnd($event, index)">
                                     <div
                                         :class="['p-0 rounded-2xl shadow-sm text-sm md:text-base leading-relaxed overflow-hidden',
                                         msg.shouldAnimate && !(msg.role === 'assistant' && msg.reasoning) ? 'animate-message-in' : '',
@@ -484,7 +515,95 @@ export default {
   components: { UiTemplateFrame, GenerationTimer, UiTemplatePending },
   setup() {
     const ctx = inject("appContext");
-    return ctx || {};
+    // Swipe-gesture local state (M3 optional feature from the swipe design doc):
+    // horizontal touch tracking on the last-floor bubble with ST-style drag animation —
+    // the bubble follows the finger during the drag, then either flies off and swaps
+    // the candidate, or springs back. Guards exclude multi-touch (pinch), vertical
+    // scrolling, and text-selection touches inside the bubble.
+    let bubbleTouch = null;
+    const swipeDrag = { index: -1, dx: 0, phase: 'idle' };
+    const canSwipeGesture = (msg, index) => {
+      if (!msg || msg.role !== 'assistant' || index !== ctx.chatHistory.length - 1) return false;
+      if (!msg.swipes || msg.swipes.length < 2) return false;
+      if (ctx.isConversationBusy && ctx.isConversationBusy.value) return false;
+      return true;
+    };
+    const swipeGestureOnIndex = (index) => swipeDrag.index === index && swipeDrag.phase === 'drag';
+    const swipeBubbleStyle = (msg, index) => {
+      if (swipeGestureOnIndex(index)) {
+        return { transform: `translateX(${swipeDrag.dx}px)`, transition: 'none' };
+      }
+      return { transform: 'translateX(0)', transition: 'transform 260ms cubic-bezier(0.22, 0.61, 0.36, 1)' };
+    };
+    const onBubbleTouchStart = (event, index) => {
+      if (!canSwipeGesture(ctx.chatHistory[index], index)) return;
+      if (!event.touches || event.touches.length !== 1) { bubbleTouch = null; return; }
+      const t = event.touches[0];
+      const target = t.target;
+      // text selection / link taps inside the bubble must not trigger swipes
+      if (target && target.closest && target.closest('a, button, details, summary, textarea, input, select, [contenteditable]')) { bubbleTouch = null; return; }
+      const sel = window.getSelection && window.getSelection();
+      if (sel && sel.type === 'Range') { bubbleTouch = null; return; }
+      bubbleTouch = { index, x: t.clientX, y: t.clientY, time: Date.now() };
+    };
+    const onBubbleTouchMove = (event, index) => {
+      if (!bubbleTouch || bubbleTouch.index !== index) return;
+      const t = event.touches && event.touches[0];
+      if (!t) return;
+      const dx = t.clientX - bubbleTouch.x;
+      const dy = t.clientY - bubbleTouch.y;
+      // decide once per gesture whether this is a horizontal swipe
+      if (swipeDrag.phase === 'idle' || swipeDrag.index !== index) {
+        if (Math.abs(dx) < 14) return; // jitter band
+        if (Math.abs(dy) > Math.abs(dx)) { bubbleTouch = null; return; } // vertical scroll wins
+        const msg = ctx.chatHistory[index];
+        const dirOk = dx > 0 ? msg.activeSwipeIndex > 0 : msg.activeSwipeIndex < msg.swipes.length - 1;
+        if (!dirOk) { bubbleTouch = null; return; } // at the end, no animation either
+        swipeDrag.index = index;
+        swipeDrag.phase = 'drag';
+      }
+      if (swipeDrag.phase !== 'drag') return;
+      const msg = ctx.chatHistory[index];
+      // rubber-band beyond the edge candidate
+      const goingNext = dx < 0;
+      const atEdge = goingNext ? msg.activeSwipeIndex >= msg.swipes.length - 1 : msg.activeSwipeIndex <= 0;
+      swipeDrag.dx = atEdge ? dx * 0.25 : dx;
+    };
+    const finishSwipeDrag = (event, index, cancelled) => {
+      const wasDragging = swipeDrag.index === index && swipeDrag.phase === 'drag';
+      let dx = swipeDrag.dx;
+      swipeDrag.index = -1;
+      swipeDrag.dx = 0;
+      swipeDrag.phase = 'idle';
+      if (!bubbleTouch) return;
+      const start = bubbleTouch;
+      bubbleTouch = null;
+      const touch = event && event.changedTouches && event.changedTouches[0];
+      const relDx = touch ? touch.clientX - start.x : dx;
+      const relDy = touch ? touch.clientY - start.y : 0;
+      const dt = Date.now() - start.time;
+      const msg = ctx.chatHistory[index];
+      if (!msg || msg.role !== 'assistant') return;
+      // Flick: quick short swipe should also switch (but not during a pure drag-release)
+      const flick = !cancelled && dt < 260 && Math.abs(relDx) > 32 && Math.abs(relDy) < 36;
+      const dragPass = Math.abs(relDx) > 56 && Math.abs(relDy) < 40;
+      const dir = relDx < 0 ? 'next' : 'prev';
+      if (flick || dragPass) {
+        const atEdge = dir === 'next' ? msg.activeSwipeIndex >= msg.swipes.length - 1 : msg.activeSwipeIndex <= 0;
+        if (!atEdge) {
+          if (dir === 'next') ctx.swipeNext(index); else ctx.swipePrev(index);
+        }
+      }
+      // else: bubble springs back via the transition on the cleared drag state
+    };
+    const onBubbleTouchEnd = (event, index) => {
+      const wasMine = bubbleTouch && bubbleTouch.index === index;
+      if (!wasMine && swipeDrag.index !== index) return;
+      finishSwipeDrag(event, index, false);
+    };
+    const onSwipeBarTouchStart = () => {};
+    const onSwipeBarTouchEnd = () => {};
+    return { ...(ctx || {}), canSwipeGesture, swipeGestureOnIndex, swipeBubbleStyle, onBubbleTouchStart, onBubbleTouchMove, onBubbleTouchEnd, onSwipeBarTouchStart, onSwipeBarTouchEnd };
   }
 };
 </script>

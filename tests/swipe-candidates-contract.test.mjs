@@ -189,6 +189,29 @@ test('MessageList.vue: swipe switcher wired with arrows, counter, render conditi
     assert.ok(messageList.includes('title="上一个候选"') && messageList.includes('title="下一个候选"'), 'arrow titles');
 });
 
+test('MessageList.vue: candidate bar anchored above the bubble + bubble swipe gesture (M3)', () => {
+    // top-position bar: it must appear BEFORE the bubble div so it stays visible for tall candidates
+    const barAt = messageList.indexOf('Swipe candidate bar (top position)');
+    const bubbleAt = messageList.indexOf('<!-- Message Bubble -->');
+    assert.ok(barAt > -1 && bubbleAt > -1 && barAt < bubbleAt, 'candidate bar rendered above the bubble');
+    // bubble horizontal swipe gesture wired with touch guards
+    assert.ok(messageList.includes('onBubbleTouchStart($event, index)'), 'bubble touchstart wired');
+    assert.ok(messageList.includes('onBubbleTouchEnd($event, index)'), 'bubble touchend wired');
+    assert.ok(messageList.includes("target.closest('a, button, details, summary, textarea, input, select, [contenteditable]')"), 'interactive-element guard');
+    assert.ok(messageList.includes("sel.type === 'Range'"), 'text-selection guard');
+    assert.ok(messageList.includes('Math.abs(relDx) > 56'), 'horizontal distance threshold');
+    assert.ok(messageList.includes("if (dir === 'next') ctx.swipeNext(index); else ctx.swipePrev(index);"), 'swipe-left -> next, swipe-right -> prev');
+    // drag-follow animation: bubble tracks the finger, springs back on cancel
+    assert.ok(messageList.includes('swipeBubbleStyle(msg, index)'), 'drag transform binding');
+    assert.ok(messageList.includes("translateX(${swipeDrag.dx}px)"), 'bubble follows the finger');
+    assert.ok(messageList.includes("transition: 'transform 260ms cubic-bezier(0.22, 0.61, 0.36, 1)'"), 'spring-back transition');
+    assert.ok(messageList.includes('dx * 0.25'), 'rubber-band at the edge candidate');
+    assert.ok(messageList.includes('Math.abs(dy) > Math.abs(dx)'), 'vertical scroll wins over swipe');
+    assert.ok(messageList.includes('dt < 260 && Math.abs(relDx) > 32'), 'flick gesture supported');
+    // gesture state stays local to the component (no ctx pollution)
+    assert.ok(messageList.includes('return { ...(ctx || {}), canSwipeGesture'), 'ctx spread with local handlers');
+});
+
 test('swipePrev/swipeNext exported from setup and bound in MessageList', () => {
     assert.match(app, /copyMessage, deleteMessage, regenerateMessage, swipePrev, swipeNext,/, 'ctx export');
     // card ops discard hook is wired for character switches
