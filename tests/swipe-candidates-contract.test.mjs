@@ -190,12 +190,17 @@ test('MessageList.vue: swipe switcher wired with arrows, counter, render conditi
 });
 
 test('MessageList.vue: candidate bar anchored above the bubble + bubble swipe gesture (M3)', () => {
-    // top-position bar: it must appear BEFORE the bubble div so it stays visible for tall candidates
-    const barAt = messageList.indexOf('Swipe candidate bar (top position)');
-    const bubbleAt = messageList.indexOf('<!-- Message Bubble -->');
-    assert.ok(barAt > -1 && bubbleAt > -1 && barAt < bubbleAt, 'candidate bar rendered above the bubble');
+    // 2026-09-22 redesign: the top-position bar was removed — the switcher arrows +
+    // counter live INSIDE the message action bar with the same borderless style.
+    assert.ok(!messageList.includes('Swipe candidate bar (top position)'), 'top bar removed');
+    assert.ok(!messageList.includes('滑动气泡也可切换'), 'hint text removed');
+    const barAt = messageList.indexOf('message-action-swipe-counter');
+    assert.ok(barAt > -1, 'counter styled via action-bar css');
     // bubble horizontal swipe gesture wired with touch guards
-    assert.ok(messageList.includes('onBubbleTouchStart($event, index)'), 'bubble touchstart wired');
+    // 2026-09-22 device fix: handlers bind UNCONDITIONALLY (inline ternary in the
+    // template broke gesture dispatch in the device production build); guards live
+    // inside the handler instead.
+    assert.ok(messageList.includes('@touchstart="onBubbleTouchStart($event, index)"'), 'bubble touchstart bound unconditionally');
     assert.ok(messageList.includes('onBubbleTouchEnd($event, index)'), 'bubble touchend wired');
     assert.ok(messageList.includes('onBubbleTouchMove($event, index)'), 'bubble touchmove wired');
     assert.ok(messageList.includes('onBubbleTouchCancel($event, index)'), 'bubble touchcancel wired');
@@ -203,6 +208,8 @@ test('MessageList.vue: candidate bar anchored above the bubble + bubble swipe ge
     assert.ok(messageList.includes("sel.type === 'Range'"), 'text-selection guard');
     assert.ok(messageList.includes('Math.abs(relDx) > 56'), 'horizontal distance threshold');
     assert.ok(messageList.includes("if (dir === 'next') ctx.swipeNext(index); else ctx.swipePrev(index);"), 'swipe-left -> next, swipe-right -> prev');
+    // ctx.chatHistory ref/array dual-shape compatibility (device production quirk)
+    assert.ok(messageList.includes('ctx.chatHistory.value ? ctx.chatHistory.value[index] : (Array.isArray(ctx.chatHistory)'), 'chatHistory dual-shape guard');
     // drag animation applied imperatively via DOM style (no per-move Vue re-render)
     assert.ok(messageList.includes('setBubbleTransform(bubbleTouch.el, effective, false)'), 'drag follows the finger via DOM transform');
     assert.ok(messageList.includes("'transform 260ms cubic-bezier(0.22, 0.61, 0.36, 1)'"), 'spring-back transition');
@@ -213,6 +220,14 @@ test('MessageList.vue: candidate bar anchored above the bubble + bubble swipe ge
     assert.ok(messageList.includes("el.style.opacity = '0.25'"), 'fade during candidate swap');
     // gesture state stays local to the component (no ctx pollution)
     assert.ok(messageList.includes('return { ...(ctx || {}), canSwipeGesture'), 'ctx spread with local handlers');
+});
+
+test('MessageList.vue: left swipe past the last candidate triggers regeneration', () => {
+    // 2026-09-22 feedback: swiping left at the last candidate should regenerate
+    // (append a new candidate) instead of refusing.
+    assert.ok(messageList.includes('regenerateArm'), 'regenerate arm flag tracked during drag');
+    assert.ok(messageList.includes('ctx.regenerateMessage(index);'), 'end gesture triggers regenerateMessage');
+    assert.ok(messageList.includes('Math.abs(relDx) > 120'), 'beyond-edge distance guard for un-armed gestures');
 });
 
 test('swipePrev/swipeNext exported from setup and bound in MessageList', () => {

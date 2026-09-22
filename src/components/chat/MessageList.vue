@@ -85,37 +85,10 @@
                                     :class="['text-[10px] font-bold text-gray-600 mb-1 select-none px-1.5 py-0.5 rounded-md bg-white/50 backdrop-blur-sm border border-white/20 w-fit shadow-sm truncate max-w-[150px] md:max-w-[250px] msg-name-tag', msg.isSelf ? 'ml-auto mr-1' : 'mr-auto ml-1', msg.shouldAnimate ? 'animate-message-fade-in' : '']">
                                     {{ msg.name || (msg.role === 'user' ? user.name : (currentCharacter?.name || 'Unknown')) }}
                                 </div>
-                                <!-- Swipe candidate bar (top position): anchored above the bubble so it stays
-                                     visible for tall candidates where the bottom action bar falls off-screen -->
-                                <div v-if="msg.role === 'assistant' && index === chatHistory.length - 1 && msg.swipes && msg.swipes.length > 1 && !isConversationBusy"
-                                    class="flex items-center gap-1 mb-1 select-none"
-                                    @touchstart="onSwipeBarTouchStart($event, index)"
-                                    @touchend="onSwipeBarTouchEnd($event, index)">
-                                    <div class="flex items-center rounded-lg border border-gray-200 bg-white/85 shadow-sm overflow-hidden">
-                                        <button @click="swipePrev(index)"
-                                            :disabled="msg.activeSwipeIndex <= 0"
-                                            class="px-2 py-1 text-gray-600 disabled:opacity-30 active:bg-gray-100 transition-colors"
-                                            title="上一个候选">
-                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
-                                            </svg>
-                                        </button>
-                                        <span class="text-[11px] font-mono text-gray-500 px-1 min-w-[2.2rem] text-center">{{ msg.activeSwipeIndex + 1 }}/{{ msg.swipes.length }}</span>
-                                        <button @click="swipeNext(index)"
-                                            :disabled="msg.activeSwipeIndex >= msg.swipes.length - 1"
-                                            class="px-2 py-1 text-gray-600 disabled:opacity-30 active:bg-gray-100 transition-colors"
-                                            title="下一个候选">
-                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
-                                            </svg>
-                                        </button>
-                                    </div>
-                                    <span class="text-[10px] text-gray-400">滑动气泡也可切换</span>
-                                </div>
                                 <!-- Message Bubble -->
                                 <div class="group relative"
                                     :class="{'w-full': messageUsesWideLayout(msg)}"
-                                    @touchstart="canSwipeGesture(msg, index) ? onBubbleTouchStart($event, index) : null"
+                                    @touchstart="onBubbleTouchStart($event, index)"
                                     @touchmove="onBubbleTouchMove($event, index)"
                                     @touchend="onBubbleTouchEnd($event, index)"
                                     @touchcancel="onBubbleTouchCancel($event, index)">
@@ -369,29 +342,27 @@
                                     <!-- Message Actions -->
                                     <div v-if="!msg.isEditing_Message && !isMessageThinkingOrRunning(msg) && !(index === chatHistory.length - 1 && !msg.isSelf && (isGenerating || isRemoteGenerating)) && !(msg.isSelf && isConversationBusy && !chatHistory.slice(index + 1).some(m => m.isSelf))"
                                         :class="['message-action-bar absolute bottom-0 -mb-11 md:-mb-12 flex items-center opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-200', msg.isSelf ? 'right-0' : 'left-0']">
-                                        <!-- Swipe candidate switcher: last-floor assistant messages only -->
-                                        <div v-if="msg.role === 'assistant' && index === chatHistory.length - 1 && msg.swipes && msg.swipes.length > 1 && !isConversationBusy"
-                                            class="flex items-center mr-1 rounded-lg border border-gray-200 bg-white/80 shadow-sm overflow-hidden">
+                                        <!-- Swipe candidate switcher: last-floor assistant messages only.
+                                             Same borderless button style as the neighboring icon actions. -->
+                                        <template v-if="msg.role === 'assistant' && index === chatHistory.length - 1 && msg.swipes && msg.swipes.length > 1 && !isConversationBusy">
                                             <button @click="swipePrev(index)"
                                                 :disabled="msg.activeSwipeIndex <= 0"
-                                                class="message-action-button !border-0 !bg-transparent"
-                                                :class="{ 'opacity-40': msg.activeSwipeIndex <= 0 }"
+                                                class="message-action-button"
                                                 title="上一个候选">
                                                 <svg class="w-3.5 h-3.5 md:w-4 md:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
                                                 </svg>
                                             </button>
-                                            <span class="text-[11px] font-mono text-gray-500 select-none px-0.5 min-w-[2.2rem] text-center">{{ msg.activeSwipeIndex + 1 }}/{{ msg.swipes.length }}</span>
+                                            <span class="message-action-swipe-counter">{{ msg.activeSwipeIndex + 1 }}/{{ msg.swipes.length }}</span>
                                             <button @click="swipeNext(index)"
                                                 :disabled="msg.activeSwipeIndex >= msg.swipes.length - 1"
-                                                class="message-action-button !border-0 !bg-transparent"
-                                                :class="{ 'opacity-40': msg.activeSwipeIndex >= msg.swipes.length - 1 }"
+                                                class="message-action-button"
                                                 title="下一个候选">
                                                 <svg class="w-3.5 h-3.5 md:w-4 md:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
                                                 </svg>
                                             </button>
-                                        </div>
+                                        </template>
                                         <button v-if="index === chatHistory.length - 1"
                                             @click="regenerateMessage(index)"
                                             class="message-action-button"
@@ -523,10 +494,12 @@ export default {
     let bubbleTouch = null;   // { index, x, y, time, el, decided }
     let dragging = null;      // { index, dx } while the horizontal drag is active
     const canSwipeGesture = (msg, index) => {
-      if (!msg || msg.role !== 'assistant' || !ctx.chatHistory) return false;
-      if (index !== ctx.chatHistory.length - 1) return false;
+      if (!msg || msg.role !== 'assistant') return false;
+      const hist = ctx.chatHistory && ctx.chatHistory.value ? ctx.chatHistory.value : (Array.isArray(ctx.chatHistory) ? ctx.chatHistory : null);
+      if (!hist || index !== hist.length - 1) return false;
       if (!msg.swipes || msg.swipes.length < 2) return false;
-      if (ctx.isConversationBusy && ctx.isConversationBusy.value) return false;
+      const busy = ctx.isConversationBusy && ctx.isConversationBusy.value;
+      if (busy) return false;
       return true;
     };
     const setBubbleTransform = (el, dx, animate) => {
@@ -536,7 +509,8 @@ export default {
       if (dx === 0 && animate) setTimeout(() => { el.style.transition = ''; el.style.transform = ''; }, 300);
     };
     const onBubbleTouchStart = (event, index) => {
-      if (!canSwipeGesture(ctx.chatHistory[index], index)) return;
+      const msg = ctx.chatHistory && ctx.chatHistory.value ? ctx.chatHistory.value[index] : (Array.isArray(ctx.chatHistory) ? ctx.chatHistory[index] : null);
+      if (!canSwipeGesture(msg, index)) return;
       if (!event.touches || event.touches.length !== 1) return;
       const t = event.touches[0];
       const target = t.target;
@@ -557,20 +531,33 @@ export default {
       if (!bubbleTouch.decided) {
         if (Math.abs(dx) < 12) return; // jitter band
         if (Math.abs(dy) > Math.abs(dx)) { bubbleTouch = null; return; } // vertical scroll wins
-        const msg = ctx.chatHistory[index];
-        const dirOk = dx > 0 ? msg.activeSwipeIndex > 0 : msg.activeSwipeIndex < msg.swipes.length - 1;
-        if (!dirOk) { bubbleTouch = null; return; } // at the end, no drag
-        bubbleTouch.decided = true;
-        dragging = { index, dx: 0 };
-        // prevent the page scroll from fighting the horizontal drag
-        if (event.cancelable) event.preventDefault();
+        const histArr = ctx.chatHistory.value || ctx.chatHistory; const msg = histArr[index];
+        // Swiping left PAST the last candidate arms "regenerate" instead of refusing:
+        // track the gesture so the end handler can trigger a regeneration.
+        const goingNext = dx < 0;
+        const atEdge = goingNext ? msg.activeSwipeIndex >= msg.swipes.length - 1 : msg.activeSwipeIndex <= 0;
+        if (atEdge) {
+          if (goingNext && msg.role === 'assistant') {
+            bubbleTouch.decided = true;
+            dragging = { index, dx: 0, regenerateArm: true };
+            if (event.cancelable) event.preventDefault();
+          } else {
+            bubbleTouch = null; return; // at the prev edge, no drag
+          }
+        } else {
+          bubbleTouch.decided = true;
+          dragging = { index, dx: 0, regenerateArm: false };
+          // prevent the page scroll from fighting the horizontal drag
+          if (event.cancelable) event.preventDefault();
+        }
       }
       if (!dragging || dragging.index !== index) return;
-      const msg = ctx.chatHistory[index];
-      // rubber-band beyond the edge candidate
+      const histArr = ctx.chatHistory.value || ctx.chatHistory; const msg = histArr[index];
+      // Rubber-band beyond the edge candidate (both directions);
+      // for regenerateArm the left-drag also rubber-bands but stays live.
       const goingNext = dx < 0;
       const atEdge = goingNext ? msg.activeSwipeIndex >= msg.swipes.length - 1 : msg.activeSwipeIndex <= 0;
-      const effective = atEdge ? dx * 0.25 : dx;
+      const effective = (atEdge || dragging.regenerateArm) ? dx * 0.25 : dx;
       dragging.dx = effective;
       setBubbleTransform(bubbleTouch.el, effective, false);
     };
@@ -585,12 +572,22 @@ export default {
       const relDx = t ? t.clientX - touch.x : (drag ? drag.dx : 0);
       const relDy = t ? t.clientY - touch.y : 0;
       const dt = Date.now() - touch.time;
-      const msg = ctx.chatHistory[index];
+      const histArr = ctx.chatHistory.value || ctx.chatHistory; const msg = histArr[index];
       if (!msg || msg.role !== 'assistant') { setBubbleTransform(el, 0, true); return; }
       const flick = !cancelled && dt < 260 && Math.abs(relDx) > 32 && Math.abs(relDy) < 36;
       const dragPass = !cancelled && Math.abs(relDx) > 56 && Math.abs(relDy) < 40;
       const dir = relDx < 0 ? 'next' : 'prev';
       const atEdge = dir === 'next' ? msg.activeSwipeIndex >= msg.swipes.length - 1 : msg.activeSwipeIndex <= 0;
+      // Left swipe past the last candidate = regenerate (append a new candidate)
+      if ((flick || dragPass) && dir === 'next' && atEdge) {
+        const arm = drag && drag.regenerateArm;
+        const beyondEdge = Math.abs(relDx) > 120;
+        if (arm || beyondEdge) {
+          setBubbleTransform(el, 0, true);
+          ctx.regenerateMessage(index);
+          return;
+        }
+      }
       if ((flick || dragPass) && !atEdge) {
         // animate the old bubble out, swap, then animate back from the opposite side
         const outPx = dir === 'next' ? -160 : 160;
@@ -616,9 +613,7 @@ export default {
     };
     const onBubbleTouchEnd = (event, index) => endGesture(event, index, false);
     const onBubbleTouchCancel = (event, index) => endGesture(event, index, true);
-    const onSwipeBarTouchStart = () => {};
-    const onSwipeBarTouchEnd = () => {};
-    return { ...(ctx || {}), canSwipeGesture, onBubbleTouchStart, onBubbleTouchMove, onBubbleTouchEnd, onBubbleTouchCancel, onSwipeBarTouchStart, onSwipeBarTouchEnd };
+    return { ...(ctx || {}), canSwipeGesture, onBubbleTouchStart, onBubbleTouchMove, onBubbleTouchEnd, onBubbleTouchCancel };
   }
 };
 </script>
