@@ -89,8 +89,6 @@
                                 <div class="group relative"
                                     :class="{'w-full': messageUsesWideLayout(msg)}"
                                     @touchstart="onBubbleTouchStart($event, index)"
-                                    @touchmove="onBubbleTouchMove($event, index)"
-                                    @touchend="onBubbleTouchEnd($event, index)"
                                     @touchcancel="onBubbleTouchCancel($event, index)">
                                     <div
                                         :class="['p-0 rounded-2xl shadow-sm text-sm md:text-base leading-relaxed overflow-hidden',
@@ -520,6 +518,25 @@ export default {
       if (sel && sel.type === 'Range') return;
       const bubbleEl = event.currentTarget;
       bubbleTouch = { index, x: t.clientX, y: t.clientY, time: Date.now(), el: bubbleEl, decided: false };
+      // Attach move/end listeners IMPERATIVELY and NON-PASSIVE: the browser only
+      // lets a touch gesture own preventDefault while the first move is still
+      // cancelable — template-bound Vue listeners proved too late on device.
+      const onMove = (ev) => { if (ev.cancelable) ev.preventDefault(); onBubbleTouchMove(ev, index); };
+      const onEnd = (ev) => {
+        bubbleEl.removeEventListener('touchmove', onMove);
+        bubbleEl.removeEventListener('touchend', onEnd);
+        bubbleEl.removeEventListener('touchcancel', onCancel);
+        onBubbleTouchEnd(ev, index);
+      };
+      const onCancel = (ev) => {
+        bubbleEl.removeEventListener('touchmove', onMove);
+        bubbleEl.removeEventListener('touchend', onEnd);
+        bubbleEl.removeEventListener('touchcancel', onCancel);
+        onBubbleTouchCancel(ev, index);
+      };
+      bubbleEl.addEventListener('touchmove', onMove, { passive: false });
+      bubbleEl.addEventListener('touchend', onEnd, { passive: false });
+      bubbleEl.addEventListener('touchcancel', onCancel, { passive: false });
     };
     const onBubbleTouchMove = (event, index) => {
       if (!bubbleTouch || bubbleTouch.index !== index) return;
@@ -532,32 +549,21 @@ export default {
         if (Math.abs(dx) < 12) return; // jitter band
         if (Math.abs(dy) > Math.abs(dx)) { bubbleTouch = null; return; } // vertical scroll wins
         const histArr = ctx.chatHistory.value || ctx.chatHistory; const msg = histArr[index];
-        // Swiping left PAST the last candidate arms "regenerate" instead of refusing:
-        // track the gesture so the end handler can trigger a regeneration.
+        // Both directions are always live: crossing an edge switches mode —
+        // left past the last candidate arms "regenerate" (ST behavior),
+        // right at the first candidate rubber-bands and does nothing on release.
         const goingNext = dx < 0;
         const atEdge = goingNext ? msg.activeSwipeIndex >= msg.swipes.length - 1 : msg.activeSwipeIndex <= 0;
-        if (atEdge) {
-          if (goingNext && msg.role === 'assistant') {
-            bubbleTouch.decided = true;
-            dragging = { index, dx: 0, regenerateArm: true };
-            if (event.cancelable) event.preventDefault();
-          } else {
-            bubbleTouch = null; return; // at the prev edge, no drag
-          }
-        } else {
-          bubbleTouch.decided = true;
-          dragging = { index, dx: 0, regenerateArm: false };
-          // prevent the page scroll from fighting the horizontal drag
-          if (event.cancelable) event.preventDefault();
-        }
+        bubbleTouch.decided = true;
+        dragging = { index, dx: 0 };
+        if (event.cancelable) event.preventDefault();
       }
       if (!dragging || dragging.index !== index) return;
       const histArr = ctx.chatHistory.value || ctx.chatHistory; const msg = histArr[index];
       // Rubber-band beyond the edge candidate (both directions);
-      // for regenerateArm the left-drag also rubber-bands but stays live.
       const goingNext = dx < 0;
       const atEdge = goingNext ? msg.activeSwipeIndex >= msg.swipes.length - 1 : msg.activeSwipeIndex <= 0;
-      const effective = (atEdge || dragging.regenerateArm) ? dx * 0.25 : dx;
+      const effective = atEdge ? dx * 0.25 : dx;
       dragging.dx = effective;
       setBubbleTransform(bubbleTouch.el, effective, false);
     };
@@ -574,21 +580,22 @@ export default {
       const dt = Date.now() - touch.time;
       const histArr = ctx.chatHistory.value || ctx.chatHistory; const msg = histArr[index];
       if (!msg || msg.role !== 'assistant') { setBubbleTransform(el, 0, true); return; }
-      const flick = !cancelled && dt < 260 && Math.abs(relDx) > 32 && Math.abs(relDy) < 36;
-      const dragPass = !cancelled && Math.abs(relDx) > 56 && Math.abs(relDy) < 40;
+      // ST-style unified dispatch: one distance test for both slow drags and fast
+      // flicks (velocity only extends the effective distance), so the feel is
+      // identical regardless of swipe speed.
+      const dist = Math.abs(relDx);
+      const velocity = dist / Math.max(dt, 1); // px per ms
+      const effectiveDist = dist + velocity * 120; // momentum extension
+      const passed = !cancelled && effectiveDist > 64 && Math.abs(relDy) < 48;
       const dir = relDx < 0 ? 'next' : 'prev';
       const atEdge = dir === 'next' ? msg.activeSwipeIndex >= msg.swipes.length - 1 : msg.activeSwipeIndex <= 0;
-      // Left swipe past the last candidate = regenerate (append a new candidate)
-      if ((flick || dragPass) && dir === 'next' && atEdge) {
-        const arm = drag && drag.regenerateArm;
-        const beyondEdge = Math.abs(relDx) > 120;
-        if (arm || beyondEdge) {
-          setBubbleTransform(el, 0, true);
-          ctx.regenerateMessage(index);
-          return;
-        }
+      if (passed && dir === 'next' && atEdge) {
+        // Left swipe past the last candidate = regenerate (append a new candidate)
+        setBubbleTransform(el, 0, true);
+        ctx.regenerateMessage(index);
+        return;
       }
-      if ((flick || dragPass) && !atEdge) {
+      if (passed && !atEdge) {
         // animate the old bubble out, swap, then animate back from the opposite side
         const outPx = dir === 'next' ? -160 : 160;
         el.style.transition = 'transform 140ms ease-in, opacity 140ms ease-in';

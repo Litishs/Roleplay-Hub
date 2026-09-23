@@ -201,12 +201,11 @@ test('MessageList.vue: candidate bar anchored above the bubble + bubble swipe ge
     // template broke gesture dispatch in the device production build); guards live
     // inside the handler instead.
     assert.ok(messageList.includes('@touchstart="onBubbleTouchStart($event, index)"'), 'bubble touchstart bound unconditionally');
-    assert.ok(messageList.includes('onBubbleTouchEnd($event, index)'), 'bubble touchend wired');
-    assert.ok(messageList.includes('onBubbleTouchMove($event, index)'), 'bubble touchmove wired');
-    assert.ok(messageList.includes('onBubbleTouchCancel($event, index)'), 'bubble touchcancel wired');
+    assert.ok(messageList.includes('onBubbleTouchEnd(ev, index)'), 'bubble touchend wired (imperative listener)');
+    assert.ok(messageList.includes("addEventListener('touchmove', onMove, { passive: false })"), 'touchmove attached non-passive (scroll-steal fix)');
     assert.ok(messageList.includes("target.closest('a, button, details, summary, textarea, input, select, [contenteditable]')"), 'interactive-element guard');
     assert.ok(messageList.includes("sel.type === 'Range'"), 'text-selection guard');
-    assert.ok(messageList.includes('Math.abs(relDx) > 56'), 'horizontal distance threshold');
+    assert.ok(messageList.includes('Math.abs(relDy) < 48'), 'vertical slop guard');
     assert.ok(messageList.includes("if (dir === 'next') ctx.swipeNext(index); else ctx.swipePrev(index);"), 'swipe-left -> next, swipe-right -> prev');
     // ctx.chatHistory ref/array dual-shape compatibility (device production quirk)
     assert.ok(messageList.includes('ctx.chatHistory.value ? ctx.chatHistory.value[index] : (Array.isArray(ctx.chatHistory)'), 'chatHistory dual-shape guard');
@@ -215,7 +214,7 @@ test('MessageList.vue: candidate bar anchored above the bubble + bubble swipe ge
     assert.ok(messageList.includes("'transform 260ms cubic-bezier(0.22, 0.61, 0.36, 1)'"), 'spring-back transition');
     assert.ok(messageList.includes('dx * 0.25'), 'rubber-band at the edge candidate');
     assert.ok(messageList.includes('Math.abs(dy) > Math.abs(dx)'), 'vertical scroll wins over swipe');
-    assert.ok(messageList.includes('dt < 260 && Math.abs(relDx) > 32'), 'flick gesture supported');
+    assert.ok(messageList.includes('dist + velocity * 120'), 'velocity-based flick support (no separate flick branch)');
     assert.ok(messageList.includes('translateX('), 'fly-out / fly-in animation');
     assert.ok(messageList.includes("el.style.opacity = '0.25'"), 'fade during candidate swap');
     // gesture state stays local to the component (no ctx pollution)
@@ -225,9 +224,10 @@ test('MessageList.vue: candidate bar anchored above the bubble + bubble swipe ge
 test('MessageList.vue: left swipe past the last candidate triggers regeneration', () => {
     // 2026-09-22 feedback: swiping left at the last candidate should regenerate
     // (append a new candidate) instead of refusing.
-    assert.ok(messageList.includes('regenerateArm'), 'regenerate arm flag tracked during drag');
-    assert.ok(messageList.includes('ctx.regenerateMessage(index);'), 'end gesture triggers regenerateMessage');
-    assert.ok(messageList.includes('Math.abs(relDx) > 120'), 'beyond-edge distance guard for un-armed gestures');
+    assert.ok(messageList.includes('const effectiveDist = dist + velocity * 120'), 'momentum extension unifies slow/flick dispatch');
+    assert.ok(messageList.includes('effectiveDist > 64'), 'single unified distance threshold');
+    assert.ok(!messageList.includes('regenerateArm'), 'edge-arming removed (mode decided at release)');
+    assert.ok(messageList.includes('ctx.regenerateMessage(index);'), 'left swipe past last candidate regenerates');
 });
 
 test('swipePrev/swipeNext exported from setup and bound in MessageList', () => {
