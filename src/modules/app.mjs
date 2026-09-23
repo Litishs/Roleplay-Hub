@@ -4694,6 +4694,12 @@ const __app = createApp({
                 }
                 await saveConversationMutationNow({ saveTemplateRuntime: true });
             } else {
+                // Failure restores the exact pre-regen state (design doc §5.1): drop the
+                // error bubbles this attempt pushed above the baseline before putting the
+                // old message back verbatim; the toast carries the failure reason.
+                if (Number.isFinite(base.baselineLength) && chatHistory.value.length > base.baselineLength) {
+                    chatHistory.value = chatHistory.value.slice(0, base.baselineLength);
+                }
                 restoreLastMessage(base.message);
                 showToast('重新生成失败，已恢复原回复', 'error', 5000);
                 await saveConversationMutationNow({ saveTemplateRuntime: false });
@@ -4795,6 +4801,21 @@ const __app = createApp({
                 abortUiTemplateUpdate();
                 abortVectorBatchExtraction();
                 abortClassicBatchExtraction();
+                // Error bubbles are transient diagnostics, never content (device regression
+                // 2026-09-23): retrying one must REPLACE it with the fresh reply instead of
+                // capturing the error text as a permanent candidate. An error floor made no
+                // memories or template changes, so no rollback is needed either.
+                if (msg.isError) {
+                    chatHistory.value = chatHistory.value.slice(0, index);
+                    await saveConversationMutationNow({ saveTemplateRuntime: false });
+                    try {
+                        await generateResponse(startTime, { reuseGeneratingState: true });
+                    } finally {
+                        // pendingSwipeBase stays null: mergeOrRestore is a safe no-op here
+                        await mergeOrRestoreSwipedGeneration();
+                    }
+                    return;
+                }
                 // 计算被删除区间的 assistant 轮次，只删除 >= 该轮次的记忆
                 const snapshot = buildConversationTurnSnapshot();
                 const turnAtIndex = getConversationTurnAtIndexFromSnapshot(snapshot, index);
@@ -4817,10 +4838,13 @@ const __app = createApp({
                 });
                 // ② Two-handed preparation: hold the old message snapshot for either merging
                 //    into the freshly generated reply or restoring it on failure.
+                //    baselineLength is the history length right after the slice below; the
+                //    restore branch uses it to drop error bubbles this attempt pushed.
                 pendingSwipeBase = {
                     swipes: JSON.parse(JSON.stringify(msg.swipes || [])),
                     activeSwipeIndex: Number(msg.activeSwipeIndex) || 0,
-                    message: JSON.parse(JSON.stringify(unwrapForStorage(msg)))
+                    message: JSON.parse(JSON.stringify(unwrapForStorage(msg))),
+                    baselineLength: index
                 };
                 await filterMemoriesAsync(m => (m.turn || 0) < turnAtIndex);
                 await removeClassicMemoriesFromTurn(snapshot, turnAtIndex);

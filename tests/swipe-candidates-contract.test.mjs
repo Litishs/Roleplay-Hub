@@ -131,6 +131,29 @@ test('pendingSwipeBase + mergeOrRestoreSwipedGeneration: merge and restore branc
     assert.ok(fn.includes('restoreLastMessage(base.message);'), 'restore branch puts the snapshot back');
 });
 
+test('error-retry: an isError floor is replaced destructively, never captured as a candidate', () => {
+    const fnStart = app.indexOf('const regenerateMessage = async (index) => {');
+    const fnEnd = app.indexOf('const getEnabledActiveTools', fnStart);
+    const fn = app.slice(fnStart, fnEnd);
+    // error bubbles are transient diagnostics (device regression 2026-09-23):
+    // retrying one replaces it, the error text never becomes a swipe candidate
+    const guardAt = fn.indexOf('if (msg.isError) {');
+    const captureAt = fn.indexOf('captureActiveCandidate(msg');
+    assert.ok(guardAt > -1, 'isError retry guard exists');
+    assert.ok(captureAt > guardAt, 'error floors skip candidate capture');
+    assert.ok(fn.includes('pendingSwipeBase stays null'), 'error retry leaves no pending swipe base');
+});
+
+test('mergeOrRestore: failure drops this attempt error bubbles before restoring the snapshot', () => {
+    const fnStart = app.indexOf('const mergeOrRestoreSwipedGeneration = async () => {');
+    const fnEnd = app.indexOf('const activateCandidate = async', fnStart);
+    const fn = app.slice(fnStart, fnEnd);
+    assert.ok(fn.includes('baselineLength'), 'baseline length recorded on the pending base');
+    const restoreAt = fn.indexOf('restoreLastMessage(base.message);');
+    const popAt = fn.indexOf('chatHistory.value.slice(0, base.baselineLength)');
+    assert.ok(popAt > -1 && popAt < restoreAt, 'error bubbles popped above the baseline before restore');
+});
+
 test('activateCandidate: lazy-capture four-piece + whole-segment swap + timing + rollback', () => {
     const fnStart = app.indexOf('const activateCandidate = async (index, target) => {');
     const fnEnd = app.indexOf('const swipePrev =', fnStart);
