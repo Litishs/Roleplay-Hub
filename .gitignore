@@ -15,6 +15,7 @@ android/keystore/
 debug_apk/
 .trae/
 .zcode/
+.zcodeignore
 .tmp-*.db
 .tmp-*.db-wal
 .tmp-*.db-shm
