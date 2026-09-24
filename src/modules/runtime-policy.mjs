@@ -8,7 +8,10 @@
         renderCache: 100,
         activeIframes: 3,
         streamFlushMs: 50,
-        draftSaveMs: 2000
+        draftSaveMs: 2000,
+        // Swipe candidates per assistant message (FIFO beyond the cap): candidates are
+        // persisted with chat history, so the cap bounds storage growth (design doc §D-5).
+        swipeMaxCandidates: 5
     });
 
     class LruCache {

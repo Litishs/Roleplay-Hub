@@ -52,6 +52,7 @@ export function useCardOperations(deps) {
         // app.mjs orchestration (persistence / confirm / toast / chat view)
         saveChatHistoryNow,
         flushPendingChatHistorySave,
+        discardPendingSwipeBase,
         confirmAction,
         showToast,
         scrollChatToBottom,
@@ -279,6 +280,9 @@ export function useCardOperations(deps) {
             await flushPendingChatHistorySave();
             abortUiTemplateUpdate();
             stopSpeaking();
+            // Swipe pending state is bound to the current last floor; switching characters
+            // abandons any unfinished merge (design doc §6.3).
+            discardPendingSwipeBase?.();
             const previousCharacterIndex = currentCharacterIndex.value;
             const previousCharacter = currentCharacter.value;
             if (previousCharacterIndex !== index) {

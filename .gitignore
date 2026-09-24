@@ -15,6 +15,7 @@ android/keystore/
 debug_apk/
 .trae/
 .zcode/
+.zcodeignore
 .tmp-*.db
 .tmp-*.db-wal
 .tmp-*.db-shm
@@ -55,3 +56,14 @@ desktop.ini
 /test_*.js
 /tmp-*.js
 *.bak
+
+# OpenClaw / AutoClaw local agent workspace (persona docs + runtime data)
+.openclaw/
+.openclaw-attachments/
+SOUL.md
+IDENTITY.md
+USER.md
+TOOLS.md
+HEARTBEAT.md
+MEMORY.md
+BOOTSTRAP.md
