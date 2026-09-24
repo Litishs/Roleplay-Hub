@@ -9,6 +9,11 @@
         activeIframes: 3,
         streamFlushMs: 50,
         draftSaveMs: 2000,
+        // 角色卡 iframe 自报高度的上限。卡片跨源之后高度由卡片自己 postMessage 上报，
+        // 属于不可信输入：不封顶的话一张卡片就能把聊天流撑成几万像素。
+        frameMaxHeight: 4000,
+        // 卡片经 triggerSlash 注入的指令长度上限，同样是不可信输入。
+        frameSlashMaxLength: 2000,
         // parseCot 已完成文本的 LRU 上限。生成中的前缀不进这里（见 utils.mjs 的
         // 单槽易失缓存），所以条目数约等于「渲染窗口内的消息数」量级，100 足够。
         parseCotCache: 100,
