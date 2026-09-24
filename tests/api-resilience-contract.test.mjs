@@ -161,8 +161,12 @@ test('release baseline stays clean; debug builds use the 10000+ -debug.N scheme'
 
     // Debug builds: baseline + untracked counter in debug_apk/ (10000+ range),
     // passed to gradle via -P overrides; version.properties is never written.
+    // 2026-09-24: versionCode keeps the global monotonic counter (so a new
+    // debug APK always installs over an older one); the -debug.N sequence in
+    // versionName is per-baseline and restarts at 1 on a new baseline.
     const script = readFileSync(new URL('../scripts/build-android-debug.ps1', import.meta.url), 'utf8');
-    assert.ok(script.includes('$nextVersionCode = 10001'), 'debug counter starts above every legacy auto-bumped code');
+    assert.ok(script.includes('$nextVersionCode = [int]$state.versionCode + 1'), 'debug versionCode continues the global monotonic counter');
+    assert.ok(script.includes('$nextSeq = if ($state.baseline -eq $baselineVersionName) { [int]$state.seq + 1 } else { 1 }'), 'debug name sequence restarts at 1 on a new baseline');
     assert.ok(script.includes("$nextVersionName = '{0}-debug.{1}' -f $baselineVersionName"));
     assert.ok(script.includes('"-PrphVersionCode=$nextVersionCode"'));
     assert.ok(script.includes('"-PrphVersionName=$nextVersionName"'));
