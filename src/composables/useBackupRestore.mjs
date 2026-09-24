@@ -36,7 +36,11 @@ export function useBackupRestore(deps) {
                 await RPHStorage.exportBackup();
                 showToast('完整备份已保存', 'success');
             } catch (error) {
-                if (!/cancel/i.test(String(error?.message || error || ''))) {
+                // 取消时静默是合理的 UX，但不能用文本正则把真实错误一起吞掉：
+                // console.error 移到 if 外，含 "cancel" 字样的真实失败也必须留痕。
+                if (/cancel/i.test(String(error?.message || error || ''))) {
+                    console.info('Backup export cancelled by user');
+                } else {
                     console.error('Backup export failed:', error);
                     showToast('完整备份失败：' + (error?.message || error), 'error', 5000);
                 }
@@ -47,14 +51,18 @@ export function useBackupRestore(deps) {
 
         const restoreNativeBackup = async () => {
             if (backupInProgress.value) return;
-            const confirmed = await showVueConfirmModal('恢复完整备份', '恢复将替换当前角色、聊天、记忆、设置和本地图片。API Key 不会从备份恢复。', { confirmLabel: '立即恢复', cancelLabel: '取消恢复' });
-            if (!confirmed) return;
+            // 守卫必须在 await 弹窗前置位：否则快速双击可双开确认弹窗，两个都被确认后
+            // 会触发双重恢复。用户取消时在 finally 复位。
             backupInProgress.value = true;
             try {
+                const confirmed = await showVueConfirmModal('恢复完整备份', '恢复将替换当前角色、聊天、记忆、设置和本地图片。API Key 不会从备份恢复。', { confirmLabel: '立即恢复', cancelLabel: '取消恢复' });
+                if (!confirmed) return;
                 await RPHStorage.restoreBackup();
                 window.location.reload();
             } catch (error) {
-                if (!/cancel/i.test(String(error?.message || error || ''))) {
+                if (/cancel/i.test(String(error?.message || error || ''))) {
+                    console.info('Backup restore cancelled by user');
+                } else {
                     console.error('Backup restore failed:', error);
                     showToast('完整恢复失败，当前数据未被替换：' + (error?.message || error), 'error', 6000);
                 }

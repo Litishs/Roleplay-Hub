@@ -29,7 +29,10 @@
 
     const recoverInterruptedDraft = (message, marker) => {
         if (!message || message.storageStatus !== 'draft') return false;
-        message.content = String(message.content || '').trimEnd();
+        // content 未来若演进为结构化对象，String() 强转会覆写成 '[object Object]'。
+        // 非字符串内容直接拒绝恢复，保持原状交给上层处理。
+        if (typeof message.content !== 'string') return false;
+        message.content = message.content.trimEnd();
         if (marker && !message.content.includes(marker)) {
             message.content = [message.content, marker].filter(Boolean).join('\n\n');
         }
