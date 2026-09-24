@@ -69,6 +69,7 @@ import MessageInput from '../components/chat/MessageInput.vue';
 const AsyncCharacterPanel = defineAsyncComponent(() => import('../components/views/CharacterPanel.vue'));
 const AsyncGeneratorPanel = defineAsyncComponent(() => import('../components/views/GeneratorPanel.vue'));
 const AsyncSquarePanel = defineAsyncComponent(() => import('../components/views/SquarePanel.vue'));
+const AsyncNovelPanel = defineAsyncComponent(() => import('../components/views/NovelPanel.vue'));
 const AsyncSettingsPanel = defineAsyncComponent(() => import('../components/views/SettingsPanel.vue'));
 const AsyncPresetsPanel = defineAsyncComponent(() => import('../components/views/PresetsPanel.vue'));
 const AsyncUiTemplatePanel = defineAsyncComponent(() => import('../components/views/UiTemplatePanel.vue'));
@@ -102,7 +103,7 @@ import { extractVectorQueryTerms, factPreviewText, getClassicMemoryKey, getMemor
 
 const __app = createApp({
     components: {
-        CharacterPanel: AsyncCharacterPanel, GeneratorPanel: AsyncGeneratorPanel, SquarePanel: AsyncSquarePanel, SettingsPanel: AsyncSettingsPanel, PresetsPanel: AsyncPresetsPanel, UiTemplatePanel: AsyncUiTemplatePanel, RegexPanel: AsyncRegexPanel, ToolsPanel: AsyncToolsPanel, UsageStatsPanel: AsyncUsageStatsPanel, MemoryPanel: AsyncMemoryPanel, WorldInfoPanel,
+        CharacterPanel: AsyncCharacterPanel, GeneratorPanel: AsyncGeneratorPanel, SquarePanel: AsyncSquarePanel, NovelPanel: AsyncNovelPanel, SettingsPanel: AsyncSettingsPanel, PresetsPanel: AsyncPresetsPanel, UiTemplatePanel: AsyncUiTemplatePanel, RegexPanel: AsyncRegexPanel, ToolsPanel: AsyncToolsPanel, UsageStatsPanel: AsyncUsageStatsPanel, MemoryPanel: AsyncMemoryPanel, WorldInfoPanel,
         UiTemplatePending, EmbeddedViewContent, GenerationTimer, SettingsPageHeader,
         SideNav, ToastNotification, ConfirmDialog, ModalDialog,
         CharacterInfo, MessageList, MessageInput,
@@ -1026,6 +1027,47 @@ const __app = createApp({
                 syncSettingsToGenerator();
             }
         });
+
+        // Novel workshop storage bridge (novel/index.html): the embedded page
+        // round-trips its library and API settings through postMessage into the
+        // host SQLite kv store. Only the novel iframe may call it and only the
+        // two whitelisted keys are served. Settings objects carry
+        // apiKey/apiProviderKeys fields, which RPHStorage.set() extracts into
+        // the native secret channel, so keys never land in plain SQLite or in
+        // full backups (documents/墨韵造梦移植工程方案.md §4/§5).
+        const NOVEL_STORAGE_ALLOWED_KEYS = ['novel_library', 'novel_settings'];
+        const handleNovelStorageRequest = (event) => {
+            const data = event.data;
+            if (!data || typeof data !== 'object') return;
+            if (data.type !== 'NOVEL_STORAGE_GET' && data.type !== 'NOVEL_STORAGE_SET') return;
+            const novelFrame = document.querySelector('iframe[src*="novel/index.html"]');
+            if (!novelFrame || event.source !== novelFrame.contentWindow) return;
+            const respond = (payload) => {
+                try {
+                    novelFrame.contentWindow.postMessage({ type: 'NOVEL_STORAGE_RESULT', requestId: data.requestId, ...payload }, '*');
+                } catch (replyError) {
+                    console.error('[Novel] storage bridge reply failed:', replyError);
+                }
+            };
+            if (!NOVEL_STORAGE_ALLOWED_KEYS.includes(data.key)) {
+                respond({ error: 'Key not allowed' });
+                return;
+            }
+            (async () => {
+                try {
+                    if (data.type === 'NOVEL_STORAGE_GET') {
+                        respond({ value: (await RPHStorage.get(data.key)) ?? null });
+                    } else {
+                        await RPHStorage.set(data.key, data.value);
+                        respond({});
+                    }
+                } catch (error) {
+                    console.error('[Novel] storage bridge error:', error);
+                    respond({ error: String(error?.message || error) });
+                }
+            })();
+        };
+        window.addEventListener('message', handleNovelStorageRequest);
 
         watch(() => [settings.apiUrl, settings.apiKey, settings.model], ([, , newModel]) => {
             if (newModel !== settings.fastModel && newModel !== settings.balancedModel) {
@@ -1952,6 +1994,15 @@ const __app = createApp({
             else window.open(url, '_blank', 'noopener,noreferrer');
         };
 
+        // Novel State ("墨韵·造梦" workshop, ported from the STA1N upstream page)
+        const isNovelLoading = ref(true);
+        const novelUrl = ref('./novel/index.html');
+
+        const onNovelLoad = () => {
+            isNovelLoading.value = false;
+            console.log('%c[Novel] Novel Workshop Iframe Loaded', 'color: #a855f7; font-weight: bold;');
+        };
+
         const initializeSortableList = (elementId, items) => {
             nextTick(() => {
                 const element = document.getElementById(elementId);
@@ -1982,6 +2033,9 @@ const __app = createApp({
             } else if (newView === 'square') {
                 isSquareLoading.value = true;
                 squareUrl.value = `https://rphforum.zeabur.app/?t=${Date.now()}`;
+            } else if (newView === 'novel') {
+                isNovelLoading.value = true;
+                novelUrl.value = `./novel/index.html?t=${Date.now()}`;
             } else {
                 const sortable = {
                     presets: ['presets-list', presets],
@@ -9479,6 +9533,7 @@ const __app = createApp({
             editingCharacter, editingPreset, editingUiTemplate, toasts, chatContainer, isChatFullscreen, isMobileKeyboardOpen, isExternalInputFocused, inputBox, messageElements,
             isGeneratorLoading, generatorUrl, onGeneratorLoad, // Generator exports
             isSquareLoading, squareUrl, onSquareLoad, openSquareExternally, // Square exports
+            isNovelLoading, novelUrl, onNovelLoad, // Novel exports
             editorTab, characterDisplayLimit, displayedCharacters, loadMoreCharacters,
             isAutoImageGenEnabled,
             apiStatus, apiLatency, imageGenStatus, imageGenLatency, checkAllStatuses, apiKeyInput, syncApiKeyInput, apiKeyVisible, toggleApiKeyVisibility, pasteApiKeyFromClipboard, // Status Exports

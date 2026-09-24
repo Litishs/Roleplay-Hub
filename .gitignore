@@ -27,6 +27,14 @@ AGENTS.md
 CODE_WIKI.md
 .archive/
 
+# OpenClaw agent runtime files (local only, not part of the project)
+.openclaw/
+HEARTBEAT.md
+IDENTITY.md
+SOUL.md
+TOOLS.md
+USER.md
+
 # Phone app data safety backups (contains API keys / user data)
 .rphub-data-safety.*
 
