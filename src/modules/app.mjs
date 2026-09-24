@@ -9338,6 +9338,14 @@ const __app = createApp({
             return { text: mainText, showSpinner: false };
         };
 
+        // 模板里解析消息 CoT 的统一入口：生成中的消息走 parseCot 的易失单槽缓存，
+        // 已完成的走 LRU。直接在模板里写 parseCot(msg.content) 会一律命中持久缓存，
+        // 把流式输出的每一帧前缀都囤起来（单条消息 O(n²) 内存）。
+        const parseMessageCot = (msg) => parseCot(
+            msg?.content || '',
+            !isMessageThinkingOrRunning(msg)
+        );
+
         const switchProfile = (id) => {
             const profile = userProfiles.value.find(p => p.uuid === id);
             if (profile) {
@@ -9699,7 +9707,7 @@ const __app = createApp({
             createPreset, editPreset, savePreset, deletePreset,
             presetGroups, setActivePresetGroup, createPresetGroup, deletePresetGroup,
             exportPresetGroups, importPresetGroups,
-            renderMarkdown, messageUsesWideLayout, parseCot, closeCharacterEditor: () => showCharacterEditor.value = false,
+            renderMarkdown, messageUsesWideLayout, parseCot, parseMessageCot, closeCharacterEditor: () => showCharacterEditor.value = false,
             openExportModal, toggleExportSelection, selectAllExportItems, deselectAllExportItems, confirmExport,
             importPresets,
             // Regex Methods

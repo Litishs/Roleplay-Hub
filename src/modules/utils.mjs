@@ -1,3 +1,5 @@
+import { RPHRuntimePolicy } from './runtime-policy.mjs';
+
 const generateUUID = () => {
                     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
                         var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
@@ -5,10 +7,25 @@ const generateUUID = () => {
                     });
                 };
 
-const parseCotCache = new Map();
-const parseCot = (text) => {
+// parseCot 的缓存以「完整正文」为 key。流式输出每 50ms flush 一次，一条 4000 字的
+// 回复会依次产生几十上百个越来越长的前缀，每个都作为独立 key 持有一份完整字符串——
+// 单条消息就是 O(n²) 的内存，而原先 2000 条的上限意味着最坏情况能囤下几十 MB。
+//
+// 两层缓存：
+//  - 持久层：只收「已完成」的文本（LRU 有界），命中率高且总量可控；
+//  - 易失层：单槽，服务生成中的消息。MessageList 一次渲染里会对同一条消息调用 3~5 次
+//    parseCot，单槽就够消掉这些重复，而且天然不累积。
+const parseCotCache = new RPHRuntimePolicy.LruCache(RPHRuntimePolicy.limits.parseCotCache);
+let volatileParseCotKey = null;
+let volatileParseCotValue = null;
+
+const parseCot = (text, cacheable = true) => {
     if (!text) return { cot: '', main: '', sys: '', isFinished: false };
-    if (parseCotCache.has(text)) return parseCotCache.get(text);
+    if (cacheable) {
+        if (parseCotCache.has(text)) return parseCotCache.get(text);
+    } else if (volatileParseCotKey === text) {
+        return volatileParseCotValue;
+    }
 
     // 匹配 <think> 或 <cot> 标签，支持未闭合的情况
     // 优化正则：允许闭合标签中存在空格，防止因闭合标签格式不规范（如 </think >）导致正文被吞
@@ -44,11 +61,12 @@ const parseCot = (text) => {
     }
 
     const result = { cot: cotContent.trim(), main: mainContent.trim(), sys: sys, isFinished };
-    parseCotCache.set(text, result);
-    // Limit cache size to prevent memory leaks in extremely long sessions
-    if (parseCotCache.size > 2000) {
-        const firstKey = parseCotCache.keys().next().value;
-        parseCotCache.delete(firstKey);
+    if (cacheable) {
+        parseCotCache.set(text, result);
+    } else {
+        // 覆盖单槽：上一帧的前缀立即失去引用，不会堆积。
+        volatileParseCotKey = text;
+        volatileParseCotValue = result;
     }
     return result;
 };

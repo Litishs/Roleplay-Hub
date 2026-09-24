@@ -88,7 +88,7 @@ export function useTemplateRenderer(deps) {
             if (!msg || !msg.content) return false;
             const cacheable = !isMessageThinkingOrRunning(msg);
             if (msg.isTriggered) return msg.showRaw && contentUsesHtmlFrame(msg.content, msg.role, false, cacheable);
-            const parsed = parseCot(msg.content);
+            const parsed = parseCot(msg.content, cacheable);
             return contentUsesHtmlFrame(parsed.main || msg.content, msg.role, false, cacheable);
         };
 
@@ -110,7 +110,7 @@ export function useTemplateRenderer(deps) {
             if (!msg) return false;
             return !!(
                 msg.reasoning
-                || parseCot(msg.content || '').cot
+                || parseCot(msg.content || '', !isMessageThinkingOrRunning(msg)).cot
                 || (Array.isArray(msg.toolCalls) && msg.toolCalls.length > 0)
                 || msg.isEditing_Message
                 || messageUsesHtmlFrame(msg)

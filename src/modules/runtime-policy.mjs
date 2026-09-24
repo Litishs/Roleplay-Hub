@@ -9,6 +9,9 @@
         activeIframes: 3,
         streamFlushMs: 50,
         draftSaveMs: 2000,
+        // parseCot 已完成文本的 LRU 上限。生成中的前缀不进这里（见 utils.mjs 的
+        // 单槽易失缓存），所以条目数约等于「渲染窗口内的消息数」量级，100 足够。
+        parseCotCache: 100,
         // 聊天请求超时默认值（毫秒）。可在设置 → 高级设置 → 网络超时 中覆盖，
         // 覆盖值经 resolveRequestTimeouts 封顶在 requestTimeoutMin/MaxSeconds 之间。
         requestTimeout: {
