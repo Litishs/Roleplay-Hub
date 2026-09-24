@@ -243,7 +243,8 @@
                                                 <generation-timer v-if="isGenerating" :wait-time="currentWaitTime"
                                                     :estimated-time="estimatedGenerationTime"
                                                     :remote-estimated-time="remoteEstimatedTime"
-                                                    :remote="isRemoteGenerating"></generation-timer>
+                                                    :remote="isRemoteGenerating"
+                                                    :hint="waitHint"></generation-timer>
                                             </div>
                                             <div v-if="msg.role === 'assistant' && msg.uiTemplateBlocks && msg.uiTemplateBlocks.top && msg.uiTemplateBlocks.top.length"
                                                 class="ui-template-message-block ui-template-message-block-top">
@@ -442,7 +443,8 @@
                                     <generation-timer v-if="isGenerating" :wait-time="currentWaitTime"
                                         :estimated-time="estimatedGenerationTime"
                                         :remote-estimated-time="remoteEstimatedTime"
-                                        :remote="isRemoteGenerating"></generation-timer>
+                                        :remote="isRemoteGenerating"
+                                        :hint="waitHint"></generation-timer>
                                 </div>
                             </div>
                         </div>

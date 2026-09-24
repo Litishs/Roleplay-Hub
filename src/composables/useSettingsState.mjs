@@ -70,6 +70,12 @@ export function useSettingsState() {
         reasoningEffort: '',            // inline panel: '', none, low, medium, high, max
         autoFetchModels: true,
         stream: true,
+        // 网络超时（秒）：guard 实际使用前经 runtime-policy.resolveRequestTimeouts
+        // clamp 在 [10, 1800] 区间，非法/缺失回退默认值，所以这里不需要 normalize。
+        requestFirstByteTimeout: 60,    // 等待服务器响应头
+        requestFirstTokenTimeout: 60,   // 等待首个输出 token（推理模型建议调大）
+        requestStreamIdleTimeout: 120,  // 流式输出空闲
+        requestTotalTimeout: 600,       // 单次生成总时长
         styleFilterEnabled: true,       // inline panel: strip AI-cliché fragments from replies
         showLatestUsageBar: false,      // inline panel: latest request token usage bar
         activeToolAggressiveness: 'adaptive',

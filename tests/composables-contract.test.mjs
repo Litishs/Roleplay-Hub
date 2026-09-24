@@ -536,7 +536,7 @@ test('app.mjs wires useChatState with single call and site destructuring', () =>
     // destructured at original declaration sites — identifiers keep previous names
     assert.ok(app.includes('const { pendingActiveToolContext, activeToolResultContexts } = chatState;'));
     assert.ok(app.includes('const { lastContextMessages, lastTriggeredWorldInfos, lastContextTotalLength } = chatState;'));
-    assert.ok(app.includes('const { recentGenerationTimes, currentWaitTime, longPressTimer, estimatedGenerationTime } = chatState;'));
+    assert.ok(app.includes('const { recentGenerationTimes, currentWaitTime, waitHint, longPressTimer, estimatedGenerationTime } = chatState;'));
     // mutable non-reactive guards use let-destructuring
     assert.ok(app.includes('let { activeToolQueueAbortController } = chatState;'));
     assert.ok(app.includes('let { isLoadingEarlierChatMessages, isLoadingLaterChatMessages, isChatTopUnlockArmed } = chatState;'));
@@ -611,7 +611,8 @@ test('useMessageSender composable holds the chat generation pipeline', () => {
     assert.ok(senderSource.includes('const generateResponse = async (startTime = null, options = {}) => {'), 'owns generateResponse');
     assert.ok(senderSource.includes('return { generateResponse };'), 'exposes only generateResponse');
     // chat request resilience policy moved along with the pipeline
-    assert.ok(senderSource.includes('CHAT_FIRST_BYTE_TIMEOUT_MS = 60000'));
+    // 2026-09-22: 超时阈值改为从 settings 解析（见 runtime-policy.resolveRequestTimeouts）
+    assert.ok(senderSource.includes('const chatTimeouts = resolveRequestTimeouts(settings);'), 'timeouts configurable from settings');
     assert.ok(senderSource.includes('const sleepChatRetry = (attempt) =>'));
     assert.ok(senderSource.includes('const truncateErrorMessage = (message, maxLength = 600) => {'));
     // waitTimer is private to the pipeline (all its uses moved here)
