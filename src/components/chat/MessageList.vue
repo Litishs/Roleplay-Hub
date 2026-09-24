@@ -491,6 +491,10 @@ export default {
     // and text-selection / interactive elements inside the bubble.
     let bubbleTouch = null;   // { index, x, y, time, el, decided }
     let dragging = null;      // { index, dx } while the horizontal drag is active
+    // Detach handle for the imperative move/end listeners of the active touch
+    // (null while no gesture owns them); lets the "vertical wins" decision hand
+    // the gesture back to native scrolling immediately.
+    let bubbleGestureDetach = null;
     const canSwipeGesture = (msg, index) => {
       if (!msg || msg.role !== 'assistant') return false;
       const hist = ctx.chatHistory && ctx.chatHistory.value ? ctx.chatHistory.value : (Array.isArray(ctx.chatHistory) ? ctx.chatHistory : null);
@@ -521,18 +525,23 @@ export default {
       // Attach move/end listeners IMPERATIVELY and NON-PASSIVE: the browser only
       // lets a touch gesture own preventDefault while the first move is still
       // cancelable — template-bound Vue listeners proved too late on device.
-      const onMove = (ev) => { if (ev.cancelable) ev.preventDefault(); onBubbleTouchMove(ev, index); };
+      // preventDefault stays OFF until the gesture is decided as a horizontal
+      // swipe: an unconditional one here killed native scrolling for every
+      // touch that started on the bubble (device regression 2026-09-24).
+      const onMove = (ev) => { if (bubbleTouch && bubbleTouch.decided && ev.cancelable) ev.preventDefault(); onBubbleTouchMove(ev, index); };
       const onEnd = (ev) => {
-        bubbleEl.removeEventListener('touchmove', onMove);
-        bubbleEl.removeEventListener('touchend', onEnd);
-        bubbleEl.removeEventListener('touchcancel', onCancel);
+        if (bubbleGestureDetach) bubbleGestureDetach();
         onBubbleTouchEnd(ev, index);
       };
       const onCancel = (ev) => {
+        if (bubbleGestureDetach) bubbleGestureDetach();
+        onBubbleTouchCancel(ev, index);
+      };
+      bubbleGestureDetach = () => {
         bubbleEl.removeEventListener('touchmove', onMove);
         bubbleEl.removeEventListener('touchend', onEnd);
         bubbleEl.removeEventListener('touchcancel', onCancel);
-        onBubbleTouchCancel(ev, index);
+        bubbleGestureDetach = null;
       };
       bubbleEl.addEventListener('touchmove', onMove, { passive: false });
       bubbleEl.addEventListener('touchend', onEnd, { passive: false });
@@ -547,7 +556,13 @@ export default {
       // decide once per gesture whether this is a horizontal swipe
       if (!bubbleTouch.decided) {
         if (Math.abs(dx) < 12) return; // jitter band
-        if (Math.abs(dy) > Math.abs(dx)) { bubbleTouch = null; return; } // vertical scroll wins
+        if (Math.abs(dy) > Math.abs(dx)) {
+          // vertical scroll wins: detach our non-passive listeners right away so
+          // the browser scrolls natively (no more preventDefault from our side)
+          if (bubbleGestureDetach) bubbleGestureDetach();
+          bubbleTouch = null;
+          return;
+        }
         const histArr = ctx.chatHistory.value || ctx.chatHistory; const msg = histArr[index];
         // Both directions are always live: crossing an edge switches mode —
         // left past the last candidate arms "regenerate" (ST behavior),

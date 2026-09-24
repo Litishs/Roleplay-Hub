@@ -237,6 +237,12 @@ test('MessageList.vue: candidate bar anchored above the bubble + bubble swipe ge
     assert.ok(messageList.includes("'transform 260ms cubic-bezier(0.22, 0.61, 0.36, 1)'"), 'spring-back transition');
     assert.ok(messageList.includes('dx * 0.25'), 'rubber-band at the edge candidate');
     assert.ok(messageList.includes('Math.abs(dy) > Math.abs(dx)'), 'vertical scroll wins over swipe');
+    // 2026-09-24 device fix: an unconditional preventDefault in the imperative
+    // onMove wrapper killed native scrolling for every touch starting on the
+    // bubble — prevention must wait for the horizontal decision, and the
+    // vertical-wins decision must detach the non-passive listeners immediately.
+    assert.ok(messageList.includes('if (bubbleTouch && bubbleTouch.decided && ev.cancelable) ev.preventDefault();'), 'preventDefault deferred until the horizontal decision');
+    assert.ok(messageList.includes('if (bubbleGestureDetach) bubbleGestureDetach();'), 'vertical-wins / gesture end detaches the listeners');
     assert.ok(messageList.includes('dist + velocity * 120'), 'velocity-based flick support (no separate flick branch)');
     assert.ok(messageList.includes('translateX('), 'fly-out / fly-in animation');
     assert.ok(messageList.includes("el.style.opacity = '0.25'"), 'fade during candidate swap');
