@@ -499,11 +499,18 @@ export default {
       if (!msg || msg.role !== 'assistant') return false;
       const hist = ctx.chatHistory && ctx.chatHistory.value ? ctx.chatHistory.value : (Array.isArray(ctx.chatHistory) ? ctx.chatHistory : null);
       if (!hist || index !== hist.length - 1) return false;
-      if (!msg.swipes || msg.swipes.length < 2) return false;
+      // 2026-09-24 maintainer feedback: left swipe MEANS regenerate, so the
+      // gesture engages on any last-floor assistant message — including a
+      // single-candidate (1/1) or fresh reply without a swipes array yet.
+      // Right swipe simply rubber-bands there (no previous candidate).
       const busy = ctx.isConversationBusy && ctx.isConversationBusy.value;
       if (busy) return false;
       return true;
     };
+    // Safe edge math for messages whose swipes array may be absent (1/1):
+    // a missing array counts as exactly one candidate.
+    const swipeCandidateCount = (msg) => Array.isArray(msg.swipes) ? msg.swipes.length : 1;
+    const swipeActiveIndex = (msg) => Number.isInteger(msg.activeSwipeIndex) ? msg.activeSwipeIndex : 0;
     const setBubbleTransform = (el, dx, animate) => {
       if (!el) return;
       el.style.transition = animate ? 'transform 260ms cubic-bezier(0.22, 0.61, 0.36, 1)' : 'none';
@@ -568,7 +575,7 @@ export default {
         // left past the last candidate arms "regenerate" (ST behavior),
         // right at the first candidate rubber-bands and does nothing on release.
         const goingNext = dx < 0;
-        const atEdge = goingNext ? msg.activeSwipeIndex >= msg.swipes.length - 1 : msg.activeSwipeIndex <= 0;
+        const atEdge = goingNext ? swipeActiveIndex(msg) >= swipeCandidateCount(msg) - 1 : swipeActiveIndex(msg) <= 0;
         bubbleTouch.decided = true;
         dragging = { index, dx: 0 };
         if (event.cancelable) event.preventDefault();
@@ -577,7 +584,7 @@ export default {
       const histArr = ctx.chatHistory.value || ctx.chatHistory; const msg = histArr[index];
       // Rubber-band beyond the edge candidate (both directions);
       const goingNext = dx < 0;
-      const atEdge = goingNext ? msg.activeSwipeIndex >= msg.swipes.length - 1 : msg.activeSwipeIndex <= 0;
+      const atEdge = goingNext ? swipeActiveIndex(msg) >= swipeCandidateCount(msg) - 1 : swipeActiveIndex(msg) <= 0;
       const effective = atEdge ? dx * 0.25 : dx;
       dragging.dx = effective;
       setBubbleTransform(bubbleTouch.el, effective, false);
@@ -603,7 +610,7 @@ export default {
       const effectiveDist = dist + velocity * 120; // momentum extension
       const passed = !cancelled && effectiveDist > 64 && Math.abs(relDy) < 48;
       const dir = relDx < 0 ? 'next' : 'prev';
-      const atEdge = dir === 'next' ? msg.activeSwipeIndex >= msg.swipes.length - 1 : msg.activeSwipeIndex <= 0;
+      const atEdge = dir === 'next' ? swipeActiveIndex(msg) >= swipeCandidateCount(msg) - 1 : swipeActiveIndex(msg) <= 0;
       if (passed && dir === 'next' && atEdge) {
         // Left swipe past the last candidate = regenerate (append a new candidate)
         setBubbleTransform(el, 0, true);

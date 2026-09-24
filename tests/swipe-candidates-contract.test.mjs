@@ -243,6 +243,12 @@ test('MessageList.vue: candidate bar anchored above the bubble + bubble swipe ge
     // vertical-wins decision must detach the non-passive listeners immediately.
     assert.ok(messageList.includes('if (bubbleTouch && bubbleTouch.decided && ev.cancelable) ev.preventDefault();'), 'preventDefault deferred until the horizontal decision');
     assert.ok(messageList.includes('if (bubbleGestureDetach) bubbleGestureDetach();'), 'vertical-wins / gesture end detaches the listeners');
+    // 2026-09-24 maintainer feedback: left swipe MEANS regenerate, so the gesture
+    // engages on any last-floor assistant message — a 1/1 (or swipes-less) reply
+    // left-swipes into a regeneration; edge math tolerates the missing array.
+    assert.ok(!messageList.includes('if (!msg.swipes || msg.swipes.length < 2) return false;'), 'gesture gate no longer requires 2 candidates');
+    assert.ok(messageList.includes('swipeCandidateCount'), 'safe candidate count helper present (1/1 support)');
+    assert.ok(messageList.includes('swipeActiveIndex(msg) >= swipeCandidateCount(msg) - 1'), 'left-swipe-at-edge math uses the safe count');
     assert.ok(messageList.includes('dist + velocity * 120'), 'velocity-based flick support (no separate flick branch)');
     assert.ok(messageList.includes('translateX('), 'fly-out / fly-in animation');
     assert.ok(messageList.includes("el.style.opacity = '0.25'"), 'fade during candidate swap');
