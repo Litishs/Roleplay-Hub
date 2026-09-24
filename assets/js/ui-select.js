@@ -1,5 +1,13 @@
+// 由 scripts/build-umd-shims.mjs 从 src/modules/ui-select.mjs 生成，请勿直接编辑。
+// 修改请改 ESM 源文件，然后运行 `npm run build:umd-shims`（build:web 会自动执行）。
 (function () {
     const { ref, computed, nextTick, watch, onBeforeUnmount } = Vue;
+
+// Import the Vue APIs explicitly: the component used to destructure the
+// global window.Vue (UMD legacy), which belongs to a DIFFERENT Vue instance
+// than the Vite-bundled app. Refs from one instance's reactivity system never
+// trigger the other instance's render effects, so the dropdown menu never
+// rendered on click (state changed, UI stayed frozen).
 
     const toOption = (option, index) => {
         if (!option || typeof option !== 'object') {
@@ -23,7 +31,6 @@
             key: option.key ?? `${index}:${String(value ?? '')}`
         };
     };
-
     window.RPHubCustomSelect = {
         name: 'CustomSelect',
         props: {
