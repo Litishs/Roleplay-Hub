@@ -283,8 +283,9 @@
 
             <!-- 聊天参数（温度 / 输出长度上限 / 网络超时） -->
             <div class="settings-subsection-card mt-1 overflow-hidden">
-                <button type="button" @click="chatParamsOpen = !chatParamsOpen"
-                    class="flex w-full items-center rounded-lg py-3 pl-4 pr-3 text-xs font-bold text-gray-400 uppercase tracking-wider text-left transition-colors hover:text-gray-600 group">
+                <div class="flex items-center justify-between gap-3 pl-4 pr-3 py-1.5">
+                    <button type="button" @click="chatParamsOpen = !chatParamsOpen"
+                        class="flex flex-1 items-center rounded-lg py-1.5 text-xs font-bold text-gray-400 uppercase tracking-wider text-left transition-colors hover:text-gray-600 group">
                     <svg class="w-4 h-4 mr-2 text-gray-400 transition-colors group-hover:text-gray-600" fill="none"
                         stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -297,7 +298,12 @@
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                             d="M19 9l-7 7-7-7"></path>
                     </svg>
-                </button>
+                    </button>
+                    <button type="button" @click="restoreChatParamsDefaults"
+                        class="shrink-0 text-xs normal-case font-medium text-gray-400 hover:text-teal-600 transition-colors">
+                        恢复默认
+                    </button>
+                </div>
                 <div class="grid"
                     :style="{ gridTemplateRows: chatParamsOpen ? '1fr' : '0fr', transition: 'grid-template-rows 300ms ease' }">
                     <div class="overflow-hidden min-h-0">
@@ -382,6 +388,10 @@
                                 d="M19 9l-7 7-7-7"></path>
                         </svg>
                     </button>
+                    <button type="button" @click="restoreImageGenDefaults"
+                        class="shrink-0 text-xs normal-case font-medium text-gray-400 hover:text-teal-600 transition-colors">
+                        恢复默认
+                    </button>
                     <button type="button" @click="openExternal('https://cdn.sta1n.cn/keys')"
                         class="text-teal-600 hover:text-teal-700 hover:underline cursor-pointer transition-colors text-xs normal-case font-medium">
                         获取生图密钥
@@ -465,6 +475,7 @@
 import { inject, ref } from "vue";
 import { RPHubCustomSelect as CustomSelect } from "../../modules/ui-select.mjs";
 import { RPHRuntimePolicy } from "../../modules/runtime-policy.mjs";
+import { CHAT_PARAMS_CARD_DEFAULTS, IMAGE_GEN_CARD_DEFAULTS } from "../../composables/useSettingsState.mjs";
 // 2026-08-28 Phase 1.6: shared components are declared locally now that the
 // app-level global registration workaround has been removed.
 
@@ -506,13 +517,27 @@ export default {
         const genSectionOpen = ref(false);
         // Chat params default open (core generation controls); collapsible like 生图设置.
         const chatParamsOpen = ref(true);
+        // 恢复默认：把当前卡片承载的设置项重置为 useSettingsState 导出的默认值。
+        // 只动偏好项——imageGenKey 是凭据，刻意不在 IMAGE_GEN_CARD_DEFAULTS 里，保留不动。
+        const restoreChatParamsDefaults = () => {
+            if (!ctx?.settings) return;
+            Object.assign(ctx.settings, CHAT_PARAMS_CARD_DEFAULTS);
+            ctx.showToast?.('聊天参数已恢复默认', 'success');
+        };
+        const restoreImageGenDefaults = () => {
+            if (!ctx?.settings) return;
+            Object.assign(ctx.settings, IMAGE_GEN_CARD_DEFAULTS);
+            ctx.showToast?.('生图设置已恢复默认，密钥保留', 'success');
+        };
         return {
             ...(ctx || {}),
             openExternal,
             genSectionOpen,
             chatParamsOpen,
             requestTimeoutItems,
-            normalizeRequestTimeout: (key) => normalizeRequestTimeout(key, ctx?.settings)
+            normalizeRequestTimeout: (key) => normalizeRequestTimeout(key, ctx?.settings),
+            restoreChatParamsDefaults,
+            restoreImageGenDefaults
         };
     }
 };

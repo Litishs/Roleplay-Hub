@@ -21,6 +21,28 @@
 //   the API key editing helpers stay in app.mjs until their own roadmap step.
 
 import { ref, reactive, computed } from 'vue';
+import { RPHRuntimePolicy } from '../modules/runtime-policy.mjs';
+
+// ApiConfig 两张设置卡（聊天参数 / 生图设置）的「恢复默认」按钮与 settings
+// 初始值共用的默认值单一来源。冻结防止意外写入污染默认值。
+// 注意：imageGenKey（生图密钥）刻意不在 IMAGE_GEN_CARD_DEFAULTS 里——密钥是
+// 凭据而非偏好，恢复默认不应清掉它。
+const REQUEST_TIMEOUT_LIMITS = RPHRuntimePolicy.limits.requestTimeout;
+export const CHAT_PARAMS_CARD_DEFAULTS = Object.freeze({
+    temperature: 1.0,
+    maxOutputTokens: 4096,
+    requestFirstByteTimeout: REQUEST_TIMEOUT_LIMITS.firstByteMs / 1000,
+    requestFirstTokenTimeout: REQUEST_TIMEOUT_LIMITS.firstTokenMs / 1000,
+    requestStreamIdleTimeout: REQUEST_TIMEOUT_LIMITS.streamIdleMs / 1000,
+    requestTotalTimeout: REQUEST_TIMEOUT_LIMITS.totalMs / 1000
+});
+export const IMAGE_GEN_CARD_DEFAULTS = Object.freeze({
+    imageModel: 'nai-diffusion-4-5-full',   // 生图版本（NAI model id，-1/-5 为每次生成扣点）
+    imageStyle: 'vertical',
+    customImageArtists: '',
+    imageSize: '竖图',
+    imageGenCount: 2
+});
 
 export function useSettingsState() {
     // --- User persona + profiles ---
@@ -62,20 +84,20 @@ export function useSettingsState() {
         model: DEFAULT_API_CONFIG.qualityModel,
         contextSize: MAX_CONTEXT_SIZE,
         contextTokenBudget: CONTEXT_TOKEN_BUDGET_DEFAULT,
-        maxOutputTokens: 4096,
+        maxOutputTokens: CHAT_PARAMS_CARD_DEFAULTS.maxOutputTokens,
         worldInfoTokenBudget: 4000,     // 世界书 token 预算（0=不限）
         chatProviderId: '',             // 聊天供应商，空=回退设置页当前浏览的供应商
         visionModel: '',                // 识图模型：用户发送图片时用聊天供应商调用它生成图片描述
-        temperature: 1.0,
+        temperature: CHAT_PARAMS_CARD_DEFAULTS.temperature,
         reasoningEffort: '',            // inline panel: '', none, low, medium, high, max
         autoFetchModels: true,
         stream: true,
         // 网络超时（秒）：guard 实际使用前经 runtime-policy.resolveRequestTimeouts
         // clamp 在 [10, 1800] 区间，非法/缺失回退默认值，所以这里不需要 normalize。
-        requestFirstByteTimeout: 60,    // 等待服务器响应头
-        requestFirstTokenTimeout: 60,   // 等待首个输出 token（推理模型建议调大）
-        requestStreamIdleTimeout: 120,  // 流式输出空闲
-        requestTotalTimeout: 600,       // 单次生成总时长
+        requestFirstByteTimeout: CHAT_PARAMS_CARD_DEFAULTS.requestFirstByteTimeout,    // 等待服务器响应头
+        requestFirstTokenTimeout: CHAT_PARAMS_CARD_DEFAULTS.requestFirstTokenTimeout,   // 等待首个输出 token（推理模型建议调大）
+        requestStreamIdleTimeout: CHAT_PARAMS_CARD_DEFAULTS.requestStreamIdleTimeout,  // 流式输出空闲
+        requestTotalTimeout: CHAT_PARAMS_CARD_DEFAULTS.requestTotalTimeout,       // 单次生成总时长
         styleFilterEnabled: true,       // inline panel: strip AI-cliché fragments from replies
         showLatestUsageBar: false,      // inline panel: latest request token usage bar
         activeToolAggressiveness: 'adaptive',
@@ -96,12 +118,12 @@ export function useSettingsState() {
         fontSize: window.innerWidth > 768 ? 16 : 14,
         themeMode: 'system',
         imageGenKey: '',
-        imageModel: 'nai-diffusion-4-5-full',   // 生图版本（NAI model id，-1/-5 为每次生成扣点）
+        imageModel: IMAGE_GEN_CARD_DEFAULTS.imageModel,   // 生图版本（NAI model id，-1/-5 为每次生成扣点）
         imageGenProviderId: 'sta1n',
-        imageStyle: 'vertical',
-        customImageArtists: '',
-        imageSize: '竖图',
-        imageGenCount: 2,
+        imageStyle: IMAGE_GEN_CARD_DEFAULTS.imageStyle,
+        customImageArtists: IMAGE_GEN_CARD_DEFAULTS.customImageArtists,
+        imageSize: IMAGE_GEN_CARD_DEFAULTS.imageSize,
+        imageGenCount: IMAGE_GEN_CARD_DEFAULTS.imageGenCount,
         ttsEnabled: false,
         ttsAutoPlay: false,
         ttsService: 'system',

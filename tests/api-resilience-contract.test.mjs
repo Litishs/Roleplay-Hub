@@ -90,6 +90,25 @@ test('聊天请求按首包、首有效 token、有效流空闲和总时长超�
     assert.ok(senderJs.includes('../modules/chat-request-guard.mjs'));
 });
 
+test('聊天参数与生图设置卡片提供恢复默认（密钥不参与重置）', () => {
+    const settingsStateSource = readFileSync(new URL('../src/composables/useSettingsState.mjs', import.meta.url), 'utf8');
+    const apiConfigHtml = readFileSync(new URL('../src/components/settings/ApiConfig.vue', import.meta.url), 'utf8');
+    // 默认值单一来源：两张卡的「恢复默认」与 settings 初始值共用同一份冻结常量。
+    assert.ok(settingsStateSource.includes('export const CHAT_PARAMS_CARD_DEFAULTS'), 'chat card defaults exported');
+    assert.ok(settingsStateSource.includes('export const IMAGE_GEN_CARD_DEFAULTS'), 'image card defaults exported');
+    assert.ok(settingsStateSource.includes('temperature: CHAT_PARAMS_CARD_DEFAULTS.temperature'), 'reactive seeds from the exported defaults');
+    assert.ok(settingsStateSource.includes('imageModel: IMAGE_GEN_CARD_DEFAULTS.imageModel'), 'reactive seeds from the exported defaults');
+    // imageGenKey 是凭据而非偏好：恢复默认不能清掉用户的生图密钥。
+    const imageGenDefaultsStart = settingsStateSource.indexOf('export const IMAGE_GEN_CARD_DEFAULTS');
+    const imageGenDefaultsBlock = settingsStateSource.slice(imageGenDefaultsStart, settingsStateSource.indexOf('});', imageGenDefaultsStart));
+    assert.ok(!imageGenDefaultsBlock.includes('imageGenKey'), 'imageGenKey is deliberately not reset by 恢复默认');
+    // 两张卡的头部都暴露恢复入口，走 ctx 上的 showToast 反馈。
+    assert.ok(apiConfigHtml.includes('restoreChatParamsDefaults'), 'chat params card has a restore button');
+    assert.ok(apiConfigHtml.includes('restoreImageGenDefaults'), 'image gen card has a restore button');
+    assert.ok(apiConfigHtml.includes('Object.assign(ctx.settings, CHAT_PARAMS_CARD_DEFAULTS)'), 'restore assigns the shared defaults');
+    assert.ok(apiConfigHtml.includes('Object.assign(ctx.settings, IMAGE_GEN_CARD_DEFAULTS)'), 'restore assigns the shared defaults');
+});
+
 test('聊天向量召回超时后仍通过关键词与最近轮次注入记忆', () => {
     assert.ok(app.includes('MEMORY_CONTEXT_RECALL_TIMEOUT_MS = 20000'));
     assert.ok(app.includes('MEMORY_CONTEXT_RECALL_RETRY_DELAY_MS = 60000'));
