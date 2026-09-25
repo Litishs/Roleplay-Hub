@@ -1,4 +1,7 @@
+// 由 scripts/build-umd-shims.mjs 从 src/modules/card-utils.mjs 生成，请勿直接编辑。
+// 修改请改 ESM 源文件，然后运行 `npm run build:umd-shims`（build:web 会自动执行）。
 (function () {
+
     const textDecoder = typeof TextDecoder !== 'undefined' ? new TextDecoder('utf-8') : null;
     const textEncoder = typeof TextEncoder !== 'undefined' ? new TextEncoder() : null;
 
@@ -689,7 +692,6 @@ year 2025, textless version, {{petite,loli}}, Petite figure, no text, The image 
     };
 
     installIframeExportBridge();
-
     window.RPHubCardUtils = {
         blobToDataUrl,
         buildCharacterCardData,

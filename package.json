@@ -6,7 +6,8 @@
     "scripts": {
         "prepare:vendor": "node scripts/prepare-vendor.mjs && node scripts/prepare-local-embedding.mjs",
         "build:css": "tailwindcss -c tailwind.main.config.cjs -i assets/css/tailwind.input.css -o assets/generated/tailwind.css --minify && tailwindcss -c tailwind.character.config.cjs -i assets/css/tailwind.input.css -o assets/generated/character.css --minify && tailwindcss -c tailwind.novel.config.cjs -i assets/css/tailwind.input.css -o assets/generated/novel.css --minify",
-        "build:web": "npm run prepare:vendor && npm run build:css && npm run build:js && node scripts/build-web.mjs",
+        "build:umd-shims": "node scripts/build-umd-shims.mjs",
+        "build:web": "npm run prepare:vendor && npm run build:css && npm run build:umd-shims && npm run build:js && node scripts/build-web.mjs",
         "test": "node --test tests/*.test.mjs",
         "android:sync": "npm run build:web && cap sync android",
         "android:open": "cap open android",
