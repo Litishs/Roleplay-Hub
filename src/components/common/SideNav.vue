@@ -95,7 +95,7 @@
                 :class="{ 'is-open': isOnlineNavOpen && !isSidebarCollapsed }">
                 <button @click="toggleOnlineNav"
                     class="sidebar-nav-button online-nav-trigger flex items-center rounded-xl transition-all duration-200 font-medium"
-                    :class="[['generator', 'square'].includes(currentView) ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900', isSidebarCollapsed ? 'w-12 h-12 mx-auto justify-center p-0' : 'w-full px-3 py-2.5']"
+                    :class="[['generator', 'square', 'novel'].includes(currentView) ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900', isSidebarCollapsed ? 'w-12 h-12 mx-auto justify-center p-0' : 'w-full px-3 py-2.5']"
                     title="在线"
                     aria-controls="online-nav-panel"
                     :aria-expanded="isOnlineNavOpen && !isSidebarCollapsed">
@@ -137,6 +137,17 @@
                                     </path>
                                 </svg>
                                 <span>万相广场</span>
+                            </button>
+                            <button @click="currentView = 'novel'; closeMobileMenu()"
+                                class="sidebar-nav-button advanced-nav-item transition-all duration-200"
+                                :class="currentView === 'novel' ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'"
+                                title="小说生成">
+                                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"
+                                        d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253">
+                                    </path>
+                                </svg>
+                                <span>小说生成</span>
                             </button>
                         </div>
                     </div>

@@ -80,7 +80,11 @@ export function useVectorMemoryPatrol(deps) {
                 while (getBatchExtractAbort() === batchController && !batchController.signal.aborted) {
                     setVectorBatchRescanRequested(false);
                     const snapshot = buildConversationTurnSnapshot(chatHistory.value, { includeSystem: false });
-                    const safeTurns = isConversationBusy.value ? snapshot.turns.slice(0, -1) : snapshot.turns;
+                    // Swipe-era contract: the newest turn is NEVER extracted while it can still be
+                    // regenerated (swipe candidates would otherwise leak inactive candidates into
+                    // vector memory). Unconditionally exclude the last turn; it becomes eligible
+                    // once a newer turn exists. (design doc §4)
+                    const safeTurns = snapshot.turns.slice(0, -1);
                     const emptyTurnSet = new Set(emptyLog);
                     let lastExtracted = Number(memorySettings.vectorExtractedTurns[extractedKey]) || 0;
                     let chunks = safeTurns
@@ -124,7 +128,12 @@ export function useVectorMemoryPatrol(deps) {
                         await waitForMemoryConversationIdle(batchController.signal);
                         continue;
                     }
-                    const currentTurnCount = buildConversationTurnSnapshot(chatHistory.value, { includeSystem: false }).turns.length;
+                    const currentTurnCount = Math.max(0, buildConversationTurnSnapshot(chatHistory.value, { includeSystem: false }).turns.length - 1);
+                    // Comparable count basis: safeTurns now ALWAYS excludes the newest turn
+                    // (swipe-era contract), so the "conversation changed" rescan check must
+                    // exclude it on both sides — comparing the full count against the safe
+                    // count would be always-unequal and spin this loop forever (a synchronous
+                    // busy loop that freezes the whole renderer when chunks are empty).
                     if (added > 0 || getVectorBatchRescanRequested() || currentTurnCount !== scannedTurnCount) continue;
                     // 全部处理完成：推进已提取轮次标记，避免下次切换角色时重复全量重扫
                     const maxTurn = safeTurns.reduce((max, turnInfo) => Math.max(max, Number(turnInfo.turn) || 0), 0);
