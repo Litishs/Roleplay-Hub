@@ -15,6 +15,7 @@ android/keystore/
 debug_apk/
 .trae/
 .zcode/
+.zcodeignore
 .tmp-*.db
 .tmp-*.db-wal
 .tmp-*.db-shm
@@ -26,6 +27,14 @@ documents/
 AGENTS.md
 CODE_WIKI.md
 .archive/
+
+# OpenClaw agent runtime files (local only, not part of the project)
+.openclaw/
+HEARTBEAT.md
+IDENTITY.md
+SOUL.md
+TOOLS.md
+USER.md
 
 # Phone app data safety backups (contains API keys / user data)
 .rphub-data-safety.*
@@ -47,3 +56,14 @@ desktop.ini
 /test_*.js
 /tmp-*.js
 *.bak
+
+# OpenClaw / AutoClaw local agent workspace (persona docs + runtime data)
+.openclaw/
+.openclaw-attachments/
+SOUL.md
+IDENTITY.md
+USER.md
+TOOLS.md
+HEARTBEAT.md
+MEMORY.md
+BOOTSTRAP.md

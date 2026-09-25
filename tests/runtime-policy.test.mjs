@@ -57,6 +57,7 @@ test('runtime limits match the APK performance contract', async () => {
       frameMaxHeight: 4000,
       frameSlashMaxLength: 2000,
       parseCotCache: 100,
+      swipeMaxCandidates: 5,
       requestTimeout: {
         firstByteMs: 60000,
         firstTokenMs: 60000,
