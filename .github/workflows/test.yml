@@ -1,0 +1,35 @@
+name: Tests
+
+# 契约测试此前只在打 tag 时才有机会被跑到（而 release.yml 里其实也没跑），
+# 49 个测试文件对日常改动零覆盖。这里让每次 push / PR 都跑一遍。
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      # vite build 不到 1 秒，却能在 CI 里直接拦住 MISSING_EXPORT / 断裂 import
+      # 这类契约测试未必覆盖的提交错误（本次评审里的 utils.mjs 漏提交即属此类）。
+      - name: Build JS bundle
+        run: npm run build:js
+
+      # 不跑 prepare:vendor：本 job 只验证源码契约，构建产物相关的断言会自行
+      # skip（见 tests/local-embedding-contract.test.mjs）。带产物的完整校验
+      # 由 release.yml 在 build:web 之后执行。
+      - name: Run contract tests
+        run: npm test

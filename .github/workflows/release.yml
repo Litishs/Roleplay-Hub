@@ -17,7 +17,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version-file: '.nvmrc'
           cache: 'npm'
 
       - name: Install dependencies
@@ -25,6 +25,11 @@ jobs:
 
       - name: Build web assets & vendor
         run: npm run build:web
+
+      # 构建产物齐全后再跑一次：此时 assets/vendor 已生成，本地 embedding 模型的
+      # 完整性断言不会被 skip，等于在发版前校验「这个包真的能离线用」。
+      - name: Run contract tests against the built output
+        run: npm test
 
       - name: Sync Capacitor to Android
         run: npx cap sync android
