@@ -33,6 +33,44 @@ test('parseCot extracts think/cot content and handles unclosed tags', () => {
     assert.ok(sloppy.cot.includes('plan'));
 });
 
+test('parseCot caching does not accumulate streaming prefixes', () => {
+    // 流式输出每 50ms flush 一次，会依次喂进「越来越长的前缀」。若每个前缀都进
+    // 持久缓存，单条消息就是 O(n²) 内存。cacheable=false 时走单槽易失缓存：
+    // 结果仍然正确，但上一帧立即失去引用。
+    const prefixes = Array.from({ length: 200 }, (_, index) => `<think>想</think>正文${'字'.repeat(index)}`);
+    const midIndex = 100;
+    let midFrameResult = null;
+
+    prefixes.forEach((prefix, index) => {
+        const parsed = parseCot(prefix, false);
+        if (index === midIndex) midFrameResult = parsed;
+        assert.equal(parsed.cot, '想');
+        assert.ok(parsed.main.startsWith('正文'));
+    });
+
+    // 中途某一帧的结果不该留在任何缓存里：再解析同一文本会得到全新对象。
+    // （若它进过持久 LRU，这里会命中并返回上面那个同一引用。）
+    assert.notStrictEqual(parseCot(prefixes[midIndex], false), midFrameResult,
+        '生成中的帧不应进入持久缓存');
+    assert.notStrictEqual(parseCot(prefixes[midIndex], true), midFrameResult,
+        '生成中的帧不应进入持久缓存');
+
+    // 已完成的文本走持久 LRU，同一输入命中同一对象。
+    const settled = '<think>想</think>最终正文';
+    assert.strictEqual(parseCot(settled), parseCot(settled));
+});
+
+test('parseCot volatile slot still serves repeat reads of the same frame', () => {
+    // MessageList 一次渲染里会对同一条消息调用 parseMessageCot 5 次，单槽必须
+    // 能消掉这些重复，否则收紧缓存反而让生成中的渲染更慢。
+    const frame = '<think>推理</think>这一帧的正文';
+    const first = parseCot(frame, false);
+    const second = parseCot(frame, false);
+
+    assert.strictEqual(first, second);
+    assert.equal(second.main, '这一帧的正文');
+});
+
 test('token formatters handle nullish and aggregate input', () => {
     assert.equal(formatTokenCount(undefined), '0');
     assert.equal(formatTokenCount(1234), '1,234');

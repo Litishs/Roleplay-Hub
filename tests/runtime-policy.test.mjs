@@ -54,6 +54,9 @@ test('runtime limits match the APK performance contract', async () => {
       activeIframes: 3,
       streamFlushMs: 50,
       draftSaveMs: 2000,
+      frameMaxHeight: 4000,
+      frameSlashMaxLength: 2000,
+      parseCotCache: 100,
       swipeMaxCandidates: 5,
       requestTimeout: {
         firstByteMs: 60000,

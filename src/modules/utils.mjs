@@ -1,3 +1,5 @@
+import { RPHRuntimePolicy } from './runtime-policy.mjs';
+
 const generateUUID = () => {
                     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
                         var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
@@ -5,10 +7,25 @@ const generateUUID = () => {
                     });
                 };
 
-const parseCotCache = new Map();
-const parseCot = (text) => {
+// parseCot 的缓存以「完整正文」为 key。流式输出每 50ms flush 一次，一条 4000 字的
+// 回复会依次产生几十上百个越来越长的前缀，每个都作为独立 key 持有一份完整字符串——
+// 单条消息就是 O(n²) 的内存，而原先 2000 条的上限意味着最坏情况能囤下几十 MB。
+//
+// 两层缓存：
+//  - 持久层：只收「已完成」的文本（LRU 有界），命中率高且总量可控；
+//  - 易失层：单槽，服务生成中的消息。MessageList 一次渲染里会对同一条消息调用 3~5 次
+//    parseCot，单槽就够消掉这些重复，而且天然不累积。
+const parseCotCache = new RPHRuntimePolicy.LruCache(RPHRuntimePolicy.limits.parseCotCache);
+let volatileParseCotKey = null;
+let volatileParseCotValue = null;
+
+const parseCot = (text, cacheable = true) => {
     if (!text) return { cot: '', main: '', sys: '', isFinished: false };
-    if (parseCotCache.has(text)) return parseCotCache.get(text);
+    if (cacheable) {
+        if (parseCotCache.has(text)) return parseCotCache.get(text);
+    } else if (volatileParseCotKey === text) {
+        return volatileParseCotValue;
+    }
 
     // 匹配 <think> 或 <cot> 标签，支持未闭合的情况
     // 优化正则：允许闭合标签中存在空格，防止因闭合标签格式不规范（如 </think >）导致正文被吞
@@ -44,11 +61,12 @@ const parseCot = (text) => {
     }
 
     const result = { cot: cotContent.trim(), main: mainContent.trim(), sys: sys, isFinished };
-    parseCotCache.set(text, result);
-    // Limit cache size to prevent memory leaks in extremely long sessions
-    if (parseCotCache.size > 2000) {
-        const firstKey = parseCotCache.keys().next().value;
-        parseCotCache.delete(firstKey);
+    if (cacheable) {
+        parseCotCache.set(text, result);
+    } else {
+        // 覆盖单槽：上一帧的前缀立即失去引用，不会堆积。
+        volatileParseCotKey = text;
+        volatileParseCotValue = result;
     }
     return result;
 };
@@ -289,24 +307,45 @@ export const isEditableElement = (el) => {
             return tag === 'textarea';
         };
 
+// 角色卡 executable-html iframe 与宿主之间的消息通道标识。iframe 以不含
+// allow-same-origin 的 sandbox 运行（源为 opaque），双方只能靠 postMessage 通信，
+// 这个常量用于两侧握手：卡片侧由 buildExecutableHtmlDocument 注入，宿主侧由
+// app.mjs 的 handleExecutableFrameMessage 校验。
+export const EXECUTABLE_FRAME_CHANNEL = 'rph-executable-frame';
+
 export const buildExecutableHtmlDocument = (rawHtml) => {
             const metaViewport = '<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">';
             const hudCSS = '.sinan-hud{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;padding:12px;background:linear-gradient(to bottom right,rgba(255,255,255,0.9),rgba(255,255,255,0.6));border-radius:12px;border:1px solid rgba(0,0,0,0.08);backdrop-filter:blur(4px)}.char-card{flex:1 1 140px;background:#fff;padding:10px;border-radius:8px;border-left:4px solid #ddd;box-shadow:0 2px 6px rgba(0,0,0,0.04);display:flex;flex-direction:column;gap:4px;font-size:12px;position:relative;overflow:hidden;transition:transform 0.2s}.char-card:hover{transform:translateY(-2px);box-shadow:0 4px 8px rgba(0,0,0,0.1)}.char-name{font-weight:700;font-size:14px;color:#374151;display:flex;justify-content:space-between;align-items:center}.char-mood{color:#6b7280;font-size:12px}.char-loc{color:#9ca3af;font-size:11px;margin-top:auto;padding-top:4px}.bar-bg{height:4px;background:#f3f4f6;border-radius:2px;overflow:hidden;margin-top:6px}.bar-fill{height:100%;background:#10b981;border-radius:2px}.c-tongqiu{border-left-color:#f59e0b}.c-tongqiu .bar-fill{background:#f59e0b}.c-yufan{border-left-color:#3b82f6}.c-yufan .bar-fill{background:#3b82f6}.c-linghu{border-left-color:#8b5cf6}.c-linghu .bar-fill{background:#8b5cf6}.c-chongtian{border-left-color:#ef4444}.c-chongtian .bar-fill{background:#ef4444}';
             const resetStyle = '<style>html,body{margin:0!important;padding:0!important;width:100%!important;height:auto!important;min-height:auto!important;word-wrap:break-word!important;box-sizing:border-box!important;overflow:hidden!important;}::-webkit-scrollbar{display:none;}*,*::before,*::after{box-sizing:inherit!important;}img,video,canvas,svg{max-width:100%!important;height:auto!important;}table{display:block!important;overflow-x:auto!important;max-width:100%!important;}pre{white-space:pre-wrap!important;word-wrap:break-word!important;max-width:100%!important;}.container,.reality-panel,.app-container{max-width:100%!important;width:100%!important;margin:0!important;border-radius:0!important;box-shadow:none!important;border:none!important;height:auto!important;min-height:0!important;}body>div:first-child{margin:0!important;max-width:100%!important;height:auto!important;min-height:0!important;}#app{height:auto!important;min-height:auto!important;}.bottom-safe{display:none!important;height:0!important;min-height:0!important;margin:0!important;padding:0!important;}' + hudCSS + '</style>';
-            const jqueryScript = '<script src="/assets/vendor/jquery.min.js" defer><\/script>';
+            // 绝对化 jQuery 地址：opaque 源的 srcdoc 文档解析相对 URL 时不再有可靠的
+            // base，直接用宿主 location 拼出绝对地址，避免卡片里的 $ 变成 undefined。
+            const jqueryUrl = typeof location !== 'undefined' && location.href
+                ? new URL('/assets/vendor/jquery.min.js', location.href).href
+                : '/assets/vendor/jquery.min.js';
+            const jqueryScript = `<script src="${jqueryUrl}" defer><\/script>`;
+            // 卡片文档与宿主之间只有 postMessage 一条通道。iframe 的 sandbox 不含
+            // allow-same-origin（见 app.mjs 的 htmlIframeSandbox），所以 window.parent、
+            // window.frameElement 在这里都够不到宿主：高度上报、焦点上报、triggerSlash
+            // 全部改走消息。宿主侧的校验与派发见 app.mjs 的 handleExecutableFrameMessage。
             const scriptShim = `
                 <script>
+                    var RPH_FRAME_CHANNEL = ${JSON.stringify(EXECUTABLE_FRAME_CHANNEL)};
+                    function postToHost(payload) {
+                        try {
+                            payload.source = RPH_FRAME_CHANNEL;
+                            window.parent.postMessage(payload, '*');
+                        } catch (e) {}
+                    }
+
                     window.triggerSlash = function(text) {
-                        if (window.parent && window.parent.triggerSlash) {
-                            window.parent.triggerSlash(text);
-                        }
+                        if (!text) return;
+                        postToHost({ type: 'slash', command: String(text) });
                     };
 
                     let lastHeight = 0;
                     let isUpdating = false;
                     function updateHeight() {
-                        if (!window.frameElement || isUpdating) return;
-                        if (window.frameElement.hasAttribute('data-rph-fixed-height')) return;
+                        if (isUpdating) return;
                         isUpdating = true;
                         requestAnimationFrame(function() {
                             var body = document.body;
@@ -330,11 +369,26 @@ export const buildExecutableHtmlDocument = (rawHtml) => {
                             var newHeight = Math.max(maxBottom + marginBottom, body.scrollHeight) + 4;
                             if (Math.abs(newHeight - lastHeight) > 0) {
                                 lastHeight = newHeight;
-                                window.frameElement.style.height = newHeight + 'px';
+                                postToHost({ type: 'height', value: newHeight });
                             }
                             isUpdating = false;
                         });
                     }
+
+                    // 卡片内输入框聚焦时宿主要收起底部聊天输入栏，避免遮挡。父文档收不到
+                    // iframe 内的 focus 事件，所以在这里监听后上报。
+                    function isEditable(el) {
+                        if (!el) return false;
+                        var tag = el.tagName;
+                        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true;
+                        return el.isContentEditable === true;
+                    }
+                    document.addEventListener('focusin', function(event) {
+                        if (isEditable(event.target)) postToHost({ type: 'focus', editable: true });
+                    }, true);
+                    document.addEventListener('focusout', function(event) {
+                        if (!isEditable(event.relatedTarget)) postToHost({ type: 'focus', editable: false });
+                    }, true);
 
                     window.addEventListener('load', function() {
                         updateHeight();

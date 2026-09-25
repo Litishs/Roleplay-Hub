@@ -22,6 +22,33 @@
 import { RPHRuntimePolicy } from '../modules/runtime-policy.mjs';
 import { parseCot } from '../modules/utils.mjs';
 
+// 历史角色卡用 onclick="triggerSlash('xxx')" 做可交互按钮。sanitizer 收紧 on* 之后这些
+// 卡片会失去交互，所以在丢弃处理器之前先把这一种——也仅此一种——形态提取成 data-slash
+// （由宿主委托处理，只能触发一条聊天指令）。其余内联代码一律不解释，连属性一起删掉。
+//
+// 放在模块作用域而不是 useTemplateRenderer 内部，是为了能被单测直接调用：整条
+// renderMarkdown 管线依赖 DOMPurify，而 DOMPurify 在 happy-dom 下行为不可靠
+// （会留下 <script>、吃掉 <button>），测不出真实结论。这个函数只用标准 DOM API，
+// happy-dom 足以覆盖。
+const SLASH_CALL_PATTERN = /(?:window\s*\.\s*)?(?:parent\s*\.\s*)?triggerSlash\s*\(\s*(['"])([\s\S]*?)\1\s*\)/;
+
+export const migrateInlineHandlersToDataSlash = (root) => {
+    root.querySelectorAll('*').forEach(element => {
+        // attributes 是实时集合，先快照属性名再改，避免边遍历边删。
+        const handlerNames = Array.from(element.attributes || [])
+            .map(attribute => attribute.name)
+            .filter(name => /^on[a-z]/i.test(name));
+        handlerNames.forEach(name => {
+            const code = element.getAttribute(name) || '';
+            const match = code.match(SLASH_CALL_PATTERN);
+            if (match && !element.hasAttribute('data-slash')) {
+                element.setAttribute('data-slash', match[2]);
+            }
+            element.removeAttribute(name);
+        });
+    });
+};
+
         // Markdown Rendering
 
 export function useTemplateRenderer(deps) {
@@ -88,7 +115,7 @@ export function useTemplateRenderer(deps) {
             if (!msg || !msg.content) return false;
             const cacheable = !isMessageThinkingOrRunning(msg);
             if (msg.isTriggered) return msg.showRaw && contentUsesHtmlFrame(msg.content, msg.role, false, cacheable);
-            const parsed = parseCot(msg.content);
+            const parsed = parseCot(msg.content, cacheable);
             return contentUsesHtmlFrame(parsed.main || msg.content, msg.role, false, cacheable);
         };
 
@@ -110,7 +137,7 @@ export function useTemplateRenderer(deps) {
             if (!msg) return false;
             return !!(
                 msg.reasoning
-                || parseCot(msg.content || '').cot
+                || parseCot(msg.content || '', !isMessageThinkingOrRunning(msg)).cot
                 || (Array.isArray(msg.toolCalls) && msg.toolCalls.length > 0)
                 || msg.isEditing_Message
                 || messageUsesHtmlFrame(msg)
@@ -134,11 +161,18 @@ export function useTemplateRenderer(deps) {
                 options
             );
 
-            // Configure DOMPurify
+            // DOMPurify 配置。这里的产物直接进 v-html，也就是跑在主文档里——不是卡片
+            // iframe 里——所以放行任何 on* 内联处理器都等于把模型输出当代码执行，能直接
+            // 碰到 RPHStorage、Capacitor 插件桥和 API Key。原先的 FORBID_ATTR 黑名单只挡
+            // 了 onmouseover/onload 两个，onerror/onfocus/onanimationstart 等一大票照样通过。
+            // 现在改回白名单语义：on* 一个都不加，DOMPurify 默认就会全部丢掉。
+            // 'script' 同样移出 ADD_TAGS——v-html 插入的 <script> 虽不会自动执行，但留在
+            // 允许列表里没有任何好处。
+            // 可交互按钮的能力不丢：改由 data-slash 承载（见 migrateInlineHandlersToDataSlash），
+            // 由宿主委托处理，只能触发一条聊天指令，不能执行任意代码。
             const cleanConfig = {
-                ADD_TAGS: ['details', 'summary', 'iframe', 'svg', 'path', 'g', 'circle', 'rect', 'defs', 'linearGradient', 'stop', 'style', 'div', 'span', 'script', 'button', 'input'],
-                ADD_ATTR: ['style', 'open', 'srcdoc', 'sandbox', 'frameborder', 'allow', 'allowfullscreen', 'class', 'id', 'viewBox', 'fill', 'stroke', 'stroke-width', 'd', 'stroke-linecap', 'stroke-linejoin', 'x1', 'y1', 'x2', 'y2', 'offset', 'stop-color', 'stop-opacity', 'width', 'height', 'onclick', 'type', 'value', 'checked', 'data-slash'],
-                FORBID_ATTR: ['onmouseover', 'onload'], // Removed onclick to allow interactive UI
+                ADD_TAGS: ['details', 'summary', 'iframe', 'svg', 'path', 'g', 'circle', 'rect', 'defs', 'linearGradient', 'stop', 'style', 'div', 'span', 'button', 'input'],
+                ADD_ATTR: ['style', 'open', 'srcdoc', 'sandbox', 'frameborder', 'allow', 'allowfullscreen', 'class', 'id', 'viewBox', 'fill', 'stroke', 'stroke-width', 'd', 'stroke-linecap', 'stroke-linejoin', 'x1', 'y1', 'x2', 'y2', 'offset', 'stop-color', 'stop-opacity', 'width', 'height', 'type', 'value', 'checked', 'data-slash'],
                 FORCE_BODY: true
             };
 
@@ -157,6 +191,10 @@ export function useTemplateRenderer(deps) {
                     placeholder.setAttribute('data-rph-srcdoc-frame', String(frameIndex));
                     sourceFrame.replaceWith(placeholder);
                 });
+
+                // 必须在 iframe 抽取之后：srcdoc 里的内容归卡片沙箱管，不参与主文档的
+                // 内联处理器迁移。
+                migrateInlineHandlersToDataSlash(sourceDoc.body);
 
                 const sanitized = DOMPurify.sanitize(sourceDoc.body.innerHTML, {
                     ...cleanConfig,

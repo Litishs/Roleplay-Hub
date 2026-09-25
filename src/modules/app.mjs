@@ -99,7 +99,7 @@ import { useRegexPipeline } from '../composables/useRegexPipeline.mjs';
 import { useStoryBranching } from '../composables/useStoryBranching.mjs';
 import { useDataIO } from '../composables/useDataIO.mjs';
 import { useBackupRestore } from '../composables/useBackupRestore.mjs';
-import { buildExecutableHtmlDocument, buildKeywordToolSnippet, bytesToBase64, checkConnectionStatus, cleanActiveToolCallReason, cleanupActiveToolCaptureState, collapseNativeReasoning, debounce, escapeRegexText, escapeXmlAttribute, escapeXmlText, estimateTokens, formatAIResponseForConsole, formatTokenAggregate, formatTokenCount, formatLatestTokenCount, formatTokenUsageTime, getConversationTurnAtIndexFromSnapshot, getTokenUsageCategory, indentXmlText, isDatabaseClosingError, isDesktopSidebarViewport, isEditableElement, isMobileViewport, normalizePresetRole, normalizeTavilyExtractUrl, printAIRequestLogs, readUsageNumber, removeActiveToolCallRawsFromText, requestTavily, resizeChatInputElement, runWithConcurrency, stringifyErrorDetail, stringifyUiSchema, stripActiveToolCallsFromAssistant, stripCodeBlocksForToolDetection, stripUiTemplateContextInjection, throwApiError, yieldToBrowser, yieldToUi } from './utils.mjs';
+import { EXECUTABLE_FRAME_CHANNEL, buildExecutableHtmlDocument, buildKeywordToolSnippet, bytesToBase64, checkConnectionStatus, cleanActiveToolCallReason, cleanupActiveToolCaptureState, collapseNativeReasoning, debounce, escapeRegexText, escapeXmlAttribute, escapeXmlText, estimateTokens, formatAIResponseForConsole, formatTokenAggregate, formatTokenCount, formatLatestTokenCount, formatTokenUsageTime, getConversationTurnAtIndexFromSnapshot, getTokenUsageCategory, indentXmlText, isDatabaseClosingError, isDesktopSidebarViewport, isEditableElement, isMobileViewport, normalizePresetRole, normalizeTavilyExtractUrl, printAIRequestLogs, readUsageNumber, removeActiveToolCallRawsFromText, requestTavily, resizeChatInputElement, runWithConcurrency, stringifyErrorDetail, stringifyUiSchema, stripActiveToolCallsFromAssistant, stripCodeBlocksForToolDetection, stripUiTemplateContextInjection, throwApiError, yieldToBrowser, yieldToUi } from './utils.mjs';
 import { extractVectorQueryTerms, factPreviewText, getClassicMemoryKey, getMemoryEmptyTurnsKey, getMemoryVectorExtractedKey, getTimelineCharCount, getVectorLexicalMatch, isEmbeddingLike, mergeSmallMemoryParagraphs, normalizeKeepFloors, normalizeVectorMemoryFingerprintText, shouldSuppressStandardVectorMemoryRecall, sortVectorMemoriesByTime, splitLongMemoryParagraph, toScoredVectorMemory, trimMemoryText, yieldMemoryStorageWork } from './memory-utils.mjs';
 
 const __app = createApp({
@@ -2864,9 +2864,17 @@ const __app = createApp({
             return text === '' ? '空' : text;
         };
 
-        const htmlIframeSandbox = 'allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-modals allow-same-origin allow-downloads allow-pointer-lock allow-presentation allow-top-navigation-by-user-activation';
+        // 角色卡 HTML 在这个 sandbox 下执行。刻意不含 allow-same-origin：srcdoc 文档
+        // 本来会继承父文档的源，配上 allow-scripts 等于完全没有隔离——卡片脚本能读到
+        // window.__RPH__、RPHStorage、Capacitor 插件桥，也就是 API Key 和整个聊天库。
+        // 角色卡是以 PNG/JSON 在社区流转的外部输入，这条路径必须封死。
+        // 同理去掉 allow-top-navigation-by-user-activation（卡片可劫持整个 WebView 导航）
+        // 和 allow-popups-to-escape-sandbox（弹出的窗口会脱离沙箱约束）。
+        // 代价是宿主不能再直接读 contentDocument，高度/焦点/triggerSlash 改走 postMessage，
+        // 见 utils.mjs 的 buildExecutableHtmlDocument 与下面的 handleExecutableFrameMessage。
+        const htmlIframeSandbox = 'allow-scripts allow-forms allow-popups allow-modals allow-downloads allow-pointer-lock allow-presentation';
 
-        
+
         const createExecutableHtmlIframe = (rawHtml, extraClass = '', options = {}) => {
             const iframe = document.createElement('iframe');
             const hasFixedHeight = options.fixedHeight !== null
@@ -2886,19 +2894,8 @@ const __app = createApp({
             iframe.setAttribute('sandbox', htmlIframeSandbox);
             iframe.setAttribute('allow', 'clipboard-read; clipboard-write; fullscreen; autoplay; encrypted-media; picture-in-picture');
             if (fixedHeight) iframe.setAttribute('data-rph-fixed-height', String(fixedHeight));
-            iframe.onload = function () {
-                if (this.hasAttribute('data-rph-fixed-height')) return;
-                try {
-                    setTimeout(() => {
-                        if (this.contentWindow && this.contentWindow.document) {
-                            const doc = this.contentWindow.document;
-                            this.style.height = Math.max(doc.body.scrollHeight, doc.documentElement.scrollHeight) + 'px';
-                        }
-                    }, 100);
-                } catch (e) {
-                    console.warn('Failed to resize iframe:', e);
-                }
-            };
+            // 高度不再由 onload 读 contentDocument 测量（跨源读不到），改由卡片内的
+            // shim 用 ResizeObserver 上报，宿主在 handleExecutableFrameMessage 里应用。
             iframe.srcdoc = buildExecutableHtmlDocument(rawHtml);
             return iframe;
         };
@@ -2916,10 +2913,11 @@ const __app = createApp({
         /* 角色卡 executable-html iframe 焦点跟踪（captureInput=false 后不再需要 IME 代理框）。
          * Android WebView 原生输入连接恢复后，iframe 内 <input>/<textarea> 可直接合成中文；
          * 这里只保留轻量 focusin/focusout 跟踪，用于在焦点进入卡片输入框时隐藏底部聊天输入栏，
-         * 避免遮挡卡片（父文档收不到 iframe 内 focus 事件，需在 contentDocument 上直接监听）。
+         * 避免遮挡卡片。去掉 allow-same-origin 后父文档既收不到也读不到 iframe 内的事件，
+         * 改由卡片内 shim 把焦点变化 postMessage 上来（见 handleExecutableFrameMessage）。
          */
-        
-        // 底部输入栏显隐判断的共享状态：iframe 内输入框聚焦由 contentDocument 监听维护，
+
+        // 底部输入栏显隐判断的共享状态：iframe 内输入框聚焦由卡片上报的消息维护，
         // Shadow DOM 输入框的焦点会 compose 到父文档（用 getRootNode 识别是否在 shadow root 内）。
         let iframeEditableFocused = false;
         const isShadowEditable = (el) => {
@@ -2941,66 +2939,55 @@ const __app = createApp({
             return false;
         };
 
-        const setupIframeFocusTracker = (iframe) => {
-            let lastDoc = null;
-            const clearIfStale = () => {
-                setTimeout(() => {
-                    if (!computeExternalFocus()) isExternalInputFocused.value = false;
-                }, 0);
-            };
-            const onFocusIn = (event) => {
-                if (isEditableElement(event.target)) {
-                    iframeEditableFocused = true;
-                    isExternalInputFocused.value = true;
-                }
-            };
-            const onFocusOut = (event) => {
-                const next = event.relatedTarget;
-                if (!next || !isEditableElement(next)) {
-                    iframeEditableFocused = false;
-                    clearIfStale();
-                }
-            };
-            const attachDocListener = () => {
-                let doc;
-                try { doc = iframe.contentDocument; } catch (_) { return; }
-                if (!doc || doc === lastDoc) return;
-                if (lastDoc) {
-                    try {
-                        lastDoc.removeEventListener('focusin', onFocusIn, true);
-                        lastDoc.removeEventListener('focusout', onFocusOut, true);
-                    } catch (_) {}
-                }
-                try {
-                    doc.addEventListener('focusin', onFocusIn, true);
-                    doc.addEventListener('focusout', onFocusOut, true);
-                    lastDoc = doc;
-                } catch (_) {}
-            };
-            iframe.addEventListener('load', attachDocListener);
-            try { if (iframe.contentDocument && iframe.contentDocument.readyState) attachDocListener(); } catch (_) {}
-            return () => {
-                iframe.removeEventListener('load', attachDocListener);
-                if (lastDoc) {
-                    try {
-                        lastDoc.removeEventListener('focusin', onFocusIn, true);
-                        lastDoc.removeEventListener('focusout', onFocusOut, true);
-                    } catch (_) {}
-                }
-                lastDoc = null;
-            };
+        // 角色卡 iframe 上报值的封顶（不可信输入，见 runtime-policy.mjs）。
+        const EXECUTABLE_FRAME_MAX_HEIGHT = RPHRuntimePolicy.limits.frameMaxHeight;
+        const EXECUTABLE_FRAME_MAX_SLASH_LENGTH = RPHRuntimePolicy.limits.frameSlashMaxLength;
+
+        // 把 event.source 反查回具体的卡片 iframe。这一步同时也是鉴权：只有当前文档里
+        // 真实挂着的 executable-html-frame 才被受理，其他窗口（别的 iframe、opener、
+        // 被打开的弹窗）发来的同名消息一律丢弃。跨源下拿不到 contentDocument，但
+        // contentWindow 的引用比较仍然成立。
+        const findExecutableFrameByWindow = (sourceWindow) => {
+            if (!sourceWindow) return null;
+            const frames = document.querySelectorAll('iframe.executable-html-frame');
+            for (const frame of frames) {
+                if (frame.contentWindow === sourceWindow) return frame;
+            }
+            return null;
         };
 
-        // 已挂载焦点跟踪的 iframe -> 清理函数。WeakMap 避免持有已移除的 iframe。
-        const iframeFocusTrackerMap = new WeakMap();
-        const ensureIframeFocusTracker = (iframe) => {
-            if (!iframe || iframe.tagName !== 'IFRAME') return;
-            if (!iframe.classList || !iframe.classList.contains('executable-html-frame')) return;
-            if (iframeFocusTrackerMap.has(iframe)) return;
-            try {
-                iframeFocusTrackerMap.set(iframe, setupIframeFocusTracker(iframe));
-                iframe.setAttribute('data-rph-focus-tracker', '1');
-            } catch (e) { console.warn('[iframe focus] 挂载失败', e); }
+        const handleExecutableFrameMessage = (event) => {
+            const data = event.data;
+            if (!data || typeof data !== 'object' || data.source !== EXECUTABLE_FRAME_CHANNEL) return;
+            const frame = findExecutableFrameByWindow(event.source);
+            if (!frame) return;
+
+            if (data.type === 'height') {
+                // 固定高度的卡片由宿主说了算，忽略其自报高度。
+                if (frame.hasAttribute('data-rph-fixed-height')) return;
+                const height = Number(data.value);
+                if (!Number.isFinite(height) || height <= 0) return;
+                frame.style.height = `${Math.min(EXECUTABLE_FRAME_MAX_HEIGHT, Math.round(height))}px`;
+                return;
+            }
+
+            if (data.type === 'focus') {
+                if (data.editable) {
+                    iframeEditableFocused = true;
+                    isExternalInputFocused.value = true;
+                } else {
+                    iframeEditableFocused = false;
+                    setTimeout(() => {
+                        if (!computeExternalFocus()) isExternalInputFocused.value = false;
+                    }, 0);
+                }
+                return;
+            }
+
+            if (data.type === 'slash') {
+                const command = String(data.command || '').slice(0, EXECUTABLE_FRAME_MAX_SLASH_LENGTH);
+                if (command) window.triggerSlash(command);
+            }
         };
 
         const renderUiTemplateHtml = (template) => {
@@ -3018,6 +3005,17 @@ const __app = createApp({
             event.preventDefault();
             event.stopPropagation();
             window.triggerSlash(command);
+        };
+
+        // 消息正文（v-html 渲染的 markdown）里的 data-slash 按钮。正文里的内联 on* 处理器
+        // 已被 useTemplateRenderer 收走并改写成 data-slash，需要在这里补上委托，否则那些
+        // 历史卡片的交互按钮会变成死按钮。
+        // UI 模板块自己挂了 @click="handleUiTemplateClick" 且会 stopPropagation，冒泡不到
+        // 这里，不会重复触发。
+        const handleMarkdownSlashClick = (event) => {
+            const trigger = event.target?.closest?.('.markdown-body [data-slash]');
+            if (!trigger) return;
+            handleUiTemplateClick(event);
         };
 
         const renderEditingUiTemplatePreview = () => {
@@ -3459,7 +3457,8 @@ const __app = createApp({
         const calculateConversationBodyLength = () => (
             chatHistory.value.reduce((total, message) => {
                 if (!['user', 'assistant'].includes(message?.role)) return total;
-                return total + parseCot(message.content || '').main.length;
+                // 最后一条消息可能仍在生成中：走易失单槽，别让流式前缀挤进持久 LRU。
+                return total + parseCot(message.content || '', !isMessageThinkingOrRunning(message)).main.length;
             }, 0)
         );
 
@@ -6698,7 +6697,8 @@ const __app = createApp({
 
         const getKeywordToolMessageText = (message) => {
             if (!message || typeof message.content !== 'string') return '';
-            const parsedData = parseCot(message.content || '');
+            // 关键词工具在生成过程中执行，最后一条消息可能尚未完成。
+            const parsedData = parseCot(message.content || '', !isMessageThinkingOrRunning(message));
             const cleanMain = stripUiTemplateContextInjection(parsedData.main || '');
             return trimMemoryText(stripVectorMemoryCode(stripDisabledImageGenContext(cleanMain)), 5000);
         };
@@ -7342,7 +7342,7 @@ const __app = createApp({
             return !!(
                 getAssistantReasoningText(message)
                 || (Array.isArray(message.toolCalls) && message.toolCalls.length > 0)
-                || (parseCot(message.content || '').cot)
+                || (parseCot(message.content || '', !isMessageThinkingOrRunning(message)).cot)
             );
         };
 
@@ -7350,8 +7350,11 @@ const __app = createApp({
             const isLast = chatHistory.value && chatHistory.value[chatHistory.value.length - 1] === message;
             if (isLast && isThinking.value) return true;
             if (getCurrentThinkingToolCall(message)) return true;
-            const cotInfo = parseCot(message.content || '');
-            if (isLast && (isGenerating.value || isRemoteGenerating.value) && cotInfo.cot && !cotInfo.isFinished) {
+            // 走到这里时若仍在生成，正文就是流式前缀：走易失单槽（isThinking 已提前
+            // 返回，这里只看两个生成标志）。
+            const possiblyStreaming = isLast && (isGenerating.value || isRemoteGenerating.value);
+            const cotInfo = parseCot(message.content || '', !possiblyStreaming);
+            if (possiblyStreaming && cotInfo.cot && !cotInfo.isFinished) {
                 return true;
             }
             return false;
@@ -7403,7 +7406,7 @@ const __app = createApp({
             const steps = [];
             const isLastMessage = chatHistory.value && chatHistory.value[chatHistory.value.length - 1] === message;
             const isGeneratingMessage = isLastMessage && (isGenerating.value || isRemoteGenerating.value);
-            const cotInfo = parseCot(message.content || '');
+            const cotInfo = parseCot(message.content || '', !isGeneratingMessage);
 
             // 1. 初始原生思考
             const reasoningText = String(getAssistantReasoningText(message) || '').trim();
@@ -9551,7 +9554,7 @@ const __app = createApp({
             // --- 焦点进入角色卡 iframe / Shadow DOM 输入框时隐藏底部输入栏；离开时恢复 ---
             // captureInput=false 后 WebView 原生输入连接恢复，iframe / Shadow DOM 内输入框可直接
             // 合成中文，不再需要 IME 代理框；这里仅做焦点跟踪：
-            // - iframe 内焦点由 ensureIframeFocusTracker 在 contentDocument 上监听（父文档收不到 iframe 事件）；
+            // - iframe 内焦点由卡片 shim 经 postMessage 上报（跨源下父文档既收不到也读不到）；
             // - Shadow DOM 输入框的 focusin 会 compose 到父文档，由 computeExternalFocus 识别。
             document.addEventListener('focusin', () => { isExternalInputFocused.value = computeExternalFocus(); }, true);
             document.addEventListener('focusout', (e) => {
@@ -9563,22 +9566,14 @@ const __app = createApp({
                 setTimeout(() => { isExternalInputFocused.value = computeExternalFocus(); }, 0);
             }, true);
 
-            // --- 监听角色卡 iframe 入树，挂载焦点跟踪 ---
-            const scanAndBridgeIframes = (root) => {
-                try {
-                    if (root.nodeType !== 1) return;
-                    if (root.tagName === 'IFRAME') ensureIframeFocusTracker(root);
-                    if (root.querySelectorAll) root.querySelectorAll('iframe.executable-html-frame').forEach(ensureIframeFocusTracker);
-                } catch (_) {}
-            };
-            // 初次扫描已有 iframe
-            scanAndBridgeIframes(document.body);
-            const iframeImeObserver = new MutationObserver((mutations) => {
-                for (const m of mutations) {
-                    for (const node of m.addedNodes) scanAndBridgeIframes(node);
-                }
-            });
-            iframeImeObserver.observe(document.body, { childList: true, subtree: true });
+            // --- 角色卡 iframe 消息通道（高度 / 焦点 / triggerSlash）---
+            // 一个全局监听器取代了原先「MutationObserver 扫描入树 iframe + 逐个在
+            // contentDocument 上挂监听」的整套机制：跨源之后卡片必须主动上报，宿主只需
+            // 在 handleExecutableFrameMessage 里校验来源窗口。
+            window.addEventListener('message', handleExecutableFrameMessage);
+
+            // --- 消息正文里的 data-slash 按钮 ---
+            document.addEventListener('click', handleMarkdownSlashClick);
 
             // --- 全局点击外部区域收起面板 ---
             document.addEventListener('click', (e) => {
@@ -9631,6 +9626,14 @@ const __app = createApp({
             }
             return { text: mainText, showSpinner: false };
         };
+
+        // 模板里解析消息 CoT 的统一入口：生成中的消息走 parseCot 的易失单槽缓存，
+        // 已完成的走 LRU。直接在模板里写 parseCot(msg.content) 会一律命中持久缓存，
+        // 把流式输出的每一帧前缀都囤起来（单条消息 O(n²) 内存）。
+        const parseMessageCot = (msg) => parseCot(
+            msg?.content || '',
+            !isMessageThinkingOrRunning(msg)
+        );
 
         const switchProfile = (id) => {
             const profile = userProfiles.value.find(p => p.uuid === id);
@@ -9994,7 +9997,7 @@ const __app = createApp({
             createPreset, editPreset, savePreset, deletePreset,
             presetGroups, setActivePresetGroup, createPresetGroup, deletePresetGroup,
             exportPresetGroups, importPresetGroups,
-            renderMarkdown, messageUsesWideLayout, parseCot, closeCharacterEditor: () => showCharacterEditor.value = false,
+            renderMarkdown, messageUsesWideLayout, parseCot, parseMessageCot, closeCharacterEditor: () => showCharacterEditor.value = false,
             openExportModal, toggleExportSelection, selectAllExportItems, deselectAllExportItems, confirmExport,
             importPresets,
             // Regex Methods
@@ -10239,7 +10242,17 @@ const __app = createApp({
                 showAutoImageGenModal.value = false;
                 saveData();
             }
-        }; provide("appContext", __ctx); if (typeof window !== "undefined") { window.__RPH__ = __ctx; window.RPHStorage = RPHStorage; } return __ctx;
+        };
+        provide("appContext", __ctx);
+        if (typeof window !== "undefined") {
+            // RPHStorage 必须留在 window 上：角色卡工坊（character/index.html，第一方同源
+            // iframe）通过 window.parent.RPHStorage 读写本地库。
+            window.RPHStorage = RPHStorage;
+            // __RPH__ 是调试用的整包上下文句柄（400+ 个状态和方法）。正式包里没有用途，
+            // 只会白送一个攻击面，所以仅在 dev 构建下暴露。
+            if (import.meta.env?.DEV) window.__RPH__ = __ctx;
+        }
+        return __ctx;
     }
 });
 

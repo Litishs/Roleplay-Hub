@@ -54,7 +54,7 @@
                     <div ref="messageElements"
                         :data-role="msg.role"
                         :data-chat-index="index"
-                        v-show="!(msg.role === 'assistant' && index === chatHistory.length - 1 && isThinking && !(msg.reasoning || parseCot(msg.content).cot || parseCot(msg.content).main || (msg.toolCalls && msg.toolCalls.length)))"
+                        v-show="!(msg.role === 'assistant' && index === chatHistory.length - 1 && isThinking && !(msg.reasoning || parseMessageCot(msg).cot || parseMessageCot(msg).main || (msg.toolCalls && msg.toolCalls.length)))"
                         :class="['flex w-full scroll-reveal-container', settings.immersiveMode ? 'immersive-message-row' : '', msg.isSelf ? 'justify-end' : 'justify-start', msg.skipReveal ? 'reveal-active' : (settings.immersiveMode ? 'scroll-reveal-center' : (msg.isSelf ? 'scroll-reveal-right' : 'scroll-reveal-left'))]"
                         :style="{ transitionDelay: (displayIndex % 5) * 50 + 'ms' }">
                         <div
@@ -279,15 +279,15 @@
                                             </div>
                                             <!-- CoT Part -->
                                             <!-- Main Part -->
-                                            <template v-if="parseCot(msg.content).main">
+                                            <template v-if="parseMessageCot(msg).main">
                                                 <template
                                                     v-if="index === chatHistory.length - 1 && (isGenerating || isRemoteGenerating)">
-                                                    <div v-if="processMainContent(parseCot(msg.content).main, true).text"
+                                                    <div v-if="processMainContent(parseMessageCot(msg).main, true).text"
                                                         class="markdown-body"
                                                         :style="settings.fontSize ? { fontSize: settings.fontSize + 'px' } : {}"
-                                                        v-html="renderMarkdown(processMainContent(parseCot(msg.content).main, true).text, msg.role, false, !isMessageThinkingOrRunning(msg))">
+                                                        v-html="renderMarkdown(processMainContent(parseMessageCot(msg).main, true).text, msg.role, false, !isMessageThinkingOrRunning(msg))">
                                                     </div>
-                                                    <div v-if="processMainContent(parseCot(msg.content).main, true).showSpinner"
+                                                    <div v-if="processMainContent(parseMessageCot(msg).main, true).showSpinner"
                                                         class="flex flex-col items-center justify-center p-8 w-full mt-2 gap-4 opacity-90">
                                                         <div class="ui-build-dots" aria-hidden="true"><i></i><i></i><i></i></div>
                                                         <span
@@ -298,13 +298,13 @@
                                                 <template v-else>
                                                     <div class="markdown-body"
                                                         :style="settings.fontSize ? { fontSize: settings.fontSize + 'px' } : {}"
-                                                        v-html="renderMarkdown(processMainContent(parseCot(msg.content).main, false).text, msg.role, false, !isMessageThinkingOrRunning(msg))">
+                                                        v-html="renderMarkdown(processMainContent(parseMessageCot(msg).main, false).text, msg.role, false, !isMessageThinkingOrRunning(msg))">
                                                     </div>
                                                 </template>
                                             </template>
 
                                             <!-- Sys Instruction Part -->
-                                            <div v-if="parseCot(msg.content).sys"
+                                            <div v-if="parseMessageCot(msg).sys"
                                                 class="mt-2 mx-4 mb-3 p-3 bg-gradient-to-r from-gray-50/80 to-gray-100/50 backdrop-blur-sm rounded-xl border border-gray-200/60 shadow-sm flex flex-col gap-1.5 relative overflow-hidden group/sys">
                                                 <div class="absolute inset-0 bg-white/40 pointer-events-none"></div>
                                                 <div
@@ -320,7 +320,7 @@
                                                 </div>
                                                 <div class="text-gray-600 leading-relaxed font-medium markdown-body relative z-10"
                                                     :style="settings.fontSize ? { fontSize: (settings.fontSize - 1) + 'px' } : { fontSize: '13px' }"
-                                                    v-html="renderMarkdown(parseCot(msg.content).sys, 'user', true, !isMessageThinkingOrRunning(msg))">
+                                                    v-html="renderMarkdown(parseMessageCot(msg).sys, 'user', true, !isMessageThinkingOrRunning(msg))">
                                                 </div>
                                             </div>
                                             <div v-if="msg.role === 'assistant' && msg.uiTemplateBlocks && msg.uiTemplateBlocks.bottom && msg.uiTemplateBlocks.bottom.length"
