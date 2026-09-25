@@ -70,12 +70,12 @@
     // persist in plain SQLite nor enter full backups.
     const isSecretBearingKey = key => /^(rp_hub_(settings|active_tools)|novel_settings)$/.test(String(key));
 
-    // 密钥存储的 key 白名单：当前仓库内合法用途只有 `config:rp_hub_settings` /
-    // `config:rp_hub_active_tools` 两类（见 set/get/remove 中的三处调用）。RPHStorage
-    // 整体挂在 window 上供卡片 iframe 使用，一旦沙箱被绕过，任意 key 的密钥读取
-    // 都将成为攻击面——这里把可读范围收敛到白名单前缀。
+    // 密钥存储的 key 白名单：只放行 isSecretBearingKey 对应的 `config:` 前缀密钥
+    // （当前仓库内合法用途见上方注释）。RPHStorage 整体挂在 window 上供卡片 iframe
+    // 使用，一旦沙箱被绕过，任意 key 的密钥读取都将成为攻击面——这里把可读范围
+    // 收敛到白名单。与 isSecretBearingKey 保持同一份 key 列表，新增承载 key 时两处同步。
     const assertSecretKey = (key) => {
-        if (!/^config:rp_hub_(settings|active_tools)$/.test(String(key))) {
+        if (!/^config:(rp_hub_(settings|active_tools)|novel_settings)$/.test(String(key))) {
             throw new Error(`[StorageRepository] secret access denied for key "${key}"`);
         }
     };
