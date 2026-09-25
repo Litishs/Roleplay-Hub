@@ -58,6 +58,9 @@ test('聊天请求按首包、首有效 token、有效流空闲和总时长超�
     // params it governs; issue #4's reporter could not find the entry point).
     assert.ok(apiConfigHtml.includes('requestFirstByteTimeout'), 'timeout inputs live in ApiConfig chat params card');
     assert.ok(apiConfigHtml.includes('@change="normalizeRequestTimeout(item.key)"'), 'timeout inputs clamp on change');
+    // 2026-09-26: range sliders, not number spinners — the tiny up/down steppers
+    // are hard to tap on phones (review feedback on the first deployable cut).
+    assert.ok(apiConfigHtml.includes('v-model.number="settings[item.key]" type="range"'), 'timeout knobs are mobile-friendly range sliders');
     const advancedSettingsHtml = readFileSync(new URL('../src/components/settings/AdvancedSettings.vue', import.meta.url), 'utf8');
     assert.ok(!advancedSettingsHtml.includes('requestFirstByteTimeout'), 'AdvancedSettings no longer hosts the timeout inputs');
     // watchdog 必须提升到函数作用域声明(finally 才能清理), 不能只在 try 块内 const 声明

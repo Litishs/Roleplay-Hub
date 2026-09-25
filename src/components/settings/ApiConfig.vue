@@ -341,7 +341,7 @@
                                         class="text-xs font-bold text-gray-500 uppercase tracking-wider">网络超时</label>
                                 </div>
                                 <p class="text-[10px] text-gray-400 mb-3 leading-relaxed">
-                                    单位：秒（可填 10–1800，填入其他值会自动修正）。使用推理型模型（深度思考）时建议调大“首 token
+                                    单位：秒（10–1800）。使用推理型模型（深度思考）时建议调大“首 token
                                     等待”，避免模型还在思考就被中止；本地部署（llama.cpp 等）处理长上下文较慢时同理。修改后对下一次请求生效。
                                 </p>
                                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -352,9 +352,9 @@
                                                 class="text-[11px] font-mono text-teal-600 bg-teal-50 px-1.5 py-0.5 rounded border border-teal-100 whitespace-nowrap">{{
                                                 settings[item.key] }}s</span>
                                         </div>
-                                        <input type="number" v-model.number="settings[item.key]" min="10" max="1800"
+                                        <input v-model.number="settings[item.key]" type="range" min="10" max="1800"
                                             step="10" @change="normalizeRequestTimeout(item.key)"
-                                            class="w-full px-3 py-1.5 text-sm text-gray-700 bg-white rounded-lg border border-gray-200 focus:border-teal-400 focus:ring-teal-100 focus:outline-none transition-all">
+                                            class="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-teal-500 hover:accent-teal-400 transition-all">
                                         <p class="text-[10px] text-gray-400 mt-1 leading-relaxed">{{ item.description }}</p>
                                     </div>
                                 </div>
