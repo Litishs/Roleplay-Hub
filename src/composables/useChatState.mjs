@@ -96,6 +96,9 @@ export function useChatState() {
     // --- Generation timer ---
     const recentGenerationTimes = ref([]);
     const currentWaitTime = ref('0.0');
+    // 等待过半预警文案：由发送管线的 watchdog 写入，收到首个输出或生成结束时清空。
+    // 空字符串 = 不显示。用于让用户知道请求没卡死，并指路超时设置。
+    const waitHint = ref('');
     // waitTimer moved to useMessageSender (Phase 2.2): every read/write of it
     // lives inside the generation pipeline, which is now a deps-injecting
     // composable that owns the handle privately.
@@ -160,6 +163,7 @@ export function useChatState() {
         chatStatsTimer,
         recentGenerationTimes,
         currentWaitTime,
+        waitHint,
         longPressTimer,
         estimatedGenerationTime
     };

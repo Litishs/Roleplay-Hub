@@ -189,10 +189,14 @@
     }
 
     function arrayBufferToBase64(buffer) {
-        var binary = "";
+        // 分块转换：APK 动辄数十 MB，逐字节拼接字符串会触发数千次字符串再分配，
+        // 内存峰值与耗时都不可接受。按 0x8000 分块与 utils.mjs 的 bytesToBase64
+        // 保持一致，每块一次 String.fromCharCode.apply + 一次 btoa 输入拼接。
         var bytes = new Uint8Array(buffer);
-        for (var i = 0; i < bytes.length; i++) {
-            binary += String.fromCharCode(bytes[i]);
+        var binary = "";
+        var chunkSize = 0x8000;
+        for (var i = 0; i < bytes.length; i += chunkSize) {
+            binary += String.fromCharCode.apply(null, bytes.subarray(i, Math.min(i + chunkSize, bytes.length)));
         }
         return btoa(binary);
     }

@@ -1423,7 +1423,7 @@ const __app = createApp({
         const globalRegexScripts = ref([]);
         const { globalWorldInfo, worldInfo } = worldInfoState;
         const globalUiTemplates = ref([]);
-        const { recentGenerationTimes, currentWaitTime, longPressTimer, estimatedGenerationTime } = chatState;
+        const { recentGenerationTimes, currentWaitTime, waitHint, longPressTimer, estimatedGenerationTime } = chatState;
 
         // --- Memory System State (moved to src/composables/useMemorySystem.mjs) ---
         const {
@@ -3925,6 +3925,17 @@ const __app = createApp({
         const friendlyNetworkErrorMessage = (error, url = '') => {
             const message = String(error?.message || error || '');
             if (error?.name === 'AbortError' && /timed out/i.test(message)) {
+                // 按聊天看门狗的三个阶段细分文案，并把“去哪里改超时”直接告诉用户，
+                // 避免只看到一句笼统的“请求超时”却找不到调节入口。
+                if (/first byte/i.test(message)) {
+                    return '连接超时：服务器长时间未响应，请检查网络或稍后重试（可在 设置 → 高级设置 → 网络超时 中调整）';
+                }
+                if (/first token/i.test(message)) {
+                    return '模型响应超时：长时间未收到输出。推理型模型思考较久属正常现象，可在 设置 → 高级设置 → 网络超时 中调大等待时间';
+                }
+                if (/stream idle/i.test(message)) {
+                    return '生成中断：输出长时间没有新内容，请重试或检查网络（流式空闲阈值可在 设置 → 高级设置 → 网络超时 中调整）';
+                }
                 return '请求超时（长时间无响应），请检查网络或稍后重试';
             }
             // 2026-08-28: match network failures by message instead of error name.
@@ -7618,6 +7629,7 @@ const __app = createApp({
             lastTriggeredWorldInfos,
             recentGenerationTimes,
             currentWaitTime,
+            waitHint,
             // persona / character / settings / presets
             user,
             settings,
@@ -10133,7 +10145,7 @@ const __app = createApp({
             },
 
             showRegexEditor, showWorldInfoEditor, editingRegex, editingWorldInfo, worldInfoKeysText, updateEditingWorldInfoKeys,
-            worldInfoSettings, showWorldInfoSettings, showMemorySettings, settingsHelpTopic, showActiveToolSettings, showUiTemplateSettings, estimatedGenerationTime, currentWaitTime,
+            worldInfoSettings, showWorldInfoSettings, showMemorySettings, settingsHelpTopic, showActiveToolSettings, showUiTemplateSettings, estimatedGenerationTime, currentWaitTime, waitHint,
             appVersionName, appVersionCode, appBuildType, checkForUpdates, checkingUpdate, updateAvailable, updateInfo, latestVersionName, downloadingUpdate, downloadProgress, downloadAndInstallUpdate,
             globalConfirmModal,
             updateNoticeDismissedToday, dismissUpdateNoticeToday, renderReleaseNotesHtml,

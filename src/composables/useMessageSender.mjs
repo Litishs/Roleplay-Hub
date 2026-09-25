@@ -22,7 +22,7 @@
 
 import { nextTick, reactive } from 'vue';
 import { RPHRequestDiagnostics } from '../modules/request-diagnostics.mjs';
-import { RPHRuntimePolicy } from '../modules/runtime-policy.mjs';
+import { RPHRuntimePolicy, resolveRequestTimeouts } from '../modules/runtime-policy.mjs';
 import { create as createChatRequestGuard } from '../modules/chat-request-guard.mjs';
 import { generateUUID, parseCot } from '../modules/utils.mjs';
 import { filterBlockedStyleText } from '../modules/style-filter.mjs';
@@ -45,6 +45,7 @@ export function useMessageSender(deps) {
         lastTriggeredWorldInfos,
         recentGenerationTimes,
         currentWaitTime,
+        waitHint,
         // persona / character / settings / presets
         user,
         settings,
@@ -139,10 +140,9 @@ export function useMessageSender(deps) {
     let waitTimer = null;
 
         // --- Chat request resilience (timeout / retry / friendly errors) ---
-        const CHAT_FIRST_BYTE_TIMEOUT_MS = 60000;
-        const CHAT_FIRST_TOKEN_TIMEOUT_MS = 60000;
-        const CHAT_STREAM_IDLE_TIMEOUT_MS = 120000;
-        const CHAT_TOTAL_TIMEOUT_MS = 600000;
+        // 超时阈值可在 设置 → 高级设置 → 网络超时 中调整（秒），实际值经
+        // resolveRequestTimeouts 从 settings 解析并封顶；这里的默认值仅用于
+        // 兜底文档化（settings 字段缺失/非法时由 resolve 回退到同一默认）。
         const CHAT_MAX_ATTEMPTS = 3;
         const CHAT_RETRY_BASE_DELAY_MS = 800;
         const sleepChatRetry = (attempt) => new Promise(resolve => setTimeout(resolve, CHAT_RETRY_BASE_DELAY_MS * attempt));
@@ -1270,11 +1270,14 @@ export function useMessageSender(deps) {
                         // alias (`const chatRequestGuard = createChatRequestGuard`) turned
                         // every send into "chatRequestGuard.create is not a function",
                         // which friendlyNetworkErrorMessage misreported as a CORS error.
+                        // 超时阈值从设置读取（秒→毫秒，clamp [10,1800]），每次发送时解析，
+                        // 改设置无需重启即对下一次请求生效。
+                        const chatTimeouts = resolveRequestTimeouts(settings);
                         const chatGuard = createChatRequestGuard({
-                            firstByteMs: CHAT_FIRST_BYTE_TIMEOUT_MS,
-                            firstTokenMs: CHAT_FIRST_TOKEN_TIMEOUT_MS,
-                            streamIdleMs: CHAT_STREAM_IDLE_TIMEOUT_MS,
-                            totalMs: CHAT_TOTAL_TIMEOUT_MS
+                            firstByteMs: chatTimeouts.firstByteMs,
+                            firstTokenMs: chatTimeouts.firstTokenMs,
+                            streamIdleMs: chatTimeouts.streamIdleMs,
+                            totalMs: chatTimeouts.totalMs
                         });
                         const abortForChatTimeout = (timeout) => {
                             if (!timeout) return;
@@ -1286,11 +1289,20 @@ export function useMessageSender(deps) {
                             const marked = chatGuard.markMeaningful(content, reasoning);
                             if (marked && !wasMeaningful) {
                                 requestDiagnostic?.stage('streaming');
+                                if (waitHint) waitHint.value = ''; // 收到输出，过半预警完成使命
                             }
                             return marked;
                         };
                         chatWatchdog = setInterval(() => {
                             if (generationController.signal.aborted) return;
+                            // 等待过半预警：还没收到任何有效输出且已过首字节阈值一半时，
+                            // 在等待徽章旁提示用户“没卡死 + 可调超时”，避免干等。
+                            if (waitHint && !chatGuard.hasMeaningful()) {
+                                const elapsedMs = Date.now() - generationStartTime;
+                                if (elapsedMs >= chatTimeouts.firstByteMs / 2) {
+                                    waitHint.value = `已等待 ${Math.round(elapsedMs / 1000)}s，可在设置→高级设置→网络超时中调整`;
+                                }
+                            }
                             abortForChatTimeout(chatGuard.getTimeout());
                         }, 1000);
 
@@ -1781,6 +1793,7 @@ export function useMessageSender(deps) {
                     clearInterval(waitTimer);
                     waitTimer = null;
                 }
+                if (waitHint) waitHint.value = '';
                 isGenerating.value = false;
                 isReceiving.value = false;
                 isThinking.value = false;

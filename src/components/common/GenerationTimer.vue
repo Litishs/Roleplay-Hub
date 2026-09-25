@@ -9,6 +9,7 @@
       <span v-if="estimatedTime && !remote">{{ estimatedTime }}s</span>
       <span v-else-if="remoteEstimatedTime">{{ remoteEstimatedTime }}s</span>
     </span>
+    <span v-if="hint" class="whitespace-nowrap text-amber-600 font-sans">{{ hint }}</span>
   </div>
 </template>
 
@@ -18,7 +19,8 @@ export default {
     waitTime: Number,
     estimatedTime: Number,
     remoteEstimatedTime: Number,
-    remote: Boolean
+    remote: Boolean,
+    hint: String
   }
 }
 </script>

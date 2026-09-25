@@ -96,7 +96,11 @@ test('ui-template-frame.js cleans up template timers and observers on rebuild/un
 test('app.js tracks card iframe/shadow focus without IME proxy', async () => {
   const source = await read('src/modules/app.mjs');
 
-  assert.match(source, /const ensureIframeFocusTracker = \(iframe\) =>/);
+  // Current implementation: shared external-focus state maintained by card
+  // postMessage focus reports (iframeEditableFocused) plus a focusin/focusout
+  // tracker for shadow-DOM inputs, collapsed into computeExternalFocus().
+  // The old ensureIframeFocusTracker/IME-proxy design was removed.
+  assert.match(source, /let iframeEditableFocused = false;/);
   assert.match(source, /const computeExternalFocus = \(\) =>/);
   assert.doesNotMatch(source, /setupIframeImeBridge/);
   assert.doesNotMatch(source, /IME_PROXY_ATTR/);
