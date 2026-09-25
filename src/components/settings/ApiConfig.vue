@@ -339,7 +339,7 @@
 
             <!-- Generation Settings (Integrated) -->
             <div class="settings-subsection-card mt-1 overflow-hidden">
-                <div class="flex items-center justify-between gap-3 pl-4 pr-3 pt-3">
+                <div class="flex items-center justify-between gap-3 pl-4 pr-3 py-1.5">
                     <button type="button" @click="genSectionOpen = !genSectionOpen"
                         class="flex flex-1 items-center rounded-lg py-1.5 text-xs font-bold text-gray-400 uppercase tracking-wider text-left transition-colors hover:text-gray-600 group">
                         <svg class="w-4 h-4 mr-2 text-gray-400 transition-colors group-hover:text-gray-600" fill="none" stroke="currentColor"
@@ -363,7 +363,7 @@
                 <div class="grid"
                     :style="{ gridTemplateRows: genSectionOpen ? '1fr' : '0fr', transition: 'grid-template-rows 300ms ease' }">
                     <div class="overflow-hidden min-h-0">
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 px-4 pb-4 pt-3">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 px-4 pb-4 pt-1.5">
                     <!-- Image Key -->
                     <div
                         class="generation-setting-card">
