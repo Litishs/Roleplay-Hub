@@ -282,45 +282,64 @@
             </button>
 
             <!-- 聊天参数（温度 / 输出长度上限） -->
-            <div class="pt-5 border-t border-gray-100 mt-5">
-                <div class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">聊天参数</div>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <!-- 温度 -->
-                    <div
-                        class="bg-gray-50/60 p-4 rounded-xl border border-gray-100 hover:bg-white hover:border-gray-200 hover:shadow-sm transition-all duration-200">
-                        <div class="flex justify-between items-center mb-3">
-                            <label
-                                class="text-xs font-bold text-gray-500 uppercase tracking-wider">温度</label>
-                            <span
-                                class="text-xs font-mono text-teal-600 bg-teal-50 px-1.5 py-0.5 rounded border border-teal-100">{{
-                                settings.temperature }}</span>
-                        </div>
-                        <input v-model.number="settings.temperature" type="range" min="0" max="1"
-                            step="0.01"
-                            class="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-teal-500 hover:accent-teal-400 transition-all">
-                    </div>
+            <div class="settings-subsection-card mt-1 overflow-hidden">
+                <button type="button" @click="chatParamsOpen = !chatParamsOpen"
+                    class="flex w-full items-center rounded-lg py-3 pl-4 pr-3 text-xs font-bold text-gray-400 uppercase tracking-wider text-left transition-colors hover:text-gray-600 group">
+                    <svg class="w-4 h-4 mr-2 text-gray-400 transition-colors group-hover:text-gray-600" fill="none"
+                        stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M8 9v10m4-16v16m4-10v10M3 9h18M3 15h18">
+                        </path>
+                    </svg>
+                    <span>聊天参数</span>
+                    <svg :class="['w-4 h-4 ml-1.5 text-gray-400 transition-all duration-300 group-hover:text-gray-600', chatParamsOpen ? 'rotate-180' : '']"
+                        fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M19 9l-7 7-7-7"></path>
+                    </svg>
+                </button>
+                <div class="grid"
+                    :style="{ gridTemplateRows: chatParamsOpen ? '1fr' : '0fr', transition: 'grid-template-rows 300ms ease' }">
+                    <div class="overflow-hidden min-h-0">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 px-4 pb-4">
+                            <!-- 温度 -->
+                            <div
+                                class="bg-gray-50/60 p-4 rounded-xl border border-gray-100 hover:bg-white hover:border-gray-200 hover:shadow-sm transition-all duration-200">
+                                <div class="flex justify-between items-center mb-3">
+                                    <label
+                                        class="text-xs font-bold text-gray-500 uppercase tracking-wider">温度</label>
+                                    <span
+                                        class="text-xs font-mono text-teal-600 bg-teal-50 px-1.5 py-0.5 rounded border border-teal-100">{{
+                                        settings.temperature }}</span>
+                                </div>
+                                <input v-model.number="settings.temperature" type="range" min="0" max="1"
+                                    step="0.01"
+                                    class="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-teal-500 hover:accent-teal-400 transition-all">
+                            </div>
 
-                    <!-- 输出长度上限 -->
-                    <div
-                        class="bg-gray-50/60 p-4 rounded-xl border border-gray-100 hover:bg-white hover:border-gray-200 hover:shadow-sm transition-all duration-200">
-                        <div class="flex justify-between items-center mb-3">
-                            <label
-                                class="text-xs font-bold text-gray-500 uppercase tracking-wider">输出长度上限</label>
-                            <span
-                                class="text-xs font-mono text-teal-600 bg-teal-50 px-1.5 py-0.5 rounded border border-teal-100">{{
-                                settings.maxOutputTokens }} tok</span>
+                            <!-- 输出长度上限 -->
+                            <div
+                                class="bg-gray-50/60 p-4 rounded-xl border border-gray-100 hover:bg-white hover:border-gray-200 hover:shadow-sm transition-all duration-200">
+                                <div class="flex justify-between items-center mb-3">
+                                    <label
+                                        class="text-xs font-bold text-gray-500 uppercase tracking-wider">输出长度上限</label>
+                                    <span
+                                        class="text-xs font-mono text-teal-600 bg-teal-50 px-1.5 py-0.5 rounded border border-teal-100">{{
+                                        settings.maxOutputTokens }} tok</span>
+                                </div>
+                                <input v-model.number="settings.maxOutputTokens" type="range" min="256" max="8192"
+                                    step="256"
+                                    class="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-teal-500 hover:accent-teal-400 transition-all">
+                                <div class="text-[10px] text-gray-400 mt-1">单次回复的最大输出 token 数，按你的需求设定上限。</div>
+                            </div>
                         </div>
-                        <input v-model.number="settings.maxOutputTokens" type="range" min="256" max="8192"
-                            step="256"
-                            class="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-teal-500 hover:accent-teal-400 transition-all">
-                        <div class="text-[10px] text-gray-400 mt-1">单次回复的最大输出 token 数，按你的需求设定上限。</div>
                     </div>
                 </div>
             </div>
 
             <!-- Generation Settings (Integrated) -->
-            <div class="pt-6 border-t border-gray-100 mt-6">
-                <div class="flex items-center justify-between gap-3">
+            <div class="settings-subsection-card mt-1 overflow-hidden">
+                <div class="flex items-center justify-between gap-3 pl-4 pr-3 pt-3">
                     <button type="button" @click="genSectionOpen = !genSectionOpen"
                         class="flex flex-1 items-center rounded-lg py-1.5 text-xs font-bold text-gray-400 uppercase tracking-wider text-left transition-colors hover:text-gray-600 group">
                         <svg class="w-4 h-4 mr-2 text-gray-400 transition-colors group-hover:text-gray-600" fill="none" stroke="currentColor"
@@ -344,7 +363,7 @@
                 <div class="grid"
                     :style="{ gridTemplateRows: genSectionOpen ? '1fr' : '0fr', transition: 'grid-template-rows 300ms ease' }">
                     <div class="overflow-hidden min-h-0">
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 px-4 pb-4 pt-3">
                     <!-- Image Key -->
                     <div
                         class="generation-setting-card">
@@ -430,7 +449,9 @@ export default {
             else window.open(url, '_blank', 'noopener,noreferrer');
         };
         const genSectionOpen = ref(false);
-        return { ...(ctx || {}), openExternal, genSectionOpen };
+        // Chat params default open (core generation controls); collapsible like 生图设置.
+        const chatParamsOpen = ref(true);
+        return { ...(ctx || {}), openExternal, genSectionOpen, chatParamsOpen };
     }
 };
 </script>
