@@ -281,7 +281,7 @@
                 刷新可用模型列表
             </button>
 
-            <!-- 聊天参数（温度 / 输出长度上限） -->
+            <!-- 聊天参数（温度 / 输出长度上限 / 网络超时） -->
             <div class="settings-subsection-card mt-1 overflow-hidden">
                 <button type="button" @click="chatParamsOpen = !chatParamsOpen"
                     class="flex w-full items-center rounded-lg py-3 pl-4 pr-3 text-xs font-bold text-gray-400 uppercase tracking-wider text-left transition-colors hover:text-gray-600 group">
@@ -331,6 +331,33 @@
                                     step="256"
                                     class="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-teal-500 hover:accent-teal-400 transition-all">
                                 <div class="text-[10px] text-gray-400 mt-1">单次回复的最大输出 token 数，按你的需求设定上限。</div>
+                            </div>
+
+                            <!-- 网络超时（请求各阶段的等待上限，秒） -->
+                            <div
+                                class="bg-gray-50/60 p-4 rounded-xl border border-gray-100 hover:bg-white hover:border-gray-200 hover:shadow-sm transition-all duration-200 md:col-span-2">
+                                <div class="flex justify-between items-center mb-1">
+                                    <label
+                                        class="text-xs font-bold text-gray-500 uppercase tracking-wider">网络超时</label>
+                                </div>
+                                <p class="text-[10px] text-gray-400 mb-3 leading-relaxed">
+                                    单位：秒（可填 10–1800，填入其他值会自动修正）。使用推理型模型（深度思考）时建议调大“首 token
+                                    等待”，避免模型还在思考就被中止；本地部署（llama.cpp 等）处理长上下文较慢时同理。修改后对下一次请求生效。
+                                </p>
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <div v-for="item in requestTimeoutItems" :key="item.key">
+                                        <div class="flex justify-between items-center mb-1">
+                                            <span class="text-[11px] font-bold text-gray-500">{{ item.label }}</span>
+                                            <span
+                                                class="text-[11px] font-mono text-teal-600 bg-teal-50 px-1.5 py-0.5 rounded border border-teal-100 whitespace-nowrap">{{
+                                                settings[item.key] }}s</span>
+                                        </div>
+                                        <input type="number" v-model.number="settings[item.key]" min="10" max="1800"
+                                            step="10" @change="normalizeRequestTimeout(item.key)"
+                                            class="w-full px-3 py-1.5 text-sm text-gray-700 bg-white rounded-lg border border-gray-200 focus:border-teal-400 focus:ring-teal-100 focus:outline-none transition-all">
+                                        <p class="text-[10px] text-gray-400 mt-1 leading-relaxed">{{ item.description }}</p>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -437,8 +464,36 @@
 <script>
 import { inject, ref } from "vue";
 import { RPHubCustomSelect as CustomSelect } from "../../modules/ui-select.mjs";
+import { RPHRuntimePolicy } from "../../modules/runtime-policy.mjs";
 // 2026-08-28 Phase 1.6: shared components are declared locally now that the
 // app-level global registration workaround has been removed.
+
+// 网络超时配置项的展示定义（默认值单一来源是 runtime-policy.limits.requestTimeout）。
+const requestTimeoutItems = [
+    { key: 'requestFirstByteTimeout', label: '首字节等待', description: '发出请求后等待服务器响应的最长时间' },
+    { key: 'requestFirstTokenTimeout', label: '首 token 等待', description: '收到响应后等待模型开始输出的最长时间，推理模型建议 120–300 秒' },
+    { key: 'requestStreamIdleTimeout', label: '流式空闲', description: '流式输出中，多久没有新内容就判定生成中断' },
+    { key: 'requestTotalTimeout', label: '单次生成总时长', description: '从发起到生成结束的总时间上限' }
+];
+
+const timeoutDefaultsSeconds = {
+    requestFirstByteTimeout: RPHRuntimePolicy.limits.requestTimeout.firstByteMs / 1000,
+    requestFirstTokenTimeout: RPHRuntimePolicy.limits.requestTimeout.firstTokenMs / 1000,
+    requestStreamIdleTimeout: RPHRuntimePolicy.limits.requestTimeout.streamIdleMs / 1000,
+    requestTotalTimeout: RPHRuntimePolicy.limits.requestTimeout.totalMs / 1000
+};
+
+// 输入失焦时的兜底校验：非法回退默认，合法 clamp 到 [10, 1800] 秒。
+// 发送侧 runtime-policy.resolveRequestTimeouts 还有二次封顶，双保险。
+const normalizeRequestTimeout = (key, settings) => {
+    const value = Number(settings[key]);
+    const minimum = RPHRuntimePolicy.limits.requestTimeoutMinSeconds;
+    const maximum = RPHRuntimePolicy.limits.requestTimeoutMaxSeconds;
+    settings[key] = Number.isFinite(value)
+        ? Math.min(maximum, Math.max(minimum, Math.round(value)))
+        : timeoutDefaultsSeconds[key];
+};
+
 export default {
   components: { CustomSelect },
     setup() {
@@ -451,7 +506,14 @@ export default {
         const genSectionOpen = ref(false);
         // Chat params default open (core generation controls); collapsible like 生图设置.
         const chatParamsOpen = ref(true);
-        return { ...(ctx || {}), openExternal, genSectionOpen, chatParamsOpen };
+        return {
+            ...(ctx || {}),
+            openExternal,
+            genSectionOpen,
+            chatParamsOpen,
+            requestTimeoutItems,
+            normalizeRequestTimeout: (key) => normalizeRequestTimeout(key, ctx?.settings)
+        };
     }
 };
 </script>
