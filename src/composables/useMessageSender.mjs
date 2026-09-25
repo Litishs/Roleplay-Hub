@@ -140,7 +140,7 @@ export function useMessageSender(deps) {
     let waitTimer = null;
 
         // --- Chat request resilience (timeout / retry / friendly errors) ---
-        // 超时阈值可在 设置 → 高级设置 → 网络超时 中调整（秒），实际值经
+        // 超时阈值可在 设置 → API 连接与服务 → 聊天参数 中调整（秒），实际值经
         // resolveRequestTimeouts 从 settings 解析并封顶；这里的默认值仅用于
         // 兜底文档化（settings 字段缺失/非法时由 resolve 回退到同一默认）。
         const CHAT_MAX_ATTEMPTS = 3;
@@ -1300,7 +1300,7 @@ export function useMessageSender(deps) {
                             if (waitHint && !chatGuard.hasMeaningful()) {
                                 const elapsedMs = Date.now() - generationStartTime;
                                 if (elapsedMs >= chatTimeouts.firstByteMs / 2) {
-                                    waitHint.value = `已等待 ${Math.round(elapsedMs / 1000)}s，可在设置→高级设置→网络超时中调整`;
+                                    waitHint.value = `已等待 ${Math.round(elapsedMs / 1000)}s，可在设置→API连接与服务→聊天参数中调整`;
                                 }
                             }
                             abortForChatTimeout(chatGuard.getTimeout());

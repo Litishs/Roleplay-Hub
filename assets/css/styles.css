@@ -1187,6 +1187,17 @@
             transition: all 0.2s ease;
         }
 
+        /* Collapsible subsection (聊天参数 / 生图设置) wrapper card: mirrors the
+           top-level settings-accordion look in light mode; in dark mode it is
+           slightly darker than the host accordion so the lighter inner cards
+           keep their contrast. */
+        .settings-subsection-card {
+            border: 1px solid #e2e8f0;
+            border-radius: 0.75rem;
+            background: #fff;
+            box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+        }
+
         .generation-setting-card:hover {
             border-color: #e5e7eb;
             background: #fff;
@@ -2856,6 +2867,12 @@ opacity: 0;
         [data-theme='dark'] .settings-accordion .generation-setting-card {
             border-color: #303c4b;
             background: #1b2531;
+            box-shadow: none;
+        }
+
+        [data-theme='dark'] .settings-accordion .settings-subsection-card {
+            border-color: #263241;
+            background: #141b24;
             box-shadow: none;
         }
 

@@ -37,13 +37,29 @@ test('API URL normalization is unified and handles trailing slashes', () => {
 // src/composables/useMessageSender.mjs; assertions for pipeline-internal text
 // read from `sender` instead of `app`.
 test('聊天请求按首包、首有效 token、有效流空闲和总时长超时', () => {
-    // 2026-09-22: 超时阈值改为可在 设置 → 高级设置 → 网络超时 中配置；
+    // 2026-09-22: 超时阈值改为可在 设置 → API 连接与服务 → 聊天参数 中配置；
     // 发送管线经 resolveRequestTimeouts(settings) 解析（缺失/非法回退默认，clamp [10,1800] 秒）。
     assert.ok(sender.includes('const chatTimeouts = resolveRequestTimeouts(settings);'), 'timeouts resolved from settings');
     assert.ok(sender.includes('firstByteMs: chatTimeouts.firstByteMs,'));
     assert.ok(sender.includes('firstTokenMs: chatTimeouts.firstTokenMs,'));
     assert.ok(sender.includes('streamIdleMs: chatTimeouts.streamIdleMs,'));
     assert.ok(sender.includes('totalMs: chatTimeouts.totalMs'));
+    // 2026-09-25: 聊天参数 folds like 生图设置 and both sections sit in a visible
+    // subsection card so the accordion affordance is obvious.
+    const apiConfigHtml = readFileSync(new URL('../src/components/settings/ApiConfig.vue', import.meta.url), 'utf8');
+    assert.ok(apiConfigHtml.includes('chatParamsOpen = !chatParamsOpen'), '聊天参数 accordion toggle exists');
+    assert.ok(apiConfigHtml.includes('const chatParamsOpen = ref(true)'), '聊天参数 defaults open');
+    assert.ok((apiConfigHtml.match(/settings-subsection-card/g) || []).length >= 2, 'both 聊天参数 and 生图设置 use the subsection card');
+    const stylesCss = readFileSync(new URL('../assets/css/styles.css', import.meta.url), 'utf8');
+    assert.ok(stylesCss.includes('.settings-subsection-card {'), 'subsection card base style exists');
+    assert.ok(stylesCss.includes("[data-theme='dark'] .settings-accordion .settings-subsection-card"), 'subsection card has a dark theme override');
+    // 2026-09-25: the four timeout inputs live in the API 连接与服务 → 聊天参数 card
+    // (moved out of AdvancedSettings so timeout tuning sits next to the request
+    // params it governs; issue #4's reporter could not find the entry point).
+    assert.ok(apiConfigHtml.includes('requestFirstByteTimeout'), 'timeout inputs live in ApiConfig chat params card');
+    assert.ok(apiConfigHtml.includes('@change="normalizeRequestTimeout(item.key)"'), 'timeout inputs clamp on change');
+    const advancedSettingsHtml = readFileSync(new URL('../src/components/settings/AdvancedSettings.vue', import.meta.url), 'utf8');
+    assert.ok(!advancedSettingsHtml.includes('requestFirstByteTimeout'), 'AdvancedSettings no longer hosts the timeout inputs');
     // watchdog 必须提升到函数作用域声明(finally 才能清理), 不能只在 try 块内 const 声明
     assert.ok(sender.includes('let chatWatchdog = null;'));
     assert.ok(sender.includes('chatWatchdog = setInterval'));
