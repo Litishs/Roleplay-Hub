@@ -6,11 +6,21 @@
     const memoryChats = new Map();
     const memoryFragments = new Map();
     const memorySecrets = new Map();
-    let initialized = false;
+    // init 并发守卫：启动期并发的 set/get 只触发一次 plugin.init()，
+    // 避免原生初始化（可能含迁移逻辑）的竞态。
+    let initPromise = null;
+    // loadFragments/applyFragments 已删除：全仓零调用方，且
+    // tests/story-branch-contract.test.mjs 明确断言 fact fragment persistence
+    // "stays removed"。memoryFragments Map 保留（deleteFragments 仍在使用）。
 
-    const parseJson = (json, fallback) => {
+    const parseJson = (json, fallback, key = '(unknown)') => {
         if (json === null || json === undefined || json === '') return fallback;
-        try { return JSON.parse(json); } catch (_) { return fallback; }
+        try { return JSON.parse(json); } catch (error) {
+            // 损坏 JSON 不能静默降级：读失败与空数据不可区分会误导上层把可恢复的旧记录
+            // 当成空数据整份覆盖（replaceChat 是整删整写语义）。至少留下带 key 的现场日志。
+            console.error(`[StorageRepository] corrupt JSON for "${key}" (length=${String(json).length}), falling back:`, error?.message || error);
+            return fallback;
+        }
     };
 
     const cloneJson = value => value === undefined ? undefined : JSON.parse(JSON.stringify(value));
@@ -41,7 +51,11 @@
             const parts = path.split('/').filter(Boolean);
             let target = result;
             for (let index = 0; index < parts.length - 1; index += 1) {
-                if (target?.[parts[index]] === undefined) return;
+                if (target?.[parts[index]] === undefined) {
+                    // 结构失配时密钥会被静默丢弃（用户表现为 API Key 无声消失），必须留痕。
+                    console.warn(`[StorageRepository] secret path "${path}" no longer matches stored structure; value dropped`);
+                    return;
+                }
                 target = target[parts[index]];
             }
             if (target && parts.length) target[parts[parts.length - 1]] = secret;
@@ -49,21 +63,44 @@
         return result;
     };
 
-    const isSecretBearingKey = key => /rp_hub_(settings|active_tools)$/.test(String(key));
+    // Secret-bearing keys get field-level extraction (apiKey/apiProviderKeys/…)
+    // into the native secret channel before the value reaches plain SQLite.
+    // novel_settings (墨韵·造梦 workshop config, written through the novel
+    // storage bridge) rides the same channel so page-side API keys never
+    // persist in plain SQLite nor enter full backups.
+    const isSecretBearingKey = key => /^(rp_hub_(settings|active_tools)|novel_settings)$/.test(String(key));
+
+    // 密钥存储的 key 白名单：只放行 isSecretBearingKey 对应的 `config:` 前缀密钥
+    // （当前仓库内合法用途见上方注释）。RPHStorage 整体挂在 window 上供卡片 iframe
+    // 使用，一旦沙箱被绕过，任意 key 的密钥读取都将成为攻击面——这里把可读范围
+    // 收敛到白名单。与 isSecretBearingKey 保持同一份 key 列表，新增承载 key 时两处同步。
+    const assertSecretKey = (key) => {
+        if (!/^config:(rp_hub_(settings|active_tools)|novel_settings)$/.test(String(key))) {
+            throw new Error(`[StorageRepository] secret access denied for key "${key}"`);
+        }
+    };
 
     const repository = {
         get isNative() { return !!nativePlugin(); },
 
         async init() {
-            if (initialized) return;
-            const plugin = nativePlugin();
-            if (plugin) await plugin.init();
-            else console.warn('[StorageRepository] Native plugin unavailable; using volatile development storage.');
-            initialized = true;
+            if (!initPromise) {
+                initPromise = (async () => {
+                    const plugin = nativePlugin();
+                    if (plugin) await plugin.init();
+                    else console.warn('[StorageRepository] Native plugin unavailable; using volatile development storage.');
+                })();
+            }
+            await initPromise;
         },
 
         async set(key, value) {
             await this.init();
+            if (value === undefined) {
+                // JSON.stringify(undefined) === undefined，过桥后原生端只会报误导性的
+                // "key and json are required"。在 JS 层提前拦下并给出准确错误。
+                throw new Error(`[StorageRepository] set("${key}") rejected: value is undefined`);
+            }
             let storedValue = cloneJson(value);
             if (isSecretBearingKey(key)) {
                 const extracted = extractSecrets(storedValue);
@@ -80,9 +117,14 @@
             await this.init();
             const plugin = nativePlugin();
             const response = plugin ? await plugin.kvGet({ key }) : { json: memoryStore.get(key) ?? null };
-            const value = parseJson(response.json, undefined);
+            const value = parseJson(response.json, undefined, key);
             if (value === undefined || !isSecretBearingKey(key)) return value;
-            const secrets = parseJson(await this.getSecret(`config:${key}`), {});
+            const secrets = parseJson(await this.getSecret(`config:${key}`), {}, `secrets:${key}`);
+            if (!Object.keys(secrets).length) {
+                // 公开数据存在但密钥回读为空：可能是两段写崩溃窗口或 apply() 异步落盘丢失，
+                // 提前留痕便于排查“API Key 无声消失”类故障。
+                console.warn(`[StorageRepository] "${key}" has public data but an empty secret store; keys may have been lost`);
+            }
             return restoreSecrets(value, secrets);
         },
 
@@ -95,18 +137,21 @@
         },
 
         async setSecret(key, value) {
+            assertSecretKey(key);
             const plugin = nativePlugin();
             if (plugin) await plugin.secretSet({ key, value: String(value ?? '') });
             else memorySecrets.set(key, String(value ?? ''));
         },
 
         async getSecret(key) {
+            assertSecretKey(key);
             const plugin = nativePlugin();
             const response = plugin ? await plugin.secretGet({ key }) : { value: memorySecrets.get(key) ?? null };
             return response.value;
         },
 
         async removeSecret(key) {
+            assertSecretKey(key);
             const plugin = nativePlugin();
             if (plugin) await plugin.secretRemove({ key });
             else memorySecrets.delete(key);
@@ -118,7 +163,14 @@
             const response = plugin
                 ? await plugin.chatGet({ characterId: String(characterId) })
                 : { json: memoryChats.get(String(characterId)) || '[]' };
-            return parseJson(response.json, []);
+            const value = parseJson(response.json, [], `chat:${characterId}`);
+            // 形状校验：合法 JSON 但非数组（schema 演进残留/其它 bug 写入）不能穿透炸下游，
+            // 统一降级为空数组并留痕。
+            if (!Array.isArray(value)) {
+                console.error(`[StorageRepository] chat "${characterId}" has non-array shape (${typeof value}); returning empty`);
+                return [];
+            }
+            return value;
         },
 
         async applyChatChanges(characterId, upserts, deletes) {
@@ -149,36 +201,6 @@
             const plugin = nativePlugin();
             if (plugin) await plugin.chatDelete({ characterId: String(characterId) });
             else memoryChats.delete(String(characterId));
-        },
-
-        async loadFragments(characterId) {
-            await this.init();
-            const plugin = nativePlugin();
-            const response = plugin
-                ? await plugin.memoryList({ characterId: String(characterId) })
-                : { json: memoryFragments.get(String(characterId)) || '[]' };
-            return parseJson(response.json, []);
-        },
-
-        async applyFragments(characterId, changes) {
-            await this.init();
-            const plugin = nativePlugin();
-            const normalized = {
-                upserts: cloneJson(changes?.upserts || []),
-                deletes: cloneJson(changes?.deletes || [])
-            };
-            if (plugin) {
-                await plugin.memoryApply({ characterId: String(characterId), changesJson: JSON.stringify(normalized) });
-                return;
-            }
-            const key = String(characterId);
-            const current = parseJson(memoryFragments.get(key) || '[]', []);
-            const byRow = new Map(current.map(item => [`${item._kind}:${item._fragmentId}`, item]));
-            normalized.deletes.forEach(item => byRow.delete(`${item.kind}:${item.id}`));
-            normalized.upserts.forEach(item => {
-                byRow.set(`${item.kind}:${item.id}`, { ...(item.data || item), _kind: item.kind, _fragmentId: item.id });
-            });
-            memoryFragments.set(key, JSON.stringify([...byRow.values()]));
         },
 
         async deleteFragments(characterId) {

@@ -1262,6 +1262,22 @@
             pointer-events: none;
         }
 
+        /* Swipe candidate counter + arrows inside the action bar: same visual
+           language as the icon buttons — borderless, transparent, icon-colored. */
+        .message-action-swipe-counter {
+            min-width: 2.1rem;
+            text-align: center;
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+            font-size: 0.6875rem;
+            line-height: 1;
+            color: rgba(75, 85, 99, 0.78);
+            user-select: none;
+        }
+
+        [data-theme='dark'] .message-action-swipe-counter {
+            color: rgba(156, 163, 175, 0.85);
+        }
+
         .settings-page-header {
             display: flex;
             align-items: center;

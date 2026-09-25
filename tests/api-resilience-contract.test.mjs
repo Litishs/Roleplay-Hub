@@ -37,10 +37,13 @@ test('API URL normalization is unified and handles trailing slashes', () => {
 // src/composables/useMessageSender.mjs; assertions for pipeline-internal text
 // read from `sender` instead of `app`.
 test('聊天请求按首包、首有效 token、有效流空闲和总时长超时', () => {
-    assert.ok(sender.includes('CHAT_FIRST_BYTE_TIMEOUT_MS = 60000'));
-    assert.ok(sender.includes('CHAT_FIRST_TOKEN_TIMEOUT_MS = 60000'));
-    assert.ok(sender.includes('CHAT_STREAM_IDLE_TIMEOUT_MS = 120000'));
-    assert.ok(sender.includes('CHAT_TOTAL_TIMEOUT_MS = 600000'));
+    // 2026-09-22: 超时阈值改为可在 设置 → 高级设置 → 网络超时 中配置；
+    // 发送管线经 resolveRequestTimeouts(settings) 解析（缺失/非法回退默认，clamp [10,1800] 秒）。
+    assert.ok(sender.includes('const chatTimeouts = resolveRequestTimeouts(settings);'), 'timeouts resolved from settings');
+    assert.ok(sender.includes('firstByteMs: chatTimeouts.firstByteMs,'));
+    assert.ok(sender.includes('firstTokenMs: chatTimeouts.firstTokenMs,'));
+    assert.ok(sender.includes('streamIdleMs: chatTimeouts.streamIdleMs,'));
+    assert.ok(sender.includes('totalMs: chatTimeouts.totalMs'));
     // watchdog 必须提升到函数作用域声明(finally 才能清理), 不能只在 try 块内 const 声明
     assert.ok(sender.includes('let chatWatchdog = null;'));
     assert.ok(sender.includes('chatWatchdog = setInterval'));
@@ -161,8 +164,12 @@ test('release baseline stays clean; debug builds use the 10000+ -debug.N scheme'
 
     // Debug builds: baseline + untracked counter in debug_apk/ (10000+ range),
     // passed to gradle via -P overrides; version.properties is never written.
+    // 2026-09-24: versionCode keeps the global monotonic counter (so a new
+    // debug APK always installs over an older one); the -debug.N sequence in
+    // versionName is per-baseline and restarts at 1 on a new baseline.
     const script = readFileSync(new URL('../scripts/build-android-debug.ps1', import.meta.url), 'utf8');
-    assert.ok(script.includes('$nextVersionCode = 10001'), 'debug counter starts above every legacy auto-bumped code');
+    assert.ok(script.includes('$nextVersionCode = [int]$state.versionCode + 1'), 'debug versionCode continues the global monotonic counter');
+    assert.ok(script.includes('$nextSeq = if ($state.baseline -eq $baselineVersionName) { [int]$state.seq + 1 } else { 1 }'), 'debug name sequence restarts at 1 on a new baseline');
     assert.ok(script.includes("$nextVersionName = '{0}-debug.{1}' -f $baselineVersionName"));
     assert.ok(script.includes('"-PrphVersionCode=$nextVersionCode"'));
     assert.ok(script.includes('"-PrphVersionName=$nextVersionName"'));

@@ -29,7 +29,7 @@ const createRepository = async () => {
   const context = vm.createContext({ window, console });
   const source = await readFile(new URL('../src/modules/storage-repository.mjs', import.meta.url), 'utf8');
   const cleanSource = source.replace(/^export\s*\{([^}]*)\};\s*$/m, (_, exports) => {
-    return exports.split(',').map(s => { const n = s.trim(); return 'window.' + n + ' = ' + n + ';\nglobalThis.' + n + ' = ' + n + ';'; }).join('\\n');
+    return exports.split(',').map(s => { const n = s.trim(); return 'window.' + n + ' = ' + n + ';\nglobalThis.' + n + ' = ' + n + ';'; }).join('\n');
   }).replace(/^export default\s+(\S+);\s*$/m, (_, name) => { return 'window.' + name + ' = ' + name + ';\nglobalThis.' + name + ' = ' + name + ';'; });
   vm.runInContext(cleanSource, context);
   return { repository: window.RPHStorage, kv, secrets };
@@ -57,6 +57,38 @@ test('settings secrets are excluded from SQLite JSON and restored from secure st
   assert.equal(restored.apiKey, 'chat-secret');
   assert.equal(restored.imageGenKey, 'image-secret');
   assert.equal(restored.apiProviderKeys.primary, 'provider-secret');
+});
+
+test('novel_settings secrets ride the secret channel (novel workshop bridge)', async () => {
+  const { repository, kv, secrets } = await createRepository();
+  const novelSettings = {
+    providerId: 'deepseek',
+    apiUrl: 'https://api.deepseek.com/v1',
+    apiKey: 'novel-secret',
+    apiProviderKeys: { deepseek: 'novel-provider-secret', zhipu: 'novel-zhipu-secret' },
+    model: 'example-model'
+  };
+
+  await repository.set('novel_settings', novelSettings);
+  const sqliteValue = JSON.parse(kv.get('novel_settings'));
+  assert.equal(sqliteValue.apiKey, '', 'apiKey must be blanked out in plain SQLite');
+  assert.deepEqual(sqliteValue.apiProviderKeys, {}, 'apiProviderKeys must be blanked out in plain SQLite');
+  assert.equal(kv.get('novel_settings').includes('novel-secret'), false);
+  assert.equal(kv.get('novel_settings').includes('novel-provider-secret'), false);
+  assert.equal(sqliteValue.providerId, 'deepseek', 'non-secret fields stay public');
+  assert.equal(secrets.get('config:novel_settings') !== undefined, true, 'secrets must live in the secret channel');
+
+  const restored = await repository.get('novel_settings');
+  assert.equal(restored.apiKey, 'novel-secret');
+  assert.equal(restored.apiProviderKeys.deepseek, 'novel-provider-secret');
+  assert.equal(restored.apiProviderKeys.zhipu, 'novel-zhipu-secret');
+});
+
+test('novel library stays non-secret (no keys inside, plain SQLite is fine)', async () => {
+  const { repository, kv, secrets } = await createRepository();
+  await repository.set('novel_library', { version: 1, books: [{ id: 'b1', title: 'demo' }] });
+  assert.equal(JSON.parse(kv.get('novel_library')).books[0].title, 'demo');
+  assert.equal(secrets.has('config:novel_library'), false, 'library must not enter the secret channel');
 });
 
 test('chat repository applies per-row upserts and deletes', async () => {

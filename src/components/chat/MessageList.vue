@@ -54,7 +54,7 @@
                     <div ref="messageElements"
                         :data-role="msg.role"
                         :data-chat-index="index"
-                        v-show="!(msg.role === 'assistant' && index === chatHistory.length - 1 && isThinking && !(msg.reasoning || parseCot(msg.content).cot || parseCot(msg.content).main || (msg.toolCalls && msg.toolCalls.length)))"
+                        v-show="!(msg.role === 'assistant' && index === chatHistory.length - 1 && isThinking && !(msg.reasoning || parseMessageCot(msg).cot || parseMessageCot(msg).main || (msg.toolCalls && msg.toolCalls.length)))"
                         :class="['flex w-full scroll-reveal-container', settings.immersiveMode ? 'immersive-message-row' : '', msg.isSelf ? 'justify-end' : 'justify-start', msg.skipReveal ? 'reveal-active' : (settings.immersiveMode ? 'scroll-reveal-center' : (msg.isSelf ? 'scroll-reveal-right' : 'scroll-reveal-left'))]"
                         :style="{ transitionDelay: (displayIndex % 5) * 50 + 'ms' }">
                         <div
@@ -87,7 +87,9 @@
                                 </div>
                                 <!-- Message Bubble -->
                                 <div class="group relative"
-                                    :class="{'w-full': messageUsesWideLayout(msg)}">
+                                    :class="{'w-full': messageUsesWideLayout(msg)}"
+                                    @touchstart="onBubbleTouchStart($event, index)"
+                                    @touchcancel="onBubbleTouchCancel($event, index)">
                                     <div
                                         :class="['p-0 rounded-2xl shadow-sm text-sm md:text-base leading-relaxed overflow-hidden',
                                         msg.shouldAnimate && !(msg.role === 'assistant' && msg.reasoning) ? 'animate-message-in' : '',
@@ -243,7 +245,8 @@
                                                 <generation-timer v-if="isGenerating" :wait-time="currentWaitTime"
                                                     :estimated-time="estimatedGenerationTime"
                                                     :remote-estimated-time="remoteEstimatedTime"
-                                                    :remote="isRemoteGenerating"></generation-timer>
+                                                    :remote="isRemoteGenerating"
+                                                    :hint="waitHint"></generation-timer>
                                             </div>
                                             <div v-if="msg.role === 'assistant' && msg.uiTemplateBlocks && msg.uiTemplateBlocks.top && msg.uiTemplateBlocks.top.length"
                                                 class="ui-template-message-block ui-template-message-block-top">
@@ -276,15 +279,15 @@
                                             </div>
                                             <!-- CoT Part -->
                                             <!-- Main Part -->
-                                            <template v-if="parseCot(msg.content).main">
+                                            <template v-if="parseMessageCot(msg).main">
                                                 <template
                                                     v-if="index === chatHistory.length - 1 && (isGenerating || isRemoteGenerating)">
-                                                    <div v-if="processMainContent(parseCot(msg.content).main, true).text"
+                                                    <div v-if="processMainContent(parseMessageCot(msg).main, true).text"
                                                         class="markdown-body"
                                                         :style="settings.fontSize ? { fontSize: settings.fontSize + 'px' } : {}"
-                                                        v-html="renderMarkdown(processMainContent(parseCot(msg.content).main, true).text, msg.role, false, !isMessageThinkingOrRunning(msg))">
+                                                        v-html="renderMarkdown(processMainContent(parseMessageCot(msg).main, true).text, msg.role, false, !isMessageThinkingOrRunning(msg))">
                                                     </div>
-                                                    <div v-if="processMainContent(parseCot(msg.content).main, true).showSpinner"
+                                                    <div v-if="processMainContent(parseMessageCot(msg).main, true).showSpinner"
                                                         class="flex flex-col items-center justify-center p-8 w-full mt-2 gap-4 opacity-90">
                                                         <div class="ui-build-dots" aria-hidden="true"><i></i><i></i><i></i></div>
                                                         <span
@@ -295,13 +298,13 @@
                                                 <template v-else>
                                                     <div class="markdown-body"
                                                         :style="settings.fontSize ? { fontSize: settings.fontSize + 'px' } : {}"
-                                                        v-html="renderMarkdown(processMainContent(parseCot(msg.content).main, false).text, msg.role, false, !isMessageThinkingOrRunning(msg))">
+                                                        v-html="renderMarkdown(processMainContent(parseMessageCot(msg).main, false).text, msg.role, false, !isMessageThinkingOrRunning(msg))">
                                                     </div>
                                                 </template>
                                             </template>
 
                                             <!-- Sys Instruction Part -->
-                                            <div v-if="parseCot(msg.content).sys"
+                                            <div v-if="parseMessageCot(msg).sys"
                                                 class="mt-2 mx-4 mb-3 p-3 bg-gradient-to-r from-gray-50/80 to-gray-100/50 backdrop-blur-sm rounded-xl border border-gray-200/60 shadow-sm flex flex-col gap-1.5 relative overflow-hidden group/sys">
                                                 <div class="absolute inset-0 bg-white/40 pointer-events-none"></div>
                                                 <div
@@ -317,7 +320,7 @@
                                                 </div>
                                                 <div class="text-gray-600 leading-relaxed font-medium markdown-body relative z-10"
                                                     :style="settings.fontSize ? { fontSize: (settings.fontSize - 1) + 'px' } : { fontSize: '13px' }"
-                                                    v-html="renderMarkdown(parseCot(msg.content).sys, 'user', true, !isMessageThinkingOrRunning(msg))">
+                                                    v-html="renderMarkdown(parseMessageCot(msg).sys, 'user', true, !isMessageThinkingOrRunning(msg))">
                                                 </div>
                                             </div>
                                             <div v-if="msg.role === 'assistant' && msg.uiTemplateBlocks && msg.uiTemplateBlocks.bottom && msg.uiTemplateBlocks.bottom.length"
@@ -338,10 +341,31 @@
                                     <!-- Message Actions -->
                                     <div v-if="!msg.isEditing_Message && !isMessageThinkingOrRunning(msg) && !(index === chatHistory.length - 1 && !msg.isSelf && (isGenerating || isRemoteGenerating)) && !(msg.isSelf && isConversationBusy && !chatHistory.slice(index + 1).some(m => m.isSelf))"
                                         :class="['message-action-bar absolute bottom-0 -mb-11 md:-mb-12 flex items-center opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-200', msg.isSelf ? 'right-0' : 'left-0']">
+                                        <!-- Swipe candidate switcher: last-floor assistant messages only.
+                                             Same borderless button style as the neighboring icon actions. -->
+                                        <template v-if="msg.role === 'assistant' && index === chatHistory.length - 1 && msg.swipes && msg.swipes.length > 1 && !isConversationBusy">
+                                            <button @click="swipePrev(index)"
+                                                :disabled="msg.activeSwipeIndex <= 0"
+                                                class="message-action-button"
+                                                title="上一个候选">
+                                                <svg class="w-3.5 h-3.5 md:w-4 md:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+                                                </svg>
+                                            </button>
+                                            <span class="message-action-swipe-counter">{{ msg.activeSwipeIndex + 1 }}/{{ msg.swipes.length }}</span>
+                                            <button @click="swipeNext(index)"
+                                                :disabled="msg.activeSwipeIndex >= msg.swipes.length - 1"
+                                                class="message-action-button"
+                                                title="下一个候选">
+                                                <svg class="w-3.5 h-3.5 md:w-4 md:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                                                </svg>
+                                            </button>
+                                        </template>
                                         <button v-if="index === chatHistory.length - 1"
                                             @click="regenerateMessage(index)"
                                             class="message-action-button"
-                                            title="重新生成">
+                                            title="重新生成（追加候选）">
                                             <svg class="w-3.5 h-3.5 md:w-4 md:h-4" fill="none" stroke="currentColor"
                                                 viewBox="0 0 24 24">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -442,7 +466,8 @@
                                     <generation-timer v-if="isGenerating" :wait-time="currentWaitTime"
                                         :estimated-time="estimatedGenerationTime"
                                         :remote-estimated-time="remoteEstimatedTime"
-                                        :remote="isRemoteGenerating"></generation-timer>
+                                        :remote="isRemoteGenerating"
+                                        :hint="waitHint"></generation-timer>
                                 </div>
                             </div>
                         </div>
@@ -461,7 +486,165 @@ export default {
   components: { UiTemplateFrame, GenerationTimer, UiTemplatePending },
   setup() {
     const ctx = inject("appContext");
-    return ctx || {};
+    // Swipe-gesture local state (M3): horizontal drag on the last-floor bubble with
+    // ST-style animation. The bubble transform is applied IMPERATIVELY via DOM style
+    // (no Vue re-render per move frame — smooth 60fps drag), and cleared with a CSS
+    // transition for the spring-back. Guards exclude multi-touch, vertical scrolling,
+    // and text-selection / interactive elements inside the bubble.
+    let bubbleTouch = null;   // { index, x, y, time, el, decided }
+    let dragging = null;      // { index, dx } while the horizontal drag is active
+    // Detach handle for the imperative move/end listeners of the active touch
+    // (null while no gesture owns them); lets the "vertical wins" decision hand
+    // the gesture back to native scrolling immediately.
+    let bubbleGestureDetach = null;
+    const canSwipeGesture = (msg, index) => {
+      if (!msg || msg.role !== 'assistant') return false;
+      const hist = ctx.chatHistory && ctx.chatHistory.value ? ctx.chatHistory.value : (Array.isArray(ctx.chatHistory) ? ctx.chatHistory : null);
+      if (!hist || index !== hist.length - 1) return false;
+      // 2026-09-24 maintainer feedback: left swipe MEANS regenerate, so the
+      // gesture engages on any last-floor assistant message — including a
+      // single-candidate (1/1) or fresh reply without a swipes array yet.
+      // Right swipe simply rubber-bands there (no previous candidate).
+      const busy = ctx.isConversationBusy && ctx.isConversationBusy.value;
+      if (busy) return false;
+      return true;
+    };
+    // Safe edge math for messages whose swipes array may be absent (1/1):
+    // a missing array counts as exactly one candidate.
+    const swipeCandidateCount = (msg) => Array.isArray(msg.swipes) ? msg.swipes.length : 1;
+    const swipeActiveIndex = (msg) => Number.isInteger(msg.activeSwipeIndex) ? msg.activeSwipeIndex : 0;
+    const setBubbleTransform = (el, dx, animate) => {
+      if (!el) return;
+      el.style.transition = animate ? 'transform 260ms cubic-bezier(0.22, 0.61, 0.36, 1)' : 'none';
+      el.style.transform = dx === 0 ? '' : `translateX(${dx}px)`;
+      if (dx === 0 && animate) setTimeout(() => { el.style.transition = ''; el.style.transform = ''; }, 300);
+    };
+    const onBubbleTouchStart = (event, index) => {
+      const msg = ctx.chatHistory && ctx.chatHistory.value ? ctx.chatHistory.value[index] : (Array.isArray(ctx.chatHistory) ? ctx.chatHistory[index] : null);
+      if (!canSwipeGesture(msg, index)) return;
+      if (!event.touches || event.touches.length !== 1) return;
+      const t = event.touches[0];
+      const target = t.target;
+      // text selection / link taps inside the bubble must not trigger swipes
+      if (target && target.closest && target.closest('a, button, details, summary, textarea, input, select, [contenteditable]')) return;
+      const sel = window.getSelection && window.getSelection();
+      if (sel && sel.type === 'Range') return;
+      const bubbleEl = event.currentTarget;
+      bubbleTouch = { index, x: t.clientX, y: t.clientY, time: Date.now(), el: bubbleEl, decided: false };
+      // Attach move/end listeners IMPERATIVELY and NON-PASSIVE: the browser only
+      // lets a touch gesture own preventDefault while the first move is still
+      // cancelable — template-bound Vue listeners proved too late on device.
+      // preventDefault stays OFF until the gesture is decided as a horizontal
+      // swipe: an unconditional one here killed native scrolling for every
+      // touch that started on the bubble (device regression 2026-09-24).
+      const onMove = (ev) => { if (bubbleTouch && bubbleTouch.decided && ev.cancelable) ev.preventDefault(); onBubbleTouchMove(ev, index); };
+      const onEnd = (ev) => {
+        if (bubbleGestureDetach) bubbleGestureDetach();
+        onBubbleTouchEnd(ev, index);
+      };
+      const onCancel = (ev) => {
+        if (bubbleGestureDetach) bubbleGestureDetach();
+        onBubbleTouchCancel(ev, index);
+      };
+      bubbleGestureDetach = () => {
+        bubbleEl.removeEventListener('touchmove', onMove);
+        bubbleEl.removeEventListener('touchend', onEnd);
+        bubbleEl.removeEventListener('touchcancel', onCancel);
+        bubbleGestureDetach = null;
+      };
+      bubbleEl.addEventListener('touchmove', onMove, { passive: false });
+      bubbleEl.addEventListener('touchend', onEnd, { passive: false });
+      bubbleEl.addEventListener('touchcancel', onCancel, { passive: false });
+    };
+    const onBubbleTouchMove = (event, index) => {
+      if (!bubbleTouch || bubbleTouch.index !== index) return;
+      const t = event.touches && event.touches[0];
+      if (!t) return;
+      const dx = t.clientX - bubbleTouch.x;
+      const dy = t.clientY - bubbleTouch.y;
+      // decide once per gesture whether this is a horizontal swipe
+      if (!bubbleTouch.decided) {
+        if (Math.abs(dx) < 12) return; // jitter band
+        if (Math.abs(dy) > Math.abs(dx)) {
+          // vertical scroll wins: detach our non-passive listeners right away so
+          // the browser scrolls natively (no more preventDefault from our side)
+          if (bubbleGestureDetach) bubbleGestureDetach();
+          bubbleTouch = null;
+          return;
+        }
+        const histArr = ctx.chatHistory.value || ctx.chatHistory; const msg = histArr[index];
+        // Both directions are always live: crossing an edge switches mode —
+        // left past the last candidate arms "regenerate" (ST behavior),
+        // right at the first candidate rubber-bands and does nothing on release.
+        const goingNext = dx < 0;
+        const atEdge = goingNext ? swipeActiveIndex(msg) >= swipeCandidateCount(msg) - 1 : swipeActiveIndex(msg) <= 0;
+        bubbleTouch.decided = true;
+        dragging = { index, dx: 0 };
+        if (event.cancelable) event.preventDefault();
+      }
+      if (!dragging || dragging.index !== index) return;
+      const histArr = ctx.chatHistory.value || ctx.chatHistory; const msg = histArr[index];
+      // Rubber-band beyond the edge candidate (both directions);
+      const goingNext = dx < 0;
+      const atEdge = goingNext ? swipeActiveIndex(msg) >= swipeCandidateCount(msg) - 1 : swipeActiveIndex(msg) <= 0;
+      const effective = atEdge ? dx * 0.25 : dx;
+      dragging.dx = effective;
+      setBubbleTransform(bubbleTouch.el, effective, false);
+    };
+    const endGesture = (event, index, cancelled) => {
+      const touch = bubbleTouch;
+      const drag = dragging;
+      bubbleTouch = null;
+      dragging = null;
+      if (!touch || touch.index !== index) return;
+      const el = touch.el;
+      const t = event && event.changedTouches && event.changedTouches[0];
+      const relDx = t ? t.clientX - touch.x : (drag ? drag.dx : 0);
+      const relDy = t ? t.clientY - touch.y : 0;
+      const dt = Date.now() - touch.time;
+      const histArr = ctx.chatHistory.value || ctx.chatHistory; const msg = histArr[index];
+      if (!msg || msg.role !== 'assistant') { setBubbleTransform(el, 0, true); return; }
+      // ST-style unified dispatch: one distance test for both slow drags and fast
+      // flicks (velocity only extends the effective distance), so the feel is
+      // identical regardless of swipe speed.
+      const dist = Math.abs(relDx);
+      const velocity = dist / Math.max(dt, 1); // px per ms
+      const effectiveDist = dist + velocity * 120; // momentum extension
+      const passed = !cancelled && effectiveDist > 64 && Math.abs(relDy) < 48;
+      const dir = relDx < 0 ? 'next' : 'prev';
+      const atEdge = dir === 'next' ? swipeActiveIndex(msg) >= swipeCandidateCount(msg) - 1 : swipeActiveIndex(msg) <= 0;
+      if (passed && dir === 'next' && atEdge) {
+        // Left swipe past the last candidate = regenerate (append a new candidate)
+        setBubbleTransform(el, 0, true);
+        ctx.regenerateMessage(index);
+        return;
+      }
+      if (passed && !atEdge) {
+        // animate the old bubble out, swap, then animate back from the opposite side
+        const outPx = dir === 'next' ? -160 : 160;
+        el.style.transition = 'transform 140ms ease-in, opacity 140ms ease-in';
+        el.style.transform = `translateX(${outPx}px)`;
+        el.style.opacity = '0.25';
+        setTimeout(() => {
+          if (dir === 'next') ctx.swipeNext(index); else ctx.swipePrev(index);
+          el.style.transition = 'none';
+          el.style.transform = `translateX(${dir === 'next' ? 160 : -160}px)`;
+          el.style.opacity = '0.25';
+          requestAnimationFrame(() => requestAnimationFrame(() => {
+            el.style.transition = 'transform 220ms cubic-bezier(0.22, 0.61, 0.36, 1), opacity 220ms ease-out';
+            el.style.transform = '';
+            el.style.opacity = '';
+            setTimeout(() => { el.style.transition = ''; el.style.transform = ''; el.style.opacity = ''; }, 260);
+          }));
+        }, 150);
+      } else {
+        // spring back
+        setBubbleTransform(el, 0, true);
+      }
+    };
+    const onBubbleTouchEnd = (event, index) => endGesture(event, index, false);
+    const onBubbleTouchCancel = (event, index) => endGesture(event, index, true);
+    return { ...(ctx || {}), canSwipeGesture, onBubbleTouchStart, onBubbleTouchMove, onBubbleTouchEnd, onBubbleTouchCancel };
   }
 };
 </script>

@@ -33,6 +33,7 @@ const RPHUpdateChecker = { compareVersions, checkForUpdate, fetchLatestRelease, 
 const IMAGE_GEN_BASE_URL = 'https://nai.sta1n.cn';
 
 import { RPHChatPersistence } from './chat-persistence.mjs';
+import { initSwipes, captureActiveCandidate, appendSwipeCandidate, normalizeSwipes, swipeMaxCandidates } from './swipe-candidates.mjs';
 import { DEFAULT_PRESET_DEFINITIONS, DEFAULT_PRESET_DEFINITIONS_VERSION } from './default-presets.mjs';
 import { buildCotPresetContent } from './cot-builder.mjs';
 import { RPHStorage } from './storage-repository.mjs';
@@ -69,6 +70,7 @@ import MessageInput from '../components/chat/MessageInput.vue';
 const AsyncCharacterPanel = defineAsyncComponent(() => import('../components/views/CharacterPanel.vue'));
 const AsyncGeneratorPanel = defineAsyncComponent(() => import('../components/views/GeneratorPanel.vue'));
 const AsyncSquarePanel = defineAsyncComponent(() => import('../components/views/SquarePanel.vue'));
+const AsyncNovelPanel = defineAsyncComponent(() => import('../components/views/NovelPanel.vue'));
 const AsyncSettingsPanel = defineAsyncComponent(() => import('../components/views/SettingsPanel.vue'));
 const AsyncPresetsPanel = defineAsyncComponent(() => import('../components/views/PresetsPanel.vue'));
 const AsyncUiTemplatePanel = defineAsyncComponent(() => import('../components/views/UiTemplatePanel.vue'));
@@ -97,12 +99,12 @@ import { useRegexPipeline } from '../composables/useRegexPipeline.mjs';
 import { useStoryBranching } from '../composables/useStoryBranching.mjs';
 import { useDataIO } from '../composables/useDataIO.mjs';
 import { useBackupRestore } from '../composables/useBackupRestore.mjs';
-import { buildExecutableHtmlDocument, buildKeywordToolSnippet, bytesToBase64, checkConnectionStatus, cleanActiveToolCallReason, cleanupActiveToolCaptureState, collapseNativeReasoning, debounce, escapeRegexText, escapeXmlAttribute, escapeXmlText, estimateTokens, formatAIResponseForConsole, formatTokenAggregate, formatTokenCount, formatLatestTokenCount, formatTokenUsageTime, getConversationTurnAtIndexFromSnapshot, getTokenUsageCategory, indentXmlText, isDatabaseClosingError, isDesktopSidebarViewport, isEditableElement, isMobileViewport, normalizePresetRole, normalizeTavilyExtractUrl, printAIRequestLogs, readUsageNumber, removeActiveToolCallRawsFromText, requestTavily, resizeChatInputElement, runWithConcurrency, stringifyErrorDetail, stringifyUiSchema, stripActiveToolCallsFromAssistant, stripCodeBlocksForToolDetection, stripUiTemplateContextInjection, throwApiError, yieldToBrowser, yieldToUi } from './utils.mjs';
+import { EXECUTABLE_FRAME_CHANNEL, buildExecutableHtmlDocument, buildKeywordToolSnippet, bytesToBase64, checkConnectionStatus, cleanActiveToolCallReason, cleanupActiveToolCaptureState, collapseNativeReasoning, debounce, escapeRegexText, escapeXmlAttribute, escapeXmlText, estimateTokens, formatAIResponseForConsole, formatTokenAggregate, formatTokenCount, formatLatestTokenCount, formatTokenUsageTime, getConversationTurnAtIndexFromSnapshot, getTokenUsageCategory, indentXmlText, isDatabaseClosingError, isDesktopSidebarViewport, isEditableElement, isMobileViewport, normalizePresetRole, normalizeTavilyExtractUrl, printAIRequestLogs, readUsageNumber, removeActiveToolCallRawsFromText, requestTavily, resizeChatInputElement, runWithConcurrency, stringifyErrorDetail, stringifyUiSchema, stripActiveToolCallsFromAssistant, stripCodeBlocksForToolDetection, stripUiTemplateContextInjection, throwApiError, yieldToBrowser, yieldToUi } from './utils.mjs';
 import { extractVectorQueryTerms, factPreviewText, getClassicMemoryKey, getMemoryEmptyTurnsKey, getMemoryVectorExtractedKey, getTimelineCharCount, getVectorLexicalMatch, isEmbeddingLike, mergeSmallMemoryParagraphs, normalizeKeepFloors, normalizeVectorMemoryFingerprintText, shouldSuppressStandardVectorMemoryRecall, sortVectorMemoriesByTime, splitLongMemoryParagraph, toScoredVectorMemory, trimMemoryText, yieldMemoryStorageWork } from './memory-utils.mjs';
 
 const __app = createApp({
     components: {
-        CharacterPanel: AsyncCharacterPanel, GeneratorPanel: AsyncGeneratorPanel, SquarePanel: AsyncSquarePanel, SettingsPanel: AsyncSettingsPanel, PresetsPanel: AsyncPresetsPanel, UiTemplatePanel: AsyncUiTemplatePanel, RegexPanel: AsyncRegexPanel, ToolsPanel: AsyncToolsPanel, UsageStatsPanel: AsyncUsageStatsPanel, MemoryPanel: AsyncMemoryPanel, WorldInfoPanel,
+        CharacterPanel: AsyncCharacterPanel, GeneratorPanel: AsyncGeneratorPanel, SquarePanel: AsyncSquarePanel, NovelPanel: AsyncNovelPanel, SettingsPanel: AsyncSettingsPanel, PresetsPanel: AsyncPresetsPanel, UiTemplatePanel: AsyncUiTemplatePanel, RegexPanel: AsyncRegexPanel, ToolsPanel: AsyncToolsPanel, UsageStatsPanel: AsyncUsageStatsPanel, MemoryPanel: AsyncMemoryPanel, WorldInfoPanel,
         UiTemplatePending, EmbeddedViewContent, GenerationTimer, SettingsPageHeader,
         SideNav, ToastNotification, ConfirmDialog, ModalDialog,
         CharacterInfo, MessageList, MessageInput,
@@ -1027,6 +1029,47 @@ const __app = createApp({
             }
         });
 
+        // Novel workshop storage bridge (novel/index.html): the embedded page
+        // round-trips its library and API settings through postMessage into the
+        // host SQLite kv store. Only the novel iframe may call it and only the
+        // two whitelisted keys are served. Settings objects carry
+        // apiKey/apiProviderKeys fields, which RPHStorage.set() extracts into
+        // the native secret channel, so keys never land in plain SQLite or in
+        // full backups (documents/墨韵造梦移植工程方案.md §4/§5).
+        const NOVEL_STORAGE_ALLOWED_KEYS = ['novel_library', 'novel_settings'];
+        const handleNovelStorageRequest = (event) => {
+            const data = event.data;
+            if (!data || typeof data !== 'object') return;
+            if (data.type !== 'NOVEL_STORAGE_GET' && data.type !== 'NOVEL_STORAGE_SET') return;
+            const novelFrame = document.querySelector('iframe[src*="novel/index.html"]');
+            if (!novelFrame || event.source !== novelFrame.contentWindow) return;
+            const respond = (payload) => {
+                try {
+                    novelFrame.contentWindow.postMessage({ type: 'NOVEL_STORAGE_RESULT', requestId: data.requestId, ...payload }, '*');
+                } catch (replyError) {
+                    console.error('[Novel] storage bridge reply failed:', replyError);
+                }
+            };
+            if (!NOVEL_STORAGE_ALLOWED_KEYS.includes(data.key)) {
+                respond({ error: 'Key not allowed' });
+                return;
+            }
+            (async () => {
+                try {
+                    if (data.type === 'NOVEL_STORAGE_GET') {
+                        respond({ value: (await RPHStorage.get(data.key)) ?? null });
+                    } else {
+                        await RPHStorage.set(data.key, data.value);
+                        respond({});
+                    }
+                } catch (error) {
+                    console.error('[Novel] storage bridge error:', error);
+                    respond({ error: String(error?.message || error) });
+                }
+            })();
+        };
+        window.addEventListener('message', handleNovelStorageRequest);
+
         watch(() => [settings.apiUrl, settings.apiKey, settings.model], ([, , newModel]) => {
             if (newModel !== settings.fastModel && newModel !== settings.balancedModel) {
                 settings.qualityModel = newModel; // 确保 qualityModel 也同步更新
@@ -1380,7 +1423,7 @@ const __app = createApp({
         const globalRegexScripts = ref([]);
         const { globalWorldInfo, worldInfo } = worldInfoState;
         const globalUiTemplates = ref([]);
-        const { recentGenerationTimes, currentWaitTime, longPressTimer, estimatedGenerationTime } = chatState;
+        const { recentGenerationTimes, currentWaitTime, waitHint, longPressTimer, estimatedGenerationTime } = chatState;
 
         // --- Memory System State (moved to src/composables/useMemorySystem.mjs) ---
         const {
@@ -1952,6 +1995,15 @@ const __app = createApp({
             else window.open(url, '_blank', 'noopener,noreferrer');
         };
 
+        // Novel State ("墨韵·造梦" workshop, ported from the STA1N upstream page)
+        const isNovelLoading = ref(true);
+        const novelUrl = ref('./novel/index.html');
+
+        const onNovelLoad = () => {
+            isNovelLoading.value = false;
+            console.log('%c[Novel] Novel Workshop Iframe Loaded', 'color: #a855f7; font-weight: bold;');
+        };
+
         const initializeSortableList = (elementId, items) => {
             nextTick(() => {
                 const element = document.getElementById(elementId);
@@ -1982,6 +2034,9 @@ const __app = createApp({
             } else if (newView === 'square') {
                 isSquareLoading.value = true;
                 squareUrl.value = `https://rphforum.zeabur.app/?t=${Date.now()}`;
+            } else if (newView === 'novel') {
+                isNovelLoading.value = true;
+                novelUrl.value = `./novel/index.html?t=${Date.now()}`;
             } else {
                 const sortable = {
                     presets: ['presets-list', presets],
@@ -2809,9 +2864,17 @@ const __app = createApp({
             return text === '' ? '空' : text;
         };
 
-        const htmlIframeSandbox = 'allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-modals allow-same-origin allow-downloads allow-pointer-lock allow-presentation allow-top-navigation-by-user-activation';
+        // 角色卡 HTML 在这个 sandbox 下执行。刻意不含 allow-same-origin：srcdoc 文档
+        // 本来会继承父文档的源，配上 allow-scripts 等于完全没有隔离——卡片脚本能读到
+        // window.__RPH__、RPHStorage、Capacitor 插件桥，也就是 API Key 和整个聊天库。
+        // 角色卡是以 PNG/JSON 在社区流转的外部输入，这条路径必须封死。
+        // 同理去掉 allow-top-navigation-by-user-activation（卡片可劫持整个 WebView 导航）
+        // 和 allow-popups-to-escape-sandbox（弹出的窗口会脱离沙箱约束）。
+        // 代价是宿主不能再直接读 contentDocument，高度/焦点/triggerSlash 改走 postMessage，
+        // 见 utils.mjs 的 buildExecutableHtmlDocument 与下面的 handleExecutableFrameMessage。
+        const htmlIframeSandbox = 'allow-scripts allow-forms allow-popups allow-modals allow-downloads allow-pointer-lock allow-presentation';
 
-        
+
         const createExecutableHtmlIframe = (rawHtml, extraClass = '', options = {}) => {
             const iframe = document.createElement('iframe');
             const hasFixedHeight = options.fixedHeight !== null
@@ -2831,19 +2894,8 @@ const __app = createApp({
             iframe.setAttribute('sandbox', htmlIframeSandbox);
             iframe.setAttribute('allow', 'clipboard-read; clipboard-write; fullscreen; autoplay; encrypted-media; picture-in-picture');
             if (fixedHeight) iframe.setAttribute('data-rph-fixed-height', String(fixedHeight));
-            iframe.onload = function () {
-                if (this.hasAttribute('data-rph-fixed-height')) return;
-                try {
-                    setTimeout(() => {
-                        if (this.contentWindow && this.contentWindow.document) {
-                            const doc = this.contentWindow.document;
-                            this.style.height = Math.max(doc.body.scrollHeight, doc.documentElement.scrollHeight) + 'px';
-                        }
-                    }, 100);
-                } catch (e) {
-                    console.warn('Failed to resize iframe:', e);
-                }
-            };
+            // 高度不再由 onload 读 contentDocument 测量（跨源读不到），改由卡片内的
+            // shim 用 ResizeObserver 上报，宿主在 handleExecutableFrameMessage 里应用。
             iframe.srcdoc = buildExecutableHtmlDocument(rawHtml);
             return iframe;
         };
@@ -2861,10 +2913,11 @@ const __app = createApp({
         /* 角色卡 executable-html iframe 焦点跟踪（captureInput=false 后不再需要 IME 代理框）。
          * Android WebView 原生输入连接恢复后，iframe 内 <input>/<textarea> 可直接合成中文；
          * 这里只保留轻量 focusin/focusout 跟踪，用于在焦点进入卡片输入框时隐藏底部聊天输入栏，
-         * 避免遮挡卡片（父文档收不到 iframe 内 focus 事件，需在 contentDocument 上直接监听）。
+         * 避免遮挡卡片。去掉 allow-same-origin 后父文档既收不到也读不到 iframe 内的事件，
+         * 改由卡片内 shim 把焦点变化 postMessage 上来（见 handleExecutableFrameMessage）。
          */
-        
-        // 底部输入栏显隐判断的共享状态：iframe 内输入框聚焦由 contentDocument 监听维护，
+
+        // 底部输入栏显隐判断的共享状态：iframe 内输入框聚焦由卡片上报的消息维护，
         // Shadow DOM 输入框的焦点会 compose 到父文档（用 getRootNode 识别是否在 shadow root 内）。
         let iframeEditableFocused = false;
         const isShadowEditable = (el) => {
@@ -2886,66 +2939,55 @@ const __app = createApp({
             return false;
         };
 
-        const setupIframeFocusTracker = (iframe) => {
-            let lastDoc = null;
-            const clearIfStale = () => {
-                setTimeout(() => {
-                    if (!computeExternalFocus()) isExternalInputFocused.value = false;
-                }, 0);
-            };
-            const onFocusIn = (event) => {
-                if (isEditableElement(event.target)) {
-                    iframeEditableFocused = true;
-                    isExternalInputFocused.value = true;
-                }
-            };
-            const onFocusOut = (event) => {
-                const next = event.relatedTarget;
-                if (!next || !isEditableElement(next)) {
-                    iframeEditableFocused = false;
-                    clearIfStale();
-                }
-            };
-            const attachDocListener = () => {
-                let doc;
-                try { doc = iframe.contentDocument; } catch (_) { return; }
-                if (!doc || doc === lastDoc) return;
-                if (lastDoc) {
-                    try {
-                        lastDoc.removeEventListener('focusin', onFocusIn, true);
-                        lastDoc.removeEventListener('focusout', onFocusOut, true);
-                    } catch (_) {}
-                }
-                try {
-                    doc.addEventListener('focusin', onFocusIn, true);
-                    doc.addEventListener('focusout', onFocusOut, true);
-                    lastDoc = doc;
-                } catch (_) {}
-            };
-            iframe.addEventListener('load', attachDocListener);
-            try { if (iframe.contentDocument && iframe.contentDocument.readyState) attachDocListener(); } catch (_) {}
-            return () => {
-                iframe.removeEventListener('load', attachDocListener);
-                if (lastDoc) {
-                    try {
-                        lastDoc.removeEventListener('focusin', onFocusIn, true);
-                        lastDoc.removeEventListener('focusout', onFocusOut, true);
-                    } catch (_) {}
-                }
-                lastDoc = null;
-            };
+        // 角色卡 iframe 上报值的封顶（不可信输入，见 runtime-policy.mjs）。
+        const EXECUTABLE_FRAME_MAX_HEIGHT = RPHRuntimePolicy.limits.frameMaxHeight;
+        const EXECUTABLE_FRAME_MAX_SLASH_LENGTH = RPHRuntimePolicy.limits.frameSlashMaxLength;
+
+        // 把 event.source 反查回具体的卡片 iframe。这一步同时也是鉴权：只有当前文档里
+        // 真实挂着的 executable-html-frame 才被受理，其他窗口（别的 iframe、opener、
+        // 被打开的弹窗）发来的同名消息一律丢弃。跨源下拿不到 contentDocument，但
+        // contentWindow 的引用比较仍然成立。
+        const findExecutableFrameByWindow = (sourceWindow) => {
+            if (!sourceWindow) return null;
+            const frames = document.querySelectorAll('iframe.executable-html-frame');
+            for (const frame of frames) {
+                if (frame.contentWindow === sourceWindow) return frame;
+            }
+            return null;
         };
 
-        // 已挂载焦点跟踪的 iframe -> 清理函数。WeakMap 避免持有已移除的 iframe。
-        const iframeFocusTrackerMap = new WeakMap();
-        const ensureIframeFocusTracker = (iframe) => {
-            if (!iframe || iframe.tagName !== 'IFRAME') return;
-            if (!iframe.classList || !iframe.classList.contains('executable-html-frame')) return;
-            if (iframeFocusTrackerMap.has(iframe)) return;
-            try {
-                iframeFocusTrackerMap.set(iframe, setupIframeFocusTracker(iframe));
-                iframe.setAttribute('data-rph-focus-tracker', '1');
-            } catch (e) { console.warn('[iframe focus] 挂载失败', e); }
+        const handleExecutableFrameMessage = (event) => {
+            const data = event.data;
+            if (!data || typeof data !== 'object' || data.source !== EXECUTABLE_FRAME_CHANNEL) return;
+            const frame = findExecutableFrameByWindow(event.source);
+            if (!frame) return;
+
+            if (data.type === 'height') {
+                // 固定高度的卡片由宿主说了算，忽略其自报高度。
+                if (frame.hasAttribute('data-rph-fixed-height')) return;
+                const height = Number(data.value);
+                if (!Number.isFinite(height) || height <= 0) return;
+                frame.style.height = `${Math.min(EXECUTABLE_FRAME_MAX_HEIGHT, Math.round(height))}px`;
+                return;
+            }
+
+            if (data.type === 'focus') {
+                if (data.editable) {
+                    iframeEditableFocused = true;
+                    isExternalInputFocused.value = true;
+                } else {
+                    iframeEditableFocused = false;
+                    setTimeout(() => {
+                        if (!computeExternalFocus()) isExternalInputFocused.value = false;
+                    }, 0);
+                }
+                return;
+            }
+
+            if (data.type === 'slash') {
+                const command = String(data.command || '').slice(0, EXECUTABLE_FRAME_MAX_SLASH_LENGTH);
+                if (command) window.triggerSlash(command);
+            }
         };
 
         const renderUiTemplateHtml = (template) => {
@@ -2963,6 +3005,17 @@ const __app = createApp({
             event.preventDefault();
             event.stopPropagation();
             window.triggerSlash(command);
+        };
+
+        // 消息正文（v-html 渲染的 markdown）里的 data-slash 按钮。正文里的内联 on* 处理器
+        // 已被 useTemplateRenderer 收走并改写成 data-slash，需要在这里补上委托，否则那些
+        // 历史卡片的交互按钮会变成死按钮。
+        // UI 模板块自己挂了 @click="handleUiTemplateClick" 且会 stopPropagation，冒泡不到
+        // 这里，不会重复触发。
+        const handleMarkdownSlashClick = (event) => {
+            const trigger = event.target?.closest?.('.markdown-body [data-slash]');
+            if (!trigger) return;
+            handleUiTemplateClick(event);
         };
 
         const renderEditingUiTemplatePreview = () => {
@@ -3404,7 +3457,8 @@ const __app = createApp({
         const calculateConversationBodyLength = () => (
             chatHistory.value.reduce((total, message) => {
                 if (!['user', 'assistant'].includes(message?.role)) return total;
-                return total + parseCot(message.content || '').main.length;
+                // 最后一条消息可能仍在生成中：走易失单槽，别让流式前缀挤进持久 LRU。
+                return total + parseCot(message.content || '', !isMessageThinkingOrRunning(message)).main.length;
             }, 0)
         );
 
@@ -3870,6 +3924,17 @@ const __app = createApp({
         const friendlyNetworkErrorMessage = (error, url = '') => {
             const message = String(error?.message || error || '');
             if (error?.name === 'AbortError' && /timed out/i.test(message)) {
+                // 按聊天看门狗的三个阶段细分文案，并把“去哪里改超时”直接告诉用户，
+                // 避免只看到一句笼统的“请求超时”却找不到调节入口。
+                if (/first byte/i.test(message)) {
+                    return '连接超时：服务器长时间未响应，请检查网络或稍后重试（可在 设置 → 高级设置 → 网络超时 中调整）';
+                }
+                if (/first token/i.test(message)) {
+                    return '模型响应超时：长时间未收到输出。推理型模型思考较久属正常现象，可在 设置 → 高级设置 → 网络超时 中调大等待时间';
+                }
+                if (/stream idle/i.test(message)) {
+                    return '生成中断：输出长时间没有新内容，请重试或检查网络（流式空闲阈值可在 设置 → 高级设置 → 网络超时 中调整）';
+                }
                 return '请求超时（长时间无响应），请检查网络或稍后重试';
             }
             // 2026-08-28: match network failures by message instead of error name.
@@ -4428,6 +4493,10 @@ const __app = createApp({
                     finalContent = msg.originalCot + '\n\n' + finalContent;
                 }
                 msg.content = finalContent;
+                // Swipe contract (design doc §3.3): an edited message is the user's authoritative
+                // version, so the whole candidate set is retired.
+                delete msg.swipes;
+                delete msg.activeSwipeIndex;
                 msg.isEditing_Message = false;
                 delete msg.editMessageContent;
                 delete msg.editMessageHeight;
@@ -4582,6 +4651,184 @@ const __app = createApp({
             });
         };
 
+        // ------------------------------------------------------------------
+        // Swipe candidates (design doc §5.1/§5.2): the last-floor assistant
+        // message can hold multiple candidates; regeneration appends instead
+        // of overwriting, and the user switches between them.
+        // ------------------------------------------------------------------
+        let pendingSwipeBase = null;
+
+        // Character/branch switches abandon an unfinished merge (§6.3); the composable
+        // reaches this through a dep because pendingSwipeBase is app.mjs-local state.
+        const discardPendingSwipeBase = (reason = 'scope switch') => {
+            if (!pendingSwipeBase) return;
+            pendingSwipeBase = null;
+            console.warn(`[Swipe] Pending swipe base discarded on ${reason}`);
+        };
+
+        // Mirror of pruneUiTemplateChangesFromTurn's segment filter, but READ-only:
+        // extract the changeLog segment (turn >= turnIndex) without touching the live logs.
+        const extractUiTemplateTurnSegment = (turnIndex) => {
+            if (!Number.isFinite(turnIndex) || turnIndex < 1) return [];
+            const segment = [];
+            currentUiTemplates.value.forEach(template => {
+                (Array.isArray(template.changeLog) ? template.changeLog : [])
+                    .filter(log => (log.turn || 0) >= turnIndex)
+                    .forEach(log => segment.push({
+                        ...JSON.parse(JSON.stringify(log)),
+                        templateId: template.id
+                    }));
+            });
+            return segment;
+        };
+
+        // Swap a captured changeLog segment back in as a whole (design doc §9):
+        // replace the live tail segment (turn >= segmentTurn) with the given one,
+        // then rebuild every template's variable state from the resulting logs.
+        // When the target candidate carries no captured segment, fallbackTurn strips
+        // the live tail instead — "no segment" means "this candidate made no changes".
+        const swapUiTemplateTurn = (segment, fallbackTurn = null) => {
+            const entries = Array.isArray(segment) ? segment : [];
+            const segmentTurns = entries.map(log => Number(log.turn || 0)).filter(Number.isFinite);
+            const boundaryTurn = segmentTurns.length ? Math.min(...segmentTurns) : fallbackTurn;
+            currentUiTemplates.value.forEach(template => {
+                const allLogs = Array.isArray(template.changeLog) ? template.changeLog : [];
+                let remainingLogs = boundaryTurn === null || !Number.isFinite(boundaryTurn)
+                    ? allLogs
+                    : allLogs.filter(log => (log.turn || 0) < boundaryTurn);
+                const templateEntries = entries
+                    .filter(log => log.templateId === template.id)
+                    .map(({ templateId, ...log }) => log);
+                if (templateEntries.length) remainingLogs = [...remainingLogs, ...templateEntries];
+                rebuildUiTemplateStateFromLogs(template, remainingLogs, remainingLogs);
+                template.changeLog = remainingLogs;
+            });
+        };
+
+        // Swap the recentGenerationTimes record that belongs to a message id.
+        const swapTimingRecord = (timing) => {
+            // The record's id field no longer matters here: regenerateMessage removed the
+            // old id's record and the new message gets its own on completion. Swapping a
+            // captured record therefore means dropping the live one and restoring the
+            // captured duration under the current message id.
+            recentGenerationTimes.value = recentGenerationTimes.value.filter(t => t.id !== swipeTimingMessageId);
+            if (timing && typeof timing === 'object' && Number.isFinite(Number(timing.duration))) {
+                recentGenerationTimes.value.push({ id: swipeTimingMessageId, duration: Number(timing.duration) });
+            }
+        };
+
+        // Capture-while-swapping helper: the id-bound timing record must be looked up
+        // before the message id changes hands, so swapTimingRecord is wrapped per call.
+        let swipeTimingMessageId = null;
+        const swapTimingForMessage = (messageId, timing) => {
+            swipeTimingMessageId = messageId;
+            try {
+                swapTimingRecord(timing);
+            } finally {
+                swipeTimingMessageId = null;
+            }
+        };
+
+        // Rollback helper (design doc §8.1): put a snapshot back as the last message.
+        const restoreLastMessage = (tailSnapshot) => {
+            if (!tailSnapshot) return;
+            chatHistory.value = [...chatHistory.value, reactive(JSON.parse(JSON.stringify(tailSnapshot)))];
+        };
+
+        // mergeOrRestore after a swipe-style regeneration (design doc §6):
+        // - merge: the new reply becomes the last candidate of the fresh message;
+        // - restore: generation failed/early-exited -> put the old message back verbatim.
+        const mergeOrRestoreSwipedGeneration = async () => {
+            const base = pendingSwipeBase;
+            pendingSwipeBase = null;
+            if (!base) return;
+            const tail = chatHistory.value[chatHistory.value.length - 1];
+            const isFreshAssistantReply = tail
+                && tail.role === 'assistant'
+                && !tail.isError
+                && tail.id !== base.message.id;
+            if (isFreshAssistantReply) {
+                const baseSwipes = Array.isArray(base.swipes) && base.swipes.length ? base.swipes : [{ content: base.message.content || '', reasoning: base.message.reasoning || '' }];
+                tail.swipes = [...baseSwipes, { content: tail.content || '', reasoning: tail.reasoning || '' }];
+                tail.activeSwipeIndex = tail.swipes.length - 1;
+                const evicted = tail.swipes.length - swipeMaxCandidates();
+                if (evicted > 0) {
+                    tail.swipes = tail.swipes.slice(evicted);
+                    tail.activeSwipeIndex = tail.swipes.length - 1;
+                }
+                await saveConversationMutationNow({ saveTemplateRuntime: true });
+            } else {
+                // Failure restores the exact pre-regen state (design doc §5.1): drop the
+                // error bubbles this attempt pushed above the baseline before putting the
+                // old message back verbatim; the toast carries the failure reason.
+                if (Number.isFinite(base.baselineLength) && chatHistory.value.length > base.baselineLength) {
+                    chatHistory.value = chatHistory.value.slice(0, base.baselineLength);
+                }
+                restoreLastMessage(base.message);
+                showToast('重新生成失败，已恢复原回复', 'error', 5000);
+                await saveConversationMutationNow({ saveTemplateRuntime: false });
+            }
+        };
+
+        // Candidate switching (design doc §5.2): lazy-capture the outgoing candidate,
+        // swap the whole template changeLog segment + blocks + timing, then mirror the
+        // incoming candidate into msg.content/msg.reasoning. Any failure rolls the
+        // last message back and keeps swipes/activeSwipeIndex consistent.
+        const activateCandidate = async (index, target) => {
+            if (isConversationBusy.value) return;
+            if (index !== chatHistory.value.length - 1) return;
+            const msg = chatHistory.value[index];
+            if (!msg || msg.role !== 'assistant' || !Array.isArray(msg.swipes) || msg.swipes.length === 0) return;
+            if (!Number.isInteger(target) || target < 0 || target >= msg.swipes.length) return;
+            if (target === msg.activeSwipeIndex) return;
+            abortUiTemplateUpdate();
+            const previousTail = JSON.parse(JSON.stringify(unwrapForStorage(msg)));
+            try {
+                // 1. Lazy-capture the outgoing active candidate before it leaves the mirror
+                const capturedBlocks = msg.uiTemplateBlocks
+                    ? JSON.parse(JSON.stringify(msg.uiTemplateBlocks))
+                    : undefined;
+                const snapshot = buildConversationTurnSnapshot();
+                const turnIndex = getConversationTurnAtIndexFromSnapshot(snapshot, index);
+                const capturedTurn = extractUiTemplateTurnSegment(turnIndex);
+                const capturedTiming = (() => {
+                    const record = recentGenerationTimes.value.find(t => (t.id || t) === msg.id);
+                    return record ? JSON.parse(JSON.stringify(record)) : undefined;
+                })();
+                captureActiveCandidate(msg, {
+                    uiTemplateBlocks: capturedBlocks,
+                    uiTemplateTurn: capturedTurn,
+                    timing: capturedTiming
+                });
+                // 2. Whole-segment swap to the target candidate
+                const next = msg.swipes[target];
+                swapUiTemplateTurn(next.uiTemplateTurn, turnIndex);
+                if (next.uiTemplateBlocks) {
+                    msg.uiTemplateBlocks = JSON.parse(JSON.stringify(next.uiTemplateBlocks));
+                } else if (msg.uiTemplateBlocks) {
+                    delete msg.uiTemplateBlocks;
+                }
+                msg.content = String(next.content ?? '');
+                msg.reasoning = String(next.reasoning ?? '');
+                swapTimingForMessage(msg.id, next.timing);
+                msg.activeSwipeIndex = target;
+                msg.shouldAnimate = false;
+                await saveConversationMutationNow({ saveTemplateRuntime: true });
+            } catch (error) {
+                console.error('Swipe candidate switch failed:', error);
+                // Roll back only when the last floor is still the message we mutated;
+                // if new messages arrived meanwhile, leave them untouched.
+                if (chatHistory.value.length === index + 1 && chatHistory.value[index]?.id === previousTail.id) {
+                    chatHistory.value = chatHistory.value.slice(0, index);
+                    restoreLastMessage(previousTail);
+                }
+                showToast('切换失败：' + (error?.message || '未知错误'), 'error', 5000);
+            }
+        };
+
+        const swipePrev = (index) => activateCandidate(index, (chatHistory.value[index]?.activeSwipeIndex ?? 0) - 1);
+        const swipeNext = (index) => activateCandidate(index, (chatHistory.value[index]?.activeSwipeIndex ?? 0) + 1);
+
         const regenerateMessage = async (index) => {
             if (isGenerating.value) return;
 
@@ -4609,27 +4856,77 @@ const __app = createApp({
                 await Promise.all([saveMemoriesNow(), saveClassicMemoriesNow()]);
                 await generateResponse(startTime, { reuseGeneratingState: true });
             } else {
-                // 如果是 AI 消息，删除它（及之后）然后重新生成
-                confirmAction('确定要重新生成这条消息吗？该楼层的记忆将被清除。', async () => {
-                    startRegenerationStatus();
-                    abortUiTemplateUpdate();
-                    abortVectorBatchExtraction();
-                    abortClassicBatchExtraction();
-                    // 计算被删除区间的 assistant 轮次，只删除 >= 该轮次的记忆
-                    const snapshot = buildConversationTurnSnapshot();
-                    const turnAtIndex = getConversationTurnAtIndexFromSnapshot(snapshot, index);
-                    const uiTurnAtIndex = turnAtIndex;
-                    await filterMemoriesAsync(m => (m.turn || 0) < turnAtIndex);
-                    await removeClassicMemoriesFromTurn(snapshot, turnAtIndex);
-                    const uiCleanup = pruneUiTemplateChangesFromTurn(uiTurnAtIndex);
-                    // Remove timing record for the message being regenerated
-                    if (msg && msg.id) {
-                        recentGenerationTimes.value = recentGenerationTimes.value.filter(t => (t.id || t) !== msg.id);
-                    }
+                // AI message branch: swipe-style regeneration — the existing reply is kept as a
+                // candidate, the new reply is appended as another one, and the user can switch
+                // between candidates afterwards (design doc §5.1). Only the last message is
+                // supported (the action button is rendered on the last floor only).
+                if (index !== chatHistory.value.length - 1) return;
+                startRegenerationStatus();
+                abortUiTemplateUpdate();
+                abortVectorBatchExtraction();
+                abortClassicBatchExtraction();
+                // Error bubbles are transient diagnostics, never content (device regression
+                // 2026-09-23): retrying one must REPLACE it with the fresh reply instead of
+                // capturing the error text as a permanent candidate. An error floor made no
+                // memories or template changes, so no rollback is needed either.
+                if (msg.isError) {
                     chatHistory.value = chatHistory.value.slice(0, index);
-                    await saveConversationMutationNow({ saveTemplateRuntime: uiCleanup.logs > 0 || uiCleanup.blocks > 0 });
-                    await generateResponse(startTime, { reuseGeneratingState: true });
+                    await saveConversationMutationNow({ saveTemplateRuntime: false });
+                    try {
+                        await generateResponse(startTime, { reuseGeneratingState: true });
+                    } finally {
+                        // pendingSwipeBase stays null: mergeOrRestore is a safe no-op here
+                        await mergeOrRestoreSwipedGeneration();
+                    }
+                    return;
+                }
+                // 计算被删除区间的 assistant 轮次，只删除 >= 该轮次的记忆
+                const snapshot = buildConversationTurnSnapshot();
+                const turnAtIndex = getConversationTurnAtIndexFromSnapshot(snapshot, index);
+                const uiTurnAtIndex = turnAtIndex;
+                // ① Lazy-capture the currently active candidate BEFORE any pruning (design doc
+                //    D-4: template segments are written asynchronously after generation and must
+                //    be read only after the async window closes, i.e. when leaving the candidate).
+                const capturedBlocks = msg.uiTemplateBlocks
+                    ? JSON.parse(JSON.stringify(msg.uiTemplateBlocks))
+                    : undefined;
+                const capturedTurn = extractUiTemplateTurnSegment(uiTurnAtIndex);
+                const capturedTiming = (() => {
+                    const record = recentGenerationTimes.value.find(t => (t.id || t) === msg.id);
+                    return record ? JSON.parse(JSON.stringify(record)) : undefined;
+                })();
+                captureActiveCandidate(msg, {
+                    uiTemplateBlocks: capturedBlocks,
+                    uiTemplateTurn: capturedTurn,
+                    timing: capturedTiming
                 });
+                // ② Two-handed preparation: hold the old message snapshot for either merging
+                //    into the freshly generated reply or restoring it on failure.
+                //    baselineLength is the history length right after the slice below; the
+                //    restore branch uses it to drop error bubbles this attempt pushed.
+                pendingSwipeBase = {
+                    swipes: JSON.parse(JSON.stringify(msg.swipes || [])),
+                    activeSwipeIndex: Number(msg.activeSwipeIndex) || 0,
+                    message: JSON.parse(JSON.stringify(unwrapForStorage(msg))),
+                    baselineLength: index
+                };
+                await filterMemoriesAsync(m => (m.turn || 0) < turnAtIndex);
+                await removeClassicMemoriesFromTurn(snapshot, turnAtIndex);
+                const uiCleanup = pruneUiTemplateChangesFromTurn(uiTurnAtIndex);
+                // Remove timing record for the message being regenerated (the candidate's own
+                // timing was captured into the swipe slot above)
+                if (msg && msg.id) {
+                    recentGenerationTimes.value = recentGenerationTimes.value.filter(t => (t.id || t) !== msg.id);
+                }
+                chatHistory.value = chatHistory.value.slice(0, index);
+                await saveConversationMutationNow({ saveTemplateRuntime: uiCleanup.logs > 0 || uiCleanup.blocks > 0 });
+                try {
+                    await generateResponse(startTime, { reuseGeneratingState: true });
+                } finally {
+                    // mergeOrRestore must run even if generation throws unexpectedly,
+                    // otherwise the old reply stays sliced off with no restore path.
+                    await mergeOrRestoreSwipedGeneration();
+                }
             }
         };
 
@@ -6400,7 +6697,8 @@ const __app = createApp({
 
         const getKeywordToolMessageText = (message) => {
             if (!message || typeof message.content !== 'string') return '';
-            const parsedData = parseCot(message.content || '');
+            // 关键词工具在生成过程中执行，最后一条消息可能尚未完成。
+            const parsedData = parseCot(message.content || '', !isMessageThinkingOrRunning(message));
             const cleanMain = stripUiTemplateContextInjection(parsedData.main || '');
             return trimMemoryText(stripVectorMemoryCode(stripDisabledImageGenContext(cleanMain)), 5000);
         };
@@ -7044,7 +7342,7 @@ const __app = createApp({
             return !!(
                 getAssistantReasoningText(message)
                 || (Array.isArray(message.toolCalls) && message.toolCalls.length > 0)
-                || (parseCot(message.content || '').cot)
+                || (parseCot(message.content || '', !isMessageThinkingOrRunning(message)).cot)
             );
         };
 
@@ -7052,8 +7350,11 @@ const __app = createApp({
             const isLast = chatHistory.value && chatHistory.value[chatHistory.value.length - 1] === message;
             if (isLast && isThinking.value) return true;
             if (getCurrentThinkingToolCall(message)) return true;
-            const cotInfo = parseCot(message.content || '');
-            if (isLast && (isGenerating.value || isRemoteGenerating.value) && cotInfo.cot && !cotInfo.isFinished) {
+            // 走到这里时若仍在生成，正文就是流式前缀：走易失单槽（isThinking 已提前
+            // 返回，这里只看两个生成标志）。
+            const possiblyStreaming = isLast && (isGenerating.value || isRemoteGenerating.value);
+            const cotInfo = parseCot(message.content || '', !possiblyStreaming);
+            if (possiblyStreaming && cotInfo.cot && !cotInfo.isFinished) {
                 return true;
             }
             return false;
@@ -7105,7 +7406,7 @@ const __app = createApp({
             const steps = [];
             const isLastMessage = chatHistory.value && chatHistory.value[chatHistory.value.length - 1] === message;
             const isGeneratingMessage = isLastMessage && (isGenerating.value || isRemoteGenerating.value);
-            const cotInfo = parseCot(message.content || '');
+            const cotInfo = parseCot(message.content || '', !isGeneratingMessage);
 
             // 1. 初始原生思考
             const reasoningText = String(getAssistantReasoningText(message) || '').trim();
@@ -7331,6 +7632,7 @@ const __app = createApp({
             lastTriggeredWorldInfos,
             recentGenerationTimes,
             currentWaitTime,
+            waitHint,
             // persona / character / settings / presets
             user,
             settings,
@@ -7766,6 +8068,7 @@ const __app = createApp({
             .filter(msg => msg !== null && msg !== undefined)
             .map(msg => {
                 if (!msg.id) msg.id = generateUUID();
+                if (msg.role === 'assistant') normalizeSwipes(msg);
                 if (msg.isSelf === undefined) {
                     msg.isSelf = msg.role === 'user';
                 }
@@ -8139,6 +8442,11 @@ const __app = createApp({
             storyBranchSwitching.value = true;
             try {
                 abortRollingSummary();
+                // Abandon an unfinished swipe merge when leaving the current branch (§6.3).
+                if (pendingSwipeBase) {
+                    pendingSwipeBase = null;
+                    console.warn('[Swipe] Pending swipe base discarded on branch switch');
+                }
                 if (!await flushCurrentBranchState()) return;
                 const targetScopeId = getStoryBranchScopeId(char.uuid, branchId);
                 const [savedChat, savedMemories, savedClassicMemories] = await Promise.all([
@@ -8532,6 +8840,7 @@ const __app = createApp({
             // app.mjs orchestration (persistence / confirm / toast / chat view)
             saveChatHistoryNow,
             flushPendingChatHistorySave,
+            discardPendingSwipeBase,
             confirmAction,
             showToast,
             scrollChatToBottom,
@@ -9245,7 +9554,7 @@ const __app = createApp({
             // --- 焦点进入角色卡 iframe / Shadow DOM 输入框时隐藏底部输入栏；离开时恢复 ---
             // captureInput=false 后 WebView 原生输入连接恢复，iframe / Shadow DOM 内输入框可直接
             // 合成中文，不再需要 IME 代理框；这里仅做焦点跟踪：
-            // - iframe 内焦点由 ensureIframeFocusTracker 在 contentDocument 上监听（父文档收不到 iframe 事件）；
+            // - iframe 内焦点由卡片 shim 经 postMessage 上报（跨源下父文档既收不到也读不到）；
             // - Shadow DOM 输入框的 focusin 会 compose 到父文档，由 computeExternalFocus 识别。
             document.addEventListener('focusin', () => { isExternalInputFocused.value = computeExternalFocus(); }, true);
             document.addEventListener('focusout', (e) => {
@@ -9257,22 +9566,14 @@ const __app = createApp({
                 setTimeout(() => { isExternalInputFocused.value = computeExternalFocus(); }, 0);
             }, true);
 
-            // --- 监听角色卡 iframe 入树，挂载焦点跟踪 ---
-            const scanAndBridgeIframes = (root) => {
-                try {
-                    if (root.nodeType !== 1) return;
-                    if (root.tagName === 'IFRAME') ensureIframeFocusTracker(root);
-                    if (root.querySelectorAll) root.querySelectorAll('iframe.executable-html-frame').forEach(ensureIframeFocusTracker);
-                } catch (_) {}
-            };
-            // 初次扫描已有 iframe
-            scanAndBridgeIframes(document.body);
-            const iframeImeObserver = new MutationObserver((mutations) => {
-                for (const m of mutations) {
-                    for (const node of m.addedNodes) scanAndBridgeIframes(node);
-                }
-            });
-            iframeImeObserver.observe(document.body, { childList: true, subtree: true });
+            // --- 角色卡 iframe 消息通道（高度 / 焦点 / triggerSlash）---
+            // 一个全局监听器取代了原先「MutationObserver 扫描入树 iframe + 逐个在
+            // contentDocument 上挂监听」的整套机制：跨源之后卡片必须主动上报，宿主只需
+            // 在 handleExecutableFrameMessage 里校验来源窗口。
+            window.addEventListener('message', handleExecutableFrameMessage);
+
+            // --- 消息正文里的 data-slash 按钮 ---
+            document.addEventListener('click', handleMarkdownSlashClick);
 
             // --- 全局点击外部区域收起面板 ---
             document.addEventListener('click', (e) => {
@@ -9325,6 +9626,14 @@ const __app = createApp({
             }
             return { text: mainText, showSpinner: false };
         };
+
+        // 模板里解析消息 CoT 的统一入口：生成中的消息走 parseCot 的易失单槽缓存，
+        // 已完成的走 LRU。直接在模板里写 parseCot(msg.content) 会一律命中持久缓存，
+        // 把流式输出的每一帧前缀都囤起来（单条消息 O(n²) 内存）。
+        const parseMessageCot = (msg) => parseCot(
+            msg?.content || '',
+            !isMessageThinkingOrRunning(msg)
+        );
 
         const switchProfile = (id) => {
             const profile = userProfiles.value.find(p => p.uuid === id);
@@ -9479,6 +9788,7 @@ const __app = createApp({
             editingCharacter, editingPreset, editingUiTemplate, toasts, chatContainer, isChatFullscreen, isMobileKeyboardOpen, isExternalInputFocused, inputBox, messageElements,
             isGeneratorLoading, generatorUrl, onGeneratorLoad, // Generator exports
             isSquareLoading, squareUrl, onSquareLoad, openSquareExternally, // Square exports
+            isNovelLoading, novelUrl, onNovelLoad, // Novel exports
             editorTab, characterDisplayLimit, displayedCharacters, loadMoreCharacters,
             isAutoImageGenEnabled,
             apiStatus, apiLatency, imageGenStatus, imageGenLatency, checkAllStatuses, apiKeyInput, syncApiKeyInput, apiKeyVisible, toggleApiKeyVisibility, pasteApiKeyFromClipboard, // Status Exports
@@ -9669,7 +9979,7 @@ const __app = createApp({
             handleConfirm, handleCancel, // Export handlers
             showChatImportDialog, chatImportDialog, confirmChatImportOverwrite, confirmChatImportAppend, cancelChatImport,
             showImportPreview, importPreview, confirmImportPreview, cancelImportPreview,
-            copyMessage, deleteMessage, regenerateMessage,
+            copyMessage, deleteMessage, regenerateMessage, swipePrev, swipeNext,
             editMessage, saveEditMessage, cancelEditMessage,
             createNewCharacter, editCharacter, saveCharacter, deleteCharacter, selectCharacter, beginCharacterCardPress, endCharacterCardPress, toggleCharacterFavorite, isCharacterFavorite,
             currentUiTemplates, activeUiTemplates, uiTemplateUpdateStatus, createUiTemplate, editUiTemplate, saveUiTemplate, deleteUiTemplate, importUiTemplates, updateUiTemplatesFromChat, renderEditingUiTemplatePreview, handleUiTemplateClick, formatUiTemplateChangeValue, hasUiTemplateScripts,
@@ -9687,7 +9997,7 @@ const __app = createApp({
             createPreset, editPreset, savePreset, deletePreset,
             presetGroups, setActivePresetGroup, createPresetGroup, deletePresetGroup,
             exportPresetGroups, importPresetGroups,
-            renderMarkdown, messageUsesWideLayout, parseCot, closeCharacterEditor: () => showCharacterEditor.value = false,
+            renderMarkdown, messageUsesWideLayout, parseCot, parseMessageCot, closeCharacterEditor: () => showCharacterEditor.value = false,
             openExportModal, toggleExportSelection, selectAllExportItems, deselectAllExportItems, confirmExport,
             importPresets,
             // Regex Methods
@@ -9838,7 +10148,7 @@ const __app = createApp({
             },
 
             showRegexEditor, showWorldInfoEditor, editingRegex, editingWorldInfo, worldInfoKeysText, updateEditingWorldInfoKeys,
-            worldInfoSettings, showWorldInfoSettings, showMemorySettings, settingsHelpTopic, showActiveToolSettings, showUiTemplateSettings, estimatedGenerationTime, currentWaitTime,
+            worldInfoSettings, showWorldInfoSettings, showMemorySettings, settingsHelpTopic, showActiveToolSettings, showUiTemplateSettings, estimatedGenerationTime, currentWaitTime, waitHint,
             appVersionName, appVersionCode, appBuildType, checkForUpdates, checkingUpdate, updateAvailable, updateInfo, latestVersionName, downloadingUpdate, downloadProgress, downloadAndInstallUpdate,
             globalConfirmModal,
             updateNoticeDismissedToday, dismissUpdateNoticeToday, renderReleaseNotesHtml,
@@ -9932,7 +10242,17 @@ const __app = createApp({
                 showAutoImageGenModal.value = false;
                 saveData();
             }
-        }; provide("appContext", __ctx); if (typeof window !== "undefined") { window.__RPH__ = __ctx; window.RPHStorage = RPHStorage; } return __ctx;
+        };
+        provide("appContext", __ctx);
+        if (typeof window !== "undefined") {
+            // RPHStorage 必须留在 window 上：角色卡工坊（character/index.html，第一方同源
+            // iframe）通过 window.parent.RPHStorage 读写本地库。
+            window.RPHStorage = RPHStorage;
+            // __RPH__ 是调试用的整包上下文句柄（400+ 个状态和方法）。正式包里没有用途，
+            // 只会白送一个攻击面，所以仅在 dev 构建下暴露。
+            if (import.meta.env?.DEV) window.__RPH__ = __ctx;
+        }
+        return __ctx;
     }
 });
 
