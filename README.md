@@ -1,100 +1,84 @@
-﻿# Roleplay Hub
+<div align="center">
 
+# 🎭 Roleplay Hub
+
+[![Release](https://img.shields.io/github/v/release/Litishs/Roleplay-Hub?color=blue&logo=github)](https://github.com/Litishs/Roleplay-Hub/releases/latest)
 [![License: CC BY-NC 4.0](https://img.shields.io/badge/License-CC%20BY--NC%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc/4.0/)
+[![Platform](https://img.shields.io/badge/Platform-Android-3DDC84?logo=android&logoColor=white)](https://github.com/Litishs/Roleplay-Hub/releases/latest)
 [![Vue](https://img.shields.io/badge/Vue-3-4FC08D.svg?logo=vue.js)](https://vuejs.org/)
-[![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-38B2AC?logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
 [![Capacitor](https://img.shields.io/badge/Capacitor-7-119EFF?logo=capacitor&logoColor=white)](https://capacitorjs.com/)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-38B2AC?logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
 
-> 一款本地优先的 AI 角色扮演对话工具。应用本体与数据在本地运行，对话、角色卡与设置均保存在设备本地；调用大模型 API 时需联网。
+**本地优先的 AI 角色扮演 App** —— 与角色对话、共写剧情、把记忆慢慢养成。<br>
+对话、角色卡与所有设置只留在你的设备上，调用大模型 API 时才需要联网。
 
-支持角色扮演对话、角色卡管理、记忆系统、世界书与正则引擎、系统/云端双 TTS 语音朗读，以及多 API 服务商接入。
+[⬇️ 下载最新版 APK](https://github.com/Litishs/Roleplay-Hub/releases/latest)
 
-## 功能特性
+</div>
 
-**对话与演出**
+## ✨ 功能一览
 
-- 流式输出、思维链（CoT）折叠展示、消息编辑 / 重新生成
-- 剧情分支：从任意楼层创建分支树，独立推进多线剧情
-- 富文本回复：Markdown 渲染 + 受控沙箱 iframe HTML 卡片（动作按钮可交互），配合渲染缓存与活动 iframe 上限保障长对话流畅
-- UI 模板系统：可自定义对话界面模板（纯函数引擎 + shadow DOM 渲染）
+| 能力 | 说明 |
+| --- | --- |
+| 🎭 **对话与演出** | 流式输出、CoT 折叠、楼层候选左右滑、剧情分支树、沙箱交互卡片、UI 模板换装 |
+| 🧠 **记忆系统** | 滚动总结 + 本地向量召回（模型内置、离线可用）+ 角色 / 关系 / 伏笔信息卡 |
+| 🗂️ **角色与世界观** | PNG / JSON / JSONL 角色卡保真往返、角色卡工坊、世界书、正则脚本引擎 |
+| 📖 **墨韵·造梦** | AI 小说工坊：定好世界观与角色逐章生成，TXT 随进随出，稿件存本地 |
+| 🖼️ **多模态** | 聊天发图识图（≤3 张）、AI 生图（NAI Diffusion 4.5） |
+| 🔊 **双 TTS** | 系统引擎随时开口，云端引擎（OpenAI 兼容 /audio/speech）音色讲究 |
+| 🔌 **多服务商** | STA1N / DeepSeek / OpenRouter / SiliconFlow / 百炼 / 智谱 / 自定义端点，Key 分供应商加密存储 |
+| 🔒 **数据与运维** | SQLite 全本地 + 增量持久化、备份恢复完整性校验、应用内更新、万相广场 |
 
-**角色与世界观**
+> 请求超时、生图参数等均可在设置中滑动调节，支持一键恢复默认。
 
-- 角色卡管理：PNG / JSON / JSONL 导入导出，字段保真往返；内置角色卡工坊（独立页面，从零创建角色）
-- 世界书（情境注入）与正则脚本引擎
-- 记忆系统：滚动总结 + 向量记忆召回（本地 embedding 模型，离线可用）+ 固定信息卡（角色状态 / 有向关系 / 未决伏笔）
+## 🌱 与上游的不同
 
-**多模态与生图**
+fork 自 STA1N 的开源项目 [STA1N156/RP-Hub](https://github.com/STA1N156/RP-Hub)：上游奠定页面设计与核心玩法，本仓库把整套体验装进 Android——
 
-- 聊天发图与识图：消息可附加图片（≤3 张），由识图模型转述后以 `<user_image_context>` 注入对话上下文
-- AI 生图：STA1N 生图（NAI Diffusion 4.5），支持生图版本、比例与风格选择
+**Capacitor 原生壳 · SQLite 本地库 · AndroidKeyStore 加密 · 备份恢复 · 应用内更新 · CI 自动签名发布 · 本地向量记忆 · 双 TTS · UI 模板 · 楼层候选滑动**
 
-**语音与接入**
+识图 / 生图 / 墨韵·造梦等能力与上游同源，一并致谢。
 
-- 双 TTS 引擎：系统 TTS 与云端 API TTS（OpenAI 兼容 /audio/speech 格式，支持自定义中转端点）
-- 多 API 服务商：STA1N API（默认）/ DeepSeek / OpenRouter / SiliconFlow / 阿里百炼 / 智谱，以及自定义 OpenAI 兼容端点；分供应商保存 API Key，密钥经 AndroidKeyStore 加密存储
+<details>
+<summary><b>🏗️ 架构概览</b></summary>
+<br>
 
-**数据与运维**
-
-- 全本地存储：SQLite（WAL 模式）+ 聊天增量持久化；原生备份 / 恢复（完整性校验 + 原子替换，密钥不入备份）
-- 应用内更新检查：GitHub Release 版本比对 + APK 下载安装
-- 万相广场：内嵌社区页面
-
-## 架构概览
-
-Android WebView 壳（Capacitor 7，4 个自定义原生插件：NativeStorage / ThemeBridge / TTSSpeech / BuildInfo）承载 Vue 3 + Vite 构建的 Web 应用本体，所有数据经存储仓库门面落入设备本地 SQLite，不经过任何第三方服务。
-
-```
-┌─ Android 原生壳（Capacitor 7 + 自定义插件）
-├─ Web 应用层
-│   ├─ src/modules/app.mjs    编排入口：跨域 watch 同步、API 编排、数据加载守卫
-│   ├─ src/composables/       状态域 ×7（useChatState / useCharacterState / useSettingsState …）
-│   │                         业务管线 ×5（useMessageSender / useTemplateRenderer / useCardOperations
-│   │                         / useDataIO / useBackupRestore，deps 注入逻辑工厂模式）
-│   ├─ src/modules/           26 个纯函数业务模块（记忆引擎 / 故事分支 / TTS / 请求看门狗 / utils …）
-│   └─ src/components/        29 个 Vue SFC（views / chat / settings / common）
-└─ 存储层：SQLite（WAL）+ 媒体文件 + AndroidKeyStore 加密密钥
+```mermaid
+flowchart TB
+    N["Android 原生壳 — Capacitor 7<br>NativeStorage / ThemeBridge / TTSSpeech / BuildInfo"]
+    W["Web 应用 — Vue 3 + Vite<br>编排入口 · composables ×20 · 业务模块 ×27 · 组件 ×30"]
+    P["独立页面 — 角色卡工坊 · 墨韵·造梦"]
+    D[("SQLite（WAL）+ 媒体文件<br>密钥经 AndroidKeyStore 加密")]
+    N --> W
+    W --> P
+    W --> D
 ```
 
+</details>
 
+<details>
+<summary><b>🛠️ 快速开始</b></summary>
+<br>
 
-## 快速开始
+**普通用户**：直接[下载最新 Release APK](https://github.com/Litishs/Roleplay-Hub/releases/latest)，进入「设置」选 API 提供商、填入 Key、选模型即可开聊。
 
-### 普通用户
-
-直接安装仓库根目录的 `Roleplay-Hub-<版本>-release.apk`（正式包）即可使用。首次使用进入「设置」，选择 API 提供商并填入 API Key，选择模型后即可开始对话。
-
-### 开发者构建
-
-环境要求：Node.js 18+，Android 构建优先使用项目内 `.toolchains` 提供的 JDK 21 与 Android SDK（也可配置全局 `JAVA_HOME`）。
+**开发者构建**：Node.js 18+，Android 构建建议使用仓库内 `.toolchains` 提供的 JDK 21 与 SDK。
 
 ```bash
 npm install                 # 安装依赖
-npm test                    # 运行契约测试
+npm test                    # 契约测试
 npm run build:web           # 构建 Web 资源到 dist/
 npm run android:sync        # 构建并同步到 Android 工程
-npm run android:debug       # 构建 debug 包 -> debug_apk/
-npm run android:release     # 构建正式包 -> 仓库根目录
+npm run android:debug       # debug 包 -> debug_apk/
+npm run android:release     # 正式包 -> 仓库根目录
 ```
 
-版本规则：正式包签名需首次构建前自行生成 `android/keystore/roleplay-hub-release.keystore` 并配置 `android/keystore.properties`（两者均已加入 .gitignore，请自行备份）。
+正式包签名需自行生成 `android/keystore/roleplay-hub-release.keystore` 并配置 `android/keystore.properties`（两者均不入库，请自行备份）。
 
-## 项目渊源
+</details>
 
-本仓库最初 fork 自 **STA1N** 的开源项目 [STA1N156/RP-Hub](https://github.com/STA1N156/RP-Hub)，在保留原始项目全部能力的基础上，进行了 Android 应用封装、本地向量记忆、系统 TTS 朗读、UI 模板系统、API 服务商扩展、正式包构建流程与大规模模块化架构重构等工作。原始项目的页面设计、角色卡系统与核心功能构思均出自原作者之手，原始代码与设计的全部版权归 STA1N 所有。
+## 📜 渊源与许可
 
-## 致谢
+本仓库最初 fork 自 **STA1N** 的开源项目 [STA1N156/RP-Hub](https://github.com/STA1N156/RP-Hub)，在此持续演进。原始项目的页面设计、角色卡系统与核心功能构思均出自原作者之手，原始代码与设计的全部版权归 STA1N 所有，由衷感谢其无私开源。
 
-由衷感谢 **STA1N** 的无私开源，让我们能在此基础之上继续完善与本地化适配。
-
-使用本项目请遵守原始协议 **CC BY-NC 4.0**：保留署名、禁止商业使用、演绎作品须标注修改；若需**商业授权**，请联系原始项目作者 STA1N。
-
-## 协议与许可
-
-沿用原始项目 **[CC BY-NC 4.0（知识共享 署名-非商业性使用 4.0 国际许可协议）](./LICENSE)** 开源：
-
-- **您可以**：自由共享与演绎（修改、转换或以本项目为基础进行创作）。
-- **您必须**：保留署名并标明修改，**不得用于任何商业目的**（售卖、付费服务、广告获利等）。
-- 若需商业授权，请联系原始项目作者 STA1N。
-
-详细许可条款请参看根目录下的 [`LICENSE`](./LICENSE) 文件。
+沿用 **[CC BY-NC 4.0](./LICENSE)** 协议：可自由共享与演绎，须保留署名并标明修改，**不得用于任何商业目的**；如需商业授权，请联系原作者 STA1N。
