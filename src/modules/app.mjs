@@ -3977,7 +3977,8 @@ const __app = createApp({
             return diagnostics ? diagnostics.getAll() : [];
         });
         // Total journal entries = chat generations + tool batches + update
-        // checks/downloads + TTS + memory extractions + UI template analysis.
+        // checks/downloads + runtime errors (global error handler).  TTS and
+        // image-gen writers are not wired yet (planned journal extension).
         const requestDiagnosticsCount = computed(() => requestDiagnosticsAllRecords.value.length);
         // Chat-only counter matches the pre-v1 semantics: one entry per LLM
         // HTTP generation flow (either `category === 'chat'` on the new API,

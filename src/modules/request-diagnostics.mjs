@@ -18,6 +18,16 @@ const LEGACY_STORAGE_KEY = 'rph_request_diagnostics_v1';
 const MAX_RECORDS = 30;
 const SUMMARY_MAX_LENGTH = 80;
 const RECORD_JSON_SIZE_HARD_LIMIT = 8 * 1024; // 8 KiB per record safety net
+// Trim layout when a serialized record exceeds the hard limit: keep the head
+// (early pipeline shape) and tail (final steps) of long arrays, drop the
+// middle.  Applied on the persisted copy only — in-memory records stay whole.
+const PERSIST_TRIM = Object.freeze({
+    behaviorsHead: 12,
+    behaviorsTail: 4,
+    stagesHead: 4,
+    stagesTail: 4,
+    postprocessTail: 4
+});
 const SCHEMA_VERSION = 1;
 
 const records = [];
@@ -81,8 +91,43 @@ const onChange = (listener) => {
     revisionListeners.add(listener);
     return () => revisionListeners.delete(listener);
 };
+// Per-record size guard against the declared hard limit.  Runs on the
+// serialization path only: the live record keeps every entry, the persisted
+// copy is trimmed head+tail and marked `truncated`, so reloads and exports
+// reflect what is actually on disk.
+const trimRecordForPersist = (record) => {
+    let json;
+    try { json = JSON.stringify(record); } catch (_) { return record; }
+    if (typeof json !== 'string' || json.length <= RECORD_JSON_SIZE_HARD_LIMIT) return record;
+    const trimmed = clone(record);
+    trimmed.truncated = true;
+    if (Array.isArray(trimmed.behaviors)
+        && trimmed.behaviors.length > PERSIST_TRIM.behaviorsHead + PERSIST_TRIM.behaviorsTail) {
+        trimmed.behaviors = trimmed.behaviors.slice(0, PERSIST_TRIM.behaviorsHead)
+            .concat(trimmed.behaviors.slice(-PERSIST_TRIM.behaviorsTail));
+    }
+    if (Array.isArray(trimmed.stages)
+        && trimmed.stages.length > PERSIST_TRIM.stagesHead + PERSIST_TRIM.stagesTail) {
+        trimmed.stages = trimmed.stages.slice(0, PERSIST_TRIM.stagesHead)
+            .concat(trimmed.stages.slice(-PERSIST_TRIM.stagesTail));
+    }
+    if (Array.isArray(trimmed.outputs?.postprocessSteps)
+        && trimmed.outputs.postprocessSteps.length > PERSIST_TRIM.postprocessTail) {
+        trimmed.outputs.postprocessSteps = trimmed.outputs.postprocessSteps.slice(-PERSIST_TRIM.postprocessTail);
+    }
+    try {
+        if (JSON.stringify(trimmed).length <= RECORD_JSON_SIZE_HARD_LIMIT) return trimmed;
+    } catch (_) {
+        return trimmed;
+    }
+    // Pathological case (a few entries with giant meta): drop behaviors
+    // entirely as the last resort.  The record identity/totals survive.
+    trimmed.behaviors = [];
+    return trimmed;
+};
+
 const persistImmediate = () => {
-    let attemptRecords = records.slice();
+    let attemptRecords = records.map(trimRecordForPersist);
     while (attemptRecords.length > 0) {
         try {
             globalThis.localStorage?.setItem(NEW_STORAGE_KEY, JSON.stringify(attemptRecords));
@@ -835,6 +880,11 @@ const loadPersistedRecords = () => {
                 const hydrated = [];
                 for (const item of parsed) {
                     if (!item || typeof item !== 'object') continue;
+                    // Records persisted mid-activity come from a previous
+                    // session and can never finish: reclassify pending to
+                    // 'interrupted' instead of showing zombie pending rows.
+                    const rawResult = ['ok', 'failed', 'cancelled', 'timed_out', 'skipped', 'pending', 'interrupted']
+                        .includes(item.result) ? item.result : 'pending';
                     const rec = {
                         schemaVersion: Number.isFinite(Number(item.schemaVersion)) ? item.schemaVersion : SCHEMA_VERSION,
                         id: String(item.id || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`),
@@ -842,7 +892,8 @@ const loadPersistedRecords = () => {
                         action: String(item.action || 'unknown'),
                         startedAt: String(item.startedAt || formatLocalTimestamp(new Date(0))),
                         durationMs: Number.isFinite(Number(item.durationMs)) ? item.durationMs : null,
-                        result: ['ok', 'failed', 'cancelled', 'timed_out', 'skipped', 'pending'].includes(item.result) ? item.result : 'pending',
+                        result: rawResult === 'pending' ? 'interrupted' : rawResult,
+                        truncated: item.truncated === true,
                         scope: item.scope && typeof item.scope === 'object' ? item.scope : {},
                         inputs: Array.isArray(item.inputs) ? item.inputs : [],
                         behaviors: Array.isArray(item.behaviors) ? item.behaviors : [],
