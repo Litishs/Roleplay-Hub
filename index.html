@@ -16,6 +16,29 @@
                 var dark = m === 'dark' || (m === 'system' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
                 document.documentElement.dataset.theme = dark ? 'dark' : 'light';
                 document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
+        } catch (e) { }
+    })();
+    </script>
+    <script>
+        // 启动早期错误缓冲：模块加载与 createApp 之前抛出的错误无法被全局
+        // 错误处理器捕获，先缓存（≤10 条，name≤64/message≤200），app.mjs 在
+        // installGlobalErrorHandlers 之后回放进活动日志并删除本缓冲。
+        (function () {
+            try {
+                var early = [];
+                ['error', 'unhandledrejection'].forEach(function (type) {
+                    window.addEventListener(type, function (e) {
+                        if (early.length >= 10) return;
+                        var err = e && (e.error || e.reason);
+                        early.push({
+                            kind: type,
+                            name: String((err && err.name) || (type === 'unhandledrejection' ? 'UnhandledRejection' : 'Error')).slice(0, 64),
+                            message: String((err && err.message) || e.message || '').slice(0, 200),
+                            at: Date.now()
+                        });
+                    }, true);
+                });
+                window.__rphEarlyErrors = early;
             } catch (e) { }
         })();
     </script>

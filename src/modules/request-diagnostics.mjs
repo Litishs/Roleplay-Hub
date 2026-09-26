@@ -18,7 +18,17 @@ const LEGACY_STORAGE_KEY = 'rph_request_diagnostics_v1';
 const MAX_RECORDS = 30;
 const SUMMARY_MAX_LENGTH = 80;
 const RECORD_JSON_SIZE_HARD_LIMIT = 8 * 1024; // 8 KiB per record safety net
-const SCHEMA_VERSION = 1;
+// Trim layout when a serialized record exceeds the hard limit: keep the head
+// (early pipeline shape) and tail (final steps) of long arrays, drop the
+// middle.  Applied on the persisted copy only — in-memory records stay whole.
+const PERSIST_TRIM = Object.freeze({
+    behaviorsHead: 12,
+    behaviorsTail: 4,
+    stagesHead: 4,
+    stagesTail: 4,
+    postprocessTail: 4
+});
+const SCHEMA_VERSION = 2;
 
 const records = [];
 const clocks = new WeakMap();
@@ -81,8 +91,43 @@ const onChange = (listener) => {
     revisionListeners.add(listener);
     return () => revisionListeners.delete(listener);
 };
+// Per-record size guard against the declared hard limit.  Runs on the
+// serialization path only: the live record keeps every entry, the persisted
+// copy is trimmed head+tail and marked `truncated`, so reloads and exports
+// reflect what is actually on disk.
+const trimRecordForPersist = (record) => {
+    let json;
+    try { json = JSON.stringify(record); } catch (_) { return record; }
+    if (typeof json !== 'string' || json.length <= RECORD_JSON_SIZE_HARD_LIMIT) return record;
+    const trimmed = clone(record);
+    trimmed.truncated = true;
+    if (Array.isArray(trimmed.behaviors)
+        && trimmed.behaviors.length > PERSIST_TRIM.behaviorsHead + PERSIST_TRIM.behaviorsTail) {
+        trimmed.behaviors = trimmed.behaviors.slice(0, PERSIST_TRIM.behaviorsHead)
+            .concat(trimmed.behaviors.slice(-PERSIST_TRIM.behaviorsTail));
+    }
+    if (Array.isArray(trimmed.stages)
+        && trimmed.stages.length > PERSIST_TRIM.stagesHead + PERSIST_TRIM.stagesTail) {
+        trimmed.stages = trimmed.stages.slice(0, PERSIST_TRIM.stagesHead)
+            .concat(trimmed.stages.slice(-PERSIST_TRIM.stagesTail));
+    }
+    if (Array.isArray(trimmed.outputs?.postprocessSteps)
+        && trimmed.outputs.postprocessSteps.length > PERSIST_TRIM.postprocessTail) {
+        trimmed.outputs.postprocessSteps = trimmed.outputs.postprocessSteps.slice(-PERSIST_TRIM.postprocessTail);
+    }
+    try {
+        if (JSON.stringify(trimmed).length <= RECORD_JSON_SIZE_HARD_LIMIT) return trimmed;
+    } catch (_) {
+        return trimmed;
+    }
+    // Pathological case (a few entries with giant meta): drop behaviors
+    // entirely as the last resort.  The record identity/totals survive.
+    trimmed.behaviors = [];
+    return trimmed;
+};
+
 const persistImmediate = () => {
-    let attemptRecords = records.slice();
+    let attemptRecords = records.map(trimRecordForPersist);
     while (attemptRecords.length > 0) {
         try {
             globalThis.localStorage?.setItem(NEW_STORAGE_KEY, JSON.stringify(attemptRecords));
@@ -225,6 +270,76 @@ const sanitizeScope = (raw) => {
     return out;
 };
 
+// ---- Session context, severity & breadcrumbs (schema v2) ------------------------------
+
+const sessionStartEpoch = Date.now();
+const sessionMeta = { appVersion: '', buildType: 'web', sessionId: '' };
+
+const ensureSessionId = () => {
+    if (sessionMeta.sessionId) return sessionMeta.sessionId;
+    try {
+        sessionMeta.sessionId = globalThis.crypto?.randomUUID?.()
+            || `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+    } catch (_) {
+        sessionMeta.sessionId = 'unknown';
+    }
+    return sessionMeta.sessionId;
+};
+
+// Called once per launch from app.mjs after BuildInfo resolves; tests may call
+// it to stamp records.  sessionId stays module-owned (lazy UUID) so the app
+// cannot accidentally fork identities across reloads.
+const setRecordMeta = (meta = {}) => {
+    try {
+        if (meta?.appVersion !== undefined && meta?.appVersion !== null) sessionMeta.appVersion = String(meta.appVersion);
+        if (meta?.buildType !== undefined && meta?.buildType !== null) sessionMeta.buildType = String(meta.buildType);
+        if (meta?.sessionId) sessionMeta.sessionId = String(meta.sessionId);
+    } catch (_) { /* best-effort */ }
+};
+
+const SEVERITY_LEVELS = ['info', 'warn', 'error', 'fatal'];
+const normalizeSeverity = (value) => (SEVERITY_LEVELS.includes(value) ? value : null);
+const defaultSeverityForCategory = (category) => (category === 'runtime' ? 'error' : 'info');
+// Mirrors classifyResultByError: user cancels are not faults, network-ish
+// failures are 'warn', app-level runtime faults are 'error'.
+const severityForFailure = (record) => {
+    if (record.category === 'runtime') return 'error';
+    if (record.result === 'cancelled') return 'info';
+    return 'warn';
+};
+
+const BREADCRUMB_MAX = 8;
+const BREADCRUMB_META_MAX = 32;
+const breadcrumbs = [];
+
+// Breadcrumb meta values are enum-ish short identifiers only: strip anything
+// outside [A-Za-z0-9_.-] and clamp, so free text (character names, message
+// content) can never ride in through a careless caller.
+const sanitizeBreadcrumbMeta = (meta) => {
+    if (!meta || typeof meta !== 'object' || Array.isArray(meta)) return null;
+    const out = {};
+    for (const key of Object.keys(meta)) {
+        const safe = String(meta[key] ?? '').replace(/[^A-Za-z0-9_.\-]/g, '').slice(0, BREADCRUMB_META_MAX);
+        if (safe) out[key] = safe;
+    }
+    return Object.keys(out).length ? out : null;
+};
+
+const pushBreadcrumb = (name, meta) => {
+    const cleanName = String(name || '').replace(/[^a-z0-9_]/gi, '_').slice(0, 40);
+    if (!cleanName) return;
+    const entry = { atUptimeMs: Math.max(0, Date.now() - sessionStartEpoch), name: cleanName };
+    const cleanMeta = sanitizeBreadcrumbMeta(meta);
+    if (cleanMeta) entry.meta = cleanMeta;
+    breadcrumbs.push(entry);
+    if (breadcrumbs.length > BREADCRUMB_MAX) breadcrumbs.splice(0, breadcrumbs.length - BREADCRUMB_MAX);
+};
+
+const breadcrumb = (name, meta) => {
+    try { pushBreadcrumb(name, meta); } catch (_) { /* observer must not break the journal */ }
+};
+const breadcrumbsSnapshot = () => clone(breadcrumbs);
+
 // ---- Activity record factory --------------------------------------------------------
 
 // Local wall-clock timestamp (no timezone offset, no "T"), e.g.
@@ -237,14 +352,25 @@ const formatLocalTimestamp = (d = new Date()) => {
 };
 
 const createActivityRecord = ({ category, action, scope }) => {
+    const resolvedCategory = String(category || 'general');
     const record = {
         schemaVersion: SCHEMA_VERSION,
         id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-        category: String(category || 'general'),
+        category: resolvedCategory,
         action: String(action || 'unknown'),
         startedAt: formatLocalTimestamp(),
         durationMs: null,
         result: 'pending',
+        // v2 fields: severity by category, per-record session context so a
+        // mixed-version export can be sliced per app build and per launch.
+        severity: defaultSeverityForCategory(resolvedCategory),
+        sessionId: ensureSessionId(),
+        uptimeMs: Math.max(0, Date.now() - sessionStartEpoch),
+        appVersion: sessionMeta.appVersion,
+        buildType: sessionMeta.buildType,
+        // Only runtime (global error) records carry the breadcrumb trail; the
+        // trail answers "what was the user doing when this blew up".
+        breadcrumbs: resolvedCategory === 'runtime' ? breadcrumbsSnapshot() : [],
         scope: sanitizeScope(scope),
         inputs: [],
         behaviors: [],
@@ -455,11 +581,19 @@ const makeHandle = (record) => {
             }
         },
 
-        fail(error) {
+        fail(error, failOptions = {}) {
             try {
                 if (!markLive() || finished) return;
                 finished = true;
                 record.result = classifyResultByError(error);
+                // An explicit fail() option always wins; otherwise the failure
+                // mapping applies only when severity is still the untouched
+                // category default — an explicit begin({ severity }) (e.g. the
+                // crash transcription's 'fatal') must survive fail().
+                const explicitNow = normalizeSeverity(failOptions?.severity);
+                if (explicitNow || record.severity === defaultSeverityForCategory(record.category)) {
+                    record.severity = explicitNow || severityForFailure(record);
+                }
                 record.durationMs = elapsed(record);
                 record.stages.push({ stage: record.result, elapsedMs: record.durationMs });
                 record.error = {
@@ -656,6 +790,8 @@ const begin = (options = {}) => {
             action: options?.action,
             scope: options?.scope
         });
+        const explicitSeverity = normalizeSeverity(options?.severity);
+        if (explicitSeverity) record.severity = explicitSeverity;
         pushRecord(record);
         persist();
         return makeHandle(record);
@@ -759,14 +895,72 @@ const projectForExport = (record) => {
 // Build an export envelope suitable for the settings-page "export diagnostics
 // log" button.  Caller supplies appVersion/buildType; we add ISO timestamp
 // and the projected records array.
+// Machine-readable aggregate over the current buffer: category/severity
+// distribution plus the dominant error groups.  Everything is derived from
+// already-recorded fields — no new privacy surface.
+const summarizeRecords = () => {
+    const recordsByCategory = {};
+    const severityCounts = {};
+    const errorGroups = new Map();
+    for (const record of records) {
+        recordsByCategory[record.category] = (recordsByCategory[record.category] || 0) + 1;
+        const sev = SEVERITY_LEVELS.includes(record.severity) ? record.severity : 'info';
+        severityCounts[sev] = (severityCounts[sev] || 0) + 1;
+        if (record.error && record.error.message) {
+            const groupKey = `${record.category}/${record.action}::${record.error.message}`;
+            const group = errorGroups.get(groupKey)
+                || { category: record.category, action: record.action, message: record.error.message, severity: sev, count: 0 };
+            group.count += 1;
+            errorGroups.set(groupKey, group);
+        }
+    }
+    let suppressedCount = 0;
+    try {
+        suppressedCount = Number(globalThis.RPHRuntimeErrorStats?.suppressedCount) || 0;
+    } catch (_) {
+        suppressedCount = 0;
+    }
+    return {
+        recordsByCategory,
+        severityCounts,
+        topErrors: [...errorGroups.values()].sort((a, b) => b.count - a.count).slice(0, 5),
+        suppressedCount
+    };
+};
+
 const buildExportPayload = ({ appVersion = '', buildType = 'web' } = {}) => ({
     schemaVersion: SCHEMA_VERSION,
     exportedAt: formatLocalTimestamp(),
     appVersion: String(appVersion || ''),
     buildType: String(buildType || 'web'),
     recordCount: records.length,
+    summary: summarizeRecords(),
     records: records.map(projectForExport)
 });
+
+// Short shareable text block (≤10 lines) for pasting into chat groups — the
+// full JSON export stays available via buildExportPayload.  Error messages
+// are the same clamped summaries stored on records (≤80 chars).
+const buildShortSummary = () => {
+    const summary = summarizeRecords();
+    const lines = [];
+    const version = sessionMeta.appVersion || 'unknown version';
+    lines.push(`Roleplay Hub ${version}${sessionMeta.buildType ? ` · ${sessionMeta.buildType}` : ''}`);
+    lines.push(`${formatLocalTimestamp()} · 最近 ${records.length} 条活动记录`);
+    const categoryText = Object.entries(summary.recordsByCategory).map(([name, count]) => `${name} ${count}`).join(' / ');
+    if (categoryText) lines.push(`分布 ${categoryText}`);
+    if (summary.topErrors.length) {
+        lines.push('异常 Top3:');
+        summary.topErrors.slice(0, 3).forEach((error, index) => {
+            lines.push(`${index + 1}. [${error.category}] ${error.action} ×${error.count}: ${error.message}`);
+        });
+    } else {
+        lines.push('无异常记录');
+    }
+    const severityText = Object.entries(summary.severityCounts).map(([name, count]) => `${name} ${count}`).join(' / ');
+    if (severityText) lines.push(`severity: ${severityText}`);
+    return lines.join('\n');
+};
 
 // ---- Bootstrap: load persisted ring buffer + migrate legacy data --------------------
 
@@ -835,6 +1029,11 @@ const loadPersistedRecords = () => {
                 const hydrated = [];
                 for (const item of parsed) {
                     if (!item || typeof item !== 'object') continue;
+                    // Records persisted mid-activity come from a previous
+                    // session and can never finish: reclassify pending to
+                    // 'interrupted' instead of showing zombie pending rows.
+                    const rawResult = ['ok', 'failed', 'cancelled', 'timed_out', 'skipped', 'pending', 'interrupted']
+                        .includes(item.result) ? item.result : 'pending';
                     const rec = {
                         schemaVersion: Number.isFinite(Number(item.schemaVersion)) ? item.schemaVersion : SCHEMA_VERSION,
                         id: String(item.id || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`),
@@ -842,7 +1041,14 @@ const loadPersistedRecords = () => {
                         action: String(item.action || 'unknown'),
                         startedAt: String(item.startedAt || formatLocalTimestamp(new Date(0))),
                         durationMs: Number.isFinite(Number(item.durationMs)) ? item.durationMs : null,
-                        result: ['ok', 'failed', 'cancelled', 'timed_out', 'skipped', 'pending'].includes(item.result) ? item.result : 'pending',
+                        result: rawResult === 'pending' ? 'interrupted' : rawResult,
+                        truncated: item.truncated === true,
+                        severity: SEVERITY_LEVELS.includes(item.severity) ? item.severity : 'info',
+                        sessionId: String(item.sessionId || ''),
+                        uptimeMs: Number.isFinite(Number(item.uptimeMs)) ? Math.max(0, Number(item.uptimeMs)) : 0,
+                        appVersion: String(item.appVersion || ''),
+                        buildType: String(item.buildType || 'web'),
+                        breadcrumbs: Array.isArray(item.breadcrumbs) ? item.breadcrumbs : [],
                         scope: item.scope && typeof item.scope === 'object' ? item.scope : {},
                         inputs: Array.isArray(item.inputs) ? item.inputs : [],
                         behaviors: Array.isArray(item.behaviors) ? item.behaviors : [],
@@ -902,6 +1108,9 @@ const RPHRequestDiagnostics = Object.freeze({
     begin,
     // Legacy request-oriented API (preserved on contract)
     start,
+    // Session context & breadcrumbs (schema v2)
+    setRecordMeta,
+    breadcrumb,
     getLatest: () => records.length ? projectForExport(records[records.length - 1]) : null,
     getAll: () => records.map(projectForExport),
     clear: () => {
@@ -913,6 +1122,7 @@ const RPHRequestDiagnostics = Object.freeze({
     storageKey: NEW_STORAGE_KEY,
     schemaVersion: SCHEMA_VERSION,
     buildExportPayload,
+    buildShortSummary,
     getRevision,
     onChange
 });

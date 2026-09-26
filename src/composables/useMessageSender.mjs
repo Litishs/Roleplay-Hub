@@ -134,6 +134,7 @@ export function useMessageSender(deps) {
         scheduleChatStatsRecompute,
         showToast,
         getCurrentChatStorageScopeId,
+        buildDiagnosticsToastAction,
     } = deps;
 
     // Generation wait-timer handle (private: all uses are in this pipeline)
@@ -263,9 +264,11 @@ export function useMessageSender(deps) {
             // (empty API key / wrong URL) instead of misleading "network failed".
             const chatProviderForRequest = getChatProvider();
             const chatUrl = getChatProviderEndpoint('chat/completions');
+            // Scope passes ids only — the journal whitelist (request-diagnostics
+            // sanitizeScope) drops free-text fields like character names by
+            // design; do not add them back.
             const diagnosticScope = {
                 characterId: currentCharacter.value?.id || '',
-                characterName: currentCharacter.value?.name || '',
                 chatScopeId: getCurrentChatStorageScopeId?.() || ''
             };
             let requestDiagnostic = RPHRequestDiagnostics?.start({
@@ -283,19 +286,9 @@ export function useMessageSender(deps) {
                 },
                 requestType: activeToolDepth > 0 ? 'tool_continuation' : 'chat'
             }) || null;
-            // Unified activity journal input: chat messages summary (chars only,
-            // never plaintext).  The actual request fingerprint is still
-            // computed by the legacy start() compat layer.
-            if (requestDiagnostic && requestDiagnostic.input) {
-                requestDiagnostic.input({
-                    kind: 'chat_request',
-                    chars: 0,
-                    summary: (activeToolDepth > 0
-                        ? `tool-continuation depth=${activeToolDepth}`
-                        : 'chat generate')
-                        + (settings.reasoningEffort ? ` · effort=${settings.reasoningEffort}` : '')
-                });
-            }
+            // Journal breadcrumb: runtime error records carry this trail so an
+            // export shows what was in flight when something blew up.
+            RPHRequestDiagnostics?.breadcrumb?.('generation_start', { toolDepth: String(activeToolDepth || 0) });
 
             // Start Timer
             const startTimer = () => {
@@ -1263,6 +1256,20 @@ export function useMessageSender(deps) {
                             apiMessages,
                             getMaxOutputTokens
                         });
+                        // Unified activity journal input: real payload size +
+                        // reasoning-effort tag (chars only, never plaintext).
+                        // Recorded here where the final payload exists so chars
+                        // is a real number; the request fingerprint itself is
+                        // still computed by the legacy start() compat layer.
+                        const requestMessages = Array.isArray(requestPayload?.messages) ? requestPayload.messages : [];
+                        requestDiagnostic?.input?.({
+                            kind: 'chat_request',
+                            chars: requestMessages.reduce((total, message) => total + String(message?.content || '').length, 0),
+                            summary: (activeToolDepth > 0
+                                ? `tool-continuation depth=${activeToolDepth}`
+                                : 'chat generate')
+                                + (settings.reasoningEffort ? ` · effort=${settings.reasoningEffort}` : '')
+                        });
                         requestDiagnostic?.request(requestPayload, Date.now() - generationStartTime);
                         requestDiagnostic?.stage('waiting_headers');
                         let response = null;
@@ -1757,13 +1764,19 @@ export function useMessageSender(deps) {
                     } else {
                         chatHistory.value.push(createCharacterErrorReply(interruptLabel));
                     }
+                    // Failure-moment export entry (plan L3-2); user aborts stay silent.
+                    if (timedOut) {
+                        showToast('生成超时', 'error', 5000, buildDiagnosticsToastAction?.());
+                    }
                 } else if (continuingAssistantMessage) {
                     const errorMessage = truncateErrorMessage(friendlyNetworkErrorMessage(error, chatUrl)) || '生成失败';
                     appendAssistantResponseError(continuingAssistantMessage, errorMessage);
                     activeToolContinuationHasResponse.value = true;
+                    showToast('生成失败', 'error', 5000, buildDiagnosticsToastAction?.());
                 } else {
                     const errorMessage = truncateErrorMessage(friendlyNetworkErrorMessage(error, chatUrl)) || '生成失败';
                     chatHistory.value.push(createCharacterErrorReply(errorMessage));
+                    showToast('生成失败', 'error', 5000, buildDiagnosticsToastAction?.());
                 }
             } finally {
                 flushStreamAppends();

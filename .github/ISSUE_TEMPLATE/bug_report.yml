@@ -1,0 +1,54 @@
+name: Bug 报告
+description: 反馈 Roleplay Hub 的问题（可直接粘贴「复制摘要」生成的文本）
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢反馈！为方便定位，请尽量使用 App 内 **设置页 → 运行日志 → 复制摘要** 生成的文本填入下方「运行摘要」（≤10 行，仅含行为摘要，不含聊天明文）。
+  - type: textarea
+    id: version
+    attributes:
+      label: 版本
+      description: 「复制摘要」首行，例如 `Roleplay Hub 2.63 (161) release · Android`
+      placeholder: |
+        Roleplay Hub x.xx (xxx) release · Android
+    validations:
+      required: true
+  - type: dropdown
+    id: build
+    attributes:
+      label: 构建类型
+      options:
+        - release
+        - debug
+    validations:
+      required: true
+  - type: textarea
+    id: summary
+    attributes:
+      label: 运行摘要
+      description: 设置页 → 运行日志 → 复制摘要，粘贴到这里
+      render: text
+    validations:
+      required: false
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      description: 实际发生了什么、期望是什么
+      placeholder: |
+        1. 进入 …
+        2. 点击 …
+        实际结果：…
+        期望结果：…
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: 诊断日志（可选）
+      description: 设置页 → 运行日志 → 导出日志 的 JSON 内容。仅含行为摘要（功能类型、耗时、字符数、哈希、短错误提示），不含聊天明文、思考过程或设定正文。
+      render: json
+    validations:
+      required: false

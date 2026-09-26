@@ -377,7 +377,7 @@ test('buildExportPayload includes schemaVersion/exportedAt/appVersion/buildType/
   diagnostics.begin({ category: 'tts', action: 'speak' }).complete();
 
   const envelope = diagnostics.buildExportPayload({ appVersion: '2.27', buildType: 'android-capacitor' });
-  assert.equal(envelope.schemaVersion, 1);
+  assert.equal(envelope.schemaVersion, 2);
   assert.match(envelope.exportedAt, /^\d{4}-\d{2}-\d{2} \d{2}/);
   assert.equal(envelope.appVersion, '2.27');
   assert.equal(envelope.buildType, 'android-capacitor');
@@ -390,7 +390,7 @@ test('buildExportPayload includes schemaVersion/exportedAt/appVersion/buildType/
 
 test('schemaVersion and storageKey constants are exposed on public API', async () => {
   const { diagnostics } = await loadDiagnostics();
-  assert.equal(diagnostics.schemaVersion, 1);
+  assert.equal(diagnostics.schemaVersion, 2);
   assert.equal(diagnostics.storageKey, 'rph_activity_journal_v1');
   assert.equal(diagnostics.maxRecords, 30);
   assert.equal(typeof diagnostics.begin, 'function');
@@ -494,4 +494,63 @@ test('onChange/clear publishes a revision so reactive counters recompute', async
   await new Promise(resolve => setTimeout(resolve, 60));
   assert.ok(revised.length >= 2, 'clear() must publish a change too');
   assert.equal(diagnostics.getAll().length, 0);
+});
+
+test('persistence trims oversized records to the 8 KiB hard limit with a truncated marker', async () => {
+  const values = new Map();
+  const { diagnostics, localStorage } = await loadDiagnostics(values);
+  const handle = diagnostics.begin({ category: 'tool', action: 'batch' });
+  for (let i = 0; i < 200; i++) {
+    handle.behavior({ name: 'tool_step_' + i, result: 'ok', meta: { note: 'x'.repeat(120) } });
+  }
+  await flushPersist(localStorage);
+
+  const raw = values.get('rph_activity_journal_v1');
+  assert.ok(raw, 'records persisted');
+  const persisted = JSON.parse(raw);
+  const rec = persisted.find(r => r.action === 'batch');
+  assert.ok(rec, 'oversized record persisted');
+  assert.equal(rec.truncated, true, 'trimmed record carries the truncated marker');
+  assert.ok(rec.behaviors.length <= 16, 'behaviors trimmed to head+tail (12+4)');
+
+  // Reload from the persisted bucket: trim + marker survive hydration.
+  const reloaded = await loadDiagnostics(new Map(values));
+  const reloadedRecord = reloaded.diagnostics.getAll().find(r => r.action === 'batch');
+  assert.ok(reloadedRecord, 'record survives reload');
+  assert.equal(reloadedRecord.truncated, true);
+  assert.ok(reloadedRecord.behaviors.length <= 16);
+
+  // In-memory live record is untouched by the persisted-copy trim.
+  const live = diagnostics.getAll().find(r => r.action === 'batch');
+  assert.equal(live.truncated, undefined, 'live record is not marked truncated');
+});
+
+test('records persisted mid-activity from a previous session load as interrupted, not pending', async () => {
+  const values = new Map();
+  const midFlight = [{
+    schemaVersion: 1,
+    id: 'zombie-1',
+    category: 'chat',
+    action: 'generate',
+    startedAt: '2026-09-26 10:00:00',
+    durationMs: null,
+    result: 'pending',
+    scope: {},
+    inputs: [],
+    behaviors: [],
+    outputs: {
+      contentChars: 0, reasoningChars: 0, totalChars: 0, hash: null,
+      streamContentChars: 0, streamReasoningChars: 0,
+      finalContentChars: null, finalReasoningChars: null, postprocessSteps: []
+    },
+    error: null,
+    stages: [{ stage: 'started', elapsedMs: 0 }],
+    compat: null
+  }];
+  values.set('rph_activity_journal_v1', JSON.stringify(midFlight));
+
+  const { diagnostics } = await loadDiagnostics(values);
+  const record = diagnostics.getAll().find(r => r.id === 'zombie-1');
+  assert.ok(record, 'mid-flight record hydrates');
+  assert.equal(record.result, 'interrupted', 'zombie pending reclassified on load');
 });

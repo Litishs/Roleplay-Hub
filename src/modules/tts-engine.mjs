@@ -93,6 +93,9 @@
             const utteranceId = `${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
             state.currentUtteranceId = utteranceId;
             state.status = 'speaking';
+            // Journal: chars only, never the text itself (AGENTS.md §2.4).
+            const journalRecord = globalThis.RPHRequestDiagnostics?.begin?.({ category: 'tts', action: 'system_speak' });
+            journalRecord?.input?.({ kind: 'speak_text', chars: safeText.length });
             try {
                 await plugin.ttsSpeak({
                     text: safeText,
@@ -104,8 +107,10 @@
             } catch (error) {
                 state.status = 'idle';
                 state.currentUtteranceId = null;
+                journalRecord?.fail?.(error);
                 throw error;
             }
+            journalRecord?.complete?.();
             emit({ utteranceId, state: 'start' });
             return utteranceId;
         };

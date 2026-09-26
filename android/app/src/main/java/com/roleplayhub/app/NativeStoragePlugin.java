@@ -121,6 +121,36 @@ public class NativeStoragePlugin extends Plugin {
         }
     }
 
+    @PluginMethod
+    public void readLastCrash(PluginCall call) {
+        try {
+            File file = new File(getContext().getFilesDir(), CrashFileWriter.FILE_NAME);
+            if (!file.exists()) {
+                call.resolve();
+                return;
+            }
+            String content = new String(Files.readAllBytes(file.toPath()), StandardCharsets.UTF_8);
+            JSObject result = new JSObject();
+            result.put("crash", new JSObject(content));
+            call.resolve(result);
+        } catch (Exception error) {
+            call.reject("Unable to read last crash", error);
+        }
+    }
+
+    @PluginMethod
+    public void clearLastCrash(PluginCall call) {
+        try {
+            File file = new File(getContext().getFilesDir(), CrashFileWriter.FILE_NAME);
+            if (file.exists()) {
+                file.delete();
+            }
+            call.resolve();
+        } catch (Exception error) {
+            call.reject("Unable to clear last crash", error);
+        }
+    }
+
     /**
      * Reads the current plain-text clipboard contents.
      * Reading the clipboard requires no runtime permission on Android;

@@ -178,7 +178,9 @@
                                 <div class="settings-collapse__content settings-panel-body">
                         <DataManager />
                         <div class="mt-4 rounded-xl border border-gray-200 bg-white p-3">
-                            <div class="flex items-center justify-between gap-2">
+                            <!-- Mobile: title block stacks above a 3-col button grid; sm+: side-by-side
+                                 (three inline buttons otherwise squeeze the min-w-0 title into vertical text). -->
+                            <div class="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
                                 <div class="min-w-0">
                                     <div class="flex items-center gap-1.5">
                                         <span class="text-sm font-bold text-gray-700">运行日志</span>
@@ -196,9 +198,18 @@
                                         最近 {{ requestDiagnosticsCount }} 条 / 其中 LLM 对话 {{ chatDiagnosticsCount }} 条
                                     </div>
                                 </div>
-                                <div class="flex flex-shrink-0 items-center gap-2 flex-wrap justify-end">
+                                <div class="grid grid-cols-3 gap-2 sm:flex sm:flex-shrink-0 sm:items-center sm:justify-end">
+                                    <button type="button" @click="copyDiagnosticsSummary"
+                                        class="inline-flex items-center justify-center text-xs px-2 whitespace-nowrap rounded-lg bg-gray-50 hover:bg-gray-100 text-gray-600 font-medium border border-gray-200 transition-all active:scale-95"
+                                        title="复制一段可粘贴到群聊的文本摘要（≤10 行）">
+                                        <svg class="w-3.5 h-3.5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h8a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m0 0l3-3m-3 3h3"></path>
+                                        </svg>
+                                        复制摘要
+                                    </button>
                                     <button type="button" @click="exportRequestDiagnostics('file')"
-                                        class="inline-flex items-center text-xs px-3 py-1.5 rounded-lg bg-primary-600 hover:bg-primary-700 text-white font-medium border border-primary-600 transition-all active:scale-95 shadow-sm">
+                                        class="inline-flex items-center justify-center text-xs px-2 whitespace-nowrap rounded-lg bg-primary-600 hover:bg-primary-700 text-white font-medium border border-primary-600 transition-all active:scale-95 shadow-sm">
                                         <svg class="w-3.5 h-3.5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                                 d="M12 10v6m0 0l-3-3m3 3l3-3m4 4H5a2 2 0 01-2-2V6a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414A1 1 0 0121 11v7a2 2 0 01-2 2z"></path>
@@ -206,14 +217,35 @@
                                         导出日志
                                     </button>
                                     <button type="button" @click="clearRequestDiagnostics"
-                                        class="inline-flex items-center text-xs px-3 py-1.5 rounded-lg bg-gray-50 hover:bg-red-50 text-gray-500 hover:text-red-600 font-medium border border-gray-200 transition-all active:scale-95"
+                                        class="inline-flex items-center justify-center text-xs px-2 whitespace-nowrap rounded-lg bg-gray-50 hover:bg-red-50 text-gray-500 hover:text-red-600 font-medium border border-gray-200 transition-all active:scale-95"
                                         title="清空运行日志">
                                         <svg class="w-3.5 h-3.5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 100 2v3M4 7h16"></path>
                                         </svg>
                                         清空
                                     </button>
+                                </div>
+                            </div>
+                            <div v-if="diagnosticsFailureRecords.length" class="mt-2 rounded-lg bg-gray-50 p-2.5">
+                                <div class="flex items-center justify-between">
+                                    <span class="text-[11px] font-medium text-gray-500">最近异常 ({{ diagnosticsFailureRecords.length }})</span>
+                                    <button type="button" @click="diagnosticsShowAll = !diagnosticsShowAll"
+                                        class="text-[11px] text-primary-600 hover:text-primary-700">
+                                        {{ diagnosticsShowAll ? '收起' : '展开' }}
+                                    </button>
+                                </div>
+                                <div class="mt-1.5 space-y-1.5">
+                                    <div v-for="record in (diagnosticsShowAll ? diagnosticsFailureRecords.slice(0, 10) : diagnosticsFailureRecords.slice(0, 4))"
+                                        :key="record.id" class="min-w-0">
+                                        <div class="flex items-center gap-1.5">
+                                            <span class="w-2 h-2 rounded-full flex-shrink-0" :class="diagnosticsSeverityDotClass(record.severity)"></span>
+                                            <span class="text-[11px] text-gray-500 truncate">{{ record.category }}/{{ record.action }}</span>
+                                            <span v-if="record.severity === 'fatal'" class="flex-shrink-0 text-[10px] font-medium text-red-600">崩溃</span>
+                                            <span class="ml-auto text-[10px] text-gray-400 flex-shrink-0">{{ formatDiagnosticsTime(record.startedAt) }}</span>
+                                        </div>
+                                        <div class="mt-0.5 text-xs text-gray-600 truncate" :title="diagnosticsResultLabel(record)">{{ diagnosticsResultLabel(record) }}</div>
+                                    </div>
                                 </div>
                             </div>
                             <div v-if="diagnosticsHelpOpen" class="mt-2 rounded-lg bg-gray-50 p-2.5 text-[11px] leading-5 text-gray-500">
@@ -246,7 +278,8 @@ export default {
   setup() {
     const ctx = inject("appContext");
     const diagnosticsHelpOpen = ref(false);
-    return { ...(ctx || {}), diagnosticsHelpOpen };
+    const diagnosticsShowAll = ref(false);
+    return { ...(ctx || {}), diagnosticsHelpOpen, diagnosticsShowAll };
   }
 };
 </script>

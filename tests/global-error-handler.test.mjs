@@ -191,3 +191,77 @@ test('installGlobalErrorHandlers tolerates a bare app object without config', ()
     assert.equal(typeof dispose, 'function');
     dispose();
 });
+
+test('window error listener is registered in capture phase so resource errors are reachable', () => {
+    const journal = createMockJournal();
+    const tracker = createRuntimeErrorTracker({ journal });
+    const registrations = [];
+    const eventTarget = {
+        addEventListener(type, handler, opts) { registrations.push({ type, handler, opts }); },
+        removeEventListener() { /* no-op */ }
+    };
+
+    const dispose = installGlobalErrorHandlers({}, { tracker, eventTarget, logToConsole: false });
+
+    const errorReg = registrations.find(r => r.type === 'error');
+    assert.ok(errorReg, 'error listener registered');
+    // Resource load errors do not bubble; only a capture-phase window listener
+    // ever sees them.  Regression guard: bubble-phase registration made the
+    // resource_error branch unreachable in real browsers.
+    assert.equal(errorReg.opts, true, 'error listener must use capture: true');
+    const rejectionReg = registrations.find(r => r.type === 'unhandledrejection');
+    assert.ok(rejectionReg, 'unhandledrejection listener registered');
+
+    // Dispatching a resource-style event through the registered handler (the
+    // real event path) must classify as resource_error, not only the direct
+    // recordWindowError() unit-test call.
+    errorReg.handler({ target: { tagName: 'IMG', src: 'https://example.com/a.png', nodeType: 1 } });
+    assert.equal(journal.calls[0].action, 'resource_error');
+    dispose();
+});
+
+test('recurring errors beyond the dedup window are throttled per key (storm cap)', () => {
+    const journal = createMockJournal();
+    let clock = 0;
+    const tracker = createRuntimeErrorTracker({ journal, nowFn: () => clock });
+    const error = new Error('loop boom');
+
+    for (let i = 0; i < 20; i++) {
+        clock += 3000; // every hit lands outside the 2s dedup window
+        tracker.recordVueError(error, null, 'render function');
+    }
+
+    assert.equal(journal.calls.length, 5, 'same key records at most 5 journal entries per session');
+    assert.equal(tracker.stats.recordCount, 5);
+    assert.equal(tracker.stats.suppressedCount, 15);
+    const keys = Object.keys(tracker.stats.hitsByKey);
+    assert.equal(keys.length, 1);
+    assert.equal(tracker.stats.hitsByKey[keys[0]], 20, 'hits counter counts every hit incl. suppressed');
+});
+
+test('burst inside the dedup window still records once and never floods the buffer', () => {
+    const journal = createMockJournal();
+    const tracker = createRuntimeErrorTracker({ journal });
+    const error = new Error('burst boom');
+
+    for (let i = 0; i < 20; i++) tracker.recordVueError(error, null, 'render function');
+
+    assert.equal(journal.calls.length, 1, 'within the dedup window only one record');
+    assert.equal(tracker.stats.suppressedCount, 19);
+});
+
+test('runtime error stats are published on globalThis for the export envelope', () => {
+    const journal = createMockJournal();
+    const tracker = createRuntimeErrorTracker({ journal });
+    installGlobalErrorHandlers({}, {
+        tracker,
+        eventTarget: { addEventListener() { /* no-op */ }, removeEventListener() { /* no-op */ } },
+        logToConsole: false
+    });
+
+    tracker.recordUnhandledRejection({ reason: 'stat probe' });
+
+    assert.ok(globalThis.RPHRuntimeErrorStats, 'stats singleton exposed on globalThis');
+    assert.equal(globalThis.RPHRuntimeErrorStats.recordCount, 1);
+    assert.equal(globalThis.RPHRuntimeErrorStats.suppressedCount, 0);
+});

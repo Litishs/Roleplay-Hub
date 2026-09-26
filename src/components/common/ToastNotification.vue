@@ -35,6 +35,9 @@
                     </svg>
                 </div>
                 <div class="flex-1 text-sm">{{ toast.message }}</div>
+                <button v-if="toast.action" type="button"
+                    class="ml-3 flex-shrink-0 text-xs font-medium text-primary-600 hover:text-primary-700 active:opacity-70"
+                    @click="onToastAction(toast)">{{ toast.action.label }}</button>
             </div>
         </transition-group>
     </div>
@@ -45,7 +48,11 @@ import { inject } from "vue";
 export default {
   setup() {
     const ctx = inject("appContext");
-    return ctx || {};
+    const onToastAction = (toast) => {
+      try { toast.action?.run?.(); } catch (_) { /* action errors are not toast-worthy */ }
+      ctx?.dismissToast?.(toast.id);
+    };
+    return { ...(ctx || {}), onToastAction };
   }
 };
 </script>
