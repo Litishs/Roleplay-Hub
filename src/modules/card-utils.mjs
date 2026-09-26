@@ -688,7 +688,69 @@ year 2025, textless version, {{petite,loli}}, Petite figure, no text, The image 
         return { ...result, target: 'document' };
     };
 
+    // --- Iframe error bridge -------------------------------------------------
+    // Card iframe errors live in a separate JS realm: they never reach the
+    // parent window's global error sinks.  The card page reports its uncaught
+    // errors via a one-way postMessage (no ack needed — a lost report is
+    // acceptable); the parent records them into the activity journal under
+    // category 'runtime'.  Same-origin only — cross-origin embedded views
+    // (万相广场) are out of scope by design.  Payload fields are clamped here
+    // and re-clamped by the parent; the journal applies its own whitelist.
+    const CARD_ERROR_MSG = 'rph:card-error';
+    const CARD_ERROR_NAME_MAX = 64;
+    const CARD_ERROR_MESSAGE_MAX = 200;
+
+    const installCardErrorReporter = () => {
+        if (typeof window === 'undefined' || !window.addEventListener) return;
+        if (window.parent === window) return; // only meaningful inside an iframe
+        if (window.__rphCardErrorReporterInstalled) return;
+        window.__rphCardErrorReporterInstalled = true;
+        const report = (name, message) => {
+            try {
+                window.parent.postMessage({
+                    type: CARD_ERROR_MSG,
+                    payload: {
+                        name: String(name || 'Error').slice(0, CARD_ERROR_NAME_MAX),
+                        message: String(message || '').slice(0, CARD_ERROR_MESSAGE_MAX)
+                    }
+                }, (window.location && window.location.origin) || '*');
+            } catch (_) { /* reporting must never break the card page */ }
+        };
+        window.addEventListener('error', (event) => {
+            const err = event?.error;
+            // Skip non-bubbling resource load errors: not actionable here.
+            if (!err && event?.target && event.target !== window) return;
+            report(err?.name || 'Error', err?.message || event?.message || 'uncaught error');
+        }, true);
+        window.addEventListener('unhandledrejection', (event) => {
+            const reason = event?.reason;
+            report(reason instanceof Error ? reason.name : 'NonError',
+                String(reason?.message ?? reason ?? 'unhandled rejection'));
+        }, true);
+    };
+
+    const installCardErrorBridge = () => {
+        if (typeof window === 'undefined' || !window.addEventListener) return;
+        if (window.__rphCardErrorBridgeInstalled) return;
+        window.__rphCardErrorBridgeInstalled = true;
+        window.addEventListener('message', (event) => {
+            const data = event.data;
+            if (!data || data.type !== CARD_ERROR_MSG) return;
+            try { if (event.origin !== window.location.origin) return; } catch (_) { return; }
+            const payload = data.payload || {};
+            const journal = globalThis.RPHRequestDiagnostics;
+            const handle = journal?.begin?.({ category: 'runtime', action: 'card_error' });
+            handle?.behavior?.({ name: 'error_context', result: 'ok', meta: { source: 'card_iframe' } });
+            handle?.fail?.({
+                name: String(payload.name || 'Error').slice(0, CARD_ERROR_NAME_MAX),
+                message: String(payload.message || '').slice(0, CARD_ERROR_MESSAGE_MAX)
+            });
+        });
+    };
+
     installIframeExportBridge();
+    installCardErrorBridge();
+    installCardErrorReporter();
 
     const RPHubCardUtils =  {
         blobToDataUrl,

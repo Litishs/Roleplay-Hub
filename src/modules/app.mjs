@@ -3619,12 +3619,16 @@ const __app = createApp({
         // --- Methods ---
 
         // Toast Notification
-        const showToast = (message, type = 'info', duration = 2000) => {
+        const showToast = (message, type = 'info', duration = 2000, action = null) => {
             const id = `${Date.now()}-${toastIdSeed++}`;
-            toasts.value.push({ id, message, type });
+            toasts.value.push({ id, message, type, action });
             setTimeout(() => {
                 toasts.value = toasts.value.filter(t => t.id !== id);
             }, duration);
+        };
+
+        const dismissToast = (id) => {
+            toasts.value = toasts.value.filter(t => t.id !== id);
         };
 
         // Backup/restore lives in useBackupRestore (Phase 2.2); called here because
@@ -4000,6 +4004,44 @@ const __app = createApp({
             if (!providerId) return;
             RPHRequestDiagnostics?.breadcrumb?.('provider_switch', { providerId: String(providerId) });
         });
+        // Settings-page failure list (4-layer plan L3-1): non-ok records only,
+        // worst severity first.  Pure display — details live in the export.
+        const DIAGNOSTICS_SEVERITY_RANK = { fatal: 0, error: 1, warn: 2, info: 3 };
+        const DIAGNOSTICS_SEVERITY_DOT_CLASS = {
+            fatal: 'bg-red-500',
+            error: 'bg-red-500',
+            warn: 'bg-amber-500',
+            info: 'bg-gray-400'
+        };
+        const DIAGNOSTICS_RESULT_LABELS = {
+            failed: '失败', timed_out: '超时', cancelled: '已取消',
+            interrupted: '中断', skipped: '跳过'
+        };
+        const diagnosticsFailureRecords = computed(() => requestDiagnosticsAllRecords.value
+            .filter(r => r && r.result !== 'ok' && r.result !== 'pending')
+            .sort((a, b) => (DIAGNOSTICS_SEVERITY_RANK[a.severity] ?? 9) - (DIAGNOSTICS_SEVERITY_RANK[b.severity] ?? 9)));
+        const diagnosticsSeverityDotClass = (severity) => DIAGNOSTICS_SEVERITY_DOT_CLASS[severity] || 'bg-gray-400';
+        const diagnosticsResultLabel = (record) => record?.error?.message
+            || DIAGNOSTICS_RESULT_LABELS[record?.result]
+            || record?.result
+            || '';
+        // "刚刚 / N 分钟前 / 今天 HH:mm / M-D HH:mm" — startedAt is the local
+        // "YYYY-MM-DD HH:mm:ss" stamp the journal writes on creation.
+        const formatDiagnosticsTime = (startedAt) => {
+            const parsed = new Date(String(startedAt || '').replace(' ', 'T'));
+            if (Number.isNaN(parsed.getTime())) return String(startedAt || '');
+            const diffMs = Date.now() - parsed.getTime();
+            const pad = (n) => String(n).padStart(2, '0');
+            const clock = `${pad(parsed.getHours())}:${pad(parsed.getMinutes())}`;
+            if (diffMs < 60 * 1000) return '刚刚';
+            if (diffMs < 60 * 60 * 1000) return `${Math.floor(diffMs / (60 * 1000))} 分钟前`;
+            const now = new Date();
+            const sameDay = parsed.getFullYear() === now.getFullYear()
+                && parsed.getMonth() === now.getMonth()
+                && parsed.getDate() === now.getDate();
+            if (sameDay) return `今天 ${clock}`;
+            return `${parsed.getMonth() + 1}-${parsed.getDate()} ${clock}`;
+        };
         const writeClipboardText = async (text) => {
             const native = window.Capacitor?.Plugins?.NativeStorage;
             if (native && typeof native.clipboardWrite === 'function') {
@@ -4120,6 +4162,73 @@ const __app = createApp({
                 diagnostics.clear();
                 showToast('运行日志已清空', 'success');
             });
+        };
+
+        // Copy the diagnostics summary text (shareable short block) to the clipboard.
+        const copyDiagnosticsSummary = async () => {
+            try {
+                const diagnostics = RPHRequestDiagnostics;
+                if (!diagnostics || typeof diagnostics.buildShortSummary !== 'function') {
+                    showToast('运行日志不可用', 'error');
+                    return;
+                }
+                const text = diagnostics.buildShortSummary();
+                const written = await writeClipboardText(text);
+                showToast(written ? '摘要已复制，可直接粘贴分享' : '复制失败，请稍后重试',
+                    written ? 'success' : 'error');
+            } catch (error) {
+                console.warn('[Diagnostics] copy summary failed:', error);
+                showToast('复制摘要失败', 'error');
+            }
+        };
+
+        // Export entry point for failure toasts (4-layer plan L3-2): the error
+        // moment is when users are most willing to report; the action copies
+        // the diagnostics JSON to the clipboard for pasting into chat groups.
+        const buildDiagnosticsToastAction = () => ({
+            label: '导出诊断',
+            run: () => { exportRequestDiagnostics('copy'); }
+        });
+
+        // Crash notice (4-layer plan L3-3 + L2-8): on launch, a last-crash
+        // file written by the native layer (CrashFileWriter) is transcribed
+        // into the journal as a fatal record and surfaced once via a modal.
+        // Both buttons acknowledge — the file is cleared so the notice shows
+        // exactly once per crash.
+        const maybeShowLastCrashNotice = async () => {
+            const nativeStorage = window.Capacitor?.Plugins?.NativeStorage;
+            if (!nativeStorage?.readLastCrash) return;
+            try {
+                const result = await nativeStorage.readLastCrash();
+                const crash = result?.crash;
+                if (!crash) return;
+                const isRenderGone = crash.type === 'webview_render_process_gone';
+                const handle = RPHRequestDiagnostics?.begin?.({
+                    category: 'runtime',
+                    action: isRenderGone ? 'render_process_gone' : 'native_crash',
+                    severity: 'fatal'
+                });
+                handle?.behavior?.({
+                    name: 'error_context',
+                    result: 'ok',
+                    meta: {
+                        occurredAt: String(crash.occurredAt || '').slice(0, 19),
+                        appUptimeMs: Number(crash.appUptimeMs) || 0
+                    }
+                });
+                handle?.fail?.({
+                    name: String(crash.type || 'Crash').slice(0, 64),
+                    message: String(crash.message || '').slice(0, 200) || 'native crash'
+                });
+                const typeLabel = isRenderGone ? 'WebView 渲染进程崩溃' : 'Java 崩溃';
+                const confirmed = await showVueConfirmModal(
+                    '上次应用异常退出',
+                    `时间 ${crash.occurredAt || '未知'}\n类型 ${typeLabel}\n\n可导出诊断日志帮助定位问题。`,
+                    { confirmLabel: '导出诊断', cancelLabel: '知道了' }
+                );
+                if (confirmed) await exportRequestDiagnostics('copy');
+                await nativeStorage.clearLastCrash?.();
+            } catch (_) { /* crash notice is best-effort */ }
         };
 
         const checkApiStatus = async () => {
@@ -7732,6 +7841,7 @@ const __app = createApp({
             scheduleChatStatsRecompute,
             showToast,
             getCurrentChatStorageScopeId,
+            buildDiagnosticsToastAction,
         });
 
         // Shared-guard accessors: the tool run stores its AbortController back
@@ -9238,6 +9348,8 @@ const __app = createApp({
                             buildType: appBuildType.value || (window.Capacitor ? 'capacitor' : 'web')
                         });
                     } catch (_) { /* journal meta is best-effort */ }
+                    // Surface a native crash from the previous session (once).
+                    try { await maybeShowLastCrashNotice(); } catch (_) { /* best-effort */ }
                 } catch (error) {
                     console.warn('Failed to read app version info:', error);
                 }
@@ -9822,6 +9934,8 @@ const __app = createApp({
             settingsSectionsOpen, selectTtsService, refreshTtsStatus, testTtsVoice, ttsSpeakTextFor, toggleSpeakMessage, stopSpeaking,
             ttsCloudProviderOptions: ttsProviderOptions, ttsCloudVoiceOptions, ttsCloudModelOptions, onTtsCloudProviderChange,
             requestDiagnosticsCount, chatDiagnosticsCount, buildDiagnosticsExportEnvelope, exportRequestDiagnostics, clearRequestDiagnostics,
+            diagnosticsFailureRecords, diagnosticsSeverityDotClass, diagnosticsResultLabel, formatDiagnosticsTime, copyDiagnosticsSummary,
+            dismissToast, buildDiagnosticsToastAction,
             vectorMemorySearchQuery, vectorMemorySearchResults, vectorMemorySearchError, vectorMemorySearchSortMode, isVectorMemorySearching,
             searchVectorMemories, clearVectorMemorySearch, sliceBuildStatus, startVectorBatchMemoryExtraction,
             memoryGraphView, setMemoryGraphView,
@@ -10286,5 +10400,22 @@ const __app = createApp({
 // Phase 3.3 (2026-09-05): global runtime error sinks. Installed before mount
 // so errors thrown during initial component setup/render are captured too.
 installGlobalErrorHandlers(__app);
+
+// Replay the index.html early-error buffer (errors thrown before this module
+// ran) through the journal, then drop it.  Buffer entries are pre-clamped and
+// capped at 10; a replayed error cannot double-record because it fired before
+// the live sinks existed.
+try {
+    const earlyErrors = window.__rphEarlyErrors;
+    if (Array.isArray(earlyErrors) && earlyErrors.length) {
+        for (const entry of earlyErrors) {
+            RPHRequestDiagnostics?.begin?.({
+                category: 'runtime',
+                action: entry.kind === 'unhandledrejection' ? 'unhandled_rejection' : 'window_error'
+            })?.fail?.({ name: entry.name || 'Error', message: entry.message || 'early error' });
+        }
+    }
+    delete window.__rphEarlyErrors;
+} catch (_) { /* best-effort */ }
 
 __app.mount('#app');

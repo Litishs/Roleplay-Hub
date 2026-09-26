@@ -30,6 +30,24 @@ public class MainActivity extends BridgeActivity {
         WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
         super.onCreate(savedInstanceState);
 
+        // Crash bookkeeping (diagnostics 4-layer plan): minimal uncaught-
+        // exception + WebView render-process-gone writer, chained so the
+        // default crash behavior is untouched.  Best-effort only.
+        try {
+            android.content.pm.PackageInfo packageInfo = getPackageManager()
+                    .getPackageInfo(getPackageName(), 0);
+            String crashVersionName = packageInfo.versionName == null ? "" : packageInfo.versionName;
+            int crashVersionCode = packageInfo.versionCode;
+            Thread.setDefaultUncaughtExceptionHandler(new CrashReporter(
+                    Thread.getDefaultUncaughtExceptionHandler(), getFilesDir(), crashVersionName, crashVersionCode));
+            if (getBridge() != null && getBridge().getWebView() != null) {
+                getBridge().getWebView().setWebViewClient(
+                        new CrashReportingWebViewClient(getBridge(), getFilesDir(), crashVersionName, crashVersionCode));
+            }
+        } catch (Throwable ignored) {
+            // Crash bookkeeping must never break app startup.
+        }
+
         // Defensive: hide the support action bar so HarmonyOS and other OEM skins cannot render a persistent title bar.
         ActionBar actionBar = getSupportActionBar();
         if (actionBar != null) {

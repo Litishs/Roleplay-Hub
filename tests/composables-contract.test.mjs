@@ -804,8 +804,10 @@ test('every showVueConfirmModal call site declares its own button labels', () =>
     const confirmCount = (combined.match(/confirmLabel:\s*'/g) || []).length;
     const cancelCount = (combined.match(/cancelLabel:\s*'/g) || []).length;
     // 2026-09-06: the fact-extraction retry prompt was removed with the dead
-    // fact layer; remaining sites are restore-backup + 2 memory patrol retries.
-    assert.equal(callCount, 3, 'exactly three confirm call sites (restore + 2 patrol retry prompts)');
+    // fact layer.  2026-09-26: the startup crash notice (diagnostics 4-layer
+    // plan L3-3) adds a labelled site. Remaining sites: restore-backup + 2
+    // memory patrol retries + crash notice.
+    assert.equal(callCount, 4, 'exactly four confirm call sites (restore + 2 patrol retries + crash notice)');
     assert.equal(confirmCount, callCount, 'every call site must pass confirmLabel');
     assert.equal(cancelCount, callCount, 'every call site must pass cancelLabel');
     assert.ok(!combined.includes('取消中断'), 'mistranslated Cancel label must not reappear');

@@ -165,6 +165,10 @@ const speak = async ({ text, voice = '', speed = 1, utteranceId = '', chunkChars
     emit({ utteranceId: id, state: 'start' });
 
     const prefetches = new Map();
+    // Journal: chunk/text counts only, never the text itself (§2.4).
+    const journalRecord = globalThis.RPHRequestDiagnostics?.begin?.({ category: 'tts', action: 'cloud_speech' });
+    journalRecord?.input?.({ kind: 'speak_text', chars: safeText.length });
+    journalRecord?.behavior?.({ name: 'cloud_tts_chunking', result: 'ok', meta: { chunks: chunks.length } });
     const startPrefetch = (index) => {
         if (index >= chunks.length || prefetches.has(index)) return;
         prefetches.set(index, requestChunkAudio(chunks[index], voice, speed));
@@ -173,7 +177,7 @@ const speak = async ({ text, voice = '', speed = 1, utteranceId = '', chunkChars
     try {
         startPrefetch(0);
         for (let index = 0; index < chunks.length; index += 1) {
-            if (state.currentUtteranceId !== id) return id; // stopped
+            if (state.currentUtteranceId !== id) { journalRecord?.fail?.({ name: 'AbortError', message: 'stopped by user' }); return id; } // stopped
             startPrefetch(index + PREFETCH_AHEAD);
             const url = await prefetches.get(index);
             prefetches.delete(index);
@@ -184,6 +188,7 @@ const speak = async ({ text, voice = '', speed = 1, utteranceId = '', chunkChars
             state.currentUtteranceId = null;
             emit({ utteranceId: id, state: 'done' });
         }
+        journalRecord?.complete?.();
     } catch (error) {
         teardownPlayback();
         prefetches.clear();
@@ -192,8 +197,10 @@ const speak = async ({ text, voice = '', speed = 1, utteranceId = '', chunkChars
         state.currentUtteranceId = null;
         if (aborted) {
             // stop() already tore playback down and emitted the stop event.
+            journalRecord?.fail?.({ name: 'AbortError', message: 'stopped by user' });
         } else {
             state.error = String(error?.message || error);
+            journalRecord?.fail?.(error);
             emit({ utteranceId: id, state: 'error', error: state.error });
             throw error;
         }

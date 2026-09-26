@@ -40,6 +40,24 @@ const clampText = (value, maxLength) => {
     return str.length > maxLength ? str.slice(0, maxLength) + '…' : str;
 };
 
+// Short non-crypto hash used to identify values whose text is withheld (see
+// describeError) — stable per content so dedup still works, useless for
+// reconstructing the text.
+const shortHash = (text) => {
+    let hash = 0x811c9dc5;
+    for (let i = 0; i < text.length; i++) {
+        hash ^= text.charCodeAt(i);
+        hash = Math.imul(hash, 0x01000193) >>> 0;
+    }
+    return hash.toString(16).padStart(8, '0');
+};
+
+// Non-Error throwables keep their text only when short and single-line (the
+// common "enum-ish error code" case).  Anything longer may embed user text
+// (e.g. Promise.reject(userContent)) and is downgraded to a length+hash
+// marker so the journal keeps its zero-plaintext promise (AGENTS.md §2.4).
+const NON_ERROR_TEXT_MAX = 64;
+
 // Normalize any thrown value (Error, string, object, undefined) into a
 // plain descriptor without executing arbitrary code from the value.
 const describeError = (error) => {
@@ -49,7 +67,12 @@ const describeError = (error) => {
     if (error instanceof Error) {
         return { name: String(error.name || 'Error'), message: clampText(error.message, ERROR_MESSAGE_MAX_LENGTH) };
     }
-    return { name: error?.name ? String(error.name) : 'NonError', message: clampText(error?.message ?? error, ERROR_MESSAGE_MAX_LENGTH) };
+    const name = error?.name ? String(error.name) : 'NonError';
+    const raw = String(error?.message ?? error);
+    if (raw.length <= NON_ERROR_TEXT_MAX && !/[\r\n]/.test(raw)) {
+        return { name, message: raw };
+    }
+    return { name, message: `<omitted:len=${raw.length};hash=${shortHash(raw)}>` };
 };
 
 // Best-effort component attribution for a Vue error: the component's

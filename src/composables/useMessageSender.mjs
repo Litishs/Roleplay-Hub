@@ -134,6 +134,7 @@ export function useMessageSender(deps) {
         scheduleChatStatsRecompute,
         showToast,
         getCurrentChatStorageScopeId,
+        buildDiagnosticsToastAction,
     } = deps;
 
     // Generation wait-timer handle (private: all uses are in this pipeline)
@@ -1763,13 +1764,19 @@ export function useMessageSender(deps) {
                     } else {
                         chatHistory.value.push(createCharacterErrorReply(interruptLabel));
                     }
+                    // Failure-moment export entry (plan L3-2); user aborts stay silent.
+                    if (timedOut) {
+                        showToast('生成超时', 'error', 5000, buildDiagnosticsToastAction?.());
+                    }
                 } else if (continuingAssistantMessage) {
                     const errorMessage = truncateErrorMessage(friendlyNetworkErrorMessage(error, chatUrl)) || '生成失败';
                     appendAssistantResponseError(continuingAssistantMessage, errorMessage);
                     activeToolContinuationHasResponse.value = true;
+                    showToast('生成失败', 'error', 5000, buildDiagnosticsToastAction?.());
                 } else {
                     const errorMessage = truncateErrorMessage(friendlyNetworkErrorMessage(error, chatUrl)) || '生成失败';
                     chatHistory.value.push(createCharacterErrorReply(errorMessage));
+                    showToast('生成失败', 'error', 5000, buildDiagnosticsToastAction?.());
                 }
             } finally {
                 flushStreamAppends();
