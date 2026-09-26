@@ -20,14 +20,26 @@ final class CrashFileWriter {
     static final String FILE_NAME = "last-crash.json";
     static final String RENDER_PROCESS_GONE = "webview_render_process_gone";
     private static final int MESSAGE_MAX = 500;
-    // Approximate process start: this class loads during app startup.
-    private static final long START_EPOCH_MS = System.currentTimeMillis();
+    // Real app-start base, noted from MainActivity.onCreate.  Java initializes
+    // statics lazily, so a class-load-time base would measure "time since the
+    // first crash write" (observed as appUptimeMs=1 on device), not uptime.
+    private static volatile Long startEpochMs;
+    private static final Object START_LOCK = new Object();
 
     private CrashFileWriter() { }
+
+    static void noteAppStart() {
+        synchronized (START_LOCK) {
+            if (startEpochMs == null) {
+                startEpochMs = System.currentTimeMillis();
+            }
+        }
+    }
 
     static void write(File filesDir, String type, String message,
                       String versionName, int versionCode) {
         try {
+            long base = startEpochMs != null ? startEpochMs : System.currentTimeMillis();
             JSONObject json = new JSONObject();
             json.put("type", type == null ? "unknown" : type);
             String safeMessage = message == null ? "" : message;
@@ -35,7 +47,7 @@ final class CrashFileWriter {
             json.put("versionName", versionName == null ? "" : versionName);
             json.put("versionCode", versionCode);
             json.put("occurredAt", new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(new Date()));
-            json.put("appUptimeMs", System.currentTimeMillis() - START_EPOCH_MS);
+            json.put("appUptimeMs", System.currentTimeMillis() - base);
             File out = new File(filesDir, FILE_NAME);
             FileWriter writer = new FileWriter(out);
             writer.write(json.toString());

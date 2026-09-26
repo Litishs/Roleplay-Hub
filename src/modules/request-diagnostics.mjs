@@ -586,7 +586,14 @@ const makeHandle = (record) => {
                 if (!markLive() || finished) return;
                 finished = true;
                 record.result = classifyResultByError(error);
-                record.severity = normalizeSeverity(failOptions?.severity) || severityForFailure(record);
+                // An explicit fail() option always wins; otherwise the failure
+                // mapping applies only when severity is still the untouched
+                // category default — an explicit begin({ severity }) (e.g. the
+                // crash transcription's 'fatal') must survive fail().
+                const explicitNow = normalizeSeverity(failOptions?.severity);
+                if (explicitNow || record.severity === defaultSeverityForCategory(record.category)) {
+                    record.severity = explicitNow || severityForFailure(record);
+                }
                 record.durationMs = elapsed(record);
                 record.stages.push({ stage: record.result, elapsedMs: record.durationMs });
                 record.error = {

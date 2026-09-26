@@ -97,6 +97,8 @@ test('native last-crash layer: writer, exception handler, WebView client, plugin
     assert.ok(writer.includes('last-crash.json'), 'crash file name');
     assert.ok(writer.includes('MESSAGE_MAX = 500'), 'message is clamped');
     assert.ok(!writer.includes('StackTrace'), 'no stack trace is persisted');
+    assert.ok(writer.includes('noteAppStart'), 'uptime base is noted at real app start');
+    assert.match(mainActivity, /CrashFileWriter\.noteAppStart\(\);/, 'MainActivity notes the app start');
     assert.ok(reporter.includes('previous.uncaughtException(thread, throwable)'), 'handler chains to the previous one');
     assert.ok(client.includes('extends BridgeWebViewClient'), 'client subclasses the Capacitor client');
     assert.match(client, /onRenderProcessGone[\s\S]*?return false;/, 'render-process-gone keeps default termination');

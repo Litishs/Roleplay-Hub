@@ -114,6 +114,12 @@ test('severity mapping: runtime=error, cancelled=info, timed_out/failed=warn, ex
   assert.equal(diagnostics.getLatest().severity, 'warn', 'begin() severity option is honored');
   pre.complete();
   assert.equal(diagnostics.getLatest().severity, 'warn');
+
+  // An explicit begin() severity survives fail() without an explicit override
+  // (device regression: the crash transcription's 'fatal' was being clobbered).
+  const fatal = diagnostics.begin({ category: 'runtime', action: 'native_crash', severity: 'fatal' });
+  fatal.fail({ name: 'Crash', message: 'boom' });
+  assert.equal(diagnostics.getLatest().severity, 'fatal', 'begin severity must survive fail()');
 });
 
 test('breadcrumbs: ring capped at 8, meta sanitized to identifier-safe strings', async () => {

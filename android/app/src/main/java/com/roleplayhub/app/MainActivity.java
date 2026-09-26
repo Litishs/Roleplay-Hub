@@ -33,6 +33,7 @@ public class MainActivity extends BridgeActivity {
         // Crash bookkeeping (diagnostics 4-layer plan): minimal uncaught-
         // exception + WebView render-process-gone writer, chained so the
         // default crash behavior is untouched.  Best-effort only.
+        CrashFileWriter.noteAppStart();
         try {
             android.content.pm.PackageInfo packageInfo = getPackageManager()
                     .getPackageInfo(getPackageName(), 0);
