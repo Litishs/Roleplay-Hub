@@ -285,6 +285,9 @@ export function useMessageSender(deps) {
                 },
                 requestType: activeToolDepth > 0 ? 'tool_continuation' : 'chat'
             }) || null;
+            // Journal breadcrumb: runtime error records carry this trail so an
+            // export shows what was in flight when something blew up.
+            RPHRequestDiagnostics?.breadcrumb?.('generation_start', { toolDepth: String(activeToolDepth || 0) });
 
             // Start Timer
             const startTimer = () => {

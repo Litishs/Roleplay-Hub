@@ -377,7 +377,7 @@ test('buildExportPayload includes schemaVersion/exportedAt/appVersion/buildType/
   diagnostics.begin({ category: 'tts', action: 'speak' }).complete();
 
   const envelope = diagnostics.buildExportPayload({ appVersion: '2.27', buildType: 'android-capacitor' });
-  assert.equal(envelope.schemaVersion, 1);
+  assert.equal(envelope.schemaVersion, 2);
   assert.match(envelope.exportedAt, /^\d{4}-\d{2}-\d{2} \d{2}/);
   assert.equal(envelope.appVersion, '2.27');
   assert.equal(envelope.buildType, 'android-capacitor');
@@ -390,7 +390,7 @@ test('buildExportPayload includes schemaVersion/exportedAt/appVersion/buildType/
 
 test('schemaVersion and storageKey constants are exposed on public API', async () => {
   const { diagnostics } = await loadDiagnostics();
-  assert.equal(diagnostics.schemaVersion, 1);
+  assert.equal(diagnostics.schemaVersion, 2);
   assert.equal(diagnostics.storageKey, 'rph_activity_journal_v1');
   assert.equal(diagnostics.maxRecords, 30);
   assert.equal(typeof diagnostics.begin, 'function');

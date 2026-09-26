@@ -3990,6 +3990,16 @@ const __app = createApp({
                 r.category === 'chat'
                 || (r.requestType && typeof r.requestType === 'string' && r.requestType.startsWith('chat'))
             )).length);
+        // Journal breadcrumbs (schema v2): a tiny "what was the user doing"
+        // trail that runtime error records attach automatically.  Meta values
+        // are sanitized to identifier-safe strings inside the journal module.
+        watch(() => currentView.value, (view) => {
+            RPHRequestDiagnostics?.breadcrumb?.('view_change', { to: String(view || '') });
+        });
+        watch(() => settings.chatProviderId, (providerId) => {
+            if (!providerId) return;
+            RPHRequestDiagnostics?.breadcrumb?.('provider_switch', { providerId: String(providerId) });
+        });
         const writeClipboardText = async (text) => {
             const native = window.Capacitor?.Plugins?.NativeStorage;
             if (native && typeof native.clipboardWrite === 'function') {
@@ -9220,6 +9230,14 @@ const __app = createApp({
                             console.warn('Failed to read build type:', typeError);
                         }
                     }
+                    // Journal schema v2: stamp every record with the session
+                    // context so a mixed-version export can be sliced per build.
+                    try {
+                        RPHRequestDiagnostics?.setRecordMeta?.({
+                            appVersion: appVersionName.value ? `${appVersionName.value} (${appVersionCode.value})` : '',
+                            buildType: appBuildType.value || (window.Capacitor ? 'capacitor' : 'web')
+                        });
+                    } catch (_) { /* journal meta is best-effort */ }
                 } catch (error) {
                     console.warn('Failed to read app version info:', error);
                 }

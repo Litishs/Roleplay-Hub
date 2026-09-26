@@ -28,7 +28,7 @@ const PERSIST_TRIM = Object.freeze({
     stagesTail: 4,
     postprocessTail: 4
 });
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 
 const records = [];
 const clocks = new WeakMap();
@@ -270,6 +270,76 @@ const sanitizeScope = (raw) => {
     return out;
 };
 
+// ---- Session context, severity & breadcrumbs (schema v2) ------------------------------
+
+const sessionStartEpoch = Date.now();
+const sessionMeta = { appVersion: '', buildType: 'web', sessionId: '' };
+
+const ensureSessionId = () => {
+    if (sessionMeta.sessionId) return sessionMeta.sessionId;
+    try {
+        sessionMeta.sessionId = globalThis.crypto?.randomUUID?.()
+            || `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+    } catch (_) {
+        sessionMeta.sessionId = 'unknown';
+    }
+    return sessionMeta.sessionId;
+};
+
+// Called once per launch from app.mjs after BuildInfo resolves; tests may call
+// it to stamp records.  sessionId stays module-owned (lazy UUID) so the app
+// cannot accidentally fork identities across reloads.
+const setRecordMeta = (meta = {}) => {
+    try {
+        if (meta?.appVersion !== undefined && meta?.appVersion !== null) sessionMeta.appVersion = String(meta.appVersion);
+        if (meta?.buildType !== undefined && meta?.buildType !== null) sessionMeta.buildType = String(meta.buildType);
+        if (meta?.sessionId) sessionMeta.sessionId = String(meta.sessionId);
+    } catch (_) { /* best-effort */ }
+};
+
+const SEVERITY_LEVELS = ['info', 'warn', 'error', 'fatal'];
+const normalizeSeverity = (value) => (SEVERITY_LEVELS.includes(value) ? value : null);
+const defaultSeverityForCategory = (category) => (category === 'runtime' ? 'error' : 'info');
+// Mirrors classifyResultByError: user cancels are not faults, network-ish
+// failures are 'warn', app-level runtime faults are 'error'.
+const severityForFailure = (record) => {
+    if (record.category === 'runtime') return 'error';
+    if (record.result === 'cancelled') return 'info';
+    return 'warn';
+};
+
+const BREADCRUMB_MAX = 8;
+const BREADCRUMB_META_MAX = 32;
+const breadcrumbs = [];
+
+// Breadcrumb meta values are enum-ish short identifiers only: strip anything
+// outside [A-Za-z0-9_.-] and clamp, so free text (character names, message
+// content) can never ride in through a careless caller.
+const sanitizeBreadcrumbMeta = (meta) => {
+    if (!meta || typeof meta !== 'object' || Array.isArray(meta)) return null;
+    const out = {};
+    for (const key of Object.keys(meta)) {
+        const safe = String(meta[key] ?? '').replace(/[^A-Za-z0-9_.\-]/g, '').slice(0, BREADCRUMB_META_MAX);
+        if (safe) out[key] = safe;
+    }
+    return Object.keys(out).length ? out : null;
+};
+
+const pushBreadcrumb = (name, meta) => {
+    const cleanName = String(name || '').replace(/[^a-z0-9_]/gi, '_').slice(0, 40);
+    if (!cleanName) return;
+    const entry = { atUptimeMs: Math.max(0, Date.now() - sessionStartEpoch), name: cleanName };
+    const cleanMeta = sanitizeBreadcrumbMeta(meta);
+    if (cleanMeta) entry.meta = cleanMeta;
+    breadcrumbs.push(entry);
+    if (breadcrumbs.length > BREADCRUMB_MAX) breadcrumbs.splice(0, breadcrumbs.length - BREADCRUMB_MAX);
+};
+
+const breadcrumb = (name, meta) => {
+    try { pushBreadcrumb(name, meta); } catch (_) { /* observer must not break the journal */ }
+};
+const breadcrumbsSnapshot = () => clone(breadcrumbs);
+
 // ---- Activity record factory --------------------------------------------------------
 
 // Local wall-clock timestamp (no timezone offset, no "T"), e.g.
@@ -282,14 +352,25 @@ const formatLocalTimestamp = (d = new Date()) => {
 };
 
 const createActivityRecord = ({ category, action, scope }) => {
+    const resolvedCategory = String(category || 'general');
     const record = {
         schemaVersion: SCHEMA_VERSION,
         id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-        category: String(category || 'general'),
+        category: resolvedCategory,
         action: String(action || 'unknown'),
         startedAt: formatLocalTimestamp(),
         durationMs: null,
         result: 'pending',
+        // v2 fields: severity by category, per-record session context so a
+        // mixed-version export can be sliced per app build and per launch.
+        severity: defaultSeverityForCategory(resolvedCategory),
+        sessionId: ensureSessionId(),
+        uptimeMs: Math.max(0, Date.now() - sessionStartEpoch),
+        appVersion: sessionMeta.appVersion,
+        buildType: sessionMeta.buildType,
+        // Only runtime (global error) records carry the breadcrumb trail; the
+        // trail answers "what was the user doing when this blew up".
+        breadcrumbs: resolvedCategory === 'runtime' ? breadcrumbsSnapshot() : [],
         scope: sanitizeScope(scope),
         inputs: [],
         behaviors: [],
@@ -500,11 +581,12 @@ const makeHandle = (record) => {
             }
         },
 
-        fail(error) {
+        fail(error, failOptions = {}) {
             try {
                 if (!markLive() || finished) return;
                 finished = true;
                 record.result = classifyResultByError(error);
+                record.severity = normalizeSeverity(failOptions?.severity) || severityForFailure(record);
                 record.durationMs = elapsed(record);
                 record.stages.push({ stage: record.result, elapsedMs: record.durationMs });
                 record.error = {
@@ -701,6 +783,8 @@ const begin = (options = {}) => {
             action: options?.action,
             scope: options?.scope
         });
+        const explicitSeverity = normalizeSeverity(options?.severity);
+        if (explicitSeverity) record.severity = explicitSeverity;
         pushRecord(record);
         persist();
         return makeHandle(record);
@@ -804,14 +888,72 @@ const projectForExport = (record) => {
 // Build an export envelope suitable for the settings-page "export diagnostics
 // log" button.  Caller supplies appVersion/buildType; we add ISO timestamp
 // and the projected records array.
+// Machine-readable aggregate over the current buffer: category/severity
+// distribution plus the dominant error groups.  Everything is derived from
+// already-recorded fields — no new privacy surface.
+const summarizeRecords = () => {
+    const recordsByCategory = {};
+    const severityCounts = {};
+    const errorGroups = new Map();
+    for (const record of records) {
+        recordsByCategory[record.category] = (recordsByCategory[record.category] || 0) + 1;
+        const sev = SEVERITY_LEVELS.includes(record.severity) ? record.severity : 'info';
+        severityCounts[sev] = (severityCounts[sev] || 0) + 1;
+        if (record.error && record.error.message) {
+            const groupKey = `${record.category}/${record.action}::${record.error.message}`;
+            const group = errorGroups.get(groupKey)
+                || { category: record.category, action: record.action, message: record.error.message, severity: sev, count: 0 };
+            group.count += 1;
+            errorGroups.set(groupKey, group);
+        }
+    }
+    let suppressedCount = 0;
+    try {
+        suppressedCount = Number(globalThis.RPHRuntimeErrorStats?.suppressedCount) || 0;
+    } catch (_) {
+        suppressedCount = 0;
+    }
+    return {
+        recordsByCategory,
+        severityCounts,
+        topErrors: [...errorGroups.values()].sort((a, b) => b.count - a.count).slice(0, 5),
+        suppressedCount
+    };
+};
+
 const buildExportPayload = ({ appVersion = '', buildType = 'web' } = {}) => ({
     schemaVersion: SCHEMA_VERSION,
     exportedAt: formatLocalTimestamp(),
     appVersion: String(appVersion || ''),
     buildType: String(buildType || 'web'),
     recordCount: records.length,
+    summary: summarizeRecords(),
     records: records.map(projectForExport)
 });
+
+// Short shareable text block (≤10 lines) for pasting into chat groups — the
+// full JSON export stays available via buildExportPayload.  Error messages
+// are the same clamped summaries stored on records (≤80 chars).
+const buildShortSummary = () => {
+    const summary = summarizeRecords();
+    const lines = [];
+    const version = sessionMeta.appVersion || 'unknown version';
+    lines.push(`Roleplay Hub ${version}${sessionMeta.buildType ? ` · ${sessionMeta.buildType}` : ''}`);
+    lines.push(`${formatLocalTimestamp()} · 最近 ${records.length} 条活动记录`);
+    const categoryText = Object.entries(summary.recordsByCategory).map(([name, count]) => `${name} ${count}`).join(' / ');
+    if (categoryText) lines.push(`分布 ${categoryText}`);
+    if (summary.topErrors.length) {
+        lines.push('异常 Top3:');
+        summary.topErrors.slice(0, 3).forEach((error, index) => {
+            lines.push(`${index + 1}. [${error.category}] ${error.action} ×${error.count}: ${error.message}`);
+        });
+    } else {
+        lines.push('无异常记录');
+    }
+    const severityText = Object.entries(summary.severityCounts).map(([name, count]) => `${name} ${count}`).join(' / ');
+    if (severityText) lines.push(`severity: ${severityText}`);
+    return lines.join('\n');
+};
 
 // ---- Bootstrap: load persisted ring buffer + migrate legacy data --------------------
 
@@ -894,6 +1036,12 @@ const loadPersistedRecords = () => {
                         durationMs: Number.isFinite(Number(item.durationMs)) ? item.durationMs : null,
                         result: rawResult === 'pending' ? 'interrupted' : rawResult,
                         truncated: item.truncated === true,
+                        severity: SEVERITY_LEVELS.includes(item.severity) ? item.severity : 'info',
+                        sessionId: String(item.sessionId || ''),
+                        uptimeMs: Number.isFinite(Number(item.uptimeMs)) ? Math.max(0, Number(item.uptimeMs)) : 0,
+                        appVersion: String(item.appVersion || ''),
+                        buildType: String(item.buildType || 'web'),
+                        breadcrumbs: Array.isArray(item.breadcrumbs) ? item.breadcrumbs : [],
                         scope: item.scope && typeof item.scope === 'object' ? item.scope : {},
                         inputs: Array.isArray(item.inputs) ? item.inputs : [],
                         behaviors: Array.isArray(item.behaviors) ? item.behaviors : [],
@@ -953,6 +1101,9 @@ const RPHRequestDiagnostics = Object.freeze({
     begin,
     // Legacy request-oriented API (preserved on contract)
     start,
+    // Session context & breadcrumbs (schema v2)
+    setRecordMeta,
+    breadcrumb,
     getLatest: () => records.length ? projectForExport(records[records.length - 1]) : null,
     getAll: () => records.map(projectForExport),
     clear: () => {
@@ -964,6 +1115,7 @@ const RPHRequestDiagnostics = Object.freeze({
     storageKey: NEW_STORAGE_KEY,
     schemaVersion: SCHEMA_VERSION,
     buildExportPayload,
+    buildShortSummary,
     getRevision,
     onChange
 });
