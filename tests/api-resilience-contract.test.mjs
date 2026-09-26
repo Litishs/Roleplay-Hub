@@ -30,7 +30,6 @@ test('API URL normalization is unified and handles trailing slashes', () => {
     assert.ok(app.includes('const getApiEndpoint = (path) => {'));
     assert.ok(app.includes("replace(/\\/+$/, '')"));
     assert.ok(app.includes("replace(/^\\/+/, '')"));
-    assert.ok(app.includes('const getOpenAICompatUrl = (endpoint) => getApiEndpoint(endpoint);'));
 });
 
 // 2026-08-29 (Phase 2.2): the chat generation pipeline moved from app.mjs to

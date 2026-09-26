@@ -183,45 +183,6 @@
         return String(text).split('\n').map(line => `${pad}${line}`).join('\n');
     };
 
-    /**
-     * 关系视图数据：径向布局用——中心 {{user}}，直接相连角色为第一圈，其余角色为外圈。
-     * @returns {{center:string, nodes:Array<{id:string,label:string,radius:number}>, edges:Array<{from:string,to:string,relation:string}>}}
-     */
-    const buildRelationViewData = (profile, options = {}) => {
-        const current = normalizeProfile(profile);
-        const userRoleName = String(options.userRoleName || '我').trim();
-        const active = current.relations.filter(edge => edge.status !== 'ended');
-        const direct = new Set();
-        active.forEach(edge => {
-            if (edge.from === userRoleName) direct.add(edge.to);
-            if (edge.to === userRoleName) direct.add(edge.from);
-        });
-        const nodes = [{ id: userRoleName, label: userRoleName, radius: 0 }];
-        const others = new Set();
-        active.forEach(edge => {
-            if (edge.from !== userRoleName && edge.to !== userRoleName) {
-                others.add(edge.from);
-                others.add(edge.to);
-            } else {
-                if (edge.from !== userRoleName) direct.add(edge.from);
-                if (edge.to !== userRoleName) direct.add(edge.to);
-            }
-        });
-        direct.forEach(name => {
-            if (name !== userRoleName) nodes.push({ id: name, label: name, radius: 1 });
-        });
-        others.forEach(name => {
-            if (name !== userRoleName && !direct.has(name)) nodes.push({ id: name, label: name, radius: 2 });
-        });
-        return {
-            center: userRoleName,
-            nodes,
-            edges: active.map(edge => ({ from: edge.from, to: edge.to, relation: edge.relation }))
-        };
-    };
-
-    
-
-export { createEmptyProfile, normalizeProfile, relationKey, mergeRelations, mergeCharacters, mergeOpenPlots, buildProfileContext, buildRelationViewData };
+export { createEmptyProfile, normalizeProfile, relationKey, mergeRelations, mergeCharacters, mergeOpenPlots, buildProfileContext };
 
 

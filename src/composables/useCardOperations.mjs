@@ -15,7 +15,7 @@
 //   app.mjs: the moved code flips it through the injected
 //   setApplyingCharacterScopedData() bridge instead of the raw binding.
 // - The storage handle is injected as getDb() (app.mjs reassigns its `let db`
-//   when initDB/reopenMainDB runs, so a value-captured binding would go stale)
+//   when initDB runs, so a value-captured binding would go stale)
 
 import { generateUUID } from '../modules/utils.mjs';
 

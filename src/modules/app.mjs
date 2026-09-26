@@ -899,7 +899,6 @@ const __app = createApp({
             const apiUrl = /\/v\d+$/i.test(baseUrl) ? baseUrl : `${baseUrl}/v1`;
             return `${apiUrl}/${String(path || '').replace(/^\/+/, '')}`;
         };
-        const getMemoryApiKey = () => getMemoryProvider().apiKey || '';
         const memoryProviderLabel = computed(() => {
             const provider = getMemoryProvider();
             if (provider.isFallback) {
@@ -950,10 +949,6 @@ const __app = createApp({
                 console.error(error);
                 if (isManual) showToast('获取模型失败: ' + error.message, 'error');
             }
-        };
-        const fetchModelsForMemoryProvider = () => {
-            const provider = getMemoryProvider();
-            fetchModelsForProvider(provider.providerId, { isManual: false });
         };
         const fetchAllConfiguredProviderModels = () => {
             const providerIds = [...apiProviderOptions, ...customApiProviderOptions]
@@ -1798,29 +1793,6 @@ const __app = createApp({
             };
         };
 
-        const quantizeEmbeddingForStorage = (embedding) => {
-            if (!isEmbeddingLike(embedding) || embedding.length === 0) return null;
-            let maxAbs = 0;
-            for (let i = 0; i < embedding.length; i++) {
-                const value = Math.abs(Number(embedding[i]) || 0);
-                if (value > maxAbs) maxAbs = value;
-            }
-            if (maxAbs <= 0) return null;
-
-            const quantized = new Int8Array(embedding.length);
-            for (let i = 0; i < embedding.length; i++) {
-                const scaled = Math.round(((Number(embedding[i]) || 0) / maxAbs) * 127);
-                quantized[i] = Math.max(-127, Math.min(127, scaled));
-            }
-
-            return {
-                embeddingQ: bytesToBase64(new Uint8Array(quantized.buffer)),
-                embeddingScale: maxAbs / 127,
-                embeddingDims: embedding.length,
-                embeddingEncoding: 'int8:maxabs:v1'
-            };
-        };
-
         const prepareMemoryForRuntime = (memory) => {
             if (!memory || typeof memory !== 'object') return memory;
             if (Object.prototype.hasOwnProperty.call(memory, 'depth')) {
@@ -2057,12 +2029,6 @@ const __app = createApp({
             await RPHStorage.init();
             db = RPHStorage;
             return db;
-        };
-
-        
-        const reopenMainDB = async () => {
-            db = null;
-            return initDB();
         };
 
         // accessor bridge: useCardOperations reads the storage handle through this
@@ -2898,16 +2864,6 @@ const __app = createApp({
             // shim 用 ResizeObserver 上报，宿主在 handleExecutableFrameMessage 里应用。
             iframe.srcdoc = buildExecutableHtmlDocument(rawHtml);
             return iframe;
-        };
-
-        const renderExecutableHtmlFrame = (rawHtml, extraClass = '') => {
-            const container = document.createElement('div');
-            container.className = 'html-card-container ui-template-frame-container';
-            container.style.margin = '0';
-            container.style.padding = '0';
-            container.style.overflow = 'hidden';
-            container.appendChild(createExecutableHtmlIframe(rawHtml, extraClass));
-            return container.outerHTML;
         };
 
         /* 角色卡 executable-html iframe 焦点跟踪（captureInput=false 后不再需要 IME 代理框）。
@@ -5538,9 +5494,6 @@ const __app = createApp({
             refreshTtsStatus();
         });
 
-        const getOpenAICompatUrl = (endpoint) => getApiEndpoint(endpoint);
-
-        
         const stripVectorMemoryCode = (text) => {
             if (!text) return '';
 
@@ -7938,111 +7891,6 @@ const __app = createApp({
             _classicBatchExtractAbort = null;
             _classicBatchRescanRequested = false;
             isClassicBatchExtracting.value = false;
-        };
-
-        const startClassicBatchMemoryExtraction = async (options = {}) => {
-            const { manual = true } = options;
-            if (isClassicBatchExtracting.value || !currentCharacter.value || chatHistory.value.length === 0) return;
-            if (!String(memorySettings.classicModel || '').trim()) {
-                if (manual) showToast('请先选择总结模式副模型', 'warning');
-                return;
-            }
-
-            const batchController = new AbortController();
-            _classicBatchExtractAbort = batchController;
-            _classicBatchRescanRequested = false;
-            isClassicBatchExtracting.value = true;
-            classicBatchExtractProgress.value = { current: 0, total: 0 };
-            let totalAdded = 0;
-            let foundJobs = false;
-
-            try {
-                while (_classicBatchExtractAbort === batchController && !batchController.signal.aborted) {
-                    _classicBatchRescanRequested = false;
-                    const snapshot = await ensureClassicMessageIds();
-                    if (_classicBatchExtractAbort !== batchController || batchController.signal.aborted) return;
-                    const safeTurnCount = isConversationBusy.value
-                        ? Math.max(0, snapshot.turns.length - 1)
-                        : snapshot.turns.length;
-                    const jobs = snapshot.turns
-                        .slice(0, safeTurnCount)
-                        .map((_, index) => buildClassicSummaryJob(snapshot, index))
-                        .filter(job => job && !hasClassicMemoryForJob(job));
-                    if (jobs.length > 0) {
-                        foundJobs = true;
-                        classicBatchExtractProgress.value = { current: 0, total: jobs.length };
-                    }
-
-                    const runClassicJob = async job => {
-                        try {
-                            return { job, added: await generateAndStoreClassicMemory(job, batchController.signal) };
-                        } catch (error) {
-                            return { job, error };
-                        }
-                    };
-                    const concurrency = normalizeClassicMemoryConcurrency(memorySettings.classicConcurrency);
-                    for (let offset = 0; offset < jobs.length; offset += concurrency) {
-                        if (_classicBatchExtractAbort !== batchController || batchController.signal.aborted) break;
-                        const group = jobs.slice(offset, offset + concurrency);
-                        const results = await Promise.all(group.map(runClassicJob));
-                        if (_classicBatchExtractAbort !== batchController || batchController.signal.aborted) break;
-
-                        const groupAdded = results.filter(result => result.added).length;
-                        totalAdded += groupAdded;
-                        if (groupAdded > 0) await saveClassicMemoriesNow();
-                        for (const failed of results.filter(result => result.error)) {
-                            if (!manual) throw failed.error;
-                            let retryError = failed.error;
-                            while (true) {
-                                if (retryError.name === 'AbortError') throw retryError;
-                                const retry = await showVueConfirmModal(
-                                    '总结模式补录遇到错误',
-                                    `第 ${failed.job.turn} 轮生成失败：\n${retryError.message}\n\n是否立即重试？`,
-                                    { confirmLabel: '立即重试', cancelLabel: '取消' }
-                                );
-                                if (!retry) throw retryError;
-                                const retryResult = await runClassicJob(failed.job);
-                                if (!retryResult.error) {
-                                    if (retryResult.added) {
-                                        totalAdded++;
-                                        await saveClassicMemoriesNow();
-                                    }
-                                    break;
-                                }
-                                retryError = retryResult.error;
-                            }
-                        }
-                        classicBatchExtractProgress.value.current = Math.min(offset + group.length, jobs.length);
-                    }
-
-                    if (isConversationBusy.value) {
-                        await waitForMemoryConversationIdle(batchController.signal);
-                        continue;
-                    }
-                    const currentTurnCount = buildConversationTurnSnapshot(chatHistory.value, { includeSystem: false }).turns.length;
-                    if (jobs.length > 0 || _classicBatchRescanRequested || currentTurnCount !== safeTurnCount) continue;
-                    break;
-                }
-
-                if (_classicBatchExtractAbort === batchController) {
-                    if (foundJobs) {
-                        if (manual) showToast(`总结模式补录完成：新增 ${totalAdded} 条记忆`, 'success');
-                    } else {
-                        if (manual) showNoMemoryNeededModal.value = true;
-                    }
-                }
-            } catch (error) {
-                if (_classicBatchExtractAbort !== batchController) {
-                    return;
-                } else if (error.name !== 'AbortError') {
-                    console.error('Classic memory batch extraction failed:', error);
-                }
-            } finally {
-                if (_classicBatchExtractAbort === batchController) {
-                    _classicBatchExtractAbort = null;
-                    isClassicBatchExtracting.value = false;
-                }
-            }
         };
 
         const startAutomaticMemoryPatrol = (mode = memorySettings.mode) => {

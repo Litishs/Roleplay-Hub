@@ -26,7 +26,6 @@ test('renderUiTemplateHtml returns plain template HTML, no iframe wrapper', asyn
   const source = await read('src/modules/app.mjs');
 
   assert.match(source, /const renderUiTemplateHtml = \(template\) => \{\s*if \(!template \|\| !template\.htmlTemplate\) return '';\s*const variables = template\.variableState \|\| \{\};\s*return renderUiTemplateString\(stripUiTemplateCodeFence\(template\.htmlTemplate\), variables\);/);
-  assert.doesNotMatch(source, /renderUiTemplateHtml = \(template\) => \{[\s\S]*?renderExecutableHtmlFrame\(/);
   assert.doesNotMatch(source, /renderUiTemplateHtml = \(template\) => \{[\s\S]*?<iframe/);
 });
 
