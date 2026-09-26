@@ -156,4 +156,9 @@ test('settings page: failure list, copy-summary button, and startup crash notice
     assert.match(settingsPanel, /copyDiagnosticsSummary/, 'copy-summary button rendered');
     assert.match(settingsPanel, /diagnosticsSeverityDotClass\(record\.severity\)/, 'severity dot classes');
     assert.match(settingsPanel, /diagnosticsShowAll = !diagnosticsShowAll/, 'expand/collapse toggle');
+    // Mobile layout: the header stacks and the three buttons share a 3-col
+    // grid, otherwise they squeeze the min-w-0 title into vertical text
+    // (device regression on a 1080px-wide phone).
+    assert.match(settingsPanel, /flex flex-col gap-2\.5 sm:flex-row sm:items-center sm:justify-between/, 'header stacks on mobile');
+    assert.match(settingsPanel, /grid grid-cols-3 gap-2 sm:flex sm:flex-shrink-0/, 'buttons form a 3-col grid on mobile');
 });
