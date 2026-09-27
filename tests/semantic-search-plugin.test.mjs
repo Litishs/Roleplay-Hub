@@ -123,6 +123,20 @@ test('空查询返回空结果；中断信号向上传播', async () => {
     );
 });
 
+test('空闲预热：只建索引不嵌入查询，后续执行命中缓存', async () => {
+    const embedTexts = makeEmbedder();
+    const plugin = createSemanticSearchPlugin({ getMessages: () => [], getScopeId: () => 'x', embedTexts });
+    const ctx = makeCtx();
+
+    await plugin.warmup(ctx);
+    const afterWarmup = embedTexts.embedded.length;
+    assert.ok(afterWarmup >= 3, '预热嵌入全部消息');
+
+    const results = await plugin.execute('想去看海的日子', makeTool(), null, ctx);
+    assert.equal(embedTexts.embedded.length, afterWarmup + 1, '执行时只嵌入查询本身');
+    assert.equal(results[0].messageId, 'm1', '预热后的索引可直接命中');
+});
+
 test('manifest 通过插件 API 校验，工具贡献结构完整', async () => {
     const embedTexts = makeEmbedder();
     const plugin = createSemanticSearchPlugin({ getMessages: () => [], getScopeId: () => 'x', embedTexts });

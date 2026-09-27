@@ -152,6 +152,23 @@ export const createPluginRegistry = ({ storage = null, logger = console } = {}) 
             return plugin.execute(query, tool, signal, ctx);
         },
 
+        // 空闲预热：给启用的插件一个后台建索引/做准备工作的机会。
+        // 每个 getSettings 按插件绑定；单个插件失败只记日志，不拖垮其它插件。
+        async warmupAll(baseCtx = {}) {
+            await load();
+            for (const plugin of plugins.values()) {
+                if (!effectiveEnabled(plugin) || typeof plugin.warmup !== 'function') continue;
+                try {
+                    await plugin.warmup({
+                        ...baseCtx,
+                        getSettings: () => (baseCtx.getSettings ? baseCtx.getSettings(plugin.id) : {})
+                    });
+                } catch (error) {
+                    logger?.warn?.(`[PluginRegistry] 插件 ${plugin.id} 预热失败:`, error?.message || error);
+                }
+            }
+        },
+
         onChange(listener) {
             listeners.add(listener);
             return () => listeners.delete(listener);

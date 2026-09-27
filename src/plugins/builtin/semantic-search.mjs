@@ -49,6 +49,45 @@ export const createSemanticSearchPlugin = ({ getMessages, getScopeId, embedTexts
     let indexScope = null;
     const index = new Map();
 
+    // 建立/增量补全索引并返回参与检索的目标（含位置与角色元信息）。
+    // 只嵌入缺失的条目：流式新增的消息在下一次调用时增量补上。
+    const ensureIndexed = async (ctx, signal) => {
+        const scopeId = String(ctx?.getScopeId?.() || 'default');
+        if (indexScope !== scopeId) {
+            index.clear();
+            indexScope = scopeId;
+        }
+
+        const settings = ctx?.getSettings?.() || {};
+        const indexSize = clampNumber(settings.indexSize, MIN_INDEX_SIZE, MAX_INDEX_SIZE, DEFAULT_INDEX_SIZE);
+        const sourceMessages = (ctx?.getMessages?.() || [])
+            .filter(message => message && typeof message.content === 'string'
+                && (message.role === 'user' || message.role === 'assistant'))
+            .slice(-indexSize);
+
+        const targets = [];
+        sourceMessages.forEach((message, position) => {
+            const text = excerptForEmbedding(message);
+            if (!text) return;
+            targets.push({
+                id: message.id || `pos:${position}`,
+                text,
+                turn: position + 1,
+                role: message.role,
+                speaker: message.name || ''
+            });
+        });
+
+        const missing = targets.filter(target => !index.has(target.id));
+        for (let start = 0; start < missing.length; start += EMBED_BATCH_SIZE) {
+            if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+            const batch = missing.slice(start, start + EMBED_BATCH_SIZE);
+            const vectors = await embedTexts(batch.map(target => target.text), signal);
+            batch.forEach((target, offset) => index.set(target.id, vectors[offset]));
+        }
+        return targets;
+    };
+
     return definePlugin({
         id: 'rph-semantic-search',
         name: '语义对话检索',
@@ -78,47 +117,18 @@ export const createSemanticSearchPlugin = ({ getMessages, getScopeId, embedTexts
             }
         ],
 
+        // 空闲预热：宿主在聊天打开/切换后调用，把索引在后台建好，
+        // 模型真正调用工具时即时返回。失败由宿主记日志，不影响聊天。
+        warmup: async (ctx) => { await ensureIndexed(ctx, null); },
+
         execute: async (query, tool, signal, ctx) => {
-            const question = String(query || '').trim();
-            if (!question) return [];
-            if (typeof embedTexts !== 'function') throw new Error('本机嵌入服务不可用');
+        const question = String(query || '').trim();
+        if (!question) return [];
+        if (typeof embedTexts !== 'function') throw new Error('本机嵌入服务不可用');
 
-            const scopeId = String(ctx?.getScopeId?.() || 'default');
-            if (indexScope !== scopeId) {
-                index.clear();
-                indexScope = scopeId;
-            }
-
-            const settings = ctx?.getSettings?.() || {};
-            const indexSize = clampNumber(settings.indexSize, MIN_INDEX_SIZE, MAX_INDEX_SIZE, DEFAULT_INDEX_SIZE);
-            const sourceMessages = (ctx?.getMessages?.() || [])
-                .filter(message => message && typeof message.content === 'string'
-                    && (message.role === 'user' || message.role === 'assistant'))
-                .slice(-indexSize);
-
-            const targets = [];
-            sourceMessages.forEach((message, position) => {
-                const text = excerptForEmbedding(message);
-                if (!text) return;
-                targets.push({
-                    id: message.id || `pos:${position}`,
-                    text,
-                    turn: position + 1,
-                    role: message.role,
-                    speaker: message.name || ''
-                });
-            });
-
-            const missing = targets.filter(target => !index.has(target.id));
-            for (let start = 0; start < missing.length; start += EMBED_BATCH_SIZE) {
-                if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
-                const batch = missing.slice(start, start + EMBED_BATCH_SIZE);
-                const vectors = await embedTexts(batch.map(target => target.text), signal);
-                batch.forEach((target, offset) => index.set(target.id, vectors[offset]));
-            }
-
-            const [queryVector] = await embedTexts([question], signal);
-            if (!queryVector) return [];
+        const targets = await ensureIndexed(ctx, signal);
+        const [queryVector] = await embedTexts([question], signal);
+        if (!queryVector) return [];
 
             const resultCount = clampNumber(tool?.resultCount, 1, RESULT_COUNT_MAX, 6);
             return targets

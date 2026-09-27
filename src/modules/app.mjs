@@ -2082,6 +2082,24 @@ const __app = createApp({
             applyPluginToolContributions();
         };
 
+        // 插件空闲预热：聊天打开/切换、新消息落定后延迟触发，让语义索引在后台
+        // 就绪，模型真正调用工具时即时返回。失败静默（registry 已记 warn）。
+        let pluginWarmupTimer = null;
+        const schedulePluginWarmup = () => {
+            if (pluginWarmupTimer) clearTimeout(pluginWarmupTimer);
+            pluginWarmupTimer = setTimeout(() => {
+                pluginWarmupTimer = null;
+                pluginRegistry.warmupAll({
+                    getMessages: () => chatHistory.value,
+                    getScopeId: () => getCurrentChatStorageScopeId(),
+                    getSettings: (pluginId) => pluginRegistry.getPluginSettings(pluginId)
+                }).catch(() => {});
+            }, 2500);
+        };
+        watch(() => getCurrentChatStorageScopeId(), () => schedulePluginWarmup());
+        watch(() => chatHistory.value.length, () => schedulePluginWarmup());
+        schedulePluginWarmup();
+
         const unwrapForStorage = (value, seen = new WeakMap()) => {
             if (value === null || typeof value !== 'object') return value;
 

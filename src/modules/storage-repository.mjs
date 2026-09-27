@@ -6,6 +6,53 @@
     const memoryChats = new Map();
     const memoryFragments = new Map();
     const memorySecrets = new Map();
+
+    // 非原生环境（浏览器开发 / 未来 Web 分发）的降级后端：kv 与聊天持久化到
+    // localStorage（配额超限或不可用时逐键回退内存）。密钥刻意排除在外——
+    // 明文落盘密钥是不可接受的安全回退，非原生环境密钥保持会话级（memorySecrets）。
+    const LOCAL_STORAGE_PREFIX = 'rph_storage:';
+    const localStorageAvailable = (() => {
+        try { return typeof localStorage !== 'undefined' && !!localStorage; }
+        catch (_) { return false; }
+    })();
+
+    const persistentStore = {
+        read(key) {
+            if (!localStorageAvailable) return undefined;
+            try { return localStorage.getItem(LOCAL_STORAGE_PREFIX + key) ?? undefined; }
+            catch (_) { return undefined; }
+        },
+        write(key, json) {
+            if (!localStorageAvailable) return false;
+            try { localStorage.setItem(LOCAL_STORAGE_PREFIX + key, json); return true; }
+            catch (_) { return false; }
+        },
+        remove(key) {
+            if (!localStorageAvailable) return;
+            try { localStorage.removeItem(LOCAL_STORAGE_PREFIX + key); } catch (_) {}
+        }
+    };
+
+    const kvFallbackGet = (key) => persistentStore.read(key) ?? memoryStore.get(key) ?? null;
+    const kvFallbackSet = (key, json) => {
+        memoryStore.set(key, json);
+        persistentStore.write(key, json);
+    };
+    const kvFallbackRemove = (key) => {
+        memoryStore.delete(key);
+        persistentStore.remove(key);
+    };
+    const chatFallbackGet = (id) => persistentStore.read(`chat:${id}`) ?? memoryChats.get(id) ?? null;
+    const chatFallbackSet = (id, json) => {
+        memoryChats.set(id, json);
+        if (!persistentStore.write(`chat:${id}`, json)) {
+            console.warn('[StorageRepository] chat too large for localStorage fallback; session-only for this scope');
+        }
+    };
+    const chatFallbackRemove = (id) => {
+        memoryChats.delete(id);
+        persistentStore.remove(`chat:${id}`);
+    };
     // init 并发守卫：启动期并发的 set/get 只触发一次 plugin.init()，
     // 避免原生初始化（可能含迁移逻辑）的竞态。
     let initPromise = null;
@@ -88,7 +135,7 @@
                 initPromise = (async () => {
                     const plugin = nativePlugin();
                     if (plugin) await plugin.init();
-                    else console.warn('[StorageRepository] Native plugin unavailable; using volatile development storage.');
+                    else console.warn('[StorageRepository] Native plugin unavailable; using localStorage-backed fallback (secrets stay session-only).');
                 })();
             }
             await initPromise;
@@ -110,13 +157,13 @@
             const plugin = nativePlugin();
             const json = JSON.stringify(storedValue);
             if (plugin) await plugin.kvSet({ key, json });
-            else memoryStore.set(key, json);
+            else kvFallbackSet(key, json);
         },
 
         async get(key) {
             await this.init();
             const plugin = nativePlugin();
-            const response = plugin ? await plugin.kvGet({ key }) : { json: memoryStore.get(key) ?? null };
+            const response = plugin ? await plugin.kvGet({ key }) : { json: kvFallbackGet(key) };
             const value = parseJson(response.json, undefined, key);
             if (value === undefined || !isSecretBearingKey(key)) return value;
             const secrets = parseJson(await this.getSecret(`config:${key}`), {}, `secrets:${key}`);
@@ -132,7 +179,7 @@
             await this.init();
             const plugin = nativePlugin();
             if (plugin) await plugin.kvRemove({ key });
-            else memoryStore.delete(key);
+            else kvFallbackRemove(key);
             if (isSecretBearingKey(key)) await this.removeSecret(`config:${key}`);
         },
 
@@ -162,7 +209,7 @@
             const plugin = nativePlugin();
             const response = plugin
                 ? await plugin.chatGet({ characterId: String(characterId) })
-                : { json: memoryChats.get(String(characterId)) || '[]' };
+                : { json: chatFallbackGet(String(characterId)) };
             const value = parseJson(response.json, [], `chat:${characterId}`);
             // 形状校验：合法 JSON 但非数组（schema 演进残留/其它 bug 写入）不能穿透炸下游，
             // 统一降级为空数组并留痕。
@@ -186,21 +233,21 @@
             changes.deletes.forEach(id => byId.delete(id));
             changes.upserts.forEach(item => byId.set(item.message.id, item));
             const messages = [...byId.values()].sort((a, b) => a.position - b.position).map(item => item.message);
-            memoryChats.set(String(characterId), JSON.stringify(messages));
+            chatFallbackSet(String(characterId), JSON.stringify(messages));
         },
 
         async replaceChat(characterId, messages) {
             await this.init();
             const plugin = nativePlugin();
             if (plugin) await plugin.chatReplace({ characterId: String(characterId), messagesJson: JSON.stringify(cloneJson(messages || [])) });
-            else memoryChats.set(String(characterId), JSON.stringify(cloneJson(messages || [])));
+            else chatFallbackSet(String(characterId), JSON.stringify(cloneJson(messages || [])));
         },
 
         async deleteChat(characterId) {
             await this.init();
             const plugin = nativePlugin();
             if (plugin) await plugin.chatDelete({ characterId: String(characterId) });
-            else memoryChats.delete(String(characterId));
+            else chatFallbackRemove(String(characterId));
         },
 
         async deleteFragments(characterId) {

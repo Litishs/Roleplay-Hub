@@ -7,6 +7,11 @@ on:
     branches: ['**']
   pull_request:
 
+# 同仓库 PR 的 push 与 pull_request 事件都会触发；按 PR/ref 去重，只跑最新一次。
+concurrency:
+  group: tests-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     runs-on: ubuntu-latest
