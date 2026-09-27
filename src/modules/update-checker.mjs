@@ -136,65 +136,118 @@
                 summary: "v" + tag
             });
 
-            var controller = new AbortController();
-            var timeoutId = setTimeout(function () { controller.abort(); }, DOWNLOAD_TIMEOUT_MS);
+            // 断点续传下载：每次尝试独立的超时窗口（原实现只在 fetch 阶段计时，
+            // 流读取阶段卡死会永远挂住）；尝试失败时保留已收字节，下一次带 Range
+            // 从断点继续，最多 MAX_DOWNLOAD_ATTEMPTS 次。慢网络的大安装包不再被
+            // 单个总时限判死，也不必因一次网络抖动从头再来。
+            var MAX_DOWNLOAD_ATTEMPTS = 4;
+            var totalLength = 0;
+            var receivedLength = 0;
+            var chunks = [];
+            var attempts = 0;
+            var lastError = null;
 
-            try {
-                var response = await fetch(downloadUrl, { signal: controller.signal });
-                clearTimeout(timeoutId);
-                if (!response.ok) {
-                    var hint = response.status === 404 ? "APK not found for this version" : "HTTP " + response.status;
-                    journal.fail(new Error(hint));
-                    return { error: hint };
-                }
-                var contentLength = Number(response.headers.get("Content-Length")) || 0;
-                journal.behavior({
-                    name: "download_started",
-                    result: "ok",
-                    meta: { expectedBytes: contentLength }
-                });
-                if (contentLength > 0 && contentLength < MIN_APK_SIZE) {
-                    var smallResp = { error: "Server response too small (" + Math.round(contentLength / 1024) + "KB), aborting" };
-                    journal.fail(new Error(smallResp.error));
-                    return smallResp;
-                }
+            while (attempts < MAX_DOWNLOAD_ATTEMPTS) {
+                attempts++;
+                var controller = new AbortController();
+                var timeoutId = setTimeout(function () { controller.abort(); }, DOWNLOAD_TIMEOUT_MS);
+                try {
+                    var headers = {};
+                    if (receivedLength > 0) headers["Range"] = "bytes=" + receivedLength + "-";
+                    var response = await fetch(downloadUrl, { signal: controller.signal, headers: headers });
 
-                var reader = response.body.getReader();
-                var receivedLength = 0;
-                var chunks = [];
-
-                while (true) {
-                    var result = await reader.read();
-                    if (result.done) break;
-                    chunks.push(result.value);
-                    receivedLength += result.value.length;
-                    if (progressCallback && contentLength) {
-                        progressCallback(receivedLength / contentLength);
+                    if (response.status === 416) {
+                        // Range 不满足：若恰好已收满即视为完成，否则按失败重试。
+                        if (totalLength > 0 && receivedLength === totalLength) break;
+                        throw new Error("HTTP 416 (range not satisfiable at " + receivedLength + " bytes)");
                     }
-                }
+                    if (!response.ok && response.status !== 206) {
+                        var hint = response.status === 404 ? "APK not found for this version" : "HTTP " + response.status;
+                        // 确定性失败：重试不会好转，直接结束。
+                        journal.fail(new Error(hint));
+                        return { error: hint };
+                    }
 
-                if (contentLength > 0 && receivedLength !== contentLength) {
-                    var incomplete = { error: "Download incomplete: " + Math.round(receivedLength / 1024) + "KB of " + Math.round(contentLength / 1024) + "KB" };
-                    journal.fail(new Error(incomplete.error));
-                    return incomplete;
-                }
-                if (receivedLength < MIN_APK_SIZE) {
-                    var tinyFile = { error: "Downloaded file too small (" + Math.round(receivedLength / 1024) + "KB)" };
-                    journal.fail(new Error(tinyFile.error));
-                    return tinyFile;
-                }
+                    var thisLength = Number(response.headers.get("Content-Length")) || 0;
+                    if (receivedLength > 0 && response.status === 206) {
+                        // 206 的 Content-Length 只是剩余部分，补回首部偏移。
+                        totalLength = receivedLength + thisLength;
+                    } else {
+                        if (receivedLength > 0) {
+                            // 带着续传请求却拿到 200：服务器忽略了 Range，从头再来。
+                            journal.behavior({ name: "download_resume", result: "skipped", summary: "server ignored Range; restarting" });
+                            receivedLength = 0;
+                            chunks = [];
+                        }
+                        totalLength = thisLength;
+                    }
 
-                var allChunks = new Uint8Array(receivedLength);
-                var position = 0;
-                for (var i = 0; i < chunks.length; i++) {
-                    allChunks.set(chunks[i], position);
-                    position += chunks[i].length;
+                    if (attempts === 1) {
+                        journal.behavior({ name: "download_started", result: "ok", meta: { expectedBytes: totalLength } });
+                        if (totalLength > 0 && totalLength < MIN_APK_SIZE) {
+                            var smallResp = { error: "Server response too small (" + Math.round(totalLength / 1024) + "KB), aborting" };
+                            journal.fail(new Error(smallResp.error));
+                            return smallResp;
+                        }
+                    } else {
+                        journal.behavior({ name: "download_resume", result: "ok", meta: { attempt: attempts, resumedFrom: receivedLength } });
+                    }
+
+                    var reader = response.body.getReader();
+                    while (true) {
+                        var result = await reader.read();
+                        if (result.done) break;
+                        chunks.push(result.value);
+                        receivedLength += result.value.length;
+                        if (progressCallback && totalLength) {
+                            progressCallback(receivedLength / totalLength);
+                        }
+                    }
+                    break;
+                } catch (e) {
+                    lastError = e;
+                    if (controller.signal.aborted) {
+                        lastError = new Error("Download stalled (no progress in " + (DOWNLOAD_TIMEOUT_MS / 1000) + "s)");
+                    }
+                    journal.behavior({
+                        name: "download_retry",
+                        result: attempts >= MAX_DOWNLOAD_ATTEMPTS ? "failed" : "retry",
+                        meta: { attempt: attempts, resumedFrom: receivedLength, error: String((lastError && lastError.message) || lastError) }
+                    });
+                    if (attempts >= MAX_DOWNLOAD_ATTEMPTS) break;
+                    await new Promise(function (resolve) { setTimeout(resolve, 400 * attempts); });
+                } finally {
+                    clearTimeout(timeoutId);
                 }
-                journal.behavior({
-                    name: "download_finished",
-                    result: "ok",
-                    meta: { receivedBytes: receivedLength }
-                });
+            }
+
+            if (receivedLength === 0) {
+                var failed = { error: "Download failed after " + attempts + " attempt(s): " + String((lastError && lastError.message) || lastError || "no data") };
+                journal.fail(lastError || new Error(failed.error));
+                return failed;
+            }
+            if (totalLength > 0 && receivedLength !== totalLength) {
+                var incomplete = { error: "Download incomplete: " + Math.round(receivedLength / 1024) + "KB of " + Math.round(totalLength / 1024) + "KB" };
+                journal.fail(new Error(incomplete.error));
+                return incomplete;
+            }
+            if (receivedLength < MIN_APK_SIZE) {
+                var tinyFile = { error: "Downloaded file too small (" + Math.round(receivedLength / 1024) + "KB)" };
+                journal.fail(new Error(tinyFile.error));
+                return tinyFile;
+            }
+
+            var allChunks = new Uint8Array(receivedLength);
+            var position = 0;
+            for (var i = 0; i < chunks.length; i++) {
+                allChunks.set(chunks[i], position);
+                position += chunks[i].length;
+            }
+            journal.behavior({
+                name: "download_finished",
+                result: "ok",
+                meta: { receivedBytes: receivedLength, attempts: attempts }
+            });
 
                 // 完整性校验：Release 带 .sha256 sidecar 时强制比对，不一致视为下载损坏，
                 // 绝不进入安装；sidecar 缺失（v2.64 之前的 Release）或拉取失败时跳过并留痕，
@@ -226,14 +279,6 @@
                 journal.output({ totalChars: 0 }); // no "chars" for binary
                 journal.complete();
                 return { data: allChunks, tag: tag, error: null };
-            } catch (e) {
-                clearTimeout(timeoutId);
-                journal.fail(e);
-                if (e && e.name === "AbortError") {
-                    return { error: "Download timed out after " + (DOWNLOAD_TIMEOUT_MS / 1000) + "s" };
-                }
-                return { error: "Download failed: " + ((e && e.message) || "unknown error") };
-            }
         } catch (outer) {
             journal.fail(outer);
             return { error: "Release info fetch failed: " + String((outer && outer.message) || outer || "unknown error") };
