@@ -108,9 +108,18 @@ jobs:
           cp "android/app/build/outputs/apk/release/app-release.apk" \
              "Roleplay-Hub-${{ env.VERSION_NAME }}-release.apk"
 
+      # 随 APK 附带 sha256 sidecar：应用内更新下载后强制比对（update-checker 的
+      # verifyApkChecksum），拦截传输损坏/被篡改的安装包。
+      - name: Generate APK checksum sidecar
+        run: |
+          sha256sum "Roleplay-Hub-${{ env.VERSION_NAME }}-release.apk" \
+            > "Roleplay-Hub-${{ env.VERSION_NAME }}-release.apk.sha256"
+
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          files: Roleplay-Hub-*-release.apk
+          files: |
+            Roleplay-Hub-*-release.apk
+            Roleplay-Hub-*-release.apk.sha256
           generate_release_notes: true
           fail_on_unmatched_files: true

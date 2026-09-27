@@ -25,6 +25,23 @@
     }
     function behaviorChars(text) { return String(text || "").length; }
 
+    // 校验下载到的 APK 字节与 .sha256 sidecar 是否一致。sidecar 是 sha256sum 的
+    // 标准输出（"<hex>  <文件名>"），只取第一个 64 位十六进制串。返回值带 ok 标志与
+    // 双方摘要，便于日志定位是文件损坏还是 sidecar 缺失/格式错误。
+    async function verifyApkChecksum(bytes, sha256Text) {
+        var match = String(sha256Text || "").match(/([0-9a-fA-F]{64})/);
+        if (!match) {
+            return { ok: false, expected: "", actual: "", reason: "malformed checksum file" };
+        }
+        var expected = match[1].toLowerCase();
+        var digest = await crypto.subtle.digest("SHA-256", bytes);
+        var actual = Array.prototype.map.call(
+            new Uint8Array(digest),
+            function (byte) { return ("0" + byte.toString(16)).slice(-2); }
+        ).join("");
+        return { ok: actual === expected, expected: expected, actual: actual };
+    }
+
     function compareVersions(a, b) {
         var partsA = String(a).split(".").map(Number);
         var partsB = String(b).split(".").map(Number);
@@ -49,7 +66,14 @@
             return {
                 tag_name: data.tag_name || "",
                 html_url: data.html_url || RELEASES_PAGE_URL,
-                body: data.body || ""
+                body: data.body || "",
+                // 资产清单用于下载后校验（见 verifyApkChecksum）：发版工作流会随 APK
+                // 附带 .sha256 sidecar，老版本 Release 没有该文件，校验按缺失跳过。
+                assets: Array.isArray(data.assets)
+                    ? data.assets.map(function (asset) {
+                        return { name: asset.name || "", url: asset.browser_download_url || "" };
+                    })
+                    : []
             };
         } catch (e) {
             return null;
@@ -171,6 +195,34 @@
                     result: "ok",
                     meta: { receivedBytes: receivedLength }
                 });
+
+                // 完整性校验：Release 带 .sha256 sidecar 时强制比对，不一致视为下载损坏，
+                // 绝不进入安装；sidecar 缺失（v2.64 之前的 Release）或拉取失败时跳过并留痕，
+                // 不因此挡住更新。
+                var checksumAsset = (release.assets || []).find(function (asset) {
+                    return asset.name === "Roleplay-Hub-" + tag + "-release.apk.sha256";
+                });
+                if (checksumAsset && checksumAsset.url) {
+                    try {
+                        var shaResponse = await fetch(checksumAsset.url, { signal: AbortSignal.timeout(15000) });
+                        if (shaResponse.ok) {
+                            var verify = await verifyApkChecksum(allChunks, await shaResponse.text());
+                            if (!verify.ok) {
+                                var mismatch = { error: "Checksum mismatch: expected " + verify.expected + ", got " + verify.actual };
+                                journal.fail(new Error(mismatch.error));
+                                return mismatch;
+                            }
+                            journal.behavior({ name: "checksum_verified", result: "ok" });
+                        } else {
+                            journal.behavior({ name: "checksum_verify", result: "skipped", summary: "sidecar HTTP " + shaResponse.status });
+                        }
+                    } catch (shaErr) {
+                        journal.behavior({ name: "checksum_verify", result: "skipped", summary: "sidecar fetch failed" });
+                    }
+                } else {
+                    journal.behavior({ name: "checksum_verify", result: "skipped", summary: "no sidecar asset" });
+                }
+
                 journal.output({ totalChars: 0 }); // no "chars" for binary
                 journal.complete();
                 return { data: allChunks, tag: tag, error: null };
@@ -253,6 +305,6 @@
 
     
 
-export { compareVersions, checkForUpdate, fetchLatestRelease, downloadApk, saveAndInstallApk, GITHUB_REPO, RELEASES_PAGE_URL };
+export { compareVersions, checkForUpdate, fetchLatestRelease, downloadApk, saveAndInstallApk, verifyApkChecksum, GITHUB_REPO, RELEASES_PAGE_URL };
 
 

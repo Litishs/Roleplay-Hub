@@ -1,0 +1,94 @@
+name: Debug APK
+
+# 每个 PR 自动产出调试 APK artifact：安全/行为改造的合并前真机回归（卡片高度、
+# 焦点、IME、triggerSlash、更新安装链路）不再需要本地装整套 Android 构建链，
+# 也不用等维护者打 tag。纯调试签名（debug.keystore），不碰发版密钥。
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - synchronize
+      - reopened
+  workflow_dispatch:
+
+# 同一 PR 只保留最新一次构建
+concurrency:
+  group: debug-apk-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      # 调试 APK 也要能离线跑：vendor（含本地嵌入模型）照常打进包里。
+      # 测试由 test.yml 覆盖，这里不重复跑，缩短反馈时间。
+      - name: Build web assets & vendor
+        run: npm run build:web
+
+      - name: Sync Capacitor to Android
+        run: npx cap sync android
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('android/**/*.gradle*', 'android/**/gradle-wrapper.properties') }}
+          restore-keys: |
+            gradle-${{ runner.os }}-
+
+      # 与 scripts/build-android-debug.ps1 同一方案：versionCode 从 10000 起单调
+      # 递增（run_number 保证递增），versionName 标记为「基线-debug.N」，与正式包
+      # 区分开，也便于在设备上识别测试构建。
+      - name: Derive debug version
+        run: |
+          BASELINE=$(grep '^versionName=' android/version.properties | cut -d= -f2)
+          VERSION_CODE=$((10000 + ${{ github.run_number }}))
+          VERSION_NAME="${BASELINE}-debug.${{ github.run_number }}"
+          echo "DEBUG_VERSION_CODE=$VERSION_CODE" >> "$GITHUB_ENV"
+          echo "DEBUG_VERSION_NAME=$VERSION_NAME" >> "$GITHUB_ENV"
+          echo "Building $VERSION_NAME (versionCode=$VERSION_CODE)"
+
+      - name: Build debug APK
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug \
+            "-PrphVersionCode=${{ env.DEBUG_VERSION_CODE }}" \
+            "-PrphVersionName=${{ env.DEBUG_VERSION_NAME }}"
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Roleplay-Hub-${{ env.DEBUG_VERSION_NAME }}
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 14
+          if-no-files-found: error
