@@ -14,11 +14,11 @@ const settingsStart = 0;
 const settingsEnd = html.length;
 const settingsView = html;
 
-test('设置页五个区块使用统一折叠卡片并保持原有顺序', () => {
+test('设置页六个区块使用统一折叠卡片并保持原有顺序', () => {
     assert.ok(settingsEnd > settingsStart);
-    assert.equal((settingsView.match(/class="settings-accordion-trigger"/g) || []).length, 5);
+    assert.equal((settingsView.match(/class="settings-accordion-trigger"/g) || []).length, 6);
 
-    for (const modifier of ['user', 'api', 'advanced', 'voice', 'local']) {
+    for (const modifier of ['user', 'api', 'advanced', 'plugins', 'voice', 'local']) {
         assert.match(settingsView, new RegExp(`settings-accordion--${modifier}`));
     }
 
@@ -26,6 +26,7 @@ test('设置页五个区块使用统一折叠卡片并保持原有顺序', () =>
         'user-settings-panel',
         'api-settings-panel',
         'advanced-settings-panel',
+        'plugins-settings-panel',
         'tts-settings-panel',
         'local-data-panel'
     ];
@@ -37,7 +38,7 @@ test('设置页五个区块使用统一折叠卡片并保持原有顺序', () =>
 test('用户与 API 设置默认折叠且语音区保持默认折叠', () => {
     assert.match(app, /const ttsSettingsExpanded = ref\(false\);/);
     // settingsSectionsOpen lives in useSettingsState (Phase 2)
-    assert.match(settingsState, /const settingsSectionsOpen = reactive\(\{\s*user: false,\s*api: false,\s*advanced: false,\s*localData: false\s*\}\);/);
+    assert.match(settingsState, /const settingsSectionsOpen = reactive\(\{\s*user: false,\s*api: false,\s*advanced: false,\s*plugins: false,\s*localData: false\s*\}\);/);
 });
 
 test('紧凑用户设置保留人设管理和全部编辑能力', () => {

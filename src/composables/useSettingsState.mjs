@@ -224,6 +224,7 @@ export function useSettingsState() {
         user: false,
         api: false,
         advanced: false,
+        plugins: false,
         localData: false
     });
 
