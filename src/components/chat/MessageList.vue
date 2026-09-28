@@ -27,7 +27,7 @@
                             </button>
                         </div>
                     </div>
-                    <!-- 前情提要：滚动总结就绪时在聊天顶部提供剧情回顾（会话级折叠） -->
+                    <!-- Story recap: offers a plot review at the top of the chat once rolling summaries are ready (session-scoped collapse) -->
                     <div v-if="currentCharacter && chatRecapText && !recapDismissed"
                         class="mx-auto max-w-2xl px-2 -mt-8 md:-mt-10">
                         <div class="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-xs shadow-sm">
@@ -666,8 +666,10 @@ export default {
     };
     const onBubbleTouchEnd = (event, index) => endGesture(event, index, false);
     const onBubbleTouchCancel = (event, index) => endGesture(event, index, true);
-    // 前情提要：滚动总结（short 优先，long 兜底）在聊天顶部提供剧情回顾。
-    // 折叠/关闭是会话级状态，不持久化——下次打开聊天默认再展示。
+    // Story recap: rolling summaries (short first, long as fallback) provide
+    // a plot review at the top of the chat.
+    // Collapse/dismiss is session-scoped state, not persisted — the banner
+    // shows again by default the next time the chat opens.
     const recapExpanded = ref(false);
     const recapDismissed = ref(false);
     const chatRecapText = computed(() => {

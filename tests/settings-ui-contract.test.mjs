@@ -34,15 +34,15 @@ test('设置页五个区块使用统一折叠卡片并保持原有顺序', () =>
     const positions = panelIds.map(id => settingsView.indexOf(`id="${id}"`));
     assert.ok(positions.every(position => position >= 0));
     assert.deepEqual([...positions].sort((a, b) => a - b), positions);
-    // 插件市场是侧边栏独立视图（plugins-panel），不是设置页折叠区
+    // The plugin marketplace is a standalone sidebar view (plugins-panel), not a settings collapsible section
     assert.doesNotMatch(settingsView, /plugins-settings-panel/);
 });
 
-test('插件市场是侧边栏独立视图', () => {
+test('plugin marketplace is a standalone sidebar view', () => {
     assert.match(app, /PluginsPanel: AsyncPluginsPanel/);
     assert.match(app, /const AsyncPluginsPanel = defineAsyncComponent\(\(\) => import\('\.\.\/components\/views\/PluginsPanel\.vue'\)\);/);
     assert.match(indexHtml, /<plugins-panel v-if="currentView === 'plugins'"><\/plugins-panel>/);
-    // 侧边栏入口在「角色卡管理」之后（先角色卡按钮，后插件市场按钮）
+    // The sidebar entry comes after "Character Management" (character button first, then the marketplace button)
     assert.ok(
         sideNav.indexOf("currentView = 'characters'") < sideNav.indexOf("currentView = 'plugins'"),
         'sidebar order: characters before plugins'

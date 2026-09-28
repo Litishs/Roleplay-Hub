@@ -541,8 +541,11 @@ export function useMessageSender(deps) {
             if (mesExample && mesExample.trim()) {
                 charDefinitionParts.push(mesExample);
             }
-            // 导演提示：用户为该角色设定的剧情走向 / 演出要求，每轮注入。
-            // 这是"故事感方向盘"——用户执笔定方向，模型顺着演，防止长对话剧情漂移。
+            // Story director: the plot direction / staging requirements the
+            // user set for this character, injected every turn.
+            // This is the "story steering wheel" — the user writes the
+            // direction, the model performs along it, preventing plot drift
+            // in long conversations.
             const storyDirector = String(currentCharacter?.value?.storyDirector || '').trim();
             if (storyDirector) {
                 charDefinitionParts.push(`[Story Direction]\n${storyDirector}`);

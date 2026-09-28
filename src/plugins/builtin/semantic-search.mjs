@@ -1,15 +1,21 @@
-// 内置插件：语义对话检索（Plugin Marketplace 首个上架插件）。
+// Built-in plugin: semantic dialogue search (first plugin in the Plugin
+// Marketplace).
 //
-// 把当前对话最近 N 条消息用本机嵌入模型（RPHLocalEmbedding，bge-small-zh）
-// 建立向量索引，模型的自然语言问题同样嵌入后按余弦相似度排序，返回最相关的
-// 原文片段。与关键词工具（tool_grep，精确匹配）互补：适合"意思说过但记不清
-// 原词"的检索。
+// Indexes the most recent N messages of the current chat with the on-device
+// embedding model (RPHLocalEmbedding, bge-small-zh); the model's natural-
+// language question is embedded the same way, ranked by cosine similarity,
+// and the most relevant verbatim fragments are returned. Complements the
+// keyword tool (tool_grep, exact match): fits "the meaning was said but the
+// exact words are gone" retrieval.
 //
-// 设计约束：
-//  - 索引只存内存、按对话作用域隔离（切聊天即重建），不持久化向量——Phase 1
-//    用"够用的正确"换零迁移成本；向量化持久化等 chat_messages 加向量列后做。
-//  - 嵌入与排序依赖全部注入（embedTexts / getMessages / getScopeId），宿主传
-//    真实现、测试传假实现，同一份代码两条路径。
+// Design constraints:
+//  - The index lives in memory only, isolated per chat scope (rebuilt on chat
+//    switch); vectors are not persisted — Phase 1 trades "sufficient
+//    correctness" for zero migration cost; vector persistence waits for a
+//    vector column on chat_messages.
+//  - Embedding and ranking dependencies are fully injected (embedTexts /
+//    getMessages / getScopeId): the host passes real implementations, tests
+//    pass fakes — one code path for both.
 import { definePlugin, PLUGIN_PERMISSIONS } from '../plugin-api.mjs';
 import { parseCot } from '../../modules/utils.mjs';
 
@@ -36,7 +42,7 @@ const excerptForEmbedding = (message) => {
     return main.slice(0, SNIPPET_MAX_CHARS);
 };
 
-// 向量已由嵌入管线 L2 归一化，余弦相似度即点积。
+// Vectors are L2-normalized by the embedding pipeline, so cosine similarity is the dot product.
 const dotProduct = (a, b) => {
     let sum = 0;
     const length = Math.min(a.length, b.length);
@@ -45,12 +51,15 @@ const dotProduct = (a, b) => {
 };
 
 export const createSemanticSearchPlugin = ({ getMessages, getScopeId, embedTexts }) => {
-    // 索引状态收在工厂闭包里：每个插件实例独立，测试无需清理钩子。
+    // Index state lives in the factory closure: each plugin instance is
+    // independent, so tests need no cleanup hooks.
     let indexScope = null;
     const index = new Map();
 
-    // 建立/增量补全索引并返回参与检索的目标（含位置与角色元信息）。
-    // 只嵌入缺失的条目：流式新增的消息在下一次调用时增量补上。
+    // Build / incrementally complete the index and return the retrieval
+    // targets (with position and role metadata).
+    // Only missing entries get embedded: messages added while streaming are
+    // filled in incrementally on the next call.
     const ensureIndexed = async (ctx, signal) => {
         const scopeId = String(ctx?.getScopeId?.() || 'default');
         if (indexScope !== scopeId) {
@@ -117,8 +126,9 @@ export const createSemanticSearchPlugin = ({ getMessages, getScopeId, embedTexts
             }
         ],
 
-        // 空闲预热：宿主在聊天打开/切换后调用，把索引在后台建好，
-        // 模型真正调用工具时即时返回。失败由宿主记日志，不影响聊天。
+        // Idle warmup: the host calls this after a chat is opened/switched so
+        // the index is ready in the background and real tool calls return
+        // instantly. Failures are logged by the host and never affect chat.
         warmup: async (ctx) => { await ensureIndexed(ctx, null); },
 
         execute: async (query, tool, signal, ctx) => {

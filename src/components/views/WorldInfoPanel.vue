@@ -1304,7 +1304,7 @@ export default {
   components: { SettingsPageHeader, CustomSelect, UiTemplateFrame },
   setup() {
     const ctx = inject("appContext");
-    // 角色专属音色候选：按当前语音服务切换来源（云端列表 / 系统设备音色）。
+    // Per-character voice candidates: the source switches with the current TTS service (cloud list / system device voices).
     const ttsVoiceOptions = computed(() => {
       if (!ctx) return [];
       return ctx.settings?.ttsService === 'cloud'

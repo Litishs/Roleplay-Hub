@@ -7,7 +7,7 @@
 
         <div v-for="plugin in plugins" :key="plugin.id"
             class="rounded-xl border border-gray-200/70 bg-white/70 backdrop-blur-sm flex flex-col">
-            <!-- 名称行（折叠态只保留这一行）：点击行体展开/收起，开关独立于折叠 -->
+            <!-- Name row (the only row when collapsed): click the row body to expand/collapse; the toggle is independent of collapsing -->
             <div class="flex items-center gap-2 p-3">
                 <button type="button" class="flex items-center gap-2 min-w-0 flex-1 text-left group/row"
                     :title="isExpanded(plugin) ? '收起详情' : '展开详情'"
@@ -31,7 +31,7 @@
 
             <p v-if="plugin.error" class="text-[11px] text-red-500 px-3 pb-2">{{ plugin.error }}</p>
 
-            <!-- 展开态：描述 / 权限 / 工具接线 / 每插件设置 -->
+            <!-- Expanded: description / permissions / tool wiring / per-plugin settings -->
             <div v-if="isExpanded(plugin)" class="flex flex-col gap-3 px-3 pb-3 border-t border-gray-100 pt-3">
                 <p class="text-xs text-gray-500 leading-relaxed">{{ plugin.description }}</p>
                 <div v-if="plugin.permissions.length" class="flex flex-wrap gap-1">
@@ -72,7 +72,7 @@ export default {
     setup() {
         const ctx = inject("appContext") || {};
         const plugins = ref([]);
-        // 折叠态：默认收起只留名称行；按插件 id 记忆展开状态。
+        // Collapsed by default: only the name row shows; expansion state is remembered per plugin id.
         const expandedIds = ref({});
         let unsubscribe = null;
 

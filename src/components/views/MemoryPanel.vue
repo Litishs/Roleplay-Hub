@@ -436,7 +436,7 @@
                                         </span>
                                     </div>
                                 </div>
-                                <!-- 剧情时间线：总结批次 + 开放剧情线 + 人物档案，纵向回看故事脉络 -->
+                                <!-- Story timeline: summary batches + open plot lines + character profiles, a vertical look back at the story -->
                                 <div v-if="(memorySummaries.batches || []).some(b => b.status === 'done')"
                                     class="rounded-xl border border-gray-100 bg-white px-3 py-2.5">
                                     <div class="text-[10px] font-bold text-gray-400 mb-2">剧情时间线</div>

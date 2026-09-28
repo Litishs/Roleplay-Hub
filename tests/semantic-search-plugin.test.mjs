@@ -1,11 +1,14 @@
-// 语义检索插件行为测试：假 embedder（字典映射 + 调用计数）驱动同一份插件代码，
-// 覆盖排序正确性、结果字段、<think> 剥离、缓存复用、作用域切换、索引窗口与中断。
+// Semantic search plugin behavior tests: a fake embedder (dictionary mapping +
+// call counting) drives the same plugin code, covering ranking correctness,
+// result fields, <think> stripping, cache reuse, scope switching, index
+// window, and interruption.
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
 const { createSemanticSearchPlugin } = await import('../src/plugins/builtin/semantic-search.mjs');
 
-// 字典嵌入：命中词条返回预置向量，未命中返回等权兜底向量。向量已"归一化"。
+// Dictionary embedder: known terms return preset vectors, unknown terms fall
+// back to an equal-weight vector. Vectors are "normalized".
 const VECTORS = {
     '用户说想去看海': [1, 0, 0],
     'AI描述山间徒步': [0, 1, 0],
@@ -44,36 +47,36 @@ const makeTool = (resultCount = 6) => ({
     resultCount
 });
 
-test('语义检索：按相似度降序排序，剥离 <think>，字段完整', async () => {
+test('semantic search: ranks by similarity descending, strips <think>, complete fields', async () => {
     const embedTexts = makeEmbedder();
     const plugin = createSemanticSearchPlugin({ getMessages: () => [], getScopeId: () => 'x', embedTexts });
 
     const results = await plugin.execute('想去看海的日子', makeTool(), null, makeCtx());
 
-    assert.equal(results.length, 3, 'system 与非字符串内容被过滤');
-    assert.equal(results[0].messageId, 'm1', '最相近的消息排第一');
-    assert.ok(results[0].score > results[1].score && results[1].score >= results[2].score, '分数单调不增');
-    assert.ok(!results.some(item => item.dialogueText.includes('内部推理')), '<think> 内容不进索引');
+    assert.equal(results.length, 3, 'system and non-string content filtered out');
+    assert.equal(results[0].messageId, 'm1', 'the closest message ranks first');
+    assert.ok(results[0].score > results[1].score && results[1].score >= results[2].score, 'scores are monotonically non-increasing');
+    assert.ok(!results.some(item => item.dialogueText.includes('内部推理')), '<think> content stays out of the index');
     assert.equal(results[0].role, 'user');
     assert.match(results[0].dialogueText, /^用户：/);
     assert.ok(Number.isFinite(results[0].score));
     assert.deepEqual(results[0].matchedTerms, []);
 });
 
-test('索引缓存：第二次调用只嵌入查询本身', async () => {
+test('index cache: the second call embeds only the query itself', async () => {
     const embedTexts = makeEmbedder();
     const plugin = createSemanticSearchPlugin({ getMessages: () => [], getScopeId: () => 'x', embedTexts });
     const ctx = makeCtx();
 
     await plugin.execute('看海', makeTool(), null, ctx);
     const afterFirst = embedTexts.embedded.length;
-    assert.ok(afterFirst >= 3, '首轮嵌入全部消息');
+    assert.ok(afterFirst >= 3, 'the first run embeds all messages');
 
     await plugin.execute('徒步', makeTool(), null, ctx);
-    assert.equal(embedTexts.embedded.length, afterFirst + 1, '二轮只嵌入 1 条查询');
+    assert.equal(embedTexts.embedded.length, afterFirst + 1, 'the second run embeds only the 1 query');
 });
 
-test('切换对话作用域后索引重建', async () => {
+test('index rebuilds after switching chat scope', async () => {
     let scopeId = 'chat-a';
     const embedTexts = makeEmbedder();
     const plugin = createSemanticSearchPlugin({ getMessages: () => [], getScopeId: () => scopeId, embedTexts });
@@ -84,13 +87,13 @@ test('切换对话作用域后索引重建', async () => {
 
     scopeId = 'chat-b';
     await plugin.execute('看海', makeTool(), null, ctx);
-    assert.ok(embedTexts.embedded.length >= afterFirstChat + 3, '新作用域触发全量重建');
+    assert.ok(embedTexts.embedded.length >= afterFirstChat + 3, 'the new scope triggers a full rebuild');
 });
 
-test('索引窗口与结果条数钳制生效', async () => {
+test('index window and result-count clamp take effect', async () => {
     const embedTexts = makeEmbedder();
     const plugin = createSemanticSearchPlugin({ getMessages: () => [], getScopeId: () => 'x', embedTexts });
-    // 窗口下限是 50（indexSize 钳制），所以用 55 条消息验证「只索引最近 50 条」。
+    // The window floor is 50 (indexSize clamp), so 55 messages verify "only the most recent 50 get indexed".
     const messages = Array.from({ length: 55 }, (_, index) => ({
         id: `p${index}`,
         role: index % 2 === 0 ? 'user' : 'assistant',
@@ -103,13 +106,13 @@ test('索引窗口与结果条数钳制生效', async () => {
         null,
         makeCtx({ getSettings: () => ({ indexSize: 50 }), getMessages: () => messages })
     );
-    assert.equal(results.length, 20, 'resultCount=99 被钳制到上限 20');
-    assert.ok(results.every(item => Number(item.messageId.slice(1)) >= 5), '窗口外的前 5 条（p0-p4）不出现');
+    assert.equal(results.length, 20, 'resultCount=99 clamped to the cap of 20');
+    assert.ok(results.every(item => Number(item.messageId.slice(1)) >= 5), 'the first 5 messages outside the window (p0-p4) never appear');
     const scores = results.map(item => item.score);
-    assert.deepEqual(scores, [...scores].sort((a, b) => b - a), '分数降序');
+    assert.deepEqual(scores, [...scores].sort((a, b) => b - a), 'scores in descending order');
 });
 
-test('空查询返回空结果；中断信号向上传播', async () => {
+test('empty query returns empty results; abort signal propagates', async () => {
     const embedTexts = makeEmbedder();
     const plugin = createSemanticSearchPlugin({ getMessages: () => [], getScopeId: () => 'x', embedTexts });
 
@@ -123,21 +126,21 @@ test('空查询返回空结果；中断信号向上传播', async () => {
     );
 });
 
-test('空闲预热：只建索引不嵌入查询，后续执行命中缓存', async () => {
+test('idle warmup: builds the index without embedding the query, later execution hits the cache', async () => {
     const embedTexts = makeEmbedder();
     const plugin = createSemanticSearchPlugin({ getMessages: () => [], getScopeId: () => 'x', embedTexts });
     const ctx = makeCtx();
 
     await plugin.warmup(ctx);
     const afterWarmup = embedTexts.embedded.length;
-    assert.ok(afterWarmup >= 3, '预热嵌入全部消息');
+    assert.ok(afterWarmup >= 3, 'warmup embeds all messages');
 
     const results = await plugin.execute('想去看海的日子', makeTool(), null, ctx);
-    assert.equal(embedTexts.embedded.length, afterWarmup + 1, '执行时只嵌入查询本身');
-    assert.equal(results[0].messageId, 'm1', '预热后的索引可直接命中');
+    assert.equal(embedTexts.embedded.length, afterWarmup + 1, 'execution embeds only the query itself');
+    assert.equal(results[0].messageId, 'm1', 'the warmed index hits directly');
 });
 
-test('manifest 通过插件 API 校验，工具贡献结构完整', async () => {
+test('manifest passes the plugin API validation, tool contribution structure complete', async () => {
     const embedTexts = makeEmbedder();
     const plugin = createSemanticSearchPlugin({ getMessages: () => [], getScopeId: () => 'x', embedTexts });
 
@@ -146,6 +149,6 @@ test('manifest 通过插件 API 校验，工具贡献结构完整', async () => 
     assert.deepEqual(plugin.permissions, ['chat:read', 'embedding:compute']);
     assert.equal(plugin.activeTool.callName, 'tool_semantic');
     assert.equal(plugin.activeTool.type, 'plugin');
-    assert.ok(plugin.activeTool.description.includes('tool_semantic_add'), '模型侧说明包含调用标签');
+    assert.ok(plugin.activeTool.description.includes('tool_semantic_add'), 'model-side description includes the call tag');
     assert.equal(typeof plugin.execute, 'function');
 });

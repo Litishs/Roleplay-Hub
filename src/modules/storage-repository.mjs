@@ -7,9 +7,11 @@
     const memoryFragments = new Map();
     const memorySecrets = new Map();
 
-    // 非原生环境（浏览器开发 / 未来 Web 分发）的降级后端：kv 与聊天持久化到
-    // localStorage（配额超限或不可用时逐键回退内存）。密钥刻意排除在外——
-    // 明文落盘密钥是不可接受的安全回退，非原生环境密钥保持会话级（memorySecrets）。
+    // Degraded backend for non-native environments (browser dev / future web
+    // distribution): kv and chats persist to localStorage (per-key fallback to
+    // memory on quota overflow or unavailability). Secrets are deliberately
+    // excluded — plaintext-at-rest secrets are an unacceptable security
+    // fallback; outside native, secrets stay session-only (memorySecrets).
     const LOCAL_STORAGE_PREFIX = 'rph_storage:';
     const localStorageAvailable = (() => {
         try { return typeof localStorage !== 'undefined' && !!localStorage; }

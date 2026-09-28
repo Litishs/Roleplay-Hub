@@ -1,6 +1,7 @@
-// 插件框架测试：清单校验（plugin-api）+ 注册表行为（plugin-registry）。
-// storage 用内存假实现驱动持久化路径；一个测试文件覆盖「注册→启停→设置→
-// 工具贡献→执行门禁」的完整生命周期。
+// Plugin framework tests: manifest validation (plugin-api) + registry
+// behavior (plugin-registry). Storage is an in-memory fake driving the
+// persistence path; one file covers the full lifecycle of
+// "register → enable/disable → settings → tool contributions → execution gate".
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
@@ -39,12 +40,12 @@ const makeToolPlugin = (overrides = {}) => ({
     ...overrides
 });
 
-test('definePlugin: 合法清单通过并冻结，非法字段逐项拒绝', () => {
+test('definePlugin: valid manifest passes frozen, invalid fields rejected one by one', () => {
     const plugin = definePlugin(baseManifest);
     assert.equal(plugin.id, 'rph-demo');
     assert.equal(plugin.builtin, true);
-    assert.ok(Object.isFrozen(plugin), '清单应被冻结');
-    assert.throws(() => { plugin.version = '9.9.9'; }, TypeError, '冻结后不可改写');
+    assert.ok(Object.isFrozen(plugin), 'manifest should be frozen');
+    assert.throws(() => { plugin.version = '9.9.9'; }, TypeError, 'frozen manifest must not be writable');
 
     assert.throws(() => definePlugin({ ...baseManifest, id: 'demo' }), /id 不合法/);
     assert.throws(() => definePlugin({ ...baseManifest, id: 'RPH-Demo' }), /id 不合法/);
@@ -61,26 +62,26 @@ test('definePlugin: 合法清单通过并冻结，非法字段逐项拒绝', () 
     }), /description/);
 });
 
-test('registry: 注册、默认启用、启停持久化并可跨实例恢复', async () => {
+test('registry: register, default-on, enable/disable persisted and restored across instances', async () => {
     const storage = makeStorage();
     const registry = createPluginRegistry({ storage });
     await registry.register(makeToolPlugin());
 
     assert.equal(registry.list().length, 1);
-    assert.equal(registry.isEnabled('rph-demo'), true, 'defaultEnabled: true 开箱即用');
-    assert.deepEqual(storage.store.get(PLUGIN_STATE_STORAGE_KEY)?.enabled, {}, '未显式启停时不写入记录');
+    assert.equal(registry.isEnabled('rph-demo'), true, 'defaultEnabled: true works out of the box');
+    assert.deepEqual(storage.store.get(PLUGIN_STATE_STORAGE_KEY)?.enabled, {}, 'no record written without an explicit toggle');
 
     await registry.setEnabled('rph-demo', false);
     assert.equal(registry.isEnabled('rph-demo'), false);
     assert.equal(storage.store.get(PLUGIN_STATE_STORAGE_KEY)?.enabled['rph-demo'], false);
 
-    // 新实例从同一存储恢复用户的选择
+    // A new instance restores the user's choice from the same storage
     const second = createPluginRegistry({ storage });
     await second.register(makeToolPlugin());
-    assert.equal(second.isEnabled('rph-demo'), false, '显式停用优先于 defaultEnabled');
+    assert.equal(second.isEnabled('rph-demo'), false, 'explicit disable wins over defaultEnabled');
 });
 
-test('registry: 工具贡献只含启用中的插件，停用后执行被门禁拦截', async () => {
+test('registry: tool contributions only from enabled plugins, execution gated after disable', async () => {
     const registry = createPluginRegistry({ storage: makeStorage() });
     const plugin = makeToolPlugin();
     await registry.register(plugin);
@@ -102,7 +103,7 @@ test('registry: 工具贡献只含启用中的插件，停用后执行被门禁�
     );
 });
 
-test('registry: 每插件设置的默认值合并与数字钳制', async () => {
+test('registry: per-plugin settings merge defaults and clamp numbers', async () => {
     const registry = createPluginRegistry({ storage: makeStorage() });
     await registry.register(makeToolPlugin({
         settings: [{ key: 'indexSize', label: '索引', type: 'number', default: 200, min: 50, max: 1000 }]
@@ -110,27 +111,27 @@ test('registry: 每插件设置的默认值合并与数字钳制', async () => {
 
     assert.deepEqual(registry.getPluginSettings('rph-demo'), { indexSize: 200 });
     await registry.setPluginSetting('rph-demo', 'indexSize', 9999);
-    assert.equal(registry.getPluginSettings('rph-demo').indexSize, 1000, '超出上限被钳制');
+    assert.equal(registry.getPluginSettings('rph-demo').indexSize, 1000, 'values beyond the cap are clamped');
     await assert.rejects(
         () => registry.setPluginSetting('rph-demo', 'indexSize', 'not-a-number'),
         /需为数字/,
-        '非法输入被拒绝'
+        'invalid input is rejected'
     );
-    assert.equal(registry.getPluginSettings('rph-demo').indexSize, 1000, '被拒后保持原值');
+    assert.equal(registry.getPluginSettings('rph-demo').indexSize, 1000, 'value unchanged after a rejected write');
     await assert.rejects(() => registry.setPluginSetting('rph-demo', 'unknown', 1), /没有设置项/);
 });
 
-test('registry: 持久化失败不阻塞内存态，重复注册被拒绝', async () => {
+test('registry: persistence failure never blocks in-memory state, duplicate registration rejected', async () => {
     const failingStorage = { get: async () => null, set: async () => { throw new Error('disk full'); } };
     const registry = createPluginRegistry({ storage: failingStorage, logger: { warn() {} } });
     await registry.register(makeToolPlugin());
     await registry.setEnabled('rph-demo', false);
-    assert.equal(registry.isEnabled('rph-demo'), false, '写盘失败时改动仍在内存生效');
+    assert.equal(registry.isEnabled('rph-demo'), false, 'changes still apply in memory when writes fail');
 
     await assert.rejects(() => registry.register(makeToolPlugin()), /重复注册/);
 });
 
-test('registry: onChange 在注册与启停时触发', async () => {
+test('registry: onChange fires on registration and enable/disable', async () => {
     const registry = createPluginRegistry({ storage: makeStorage() });
     let changes = 0;
     registry.onChange(() => { changes++; });

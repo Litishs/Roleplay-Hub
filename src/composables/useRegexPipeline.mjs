@@ -18,13 +18,18 @@ export function useRegexPipeline(deps) {
     const { regexScripts } = deps;
     const cardUtils = RPHubCardUtils;
 
-    // 灾难性回溯（ReDoS）启发式拦截：角色卡正则是不可信外部输入，嵌套量词一类
-    // 模式在大文本上一次 replace 就能把主线程冻死，且 JS 无法给同步正则设超时。
-    // 这里在编译前按两种经典形态拦截（宁可错杀并留痕，也不冻界面）：
-    //   R1 量词化分组再套量词： (a+)+ 、 (?:\w*)*
-    //   R2 量词化分组内含分支、且至少一个分支自带量词： (a+|b)+ 、 (a|a*)+
-    // 启发式不完备（无法覆盖所有回溯形态，也可能误杀少数无害模式）——被拦的脚本
-    // 会留在日志里便于作者改写；彻底方案是挪进 Worker，Phase 2 再做。
+    // Catastrophic backtracking (ReDoS) heuristic interception: card regexes
+    // are untrusted external input, and nested-quantifier patterns can freeze
+    // the main thread with a single replace on large text, while JS offers no
+    // timeout for synchronous regexes. Intercept the two classic shapes before
+    // compilation (prefer false positives with a log trail over a frozen UI):
+    //   R1 quantified group nested inside a quantifier: (a+)+ , (?:\w*)*
+    //   R2 quantified group containing a branch where at least one branch
+    //      carries its own quantifier: (a+|b)+ , (a|a*)+
+    // The heuristic is incomplete (it cannot cover every backtracking shape
+    // and may kill a few harmless patterns) — blocked scripts are left in the
+    // log so authors can rewrite them; the thorough fix is moving into a
+    // Worker, planned for Phase 2.
     const CATASTROPHIC_PATTERNS = [
         /\((?:[^()\\]|\\.)*[+*]\)\s*(?:[+*]|\{\d+,)/,
         /\((?:[^()\\]|\\.)*[+*][^()]*\|(?:(?!\)\s*[+*]).)*\)\s*(?:[+*]|\{\d+,)/,

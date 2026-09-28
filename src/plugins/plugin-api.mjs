@@ -1,9 +1,12 @@
-// 插件清单定义与校验（Plugin Marketplace Phase 1）。
+// Plugin manifest definition and validation (Plugin Marketplace Phase 1).
 //
-// Phase 1 只收录随应用内置的插件：清单在本仓库里声明、随构建分发，运行时经
-// plugin-registry 注册。清单里声明的权限目前用于市场界面的展示与告知，
-// 真正的按权限隔离（外置插件跑进沙箱 iframe、宿主 API 按权限放行）留给
-// Phase 2 的外置插件加载器——那一步落地前，本文件就是插件与宿主的契约面。
+// Phase 1 ships built-in plugins only: manifests are declared in this repo,
+// distributed with the build, and registered through plugin-registry at
+// runtime. Permissions declared in a manifest currently serve display and
+// disclosure in the marketplace UI; real per-permission isolation (external
+// plugins inside a sandboxed iframe, host API gated by permission) is left to
+// the Phase 2 external plugin loader. Until that lands, this file is the
+// plugin-host contract surface.
 
 export const PLUGIN_PERMISSIONS = Object.freeze({
     CHAT_READ: 'chat:read',
@@ -50,7 +53,7 @@ export const definePlugin = (manifest) => {
         id,
         version: String(manifest.version),
         permissions,
-        // Phase 1 的插件全部随应用内置；字段留给 Phase 2 区分来源。
+        // Phase 1 plugins are all built in; the field is kept for Phase 2 to tell sources apart.
         builtin: manifest?.builtin !== false
     });
 };

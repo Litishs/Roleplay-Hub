@@ -33,7 +33,7 @@ export default {
         const ctx = inject("appContext") || {};
         const pluginStateTick = ref(0);
 
-        // 标题右侧摘要（N 个插件 · M 个启用中）——registry 非响应式，用 tick 订阅变更。
+        // Summary right of the title (N plugins · M enabled) — the registry is not reactive, so subscribe to changes with a tick.
         const summary = computed(() => {
             pluginStateTick.value;
             const plugins = ctx.pluginRegistry?.list?.() || [];

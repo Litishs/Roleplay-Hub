@@ -1420,9 +1420,11 @@ const __app = createApp({
         const regexScripts = ref([]);
         const globalRegexScripts = ref([]);
 
-        // 正则美化模板包：一键加入 display-only 的排版正则（仅显示、不进提示词）。
-        // 替换产物只含 span/strong + class，DOMPurify 白名单本就放行；所有模式都
-        // 通过 ReDoS 防护的形态检查（见 useRegexPipeline）。
+        // Regex style packs: one-click display-only typography regexes
+        // (display layer only, never enters the prompt).
+        // Replacements only contain span/strong + class, which the DOMPurify
+        // allowlist already permits; all patterns pass the ReDoS guard's shape
+        // check (see useRegexPipeline).
         const REGEX_STYLE_PACKS = [
             {
                 id: 'novel',
@@ -2090,10 +2092,13 @@ const __app = createApp({
         // getter because app.mjs reassigns the db binding (deps are passed by value)
         const getDb = () => db;
 
-        // --- 插件市场（Plugin Marketplace Phase 1）---
-        // 内置插件经 registry 注册；启停与每插件设置经存储仓库持久化。插件的
-        // activeTool 贡献并进 activeTools 列表（见 applyPluginToolContributions），
-        // 让既有的解析/提示注入/格式化链路零改动地认识插件工具。
+        // --- Plugin Marketplace (Phase 1) ---
+        // Built-in plugins register through the registry; enable state and
+        // per-plugin settings persist via the storage repository. A plugin's
+        // activeTool contributions merge into the activeTools list (see
+        // applyPluginToolContributions), so the existing parsing / prompt
+        // injection / formatting chain recognizes plugin tools with zero
+        // changes.
         const pluginRegistry = createPluginRegistry({
             storage: {
                 get: async (key) => {
@@ -2135,8 +2140,10 @@ const __app = createApp({
             applyPluginToolContributions();
         };
 
-        // 插件空闲预热：聊天打开/切换、新消息落定后延迟触发，让语义索引在后台
-        // 就绪，模型真正调用工具时即时返回。失败静默（registry 已记 warn）。
+        // Plugin idle warmup: debounced after a chat opens/switches and after
+        // new messages settle, so the semantic index is ready in the
+        // background and real tool calls return instantly. Failures are
+        // silent (the registry already logs a warning).
         let pluginWarmupTimer = null;
         const schedulePluginWarmup = () => {
             if (pluginWarmupTimer) clearTimeout(pluginWarmupTimer);
@@ -5140,7 +5147,8 @@ const __app = createApp({
             || ['tool_web', 'tool_web_add', 'tool_web_cover'].includes(tool?.id)
             || /tavily|联网搜索/i.test(String(tool?.name || ''));
 
-        // 插件市场贡献的工具：type 固定 'plugin'，由 registry 按插件执行。
+        // Tools contributed by the plugin marketplace: type is fixed to
+        // 'plugin' and execution goes through the registry per plugin.
         const isPluginActiveTool = (tool) => tool?.type === 'plugin' && !!tool?.pluginId;
 
         const executePluginToolSearch = async (toolCall, signal) => {
@@ -5450,7 +5458,8 @@ const __app = createApp({
             if (settings.ttsService === 'cloud') refreshTtsStatus();
         });
 
-        // 角色专属音色选择用的候选列表：系统引擎取设备音色，云端引擎取云端音色。
+        // Candidate voices for the per-character voice picker: the system
+        // engine lists device voices, the cloud engine lists cloud voices.
         const ttsVoiceChoices = ref([]);
         const loadTtsVoiceChoices = async () => {
             try {

@@ -1,6 +1,6 @@
 name: Dependency audit
 
-# 每周扫描一次依赖漏洞；只在高危及以上时失败，避免中低危噪音淹没 PR 检查。
+# Weekly dependency vulnerability scan; fails only on high severity and above, so medium/low noise never floods PR checks.
 on:
   schedule:
     - cron: '0 3 * * 1'

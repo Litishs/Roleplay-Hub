@@ -1,13 +1,17 @@
-// 插件注册表：注册 / 启停 / 每插件设置 / 工具贡献，状态经 storage 持久化。
+// Plugin registry: registration / enable-disable / per-plugin settings / tool
+// contributions, with state persisted through storage.
 //
-// 刻意保持与框架无关（不 import Vue）：宿主 app.mjs 通过 onChange 订阅变更刷 UI；
-// 测试里直接以假 storage 驱动。启停态的生效路径是「工具贡献」——启用的插件把
-// activeTool 定义并进 app.mjs 的 activeTools 列表，让既有的工具解析、提示注入、
-// 结果格式化零改动地认识插件工具。
+// Deliberately framework-agnostic (no Vue import): the host app.mjs subscribes
+// via onChange to refresh the UI; tests drive it directly with a fake storage.
+// The enable state takes effect through "tool contributions" — enabled plugins
+// merge their activeTool definition into app.mjs's activeTools list, so the
+// existing tool parsing, prompt injection, and result formatting recognize
+// plugin tools with zero changes.
 //
-// 存储结构（storage key: plugin_marketplace_state）:
+// Storage shape (storage key: plugin_marketplace_state):
 //   { enabled: { [pluginId]: true|false }, settings: { [pluginId]: { key: value } } }
-// enabled 未记录时回退插件清单的 defaultEnabled（内置插件可声明开箱即用）。
+// When enabled has no record for a plugin, fall back to the manifest's
+// defaultEnabled (built-in plugins may declare out-of-the-box availability).
 
 export const PLUGIN_STATE_STORAGE_KEY = 'plugin_marketplace_state';
 
@@ -68,7 +72,8 @@ export const createPluginRegistry = ({ storage = null, logger = console } = {}) 
                 throw new Error(`插件重复注册: ${plugin.id}`);
             }
             plugins.set(plugin.id, plugin);
-            // 补齐设置默认值：清单新增 setting 时，老用户的存量状态里没有该键。
+            // Backfill setting defaults: when a manifest gains a new setting,
+            // existing user state has no entry for that key.
             const pluginSettings = { ...(state.settings[plugin.id] || {}) };
             (plugin.settings || []).forEach(setting => {
                 if (pluginSettings[setting.key] === undefined) pluginSettings[setting.key] = setting.default;
@@ -78,7 +83,8 @@ export const createPluginRegistry = ({ storage = null, logger = console } = {}) 
             notify();
         },
 
-        // 同步快照：调用前请先 ready()（宿主在注册完成后才渲染市场 UI）。
+        // Synchronous snapshot: call ready() first (the host renders the
+        // marketplace UI only after registration completes).
         list() {
             return [...plugins.values()].map(plugin => ({
                 id: plugin.id,
@@ -136,7 +142,8 @@ export const createPluginRegistry = ({ storage = null, logger = console } = {}) 
             notify();
         },
 
-        // 启用中的插件贡献的 activeTool 定义（app.mjs 并进 activeTools 列表）。
+        // activeTool definitions contributed by enabled plugins (app.mjs
+        // merges them into its activeTools list).
         getToolContributions() {
             return [...plugins.values()]
                 .filter(plugin => effectiveEnabled(plugin) && plugin.activeTool)
@@ -152,8 +159,9 @@ export const createPluginRegistry = ({ storage = null, logger = console } = {}) 
             return plugin.execute(query, tool, signal, ctx);
         },
 
-        // 空闲预热：给启用的插件一个后台建索引/做准备工作的机会。
-        // 每个 getSettings 按插件绑定；单个插件失败只记日志，不拖垮其它插件。
+        // Idle warmup: gives enabled plugins a chance to build indexes /
+        // prepare in the background. Each getSettings is bound per plugin; a
+        // single failing plugin only logs and never drags down the others.
         async warmupAll(baseCtx = {}) {
             await load();
             for (const plugin of plugins.values()) {
