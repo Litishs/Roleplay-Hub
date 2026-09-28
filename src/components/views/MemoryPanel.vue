@@ -436,6 +436,34 @@
                                         </span>
                                     </div>
                                 </div>
+                                <!-- Story timeline: summary batches + open plot lines + character profiles, a vertical look back at the story -->
+                                <div v-if="(memorySummaries.batches || []).some(b => b.status === 'done')"
+                                    class="rounded-xl border border-gray-100 bg-white px-3 py-2.5">
+                                    <div class="text-[10px] font-bold text-gray-400 mb-2">剧情时间线</div>
+                                    <ol class="relative border-l-2 border-primary-100 ml-2 space-y-3">
+                                        <li v-for="(b, idx) in [...memorySummaries.batches].filter(b => b.status === 'done').sort((a, b) => (a.toTurn || 0) - (b.toTurn || 0))"
+                                            :key="'tl-batch-' + idx" class="ml-4 relative">
+                                            <span class="absolute -left-[21px] top-1 w-3 h-3 rounded-full bg-primary-400 border-2 border-white shadow-sm"></span>
+                                            <p class="text-xs font-bold text-gray-700">第 {{ b.fromTurn }}–{{ b.toTurn }} 轮
+                                                <span class="text-[10px] text-gray-400 font-normal">章节总结完成{{ b.at ? ' · ' + new Date(b.at).toLocaleDateString() : '' }}</span>
+                                            </p>
+                                        </li>
+                                        <li v-for="(plot, idx) in (memoryProfile?.openPlots || []).filter(p => p.status !== 'closed')"
+                                            :key="'tl-plot-' + idx" class="ml-4 relative">
+                                            <span class="absolute -left-[21px] top-1 w-3 h-3 rounded-full bg-amber-400 border-2 border-white shadow-sm"></span>
+                                            <p class="text-xs font-bold text-amber-600">进行中的剧情线
+                                                <span class="text-[10px] text-gray-400 font-normal">{{ plot.turn ? '· 至第 ' + plot.turn + ' 轮' : '' }}</span>
+                                            </p>
+                                            <p class="text-xs text-gray-600 leading-relaxed mt-0.5">{{ plot.summary || plot.title || '' }}</p>
+                                        </li>
+                                        <li v-for="(character, idx) in (memoryProfile?.characters || [])"
+                                            :key="'tl-char-' + idx" class="ml-4 relative">
+                                            <span class="absolute -left-[21px] top-1 w-3 h-3 rounded-full bg-indigo-400 border-2 border-white shadow-sm"></span>
+                                            <p class="text-xs font-bold text-indigo-500">人物档案 · {{ character.name || '未命名' }}</p>
+                                            <p class="text-xs text-gray-600 leading-relaxed mt-0.5">{{ character.description || character.summary || '' }}</p>
+                                        </li>
+                                    </ol>
+                                </div>
                             </template>
                         </div>
 

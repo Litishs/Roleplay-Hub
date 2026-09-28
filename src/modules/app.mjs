@@ -72,6 +72,7 @@ const AsyncGeneratorPanel = defineAsyncComponent(() => import('../components/vie
 const AsyncSquarePanel = defineAsyncComponent(() => import('../components/views/SquarePanel.vue'));
 const AsyncNovelPanel = defineAsyncComponent(() => import('../components/views/NovelPanel.vue'));
 const AsyncSettingsPanel = defineAsyncComponent(() => import('../components/views/SettingsPanel.vue'));
+const AsyncPluginsPanel = defineAsyncComponent(() => import('../components/views/PluginsPanel.vue'));
 const AsyncPresetsPanel = defineAsyncComponent(() => import('../components/views/PresetsPanel.vue'));
 const AsyncUiTemplatePanel = defineAsyncComponent(() => import('../components/views/UiTemplatePanel.vue'));
 const AsyncRegexPanel = defineAsyncComponent(() => import('../components/views/RegexPanel.vue'));
@@ -101,10 +102,12 @@ import { useDataIO } from '../composables/useDataIO.mjs';
 import { useBackupRestore } from '../composables/useBackupRestore.mjs';
 import { EXECUTABLE_FRAME_CHANNEL, buildExecutableHtmlDocument, buildKeywordToolSnippet, bytesToBase64, checkConnectionStatus, cleanActiveToolCallReason, cleanupActiveToolCaptureState, collapseNativeReasoning, debounce, escapeRegexText, escapeXmlAttribute, escapeXmlText, estimateTokens, formatAIResponseForConsole, formatTokenAggregate, formatTokenCount, formatLatestTokenCount, formatTokenUsageTime, getConversationTurnAtIndexFromSnapshot, getTokenUsageCategory, indentXmlText, isDatabaseClosingError, isDesktopSidebarViewport, isEditableElement, isMobileViewport, normalizePresetRole, normalizeTavilyExtractUrl, printAIRequestLogs, readUsageNumber, removeActiveToolCallRawsFromText, requestTavily, resizeChatInputElement, runWithConcurrency, stringifyErrorDetail, stringifyUiSchema, stripActiveToolCallsFromAssistant, stripCodeBlocksForToolDetection, stripUiTemplateContextInjection, throwApiError, yieldToBrowser, yieldToUi } from './utils.mjs';
 import { extractVectorQueryTerms, factPreviewText, getClassicMemoryKey, getMemoryEmptyTurnsKey, getMemoryVectorExtractedKey, getTimelineCharCount, getVectorLexicalMatch, isEmbeddingLike, mergeSmallMemoryParagraphs, normalizeKeepFloors, normalizeVectorMemoryFingerprintText, shouldSuppressStandardVectorMemoryRecall, sortVectorMemoriesByTime, splitLongMemoryParagraph, toScoredVectorMemory, trimMemoryText, yieldMemoryStorageWork } from './memory-utils.mjs';
+import { createPluginRegistry } from '../plugins/plugin-registry.mjs';
+import { createSemanticSearchPlugin } from '../plugins/builtin/semantic-search.mjs';
 
 const __app = createApp({
     components: {
-        CharacterPanel: AsyncCharacterPanel, GeneratorPanel: AsyncGeneratorPanel, SquarePanel: AsyncSquarePanel, NovelPanel: AsyncNovelPanel, SettingsPanel: AsyncSettingsPanel, PresetsPanel: AsyncPresetsPanel, UiTemplatePanel: AsyncUiTemplatePanel, RegexPanel: AsyncRegexPanel, ToolsPanel: AsyncToolsPanel, UsageStatsPanel: AsyncUsageStatsPanel, MemoryPanel: AsyncMemoryPanel, WorldInfoPanel,
+        CharacterPanel: AsyncCharacterPanel, GeneratorPanel: AsyncGeneratorPanel, SquarePanel: AsyncSquarePanel, NovelPanel: AsyncNovelPanel, SettingsPanel: AsyncSettingsPanel, PluginsPanel: AsyncPluginsPanel, PresetsPanel: AsyncPresetsPanel, UiTemplatePanel: AsyncUiTemplatePanel, RegexPanel: AsyncRegexPanel, ToolsPanel: AsyncToolsPanel, UsageStatsPanel: AsyncUsageStatsPanel, MemoryPanel: AsyncMemoryPanel, WorldInfoPanel,
         UiTemplatePending, EmbeddedViewContent, GenerationTimer, SettingsPageHeader,
         SideNav, ToastNotification, ConfirmDialog, ModalDialog,
         CharacterInfo, MessageList, MessageInput,
@@ -1416,6 +1419,60 @@ const __app = createApp({
 
         const regexScripts = ref([]);
         const globalRegexScripts = ref([]);
+
+        // Regex style packs: one-click display-only typography regexes
+        // (display layer only, never enters the prompt).
+        // Replacements only contain span/strong + class, which the DOMPurify
+        // allowlist already permits; all patterns pass the ReDoS guard's shape
+        // check (see useRegexPipeline).
+        const REGEX_STYLE_PACKS = [
+            {
+                id: 'novel',
+                label: '小说体',
+                scripts: [
+                    { name: '[美化·小说体] 台词高亮', regex: '「([^」]{1,200})」', flags: 'g', replacement: '<span class="rph-style-dialogue">「$1」</span>' },
+                    { name: '[美化·小说体] 动作灰显', regex: '（([^（）]{1,160})）', flags: 'g', replacement: '<span class="rph-style-action">（$1）</span>' }
+                ]
+            },
+            {
+                id: 'script',
+                label: '剧本体',
+                scripts: [
+                    { name: '[美化·剧本体] 说话人加粗', regex: '^([^\\s：:]{1,12}[：:])(.*)$', flags: 'gm', replacement: '<span class="rph-style-speaker">$1</span>$2' }
+                ]
+            },
+            {
+                id: 'lightnovel',
+                label: '轻小说体',
+                scripts: [
+                    { name: '[美化·轻小说体] 内心独白', regex: '『([^』]{1,200})』', flags: 'g', replacement: '<span class="rph-style-inner">『$1』</span>' }
+                ]
+            }
+        ];
+
+        const applyRegexStylePack = (packId) => {
+            const pack = REGEX_STYLE_PACKS.find(item => item.id === packId);
+            if (!pack) return false;
+            let added = 0;
+            pack.scripts.forEach(script => {
+                if (regexScripts.value.some(item => item.name === script.name)) return;
+                regexScripts.value.push({
+                    scope: 'global',
+                    enabled: true,
+                    placement: [1, 2],
+                    markdownOnly: true,
+                    promptOnly: false,
+                    minDepth: null,
+                    maxDepth: null,
+                    ...script
+                });
+                added++;
+            });
+            if (added > 0 && typeof saveData === 'function') saveData();
+            showToast(added > 0 ? `已添加「${pack.label}」美化模板（${added} 条脚本）` : '「' + pack.label + '」的脚本已存在', added > 0 ? 'success' : 'info');
+            return true;
+        };
+
         const { globalWorldInfo, worldInfo } = worldInfoState;
         const globalUiTemplates = ref([]);
         const { recentGenerationTimes, currentWaitTime, waitHint, longPressTimer, estimatedGenerationTime } = chatState;
@@ -2034,6 +2091,74 @@ const __app = createApp({
         // accessor bridge: useCardOperations reads the storage handle through this
         // getter because app.mjs reassigns the db binding (deps are passed by value)
         const getDb = () => db;
+
+        // --- Plugin Marketplace (Phase 1) ---
+        // Built-in plugins register through the registry; enable state and
+        // per-plugin settings persist via the storage repository. A plugin's
+        // activeTool contributions merge into the activeTools list (see
+        // applyPluginToolContributions), so the existing parsing / prompt
+        // injection / formatting chain recognizes plugin tools with zero
+        // changes.
+        const pluginRegistry = createPluginRegistry({
+            storage: {
+                get: async (key) => {
+                    const repository = getDb();
+                    return repository ? await repository.get(key) : null;
+                },
+                set: async (key, value) => {
+                    const repository = getDb();
+                    if (repository) await repository.set(key, value);
+                }
+            }
+        });
+
+        const applyPluginToolContributions = () => {
+            const contributions = pluginRegistry.getToolContributions();
+            const hostTools = activeTools.value.filter(tool => !tool.pluginId);
+            const merged = [...hostTools];
+            contributions.forEach(tool => {
+                tool.enabled = pluginRegistry.isEnabled(tool.pluginId);
+                merged.push(normalizeActiveTool(tool) || tool);
+            });
+            activeTools.value = normalizeActiveTools(merged);
+        };
+
+        pluginRegistry.register(createSemanticSearchPlugin({
+            getMessages: () => chatHistory.value,
+            getScopeId: () => getCurrentChatStorageScopeId(),
+            embedTexts: (texts, signal) => RPHLocalEmbedding.embedTexts(texts, signal)
+        })).then(() => applyPluginToolContributions())
+            .catch(error => console.error('[PluginRegistry] 语义检索插件注册失败:', error));
+
+        const setPluginEnabled = async (pluginId, value) => {
+            await pluginRegistry.setEnabled(pluginId, value);
+            applyPluginToolContributions();
+        };
+
+        const setPluginSetting = async (pluginId, key, value) => {
+            await pluginRegistry.setPluginSetting(pluginId, key, value);
+            applyPluginToolContributions();
+        };
+
+        // Plugin idle warmup: debounced after a chat opens/switches and after
+        // new messages settle, so the semantic index is ready in the
+        // background and real tool calls return instantly. Failures are
+        // silent (the registry already logs a warning).
+        let pluginWarmupTimer = null;
+        const schedulePluginWarmup = () => {
+            if (pluginWarmupTimer) clearTimeout(pluginWarmupTimer);
+            pluginWarmupTimer = setTimeout(() => {
+                pluginWarmupTimer = null;
+                pluginRegistry.warmupAll({
+                    getMessages: () => chatHistory.value,
+                    getScopeId: () => getCurrentChatStorageScopeId(),
+                    getSettings: (pluginId) => pluginRegistry.getPluginSettings(pluginId)
+                }).catch(() => {});
+            }, 2500);
+        };
+        watch(() => getCurrentChatStorageScopeId(), () => schedulePluginWarmup());
+        watch(() => chatHistory.value.length, () => schedulePluginWarmup());
+        schedulePluginWarmup();
 
         const unwrapForStorage = (value, seen = new WeakMap()) => {
             if (value === null || typeof value !== 'object') return value;
@@ -5022,6 +5147,20 @@ const __app = createApp({
             || ['tool_web', 'tool_web_add', 'tool_web_cover'].includes(tool?.id)
             || /tavily|联网搜索/i.test(String(tool?.name || ''));
 
+        // Tools contributed by the plugin marketplace: type is fixed to
+        // 'plugin' and execution goes through the registry per plugin.
+        const isPluginActiveTool = (tool) => tool?.type === 'plugin' && !!tool?.pluginId;
+
+        const executePluginToolSearch = async (toolCall, signal) => {
+            const tool = toolCall.tool;
+            const results = await pluginRegistry.executeTool(tool.pluginId, toolCall.query, tool, signal, {
+                getMessages: () => chatHistory.value,
+                getScopeId: () => getCurrentChatStorageScopeId(),
+                getSettings: () => pluginRegistry.getPluginSettings(tool.pluginId)
+            });
+            return Array.isArray(results) ? results : [];
+        };
+
         const getActiveToolDisplayDescription = (tool) => tool?.displayDescription || '暂无说明';
 
         
@@ -5082,12 +5221,15 @@ const __app = createApp({
                 const coverCallName = escapeXmlAttribute(labels.cover);
                 const keywordTool = isKeywordActiveTool(tool);
                 const webTool = isWebActiveTool(tool);
-                const callPlaceholder = webTool ? '联网搜索内容或网页链接' : (keywordTool ? '关键词' : '检索内容');
-                const returnLabel = webTool ? `${count}条联网搜索结果，或网页正文` : (keywordTool ? `${count}条对话片段` : `${count}条向量记忆`);
+                const pluginTool = isPluginActiveTool(tool);
+                const callPlaceholder = webTool ? '联网搜索内容或网页链接' : (keywordTool ? '关键词' : (pluginTool ? '自然语言问题' : '检索内容'));
+                const returnLabel = webTool ? `${count}条联网搜索结果，或网页正文` : (keywordTool ? `${count}条对话片段` : (pluginTool ? `${count}条语义匹配的对话片段` : `${count}条向量记忆`));
                 const descriptionFallback = webTool
                     ? '通过 Tavily 联网搜索外部网页资料，返回带来源链接的搜索结果；当调用内容是网页链接时，读取该网页正文。'
                     : keywordTool
                     ? '按关键词精确匹配当前对话历史，抓取包含关键词的原文片段。'
+                    : pluginTool
+                    ? '按语义相似度在当前对话历史里检索相关原文片段。'
                     : '按调用内容检索长期向量记忆。';
                 const toolRules = webTool ? [
                     `用途：查外部网页、最新信息、冷门资料或本地资料无法确认的内容。`,
@@ -5095,6 +5237,9 @@ const __app = createApp({
                 ] : keywordTool ? [
                     `用途：精确查当前对话历史里的原文、名称、台词、物品、地点、设定词或前文细节。`,
                     `关键词尽量使用原文可能出现的词；同一信息点的同义词或别名可以放在同一次查询。`
+                ] : pluginTool ? [
+                    `用途：按语义相似度查找当前对话历史里的内容，适合"意思说过但记不清原词"的场景。`,
+                    `检索词写成完整的自然语言句子，描述要找的内容本身，而不是罗列关键词。`
                 ] : [
                     `用途：检索长期记忆、旧剧情、历史设定、关系、人物状态、物品来历或用户暗指内容。`,
                     `检索词优先包含人物、事件、物品、地点、时间线和关键状态。`
@@ -5312,6 +5457,22 @@ const __app = createApp({
         watch(() => [settings.ttsCloudBaseUrl, settings.ttsCloudApiKey, settings.ttsCloudModel, settings.ttsCloudProviderId], () => {
             if (settings.ttsService === 'cloud') refreshTtsStatus();
         });
+
+        // Candidate voices for the per-character voice picker: the system
+        // engine lists device voices, the cloud engine lists cloud voices.
+        const ttsVoiceChoices = ref([]);
+        const loadTtsVoiceChoices = async () => {
+            try {
+                const engine = RPHTts;
+                const voices = engine && typeof engine.getVoices === 'function' ? await engine.getVoices() : [];
+                ttsVoiceChoices.value = (Array.isArray(voices) ? voices : [])
+                    .map(voice => typeof voice === 'string' ? voice : (voice?.name || voice?.voiceName || ''))
+                    .filter(Boolean);
+            } catch (_) {
+                ttsVoiceChoices.value = [];
+            }
+            return ttsVoiceChoices.value;
+        };
 
         const refreshSystemTtsStatus = async () => {
             const engine = RPHTts;
@@ -7132,6 +7293,35 @@ const __app = createApp({
                     '</active_tool_result>'
                 ].join('\n');
             }
+            if (isPluginActiveTool(tool)) {
+                if (!Array.isArray(results) || results.length === 0) {
+                    return [
+                        `<active_tool_result name="${title}" call="${callName}" mode="${modeValue}" query="${escapeXmlAttribute(cleanQuery)}" status="empty">`,
+                        `  <description>本次语义检索没有找到与问题意思相近的对话片段。${modeDescription}本段内容已插入最后一条用户消息结尾。请换一种表述、用更接近原文的说法重新提问，或改用关键词工具精确查找；不要编造未出现过的对话内容。</description>`,
+                        '</active_tool_result>'
+                    ].join('\n');
+                }
+
+                const formattedResults = results.map(item => {
+                    const turnValue = escapeXmlAttribute(item.turn || '?');
+                    const roleValue = escapeXmlAttribute(item.role || 'unknown');
+                    const speakerValue = escapeXmlAttribute(item.speaker || '');
+                    const scoreValue = Number.isFinite(item.score) ? ` score="${item.score.toFixed(4)}"` : '';
+                    const fragmentText = indentXmlText(item.dialogueText || '', 4);
+                    return [
+                        `  <semantic_fragment turn="${turnValue}" role="${roleValue}" speaker="${speakerValue}"${scoreValue}>`,
+                        fragmentText,
+                        '  </semantic_fragment>'
+                    ].join('\n');
+                }).join('\n\n');
+
+                return [
+                    `<active_tool_result name="${title}" call="${callName}" mode="${modeValue}" query="${escapeXmlAttribute(cleanQuery)}">`,
+                    `  <description>以下是系统按语义相似度从当前对话历史中找到的原文片段（按相关度降序）。${modeDescription}本段内容由系统插入最后一条用户消息结尾。请优先依据这些片段继续回答，不要把没有出现过的内容说成事实；如果结果偏题，请换更具体、更接近原文表述的问法重新调用，或改用关键词工具精确定位。</description>`,
+                    formattedResults,
+                    '</active_tool_result>'
+                ].join('\n');
+            }
             if (!Array.isArray(results) || results.length === 0) {
                 return [
                     `<active_tool_result name="${title}" call="${callName}" mode="${modeValue}" query="${escapeXmlAttribute(cleanQuery)}" status="empty">`,
@@ -7825,6 +8015,8 @@ const __app = createApp({
             isVectorActiveTool,
             isKeywordActiveTool,
             isWebActiveTool,
+            isPluginActiveTool,
+            executePluginToolSearch,
             searchDialogueByKeywordForTool,
             searchWebByTavilyForTool,
             searchVectorMemoriesForTool,
@@ -9780,6 +9972,7 @@ const __app = createApp({
             localEmbeddingModelOptions, localEmbeddingStatusLabel,
             ttsStatus, ttsStatusLabel, ttsPlayingMessageId, ttsSettingsExpanded, ttsServiceOptions, ttsReadMode,
             settingsSectionsOpen, selectTtsService, refreshTtsStatus, testTtsVoice, ttsSpeakTextFor, toggleSpeakMessage, stopSpeaking,
+            applyRegexStylePack, regexStylePacks: REGEX_STYLE_PACKS, ttsVoiceChoices, loadTtsVoiceChoices,
             ttsCloudProviderOptions: ttsProviderOptions, ttsCloudVoiceOptions, ttsCloudModelOptions, onTtsCloudProviderChange,
             requestDiagnosticsCount, chatDiagnosticsCount, buildDiagnosticsExportEnvelope, exportRequestDiagnostics, clearRequestDiagnostics,
             diagnosticsFailureRecords, diagnosticsSeverityDotClass, diagnosticsResultLabel, formatDiagnosticsTime, copyDiagnosticsSummary,
@@ -9979,6 +10172,7 @@ const __app = createApp({
             presetGroups, setActivePresetGroup, createPresetGroup, deletePresetGroup,
             exportPresetGroups, importPresetGroups,
             renderMarkdown, messageUsesWideLayout, parseCot, parseMessageCot, closeCharacterEditor: () => showCharacterEditor.value = false,
+            pluginRegistry, setPluginEnabled, setPluginSetting,
             openExportModal, toggleExportSelection, selectAllExportItems, deselectAllExportItems, confirmExport,
             importPresets,
             // Regex Methods

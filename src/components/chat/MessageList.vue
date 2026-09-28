@@ -27,6 +27,28 @@
                             </button>
                         </div>
                     </div>
+                    <!-- Story recap: offers a plot review at the top of the chat once rolling summaries are ready (session-scoped collapse) -->
+                    <div v-if="currentCharacter && chatRecapText && !recapDismissed"
+                        class="mx-auto max-w-2xl px-2 -mt-8 md:-mt-10">
+                        <div class="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-xs shadow-sm">
+                            <div class="flex items-center gap-2 text-primary-600 font-bold">
+                                <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253">
+                                    </path>
+                                </svg>
+                                <span>前情提要</span>
+                                <button type="button" @click="recapExpanded = !recapExpanded"
+                                    class="ml-auto text-primary-600 hover:text-primary-700 transition-colors">
+                                    {{ recapExpanded ? '收起' : '展开' }}
+                                </button>
+                                <button type="button" @click="recapDismissed = true"
+                                    class="text-gray-400 hover:text-gray-600 transition-colors" title="本次会话不再显示">✕</button>
+                            </div>
+                            <p v-if="recapExpanded" class="mt-1.5 text-gray-700 leading-relaxed whitespace-pre-line">{{ chatRecapText }}</p>
+                            <p v-else class="mt-1 text-gray-500 truncate">{{ chatRecapText }}</p>
+                        </div>
+                    </div>
                     <div v-if="!currentCharacter"
                         class="flex flex-col items-center justify-center h-full text-gray-500">
                         <div class="w-24 h-24 bg-gray-200 rounded-full mb-4 flex items-center justify-center">
@@ -476,7 +498,7 @@
 </template>
 
 <script>
-import { inject } from "vue";
+import { inject, ref, computed } from "vue";
 import { UiTemplateFrame } from "../../modules/ui-template-frame.mjs";
 import GenerationTimer from "../common/GenerationTimer.vue";
 import UiTemplatePending from "../common/UiTemplatePending.vue";
@@ -644,7 +666,17 @@ export default {
     };
     const onBubbleTouchEnd = (event, index) => endGesture(event, index, false);
     const onBubbleTouchCancel = (event, index) => endGesture(event, index, true);
-    return { ...(ctx || {}), canSwipeGesture, onBubbleTouchStart, onBubbleTouchMove, onBubbleTouchEnd, onBubbleTouchCancel };
+    // Story recap: rolling summaries (short first, long as fallback) provide
+    // a plot review at the top of the chat.
+    // Collapse/dismiss is session-scoped state, not persisted — the banner
+    // shows again by default the next time the chat opens.
+    const recapExpanded = ref(false);
+    const recapDismissed = ref(false);
+    const chatRecapText = computed(() => {
+      const summaries = ctx?.memorySummaries;
+      return String(summaries?.short || summaries?.long || '').trim();
+    });
+    return { ...(ctx || {}), canSwipeGesture, onBubbleTouchStart, onBubbleTouchMove, onBubbleTouchEnd, onBubbleTouchCancel, recapExpanded, recapDismissed, chatRecapText };
   }
 };
 </script>

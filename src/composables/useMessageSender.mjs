@@ -541,6 +541,15 @@ export function useMessageSender(deps) {
             if (mesExample && mesExample.trim()) {
                 charDefinitionParts.push(mesExample);
             }
+            // Story director: the plot direction / staging requirements the
+            // user set for this character, injected every turn.
+            // This is the "story steering wheel" — the user writes the
+            // direction, the model performs along it, preventing plot drift
+            // in long conversations.
+            const storyDirector = String(currentCharacter?.value?.storyDirector || '').trim();
+            if (storyDirector) {
+                charDefinitionParts.push(`[Story Direction]\n${storyDirector}`);
+            }
             characterPreludeParts.push(charDefinitionParts.join('\n\n'));
             if (wiGroups.after_char.length > 0) {
                 characterPreludeParts.push(joinContent(wiGroups.after_char));

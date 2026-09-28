@@ -91,6 +91,17 @@
                 </svg>
                 <span v-show="!isSidebarCollapsed" class="whitespace-nowrap overflow-hidden">角色卡管理</span>
             </button>
+            <button @click="currentView = 'plugins'; closeMobileMenu()"
+                title="插件市场"
+                :class="['sidebar-nav-button flex items-center rounded-xl transition-all duration-200 font-medium', currentView === 'plugins' ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900', isSidebarCollapsed ? 'w-12 h-12 mx-auto justify-center p-0' : 'w-full px-3 py-2.5']">
+                <svg class="w-5 h-5" :class="isSidebarCollapsed ? 'mr-0' : 'mr-3'" fill="none" stroke="currentColor"
+                    viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 00-1-1H4a2 2 0 110-4h1a1 1 0 001-1V7a1 1 0 011-1h3a1 1 0 001-1V4z">
+                    </path>
+                </svg>
+                <span v-show="!isSidebarCollapsed" class="whitespace-nowrap overflow-hidden">插件市场</span>
+            </button>
             <div class="online-nav"
                 :class="{ 'is-open': isOnlineNavOpen && !isSidebarCollapsed }">
                 <button @click="toggleOnlineNav"

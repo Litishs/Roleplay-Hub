@@ -17,6 +17,28 @@ import { RPHubCardUtils } from '../modules/card-utils.mjs';
 export function useRegexPipeline(deps) {
     const { regexScripts } = deps;
     const cardUtils = RPHubCardUtils;
+
+    // Catastrophic backtracking (ReDoS) heuristic interception: card regexes
+    // are untrusted external input, and nested-quantifier patterns can freeze
+    // the main thread with a single replace on large text, while JS offers no
+    // timeout for synchronous regexes. Intercept the two classic shapes before
+    // compilation (prefer false positives with a log trail over a frozen UI):
+    //   R1 quantified group nested inside a quantifier: (a+)+ , (?:\w*)*
+    //   R2 quantified group containing a branch where at least one branch
+    //      carries its own quantifier: (a+|b)+ , (a|a*)+
+    // The heuristic is incomplete (it cannot cover every backtracking shape
+    // and may kill a few harmless patterns) — blocked scripts are left in the
+    // log so authors can rewrite them; the thorough fix is moving into a
+    // Worker, planned for Phase 2.
+    const CATASTROPHIC_PATTERNS = [
+        /\((?:[^()\\]|\\.)*[+*]\)\s*(?:[+*]|\{\d+,)/,
+        /\((?:[^()\\]|\\.)*[+*][^()]*\|(?:(?!\)\s*[+*]).)*\)\s*(?:[+*]|\{\d+,)/,
+        /\((?:[^()\\]|\\.)*\|[^()]*[+*]\)\s*(?:[+*]|\{\d+,)/
+    ];
+
+    const containsCatastrophicQuantifier = (pattern) =>
+        CATASTROPHIC_PATTERNS.some(nasty => nasty.test(String(pattern || '')));
+
         const processRegex = (text, options = {}) => {
             if (!text) return '';
             // options: { isDisplay, isPrompt, role, depth }
@@ -72,6 +94,11 @@ export function useRegexPipeline(deps) {
 
                     ({ pattern: regexPattern, flags } = cardUtils.normalizeRegexModifiers(regexPattern, flags));
 
+                    if (containsCatastrophicQuantifier(regexPattern)) {
+                        console.error(`Regex "${script.name || 'Unnamed'}" skipped: pattern contains nested quantifiers that can cause catastrophic backtracking (ReDoS guard).`);
+                        return;
+                    }
+
                     const re = new RegExp(regexPattern, flags);
 
                     // --- Protection Logic Start ---
@@ -97,5 +124,6 @@ export function useRegexPipeline(deps) {
                 }
             });
             return result;
-        };    return { processRegex };
+        };
+    return { processRegex, containsCatastrophicQuantifier };
 }

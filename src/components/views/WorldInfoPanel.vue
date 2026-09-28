@@ -265,6 +265,10 @@
                             :class="['flex-1 px-4 py-2 text-sm font-bold transition-all rounded-lg whitespace-nowrap', editorTab === 'first_mes' ? 'bg-white text-primary-600 shadow-sm' : 'text-gray-500 hover:text-gray-700 hover:bg-white/50']">
                             开场白
                         </button>
+                        <button @click="editorTab = 'story'"
+                            :class="['flex-1 px-4 py-2 text-sm font-bold transition-all rounded-lg whitespace-nowrap', editorTab === 'story' ? 'bg-white text-primary-600 shadow-sm' : 'text-gray-500 hover:text-gray-700 hover:bg-white/50']">
+                            剧情演出
+                        </button>
                     </div>
                 </div>
                 <div class="flex-1 overflow-y-auto p-3 md:p-8 custom-scrollbar flex flex-col bg-gray-50/30">
@@ -332,6 +336,30 @@
                         <textarea v-model="editingCharacter.data.first_mes"
                             class="w-full bg-gray-50/60 border border-gray-300 rounded-xl px-4 py-3 text-gray-800 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:outline-none flex-1 resize-none shadow-inner transition-all leading-relaxed"
                             placeholder="角色在对话开始时说的第一句话..."></textarea>
+                    </div>
+
+                    <!-- Story Direction & Presentation -->
+                    <div v-if="editorTab === 'story'" class="animate-fade-in h-full flex flex-col gap-5 overflow-y-auto">
+                        <div class="flex flex-col flex-1 min-h-0">
+                            <div class="flex justify-between items-center mb-2">
+                                <label class="block text-sm font-bold text-gray-600">导演提示（剧情走向 / 演出要求）</label>
+                                <span class="text-[10px] text-gray-400 font-mono bg-gray-100 px-1.5 py-0.5 rounded">{{
+                                    (editingCharacter.data.storyDirector || '').length }} 字</span>
+                            </div>
+                            <textarea v-model="editingCharacter.data.storyDirector"
+                                class="w-full bg-gray-50/60 border border-gray-300 rounded-xl px-4 py-3 text-gray-800 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:outline-none flex-1 resize-none shadow-inner transition-all leading-relaxed"
+                                placeholder="每轮对话都会注入给模型的剧情方向盘。例：&#10;- 剧情朝两人和解的方向缓慢推进，不要一步到位&#10;- 当前场景保持雨夜压抑氛围&#10;- 角色对用户保持戒备，但随剧情逐渐软化&#10;- 关键转折前先铺垫伏笔"></textarea>
+                            <p class="text-[10px] text-gray-400 mt-1.5 leading-relaxed">写剧情方向、节奏、氛围与禁区；会以 [Story Direction] 注入每轮系统提示，优先级高于历史对话的惯性。</p>
+                        </div>
+                        <div class="flex-shrink-0">
+                            <label class="block text-sm font-bold text-gray-600 mb-2">专属语音（TTS）</label>
+                            <select v-model="editingCharacter.data.ttsVoice"
+                                class="w-full bg-gray-50/60 border border-gray-300 rounded-xl px-4 py-2.5 text-gray-800 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:outline-none shadow-inner transition-all">
+                                <option value="">跟随全局设置</option>
+                                <option v-for="voice in ttsVoiceOptions" :key="voice" :value="voice">{{ voice }}</option>
+                            </select>
+                            <p class="text-[10px] text-gray-400 mt-1.5">按当前语音服务（{{ settings.ttsService === 'cloud' ? '云端' : '系统' }}）列出可选音色；留空则使用全局设置。切到该角色朗读时自动使用。</p>
+                        </div>
                     </div>
                 </div>
                 <div class="p-3 md:p-5 border-t border-gray-100 flex justify-end space-x-3 bg-gray-50/80 backdrop-blur-sm flex-shrink-0">
@@ -1266,7 +1294,7 @@
 </template>
 
 <script>
-import { inject } from "vue";
+import { inject, computed, onMounted } from "vue";
 import SettingsPageHeader from "../common/SettingsPageHeader.vue";
 import { RPHubCustomSelect as CustomSelect } from "../../modules/ui-select.mjs";
 import { UiTemplateFrame } from "../../modules/ui-template-frame.mjs";
@@ -1276,7 +1304,15 @@ export default {
   components: { SettingsPageHeader, CustomSelect, UiTemplateFrame },
   setup() {
     const ctx = inject("appContext");
-    return ctx || {};
+    // Per-character voice candidates: the source switches with the current TTS service (cloud list / system device voices).
+    const ttsVoiceOptions = computed(() => {
+      if (!ctx) return [];
+      return ctx.settings?.ttsService === 'cloud'
+        ? (ctx.ttsCloudVoiceOptions || [])
+        : (ctx.ttsVoiceChoices || []);
+    });
+    onMounted(() => { ctx?.loadTtsVoiceChoices?.(); });
+    return { ...(ctx || {}), ttsVoiceOptions };
   }
 };
 </script>

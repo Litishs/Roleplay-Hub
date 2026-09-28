@@ -1165,7 +1165,9 @@ test('useRegexPipeline composable owns processRegex', () => {
     assert.ok(regexPipelineSource.includes('transformUnprotectedText'), 'HTML/code protection kept');
     assert.ok(regexPipelineSource.includes("script.name !== 'Auto Replace {{user}}'"), 'protection exemption kept');
     assert.ok(regexPipelineSource.includes('if (isDisplay && script.promptOnly) return;'), 'mode filter kept');
-    assert.ok(regexPipelineSource.includes('return { processRegex };'));
+    assert.ok(regexPipelineSource.includes('return { processRegex, containsCatastrophicQuantifier };'));
+    // 2026-09-28: ReDoS guard — nested-quantifier patterns are intercepted before compiling
+    assert.ok(regexPipelineSource.includes('containsCatastrophicQuantifier(regexPattern)'), 'ReDoS guard runs before compiling');
     assert.ok(!regexPipelineSource.includes('showToast('), 'no toast side effects');
 });
 

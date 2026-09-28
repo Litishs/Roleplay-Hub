@@ -2,12 +2,14 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-const [html, app, styles, presetManager, settingsState] = await Promise.all([
+const [html, app, styles, presetManager, settingsState, sideNav, indexHtml] = await Promise.all([
     readFile(new URL('../src/components/views/SettingsPanel.vue', import.meta.url), 'utf8'),
     readFile(new URL('../src/modules/app.mjs', import.meta.url), 'utf8'),
     readFile(new URL('../assets/css/styles.css', import.meta.url), 'utf8'),
     readFile(new URL('../src/components/settings/PresetManager.vue', import.meta.url), 'utf8'),
-    readFile(new URL('../src/composables/useSettingsState.mjs', import.meta.url), 'utf8')
+    readFile(new URL('../src/composables/useSettingsState.mjs', import.meta.url), 'utf8'),
+    readFile(new URL('../src/components/common/SideNav.vue', import.meta.url), 'utf8'),
+    readFile(new URL('../index.html', import.meta.url), 'utf8')
 ]);
 
 const settingsStart = 0;
@@ -32,6 +34,19 @@ test('设置页五个区块使用统一折叠卡片并保持原有顺序', () =>
     const positions = panelIds.map(id => settingsView.indexOf(`id="${id}"`));
     assert.ok(positions.every(position => position >= 0));
     assert.deepEqual([...positions].sort((a, b) => a - b), positions);
+    // The plugin marketplace is a standalone sidebar view (plugins-panel), not a settings collapsible section
+    assert.doesNotMatch(settingsView, /plugins-settings-panel/);
+});
+
+test('plugin marketplace is a standalone sidebar view', () => {
+    assert.match(app, /PluginsPanel: AsyncPluginsPanel/);
+    assert.match(app, /const AsyncPluginsPanel = defineAsyncComponent\(\(\) => import\('\.\.\/components\/views\/PluginsPanel\.vue'\)\);/);
+    assert.match(indexHtml, /<plugins-panel v-if="currentView === 'plugins'"><\/plugins-panel>/);
+    // The sidebar entry comes after "Character Management" (character button first, then the marketplace button)
+    assert.ok(
+        sideNav.indexOf("currentView = 'characters'") < sideNav.indexOf("currentView = 'plugins'"),
+        'sidebar order: characters before plugins'
+    );
 });
 
 test('用户与 API 设置默认折叠且语音区保持默认折叠', () => {

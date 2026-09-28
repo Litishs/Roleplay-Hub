@@ -44,6 +44,8 @@ export function useActiveToolPipeline(deps) {
         isVectorActiveTool,
         isKeywordActiveTool,
         isWebActiveTool,
+        isPluginActiveTool,
+        executePluginToolSearch,
         searchDialogueByKeywordForTool,
         searchWebByTavilyForTool,
         searchVectorMemoriesForTool,
@@ -158,6 +160,7 @@ export function useActiveToolPipeline(deps) {
                 const toolName = toolCall?.tool?.name || 'unknown';
                 const toolMode = toolCall?.mode || (isKeywordActiveTool(toolCall?.tool) ? 'keyword'
                     : isWebActiveTool(toolCall?.tool) ? 'web'
+                    : isPluginActiveTool(toolCall?.tool) ? 'plugin'
                     : isVectorActiveTool(toolCall?.tool) ? 'vector' : 'unknown');
                 const startedAt = Date.now();
                 try {
@@ -179,6 +182,11 @@ export function useActiveToolPipeline(deps) {
                         ? await searchWebByTavilyForTool(
                             toolCall.query,
                             toolCall.tool,
+                            toolAbort.signal
+                        )
+                        : isPluginActiveTool(toolCall.tool)
+                        ? await executePluginToolSearch(
+                            toolCall,
                             toolAbort.signal
                         )
                         : await searchVectorMemoriesForTool(
