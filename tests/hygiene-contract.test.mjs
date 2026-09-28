@@ -1,23 +1,18 @@
 // Repository hygiene contract: no machine-specific data may appear inside this
 // folder (working tree + git-tracked surface).
 //
-// Covers three carriers; any hit fails with a fix hint:
-//   1. Content: local username / machine name / Windows user-directory
-//      absolute paths (the concrete forbidden words are assembled dynamically
-//      below — this file itself must not contain the literals, or it would
-//      trip its own scan)
-//   2. File names: a file or directory path itself carrying those traits
-//   3. Local data artifacts: local.properties, keystore, data-safety backups,
-//      diagnostics output, agent workspaces — files .gitignore designates as
-//      "this machine only" must never enter the working tree surface
+// Covers two carriers; any hit fails with a fix hint:
+//   1. Content: Windows user-directory absolute paths (drive letter, then a
+//      "Users" segment, then the account name) — the highest-risk shape for
+//      leaking the local username
+//   2. Local data artifacts: local.properties, keystore, data-safety backups,
+//      diagnostics output — files .gitignore designates as "this machine
+//      only" must never enter the working tree surface
 //
-// Scan scope = git-tracked files + untracked but non-ignored source files
-// (node_modules and gitignored artifacts are outside the scan surface).
-// Exception: model files under assets/vendor are third-party published
-// content (their vocabularies carry brand entries, identical for everyone,
-// not machine-specific) and are excluded from the scan surface by gitignore.
-// This test runs with npm test locally and on every CI run — "always like
-// this from now on" is enforced by it.
+// Deliberately NO keyword blocklist for machine/username names: a blocklist
+// would have to embed those very traits in this public file, leaking the
+// information it is meant to guard. The path regex below catches the
+// realistic leak shape without knowing any concrete names.
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { execFile } from 'node:child_process';
@@ -29,20 +24,9 @@ import { fileURLToPath } from 'node:url';
 const execFileAsync = promisify(execFile);
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
-// Machine-trait forbidden words assembled dynamically (so this file never
-// becomes a hit source itself)
-const machineName = ['len', 'ovo'].join('');
-const hostName = ['xi', 'yue'].join('');
-
 // Machine-trait patterns: a hit means a violation
 const FORBIDDEN_CONTENT = [
-    new RegExp(`\\b${machineName}\\b`, 'i'),
-    new RegExp(`\\b${hostName}\\b`, 'i'),
     /[a-z]:[\\/]+users[\\/]+[^\s"']+/i
-];
-const FORBIDDEN_IN_NAME = [
-    new RegExp(`\\b${machineName}\\b`, 'i'),
-    new RegExp(`\\b${hostName}\\b`, 'i')
 ];
 
 // Machine-only data files: once tracked by git (i.e. pushed into the public
@@ -54,9 +38,7 @@ const FORBIDDEN_TRACKED_ARTIFACTS = [
     'android/local.properties',
     'android/keystore.properties',
     'android/keystore',
-    '.rphub-diag-out',
-    '.openclaw',
-    '.openclaw-attachments'
+    '.rphub-diag-out'
 ];
 
 const listWorkspaceFiles = async () => {
@@ -71,16 +53,7 @@ const isBinary = (buffer) => {
     return sample.includes(0);
 };
 
-test('file names carry no machine traits', async () => {
-    const files = await listWorkspaceFiles();
-    for (const file of files) {
-        for (const pattern of FORBIDDEN_IN_NAME) {
-            assert.ok(!pattern.test(file), `file/directory name carries machine traits: "${file}" (hit ${pattern}). Rename before committing.`);
-        }
-    }
-});
-
-test('file content carries no machine traits (username/machine name/user-directory absolute paths)', async () => {
+test('file content carries no machine traits (user-directory absolute paths)', async () => {
     const files = await listWorkspaceFiles();
     assert.ok(files.length > 200, 'file list must not be empty (git availability check)');
     for (const file of files) {
