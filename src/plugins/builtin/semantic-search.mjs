@@ -95,7 +95,7 @@ export const createSemanticSearchPlugin = ({ getMessages, getScopeId, embedTexts
         author: 'Shimamura-Adach',
         description: '把当前对话的最近消息在本机建立向量索引，模型可以用自然语言问题按语义（而非关键词）找到相关前文。索引只在内存里、按对话隔离，全部计算在本机完成，不上传任何内容。',
         permissions: [PLUGIN_PERMISSIONS.CHAT_READ, PLUGIN_PERMISSIONS.EMBEDDING_COMPUTE],
-        defaultEnabled: true,
+        defaultEnabled: false,
         activeTool: {
             id: 'tool_semantic',
             name: '语义检索',

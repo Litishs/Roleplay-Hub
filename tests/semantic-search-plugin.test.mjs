@@ -142,7 +142,7 @@ test('manifest 通过插件 API 校验，工具贡献结构完整', async () => 
     const plugin = createSemanticSearchPlugin({ getMessages: () => [], getScopeId: () => 'x', embedTexts });
 
     assert.equal(plugin.id, 'rph-semantic-search');
-    assert.equal(plugin.defaultEnabled, true);
+    assert.equal(plugin.defaultEnabled, false);
     assert.deepEqual(plugin.permissions, ['chat:read', 'embedding:compute']);
     assert.equal(plugin.activeTool.callName, 'tool_semantic');
     assert.equal(plugin.activeTool.type, 'plugin');
