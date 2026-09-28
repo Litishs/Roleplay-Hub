@@ -451,7 +451,7 @@
                                         <li v-for="(plot, idx) in (memoryProfile?.openPlots || []).filter(p => p.status !== 'closed')"
                                             :key="'tl-plot-' + idx" class="ml-4 relative">
                                             <span class="absolute -left-[21px] top-1 w-3 h-3 rounded-full bg-amber-400 border-2 border-white shadow-sm"></span>
-                                            <p class="text-xs font-bold text-amber-700">进行中的剧情线
+                                            <p class="text-xs font-bold text-amber-600">进行中的剧情线
                                                 <span class="text-[10px] text-gray-400 font-normal">{{ plot.turn ? '· 至第 ' + plot.turn + ' 轮' : '' }}</span>
                                             </p>
                                             <p class="text-xs text-gray-600 leading-relaxed mt-0.5">{{ plot.summary || plot.title || '' }}</p>
@@ -459,7 +459,7 @@
                                         <li v-for="(character, idx) in (memoryProfile?.characters || [])"
                                             :key="'tl-char-' + idx" class="ml-4 relative">
                                             <span class="absolute -left-[21px] top-1 w-3 h-3 rounded-full bg-indigo-400 border-2 border-white shadow-sm"></span>
-                                            <p class="text-xs font-bold text-indigo-700">人物档案 · {{ character.name || '未命名' }}</p>
+                                            <p class="text-xs font-bold text-indigo-500">人物档案 · {{ character.name || '未命名' }}</p>
                                             <p class="text-xs text-gray-600 leading-relaxed mt-0.5">{{ character.description || character.summary || '' }}</p>
                                         </li>
                                     </ol>

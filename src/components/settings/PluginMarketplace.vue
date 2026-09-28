@@ -19,7 +19,7 @@
                     </svg>
                     <span class="font-semibold text-gray-800 text-sm truncate">{{ plugin.name }}</span>
                     <span class="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 flex-shrink-0">v{{ plugin.version }}</span>
-                    <span v-if="plugin.builtin" class="text-[10px] px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-500 flex-shrink-0">内置</span>
+                    <span v-if="plugin.builtin" class="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-primary-600 flex-shrink-0">内置</span>
                 </button>
                 <label class="shrink-0 relative inline-flex items-center cursor-pointer"
                     :title="plugin.enabled ? '点击停用' : '点击启用'" @click.stop>
@@ -36,7 +36,7 @@
                 <p class="text-xs text-gray-500 leading-relaxed">{{ plugin.description }}</p>
                 <div v-if="plugin.permissions.length" class="flex flex-wrap gap-1">
                     <span v-for="permission in plugin.permissions" :key="permission"
-                        class="text-[10px] px-1.5 py-0.5 rounded bg-amber-50 text-amber-600 border border-amber-100">
+                        class="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-amber-600 border border-gray-200">
                         {{ permission }}
                     </span>
                 </div>
@@ -52,7 +52,7 @@
                         </span>
                         <input v-if="setting.type === 'number'" type="number" :min="setting.min" :max="setting.max"
                             class="w-24 shrink-0 rounded-lg border border-gray-200 px-2 py-1 text-xs text-gray-700
-                                focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                                focus:outline-none focus:ring-2 focus:ring-primary-200"
                             :value="pluginSettingValue(plugin, setting)"
                             @change="onSettingChange(plugin, setting, $event)">
                     </label>
