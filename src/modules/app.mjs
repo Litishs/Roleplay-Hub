@@ -72,6 +72,7 @@ const AsyncGeneratorPanel = defineAsyncComponent(() => import('../components/vie
 const AsyncSquarePanel = defineAsyncComponent(() => import('../components/views/SquarePanel.vue'));
 const AsyncNovelPanel = defineAsyncComponent(() => import('../components/views/NovelPanel.vue'));
 const AsyncSettingsPanel = defineAsyncComponent(() => import('../components/views/SettingsPanel.vue'));
+const AsyncPluginsPanel = defineAsyncComponent(() => import('../components/views/PluginsPanel.vue'));
 const AsyncPresetsPanel = defineAsyncComponent(() => import('../components/views/PresetsPanel.vue'));
 const AsyncUiTemplatePanel = defineAsyncComponent(() => import('../components/views/UiTemplatePanel.vue'));
 const AsyncRegexPanel = defineAsyncComponent(() => import('../components/views/RegexPanel.vue'));
@@ -106,7 +107,7 @@ import { createSemanticSearchPlugin } from '../plugins/builtin/semantic-search.m
 
 const __app = createApp({
     components: {
-        CharacterPanel: AsyncCharacterPanel, GeneratorPanel: AsyncGeneratorPanel, SquarePanel: AsyncSquarePanel, NovelPanel: AsyncNovelPanel, SettingsPanel: AsyncSettingsPanel, PresetsPanel: AsyncPresetsPanel, UiTemplatePanel: AsyncUiTemplatePanel, RegexPanel: AsyncRegexPanel, ToolsPanel: AsyncToolsPanel, UsageStatsPanel: AsyncUsageStatsPanel, MemoryPanel: AsyncMemoryPanel, WorldInfoPanel,
+        CharacterPanel: AsyncCharacterPanel, GeneratorPanel: AsyncGeneratorPanel, SquarePanel: AsyncSquarePanel, NovelPanel: AsyncNovelPanel, SettingsPanel: AsyncSettingsPanel, PluginsPanel: AsyncPluginsPanel, PresetsPanel: AsyncPresetsPanel, UiTemplatePanel: AsyncUiTemplatePanel, RegexPanel: AsyncRegexPanel, ToolsPanel: AsyncToolsPanel, UsageStatsPanel: AsyncUsageStatsPanel, MemoryPanel: AsyncMemoryPanel, WorldInfoPanel,
         UiTemplatePending, EmbeddedViewContent, GenerationTimer, SettingsPageHeader,
         SideNav, ToastNotification, ConfirmDialog, ModalDialog,
         CharacterInfo, MessageList, MessageInput,
@@ -1418,6 +1419,58 @@ const __app = createApp({
 
         const regexScripts = ref([]);
         const globalRegexScripts = ref([]);
+
+        // 正则美化模板包：一键加入 display-only 的排版正则（仅显示、不进提示词）。
+        // 替换产物只含 span/strong + class，DOMPurify 白名单本就放行；所有模式都
+        // 通过 ReDoS 防护的形态检查（见 useRegexPipeline）。
+        const REGEX_STYLE_PACKS = [
+            {
+                id: 'novel',
+                label: '小说体',
+                scripts: [
+                    { name: '[美化·小说体] 台词高亮', regex: '「([^」]{1,200})」', flags: 'g', replacement: '<span class="rph-style-dialogue">「$1」</span>' },
+                    { name: '[美化·小说体] 动作灰显', regex: '（([^（）]{1,160})）', flags: 'g', replacement: '<span class="rph-style-action">（$1）</span>' }
+                ]
+            },
+            {
+                id: 'script',
+                label: '剧本体',
+                scripts: [
+                    { name: '[美化·剧本体] 说话人加粗', regex: '^([^\\s：:]{1,12}[：:])(.*)$', flags: 'gm', replacement: '<span class="rph-style-speaker">$1</span>$2' }
+                ]
+            },
+            {
+                id: 'lightnovel',
+                label: '轻小说体',
+                scripts: [
+                    { name: '[美化·轻小说体] 内心独白', regex: '『([^』]{1,200})』', flags: 'g', replacement: '<span class="rph-style-inner">『$1』</span>' }
+                ]
+            }
+        ];
+
+        const applyRegexStylePack = (packId) => {
+            const pack = REGEX_STYLE_PACKS.find(item => item.id === packId);
+            if (!pack) return false;
+            let added = 0;
+            pack.scripts.forEach(script => {
+                if (regexScripts.value.some(item => item.name === script.name)) return;
+                regexScripts.value.push({
+                    scope: 'global',
+                    enabled: true,
+                    placement: [1, 2],
+                    markdownOnly: true,
+                    promptOnly: false,
+                    minDepth: null,
+                    maxDepth: null,
+                    ...script
+                });
+                added++;
+            });
+            if (added > 0 && typeof saveData === 'function') saveData();
+            showToast(added > 0 ? `已添加「${pack.label}」美化模板（${added} 条脚本）` : '「' + pack.label + '」的脚本已存在', added > 0 ? 'success' : 'info');
+            return true;
+        };
+
         const { globalWorldInfo, worldInfo } = worldInfoState;
         const globalUiTemplates = ref([]);
         const { recentGenerationTimes, currentWaitTime, waitHint, longPressTimer, estimatedGenerationTime } = chatState;
@@ -5396,6 +5449,21 @@ const __app = createApp({
         watch(() => [settings.ttsCloudBaseUrl, settings.ttsCloudApiKey, settings.ttsCloudModel, settings.ttsCloudProviderId], () => {
             if (settings.ttsService === 'cloud') refreshTtsStatus();
         });
+
+        // 角色专属音色选择用的候选列表：系统引擎取设备音色，云端引擎取云端音色。
+        const ttsVoiceChoices = ref([]);
+        const loadTtsVoiceChoices = async () => {
+            try {
+                const engine = RPHTts;
+                const voices = engine && typeof engine.getVoices === 'function' ? await engine.getVoices() : [];
+                ttsVoiceChoices.value = (Array.isArray(voices) ? voices : [])
+                    .map(voice => typeof voice === 'string' ? voice : (voice?.name || voice?.voiceName || ''))
+                    .filter(Boolean);
+            } catch (_) {
+                ttsVoiceChoices.value = [];
+            }
+            return ttsVoiceChoices.value;
+        };
 
         const refreshSystemTtsStatus = async () => {
             const engine = RPHTts;
@@ -9895,6 +9963,7 @@ const __app = createApp({
             localEmbeddingModelOptions, localEmbeddingStatusLabel,
             ttsStatus, ttsStatusLabel, ttsPlayingMessageId, ttsSettingsExpanded, ttsServiceOptions, ttsReadMode,
             settingsSectionsOpen, selectTtsService, refreshTtsStatus, testTtsVoice, ttsSpeakTextFor, toggleSpeakMessage, stopSpeaking,
+            applyRegexStylePack, regexStylePacks: REGEX_STYLE_PACKS, ttsVoiceChoices, loadTtsVoiceChoices,
             ttsCloudProviderOptions: ttsProviderOptions, ttsCloudVoiceOptions, ttsCloudModelOptions, onTtsCloudProviderChange,
             requestDiagnosticsCount, chatDiagnosticsCount, buildDiagnosticsExportEnvelope, exportRequestDiagnostics, clearRequestDiagnostics,
             diagnosticsFailureRecords, diagnosticsSeverityDotClass, diagnosticsResultLabel, formatDiagnosticsTime, copyDiagnosticsSummary,

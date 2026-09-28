@@ -6,52 +6,58 @@
         </p>
 
         <div v-for="plugin in plugins" :key="plugin.id"
-            class="rounded-xl border border-gray-200/70 bg-white/70 backdrop-blur-sm p-3 flex flex-col gap-2">
-            <div class="flex items-start justify-between gap-3">
-                <div class="min-w-0">
-                    <div class="flex items-center gap-2 flex-wrap">
-                        <span class="font-semibold text-gray-800 text-sm">{{ plugin.name }}</span>
-                        <span class="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">v{{ plugin.version }}</span>
-                        <span v-if="plugin.builtin" class="text-[10px] px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-500">内置</span>
-                    </div>
-                    <p class="text-xs text-gray-500 leading-relaxed mt-1">{{ plugin.description }}</p>
-                    <div v-if="plugin.permissions.length" class="flex flex-wrap gap-1 mt-1.5">
-                        <span v-for="permission in plugin.permissions" :key="permission"
-                            class="text-[10px] px-1.5 py-0.5 rounded bg-amber-50 text-amber-600 border border-amber-100">
-                            {{ permission }}
-                        </span>
-                    </div>
-                </div>
-                <label class="shrink-0 inline-flex items-center cursor-pointer" :title="plugin.enabled ? '点击停用' : '点击启用'">
-                    <input type="checkbox" class="sr-only peer" :checked="plugin.enabled"
+            class="rounded-xl border border-gray-200/70 bg-white/70 backdrop-blur-sm flex flex-col">
+            <!-- 名称行（折叠态只保留这一行）：点击行体展开/收起，开关独立于折叠 -->
+            <div class="flex items-center gap-2 p-3">
+                <button type="button" class="flex items-center gap-2 min-w-0 flex-1 text-left group/row"
+                    :title="isExpanded(plugin) ? '收起详情' : '展开详情'"
+                    @click="toggleExpand(plugin.id)">
+                    <svg class="w-4 h-4 text-gray-400 group-hover/row:text-gray-600 transition-transform flex-shrink-0"
+                        :class="isExpanded(plugin) ? 'rotate-90' : ''" fill="none" stroke="currentColor"
+                        viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                    </svg>
+                    <span class="font-semibold text-gray-800 text-sm truncate">{{ plugin.name }}</span>
+                    <span class="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 flex-shrink-0">v{{ plugin.version }}</span>
+                    <span v-if="plugin.builtin" class="text-[10px] px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-500 flex-shrink-0">内置</span>
+                </button>
+                <label class="shrink-0 relative inline-flex items-center cursor-pointer"
+                    :title="plugin.enabled ? '点击停用' : '点击启用'" @click.stop>
+                    <input type="checkbox" class="settings-toggle-input sr-only" :checked="plugin.enabled"
                         @change="onToggle(plugin, $event)">
-                    <span class="w-9 h-5 rounded-full bg-gray-300 peer-checked:bg-indigo-500 relative transition-colors
-                        after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:w-4 after:h-4
-                        after:rounded-full after:bg-white after:transition-transform
-                        peer-checked:after:translate-x-4"></span>
+                    <div class="settings-toggle"></div>
                 </label>
             </div>
 
-            <div v-if="plugin.enabled && plugin.hasActiveTool" class="text-[11px] text-gray-400">
-                已作为工具 <code class="text-gray-500">{{ toolCallName(plugin) }}</code> 提供给模型，可在「主动工具」设置中调整结果条数。
-            </div>
+            <p v-if="plugin.error" class="text-[11px] text-red-500 px-3 pb-2">{{ plugin.error }}</p>
 
-            <div v-if="plugin.enabled && plugin.settings.length" class="flex flex-col gap-2 border-t border-gray-100 pt-2">
-                <label v-for="setting in plugin.settings" :key="setting.key"
-                    class="flex items-center justify-between gap-3 text-xs text-gray-600">
-                    <span class="min-w-0">
-                        {{ setting.label }}
-                        <span v-if="setting.help" class="block text-[10px] text-gray-400 leading-snug">{{ setting.help }}</span>
+            <!-- 展开态：描述 / 权限 / 工具接线 / 每插件设置 -->
+            <div v-if="isExpanded(plugin)" class="flex flex-col gap-3 px-3 pb-3 border-t border-gray-100 pt-3">
+                <p class="text-xs text-gray-500 leading-relaxed">{{ plugin.description }}</p>
+                <div v-if="plugin.permissions.length" class="flex flex-wrap gap-1">
+                    <span v-for="permission in plugin.permissions" :key="permission"
+                        class="text-[10px] px-1.5 py-0.5 rounded bg-amber-50 text-amber-600 border border-amber-100">
+                        {{ permission }}
                     </span>
-                    <input v-if="setting.type === 'number'" type="number" :min="setting.min" :max="setting.max"
-                        class="w-24 shrink-0 rounded-lg border border-gray-200 px-2 py-1 text-xs text-gray-700
-                            focus:outline-none focus:ring-2 focus:ring-indigo-200"
-                        :value="pluginSettingValue(plugin, setting)"
-                        @change="onSettingChange(plugin, setting, $event)">
-                </label>
+                </div>
+                <div v-if="plugin.hasActiveTool" class="text-[11px] text-gray-400">
+                    已作为工具 <code class="text-gray-500">{{ toolCallName(plugin) }}</code> 提供给模型，可在「主动工具」设置中调整结果条数。
+                </div>
+                <div v-if="plugin.settings.length" class="flex flex-col gap-2">
+                    <label v-for="setting in plugin.settings" :key="setting.key"
+                        class="flex items-center justify-between gap-3 text-xs text-gray-600">
+                        <span class="min-w-0">
+                            {{ setting.label }}
+                            <span v-if="setting.help" class="block text-[10px] text-gray-400 leading-snug">{{ setting.help }}</span>
+                        </span>
+                        <input v-if="setting.type === 'number'" type="number" :min="setting.min" :max="setting.max"
+                            class="w-24 shrink-0 rounded-lg border border-gray-200 px-2 py-1 text-xs text-gray-700
+                                focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                            :value="pluginSettingValue(plugin, setting)"
+                            @change="onSettingChange(plugin, setting, $event)">
+                    </label>
+                </div>
             </div>
-
-            <p v-if="plugin.error" class="text-[11px] text-red-500">{{ plugin.error }}</p>
         </div>
 
         <p v-if="plugins.length === 0" class="text-sm text-gray-400">暂无可用插件。</p>
@@ -59,13 +65,15 @@
 </template>
 
 <script>
-import { inject, ref, onMounted, onBeforeUnmount } from "vue";
+import { inject, ref, onMounted } from "vue";
 
 export default {
     name: 'PluginMarketplace',
     setup() {
         const ctx = inject("appContext") || {};
         const plugins = ref([]);
+        // 折叠态：默认收起只留名称行；按插件 id 记忆展开状态。
+        const expandedIds = ref({});
         let unsubscribe = null;
 
         const refresh = () => {
@@ -78,7 +86,11 @@ export default {
             refresh();
             unsubscribe = ctx.pluginRegistry.onChange(refresh);
         });
-        onBeforeUnmount(() => { if (unsubscribe) unsubscribe(); });
+
+        const isExpanded = (plugin) => expandedIds.value[plugin.id] === true;
+        const toggleExpand = (pluginId) => {
+            expandedIds.value = { ...expandedIds.value, [pluginId]: !isExpanded({ id: pluginId }) };
+        };
 
         const toolCallName = (plugin) => {
             const tool = ctx.pluginRegistry?.getToolContributions?.().find(item => item.pluginId === plugin.id);
@@ -107,7 +119,7 @@ export default {
             }
         };
 
-        return { plugins, toolCallName, pluginSettingValue, onToggle, onSettingChange };
+        return { plugins, isExpanded, toggleExpand, toolCallName, pluginSettingValue, onToggle, onSettingChange };
     }
 };
 </script>

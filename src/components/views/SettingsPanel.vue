@@ -118,39 +118,6 @@
                     </div>
                     </section>
 
-                    <!-- 插件市场（Plugin Marketplace Phase 1：内置插件管理） -->
-                    <section class="settings-accordion settings-accordion--plugins"
-                        :class="{'is-open': settingsSectionsOpen.plugins}">
-                        <button type="button" @click="settingsSectionsOpen.plugins = !settingsSectionsOpen.plugins; settingsHelpTopic = ''"
-                            class="settings-accordion-trigger" aria-controls="plugins-settings-panel"
-                            :aria-expanded="settingsSectionsOpen.plugins">
-                            <span class="settings-accordion-icon">
-                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 00-1-1H4a2 2 0 110-4h1a1 1 0 001-1V7a1 1 0 011-1h3a1 1 0 001-1V4z"></path>
-                                </svg>
-                            </span>
-                            <span class="settings-accordion-copy">
-                                <span class="settings-accordion-title">插件市场</span>
-                                <span class="settings-accordion-description">扩展能力的启用与配置</span>
-                            </span>
-                            <span class="settings-accordion-summary">{{ pluginMarketplaceSummary }}</span>
-                            <svg :class="{'transform rotate-180': settingsSectionsOpen.plugins}"
-                                class="settings-collapse-chevron settings-accordion-chevron" fill="none"
-                                stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
-                            </svg>
-                        </button>
-
-                        <div id="plugins-settings-panel" class="settings-collapse" :class="{'is-open': settingsSectionsOpen.plugins}"
-                            :aria-hidden="!settingsSectionsOpen.plugins" :inert="!settingsSectionsOpen.plugins">
-                            <div class="settings-collapse__inner">
-                                <div class="settings-collapse__content settings-panel-body">
-                        <PluginMarketplace />
-                        </div>
-                        </div>
-                    </div>
-                    </section>
-
                     <!-- 语音设置（TTS P0：Android 系统语音引擎） -->
                     <section class="settings-accordion settings-accordion--voice"
                         :class="{'is-open': ttsSettingsExpanded}">
@@ -297,37 +264,22 @@
 </template>
 
 <script>
-import { inject, ref, computed, onMounted } from "vue";
+import { inject, ref } from "vue";
 import ApiConfig from "../settings/ApiConfig.vue";
 import PresetManager from "../settings/PresetManager.vue";
 import DataManager from "../settings/DataManager.vue";
 import UpdateChecker from "../settings/UpdateChecker.vue";
 import AdvancedSettings from "../settings/AdvancedSettings.vue";
 import TtsSettings from "../settings/TtsSettings.vue";
-import PluginMarketplace from "../settings/PluginMarketplace.vue";
 // 2026-08-28 Phase 1.6: shared components are declared locally now that the
 // app-level global registration workaround has been removed.
 export default {
-  components: { ApiConfig, PresetManager, DataManager, UpdateChecker, AdvancedSettings, TtsSettings, PluginMarketplace },
+  components: { ApiConfig, PresetManager, DataManager, UpdateChecker, AdvancedSettings, TtsSettings },
   setup() {
     const ctx = inject("appContext");
     const diagnosticsHelpOpen = ref(false);
     const diagnosticsShowAll = ref(false);
-    // 插件市场折叠条右侧的摘要：N 个插件 · M 个启用中。registry 本身非响应式，
-    // 用 tick 订阅其 onChange，让 computed 在启停/注册后重算。
-    const pluginStateTick = ref(0);
-    const pluginMarketplaceSummary = computed(() => {
-      pluginStateTick.value;
-      const plugins = ctx.pluginRegistry?.list?.() || [];
-      if (plugins.length === 0) return '暂无插件';
-      return `${plugins.length} 个插件 · ${plugins.filter(plugin => plugin.enabled).length} 个启用中`;
-    });
-    onMounted(async () => {
-      if (!ctx.pluginRegistry) return;
-      await ctx.pluginRegistry.ready();
-      ctx.pluginRegistry.onChange(() => { pluginStateTick.value++; });
-    });
-    return { ...(ctx || {}), diagnosticsHelpOpen, diagnosticsShowAll, pluginMarketplaceSummary };
+    return { ...(ctx || {}), diagnosticsHelpOpen, diagnosticsShowAll };
   }
 };
 </script>

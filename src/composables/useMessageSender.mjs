@@ -541,6 +541,12 @@ export function useMessageSender(deps) {
             if (mesExample && mesExample.trim()) {
                 charDefinitionParts.push(mesExample);
             }
+            // 导演提示：用户为该角色设定的剧情走向 / 演出要求，每轮注入。
+            // 这是"故事感方向盘"——用户执笔定方向，模型顺着演，防止长对话剧情漂移。
+            const storyDirector = String(currentCharacter?.value?.storyDirector || '').trim();
+            if (storyDirector) {
+                charDefinitionParts.push(`[Story Direction]\n${storyDirector}`);
+            }
             characterPreludeParts.push(charDefinitionParts.join('\n\n'));
             if (wiGroups.after_char.length > 0) {
                 characterPreludeParts.push(joinContent(wiGroups.after_char));

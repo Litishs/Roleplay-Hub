@@ -2,23 +2,25 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-const [html, app, styles, presetManager, settingsState] = await Promise.all([
+const [html, app, styles, presetManager, settingsState, sideNav, indexHtml] = await Promise.all([
     readFile(new URL('../src/components/views/SettingsPanel.vue', import.meta.url), 'utf8'),
     readFile(new URL('../src/modules/app.mjs', import.meta.url), 'utf8'),
     readFile(new URL('../assets/css/styles.css', import.meta.url), 'utf8'),
     readFile(new URL('../src/components/settings/PresetManager.vue', import.meta.url), 'utf8'),
-    readFile(new URL('../src/composables/useSettingsState.mjs', import.meta.url), 'utf8')
+    readFile(new URL('../src/composables/useSettingsState.mjs', import.meta.url), 'utf8'),
+    readFile(new URL('../src/components/common/SideNav.vue', import.meta.url), 'utf8'),
+    readFile(new URL('../index.html', import.meta.url), 'utf8')
 ]);
 
 const settingsStart = 0;
 const settingsEnd = html.length;
 const settingsView = html;
 
-test('设置页六个区块使用统一折叠卡片并保持原有顺序', () => {
+test('设置页五个区块使用统一折叠卡片并保持原有顺序', () => {
     assert.ok(settingsEnd > settingsStart);
-    assert.equal((settingsView.match(/class="settings-accordion-trigger"/g) || []).length, 6);
+    assert.equal((settingsView.match(/class="settings-accordion-trigger"/g) || []).length, 5);
 
-    for (const modifier of ['user', 'api', 'advanced', 'plugins', 'voice', 'local']) {
+    for (const modifier of ['user', 'api', 'advanced', 'voice', 'local']) {
         assert.match(settingsView, new RegExp(`settings-accordion--${modifier}`));
     }
 
@@ -26,19 +28,31 @@ test('设置页六个区块使用统一折叠卡片并保持原有顺序', () =>
         'user-settings-panel',
         'api-settings-panel',
         'advanced-settings-panel',
-        'plugins-settings-panel',
         'tts-settings-panel',
         'local-data-panel'
     ];
     const positions = panelIds.map(id => settingsView.indexOf(`id="${id}"`));
     assert.ok(positions.every(position => position >= 0));
     assert.deepEqual([...positions].sort((a, b) => a - b), positions);
+    // 插件市场是侧边栏独立视图（plugins-panel），不是设置页折叠区
+    assert.doesNotMatch(settingsView, /plugins-settings-panel/);
+});
+
+test('插件市场是侧边栏独立视图', () => {
+    assert.match(app, /PluginsPanel: AsyncPluginsPanel/);
+    assert.match(app, /const AsyncPluginsPanel = defineAsyncComponent\(\(\) => import\('\.\.\/components\/views\/PluginsPanel\.vue'\)\);/);
+    assert.match(indexHtml, /<plugins-panel v-if="currentView === 'plugins'"><\/plugins-panel>/);
+    // 侧边栏入口在「角色卡管理」之后（先角色卡按钮，后插件市场按钮）
+    assert.ok(
+        sideNav.indexOf("currentView = 'characters'") < sideNav.indexOf("currentView = 'plugins'"),
+        'sidebar order: characters before plugins'
+    );
 });
 
 test('用户与 API 设置默认折叠且语音区保持默认折叠', () => {
     assert.match(app, /const ttsSettingsExpanded = ref\(false\);/);
     // settingsSectionsOpen lives in useSettingsState (Phase 2)
-    assert.match(settingsState, /const settingsSectionsOpen = reactive\(\{\s*user: false,\s*api: false,\s*advanced: false,\s*plugins: false,\s*localData: false\s*\}\);/);
+    assert.match(settingsState, /const settingsSectionsOpen = reactive\(\{\s*user: false,\s*api: false,\s*advanced: false,\s*localData: false\s*\}\);/);
 });
 
 test('紧凑用户设置保留人设管理和全部编辑能力', () => {

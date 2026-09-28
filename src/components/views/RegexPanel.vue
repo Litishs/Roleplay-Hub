@@ -19,6 +19,14 @@
                         </svg>
                     </button>
                 </settings-page-header>
+                <div class="flex flex-wrap items-center gap-2 mb-4">
+                    <span class="text-xs font-medium text-gray-500">美化模板（仅显示层，一键添加为全局正则）：</span>
+                    <button v-for="pack in regexStylePacks" :key="pack.id" type="button"
+                        @click="applyRegexStylePack(pack.id)"
+                        class="px-3 py-1.5 rounded-lg border border-primary-200 bg-primary-50/60 text-primary-700 text-xs font-bold hover:bg-primary-100 transition-colors">
+                        {{ pack.label }}
+                    </button>
+                </div>
                 <div id="regex-list" class="grid grid-cols-1 gap-4">
                     <div v-for="(script, index) in regexScripts" :key="script.name + index"
                         class="management-item-card bg-white p-4 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-all flex justify-between items-center group">
