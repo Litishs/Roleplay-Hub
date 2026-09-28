@@ -52,12 +52,6 @@ android {
         }
     }
     buildTypes {
-        debug {
-            // 独立 applicationId（com.roleplayhub.app.debug）：调试版与正式版共存，
-            // 签名不同也不冲突，手机上两个图标并存，互不覆盖。
-            applicationIdSuffix ".debug"
-            versionNameSuffix "-debug"
-        }
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
