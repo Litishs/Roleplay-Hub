@@ -18,13 +18,12 @@
         "prepare:embedding": "node scripts/pack-embedding-model.mjs"
     },
     "dependencies": {
-        "@capacitor/android": "^7.4.0",
+        "@capacitor/android": "^7.6.9",
         "@capacitor/app": "^7.1.0",
         "@capacitor/browser": "^7.0.2",
         "@capacitor/core": "^7.4.0",
         "@capacitor/filesystem": "^7.1.4",
         "@fontsource-variable/lora": "^5.2.8",
-        "@huggingface/transformers": "^3.8.1",
         "dompurify": "^3.2.6",
         "jquery": "^3.7.1",
         "marked": "^15.0.12",
@@ -34,6 +33,7 @@
     "devDependencies": {
         "@capacitor/cli": "^7.4.0",
         "@happy-dom/global-registrator": "^20.14.0",
+        "@huggingface/transformers": "^3.8.1",
         "@vitejs/plugin-vue": "^6.0.8",
         "@vue/test-utils": "^2.5.0",
         "daisyui": "^4.12.24",
