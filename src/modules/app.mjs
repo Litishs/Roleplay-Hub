@@ -1158,6 +1158,7 @@ const __app = createApp({
 
 
         const { characters, showAddCharacterMenu, currentCharacterIndex } = characterState;
+        const { currentCharacter } = characterState;
 
         const {
             chatHistory,
@@ -1544,6 +1545,7 @@ const __app = createApp({
         let _isApplyingCharacterScopedData = false;
         let _initComplete = false; // 守卫标志：防止 onMounted 初始化阶段写入默认值覆盖服务端数据
         let _dataLoadFailed = false; // 守卫标志：loadData 失败时禁止 saveData 用默认空值覆盖存储中的数据
+        let _dataLoaded = false;
 
         // --- Active Tool System State ---
         const ACTIVE_TOOL_VECTOR_TYPE = 'vector_memory';
@@ -2123,12 +2125,15 @@ const __app = createApp({
             activeTools.value = normalizeActiveTools(merged);
         };
 
-        pluginRegistry.register(createSemanticSearchPlugin({
-            getMessages: () => chatHistory.value,
-            getScopeId: () => getCurrentChatStorageScopeId(),
-            embedTexts: (texts, signal) => RPHLocalEmbedding.embedTexts(texts, signal)
-        })).then(() => applyPluginToolContributions())
-            .catch(error => console.error('[PluginRegistry] 语义检索插件注册失败:', error));
+        const initializePlugins = async () => {
+            await pluginRegistry.register(createSemanticSearchPlugin({
+                getMessages: () => chatHistory.value,
+                getScopeId: () => getCurrentChatStorageScopeId(),
+                embedTexts: (texts, signal) => RPHLocalEmbedding.embedTexts(texts, signal)
+            }));
+            applyPluginToolContributions();
+            schedulePluginWarmup();
+        };
 
         const setPluginEnabled = async (pluginId, value) => {
             await pluginRegistry.setEnabled(pluginId, value);
@@ -2146,6 +2151,7 @@ const __app = createApp({
         // silent (the registry already logs a warning).
         let pluginWarmupTimer = null;
         const schedulePluginWarmup = () => {
+            if (!_dataLoaded || _dataLoadFailed) return;
             if (pluginWarmupTimer) clearTimeout(pluginWarmupTimer);
             pluginWarmupTimer = setTimeout(() => {
                 pluginWarmupTimer = null;
@@ -2502,6 +2508,9 @@ const __app = createApp({
 
         const saveData = async (options = {}) => {
             const { saveMemories = true } = options;
+            // Startup dialogs and asynchronous plugins can trigger saves before
+            // loadData runs. Never persist the default state during that window.
+            if (!_dataLoaded) return;
             // 数据加载失败时禁止保存：此时内存中是默认空值，写入会用空值覆盖存储中的真实数据
             if (_dataLoadFailed) {
                 console.warn('[saveData] Skipped: data load failed, refusing to overwrite stored data with defaults');
@@ -2836,7 +2845,6 @@ const __app = createApp({
         });
 
         // --- Computed ---
-        const { currentCharacter } = characterState;
         const scopeOptions = computed(() => [
             { value: 'character', label: '绑定当前角色卡', disabled: !currentCharacter.value },
             { value: 'global', label: '全局生效' }
@@ -9422,6 +9430,9 @@ const __app = createApp({
             }
 
             await loadData();
+            if (_dataLoadFailed) return;
+            _dataLoaded = true;
+            await initializePlugins().catch(error => console.error('[PluginRegistry] Plugin initialization failed:', error));
 
             // Normalize the image-gen provider after saved settings load: legacy
             // users may have persisted an empty/unknown imageGenProviderId.
