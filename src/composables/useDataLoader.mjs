@@ -316,7 +316,7 @@ export function useDataLoader(deps) {
             } catch (e) {
                 console.error('Failed to load saved data', e);
                 setDataLoadFailed(true); // 阻止后续 saveData 用默认空值覆盖存储中的数据
-                showToast('加载保存的数据失败', 'error');
+                showToast('读取本地数据失败，已停止自动保存，请勿清除数据', 'error', 5000);
             }
     };
 

@@ -1063,7 +1063,7 @@ test('useDataLoader flips the failure guard on storage errors (runtime)', async 
     });
     await loader.loadData();
     assert.equal(loadFailed, true, 'guard flipped so saveData refuses to overwrite storage with defaults');
-    assert.equal(errorToast, '加载保存的数据失败');
+    assert.equal(errorToast, '读取本地数据失败，已停止自动保存，请勿清除数据');
 });
 
 // --- useSpecialRules (Phase 3.0): image-gen special rule injection ---

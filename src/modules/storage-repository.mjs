@@ -21,8 +21,7 @@
     const persistentStore = {
         read(key) {
             if (!localStorageAvailable) return undefined;
-            try { return localStorage.getItem(LOCAL_STORAGE_PREFIX + key) ?? undefined; }
-            catch (_) { return undefined; }
+            return localStorage.getItem(LOCAL_STORAGE_PREFIX + key) ?? undefined;
         },
         write(key, json) {
             if (!localStorageAvailable) return false;
@@ -62,14 +61,64 @@
     // tests/story-branch-contract.test.mjs 明确断言 fact fragment persistence
     // "stays removed"。memoryFragments Map 保留（deleteFragments 仍在使用）。
 
+    const failedReads = new Set();
+    const arrayKeys = new Set([
+        'rp_hub_characters', 'rp_hub_presets', 'rp_hub_preset_groups',
+        'rp_hub_deleted_default_presets', 'rp_hub_global_regex', 'rp_hub_regex',
+        'rp_hub_global_worldinfo', 'rp_hub_worldinfo', 'rp_hub_global_ui_templates',
+        'rp_hub_active_tools', 'rp_hub_user_profiles', 'rp_hub_token_usage_history'
+    ]);
+    const objectKeys = new Set([
+        'rp_hub_settings', 'rp_hub_user', 'rp_hub_worldinfo_settings',
+        'rp_hub_memory_settings', 'plugin_marketplace_state', 'novel_settings'
+    ]);
+    const isObjectRecord = value => value !== null && typeof value === 'object' && !Array.isArray(value);
+
+    const readError = (key, code) => {
+        // Parser messages can contain excerpts of secrets or conversation text.
+        // Only expose the storage key and a fixed error code, never the payload.
+        const error = new Error(`[StorageRepository] Invalid stored data for "${key}" (${code}); original data preserved`);
+        error.name = 'StorageReadError';
+        error.code = code;
+        error.storageKey = String(key);
+        return error;
+    };
+
     const parseJson = (json, fallback, key = '(unknown)') => {
-        if (json === null || json === undefined || json === '') return fallback;
-        try { return JSON.parse(json); } catch (error) {
-            // 损坏 JSON 不能静默降级：读失败与空数据不可区分会误导上层把可恢复的旧记录
-            // 当成空数据整份覆盖（replaceChat 是整删整写语义）。至少留下带 key 的现场日志。
-            console.error(`[StorageRepository] corrupt JSON for "${key}" (length=${String(json).length}), falling back:`, error?.message || error);
-            return fallback;
+        if (json === null || json === undefined) return fallback;
+        try { return JSON.parse(json); } catch (_) {
+            throw readError(key, 'STORAGE_INVALID_JSON');
         }
+    };
+
+    const validateStoredShape = (key, value) => {
+        if ((arrayKeys.has(String(key)) && !Array.isArray(value))
+            || (objectKeys.has(String(key)) && !isObjectRecord(value))) {
+            throw readError(key, 'STORAGE_INVALID_SHAPE');
+        }
+    };
+
+    const protectedRead = async (key, read) => {
+        const storageKey = String(key);
+        try {
+            const value = await read();
+            failedReads.delete(storageKey);
+            return value;
+        } catch (error) {
+            failedReads.add(storageKey);
+            console.error(`[StorageRepository] Read failed for "${storageKey}"; writes are blocked until a successful reread`);
+            throw error;
+        }
+    };
+
+    const assertWritable = key => {
+        const storageKey = String(key);
+        if (!failedReads.has(storageKey)) return;
+        const error = new Error(`[StorageRepository] Refusing to overwrite unread data for "${storageKey}"`);
+        error.name = 'StorageWriteBlockedError';
+        error.code = 'STORAGE_WRITE_BLOCKED';
+        error.storageKey = storageKey;
+        throw error;
     };
 
     const cloneJson = value => value === undefined ? undefined : JSON.parse(JSON.stringify(value));
@@ -145,6 +194,7 @@
 
         async set(key, value) {
             await this.init();
+            assertWritable(key);
             if (value === undefined) {
                 // JSON.stringify(undefined) === undefined，过桥后原生端只会报误导性的
                 // "key and json are required"。在 JS 层提前拦下并给出准确错误。
@@ -155,6 +205,7 @@
                 const extracted = extractSecrets(storedValue);
                 storedValue = extracted.publicValue;
                 await this.setSecret(`config:${key}`, JSON.stringify(extracted.secrets));
+                assertWritable(key);
             }
             const plugin = nativePlugin();
             const json = JSON.stringify(storedValue);
@@ -164,21 +215,26 @@
 
         async get(key) {
             await this.init();
-            const plugin = nativePlugin();
-            const response = plugin ? await plugin.kvGet({ key }) : { json: kvFallbackGet(key) };
-            const value = parseJson(response.json, undefined, key);
-            if (value === undefined || !isSecretBearingKey(key)) return value;
-            const secrets = parseJson(await this.getSecret(`config:${key}`), {}, `secrets:${key}`);
-            if (!Object.keys(secrets).length) {
-                // 公开数据存在但密钥回读为空：可能是两段写崩溃窗口或 apply() 异步落盘丢失，
-                // 提前留痕便于排查“API Key 无声消失”类故障。
-                console.warn(`[StorageRepository] "${key}" has public data but an empty secret store; keys may have been lost`);
-            }
-            return restoreSecrets(value, secrets);
+            return protectedRead(key, async () => {
+                const plugin = nativePlugin();
+                const response = plugin ? await plugin.kvGet({ key }) : { json: kvFallbackGet(key) };
+                const value = parseJson(response.json, undefined, key);
+                if (value === undefined) return value;
+                validateStoredShape(key, value);
+                if (!isSecretBearingKey(key)) return value;
+                const secrets = parseJson(await this.getSecret(`config:${key}`), {}, `secrets:${key}`);
+                if (!isObjectRecord(secrets)) throw readError(`secrets:${key}`, 'STORAGE_INVALID_SHAPE');
+                if (!Object.keys(secrets).length) {
+                    // Public data can survive a failed or interrupted secret write.
+                    console.warn(`[StorageRepository] "${key}" has public data but an empty secret store; keys may have been lost`);
+                }
+                return restoreSecrets(value, secrets);
+            });
         },
 
         async remove(key) {
             await this.init();
+            assertWritable(key);
             const plugin = nativePlugin();
             if (plugin) await plugin.kvRemove({ key });
             else kvFallbackRemove(key);
@@ -187,6 +243,7 @@
 
         async setSecret(key, value) {
             assertSecretKey(key);
+            assertWritable(String(key).replace(/^config:/, ''));
             const plugin = nativePlugin();
             if (plugin) await plugin.secretSet({ key, value: String(value ?? '') });
             else memorySecrets.set(key, String(value ?? ''));
@@ -201,6 +258,7 @@
 
         async removeSecret(key) {
             assertSecretKey(key);
+            assertWritable(String(key).replace(/^config:/, ''));
             const plugin = nativePlugin();
             if (plugin) await plugin.secretRemove({ key });
             else memorySecrets.delete(key);
@@ -208,30 +266,28 @@
 
         async loadChat(characterId) {
             await this.init();
-            const plugin = nativePlugin();
-            const response = plugin
-                ? await plugin.chatGet({ characterId: String(characterId) })
-                : { json: chatFallbackGet(String(characterId)) };
-            const value = parseJson(response.json, [], `chat:${characterId}`);
-            // 形状校验：合法 JSON 但非数组（schema 演进残留/其它 bug 写入）不能穿透炸下游，
-            // 统一降级为空数组并留痕。
-            if (!Array.isArray(value)) {
-                console.error(`[StorageRepository] chat "${characterId}" has non-array shape (${typeof value}); returning empty`);
-                return [];
-            }
-            return value;
+            return protectedRead(`chat:${characterId}`, async () => {
+                const plugin = nativePlugin();
+                const response = plugin
+                    ? await plugin.chatGet({ characterId: String(characterId) })
+                    : { json: chatFallbackGet(String(characterId)) };
+                const value = parseJson(response.json, [], `chat:${characterId}`);
+                if (!Array.isArray(value)) throw readError(`chat:${characterId}`, 'STORAGE_INVALID_SHAPE');
+                return value;
+            });
         },
 
         async applyChatChanges(characterId, upserts, deletes) {
             await this.init();
+            assertWritable(`chat:${characterId}`);
             const plugin = nativePlugin();
             const changes = { upserts: cloneJson(upserts || []), deletes: [...(deletes || [])] };
             if (plugin) {
                 await plugin.chatApply({ characterId: String(characterId), changesJson: JSON.stringify(changes) });
                 return;
             }
-            const current = memoryChats.get(String(characterId)) || '[]';
-            const byId = new Map(parseJson(current, []).map((message, position) => [message.id, { message, position }]));
+            const current = await this.loadChat(characterId);
+            const byId = new Map(current.map((message, position) => [message.id, { message, position }]));
             changes.deletes.forEach(id => byId.delete(id));
             changes.upserts.forEach(item => byId.set(item.message.id, item));
             const messages = [...byId.values()].sort((a, b) => a.position - b.position).map(item => item.message);
@@ -240,6 +296,7 @@
 
         async replaceChat(characterId, messages) {
             await this.init();
+            assertWritable(`chat:${characterId}`);
             const plugin = nativePlugin();
             if (plugin) await plugin.chatReplace({ characterId: String(characterId), messagesJson: JSON.stringify(cloneJson(messages || [])) });
             else chatFallbackSet(String(characterId), JSON.stringify(cloneJson(messages || [])));
@@ -247,6 +304,7 @@
 
         async deleteChat(characterId) {
             await this.init();
+            assertWritable(`chat:${characterId}`);
             const plugin = nativePlugin();
             if (plugin) await plugin.chatDelete({ characterId: String(characterId) });
             else chatFallbackRemove(String(characterId));

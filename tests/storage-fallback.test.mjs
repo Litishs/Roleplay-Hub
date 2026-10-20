@@ -8,8 +8,12 @@ import test from 'node:test';
 
 const backing = new Map();
 let failNextWrites = false;
+let failNextReads = false;
 globalThis.localStorage = {
-    getItem: (key) => backing.has(key) ? backing.get(key) : null,
+    getItem: (key) => {
+        if (failNextReads) throw new Error('Synthetic read failure');
+        return backing.has(key) ? backing.get(key) : null;
+    },
     setItem: (key, value) => {
         if (failNextWrites) throw new Error('QuotaExceededError');
         backing.set(key, String(value));
@@ -71,4 +75,46 @@ test('quota overflow: writes fall back to memory per key, reads keep working', a
     const value = await RPHStorage.get('test_quota');
     assert.deepEqual(value, { big: true }, 'the memory backstop keeps the value readable this session');
     assert.ok(!backing.has('rph_storage:test_quota'));
+});
+
+test('fallback: corrupt stored JSON cannot become an empty replacement', async () => {
+    const key = 'rp_hub_characters';
+    const raw = '[{"uuid":"saved-card",';
+    backing.set(`rph_storage:${key}`, raw);
+    await assert.rejects(RPHStorage.get(key), error => error.code === 'STORAGE_INVALID_JSON');
+    await assert.rejects(RPHStorage.set(key, []), error => error.code === 'STORAGE_WRITE_BLOCKED');
+    await assert.rejects(RPHStorage.remove(key), error => error.code === 'STORAGE_WRITE_BLOCKED');
+    assert.equal(backing.get(`rph_storage:${key}`), raw);
+});
+
+test('fallback: incremental writes read persisted history before applying changes', async () => {
+    backing.set('rph_storage:chat:fresh-session', JSON.stringify([{ id: 'old', role: 'user', content: 'Saved' }]));
+    await RPHStorage.applyChatChanges('fresh-session', [{ position: 1, message: { id: 'new', role: 'assistant', content: 'New' } }], []);
+    assert.deepEqual((await RPHStorage.loadChat('fresh-session')).map(message => message.id), ['old', 'new']);
+});
+
+test('fallback: corrupt and non-array chats reject edits without mutating the source', async () => {
+    for (const [scope, raw] of [['bad-json', '[broken'], ['bad-shape', '{}']]) {
+        backing.set(`rph_storage:chat:${scope}`, raw);
+        await assert.rejects(RPHStorage.applyChatChanges(scope, [], ['old']));
+        await assert.rejects(RPHStorage.replaceChat(scope, []), error => error.code === 'STORAGE_WRITE_BLOCKED');
+        await assert.rejects(RPHStorage.deleteChat(scope), error => error.code === 'STORAGE_WRITE_BLOCKED');
+        assert.equal(backing.get(`rph_storage:chat:${scope}`), raw);
+    }
+});
+
+test('fallback: storage access errors are not treated as missing records', async () => {
+    const key = 'read-failure';
+    const raw = '{"saved":true}';
+    backing.set(`rph_storage:${key}`, raw);
+    failNextReads = true;
+    try {
+        await assert.rejects(RPHStorage.get(key), /Synthetic read failure/);
+    } finally {
+        failNextReads = false;
+    }
+    await assert.rejects(RPHStorage.set(key, {}), error => error.code === 'STORAGE_WRITE_BLOCKED');
+    assert.equal(backing.get(`rph_storage:${key}`), raw);
+    assert.deepEqual(await RPHStorage.get(key), { saved: true });
+    await RPHStorage.set(key, { saved: true, repaired: true });
 });

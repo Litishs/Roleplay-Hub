@@ -8487,11 +8487,15 @@ const __app = createApp({
             return { activeBranchId, branches };
         };
 
-        const loadStoryBranchesForCharacter = async (char) => {
-            const branchState = await readStoryBranchesForCharacter(char);
+        const applyStoryBranchState = (branchState) => {
             storyBranches.value = branchState.branches;
             activeStoryBranchId.value = branchState.activeBranchId;
             selectedStoryBranchId.value = branchState.activeBranchId;
+        };
+
+        const loadStoryBranchesForCharacter = async (char) => {
+            const branchState = await readStoryBranchesForCharacter(char);
+            applyStoryBranchState(branchState);
             return branchState;
         };
 
@@ -9005,7 +9009,6 @@ const __app = createApp({
             deleteScopedStoredValue,
             collectCharacterScopeIds,
             getStoryBranchScopeId,
-            activeStoryBranchId,
             // app.mjs orchestration (persistence / confirm / toast / chat view)
             saveChatHistoryNow,
             flushPendingChatHistorySave,
@@ -9040,7 +9043,8 @@ const __app = createApp({
             isAutoImageGenEnabled,
             // chat / branch / worldinfo loading
             loadStoredChatHistory,
-            loadStoryBranchesForCharacter,
+            readStoryBranchesForCharacter,
+            applyStoryBranchState,
             getCombinedWorldInfo,
         });
 

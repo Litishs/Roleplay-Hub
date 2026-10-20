@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
 import { ref, reactive, watch, nextTick } from 'vue';
+import { useDataLoader } from '../src/composables/useDataLoader.mjs';
 
 const app = await readFile(new URL('../src/modules/app.mjs', import.meta.url), 'utf8');
 const section = (start, end) => {
@@ -86,4 +87,49 @@ test('startup initializes plugins only after successful data loading', () => {
         'the initial watcher getter must not access a temporal dead zone');
     const warmup = section('const schedulePluginWarmup = () => {', 'const unwrapForStorage =');
     assert.ok(warmup.indexOf('if (!_dataLoaded || _dataLoadFailed) return;') < warmup.indexOf('setTimeout('));
+});
+
+test('real storage parsing failures block loader hydration and pending autosaves', async () => {
+    const repositorySource = await readFile(new URL('../src/modules/storage-repository.mjs', import.meta.url), 'utf8');
+    for (const [key, raw] of [
+        ['rp_hub_characters', '[{"uuid":"saved-card",'],
+        ['rp_hub_characters', '{}'],
+        ['rp_hub_settings', '{broken'],
+        ['rp_hub_memory_settings', 'null'],
+    ]) {
+        const state = fixture();
+        const kv = new Map([[key, raw], ['rp_hub_presets', '[{"name":"Saved preset"}]']]);
+        const nativeWrites = [];
+        const plugin = {
+            init: async () => {},
+            kvGet: async ({ key }) => ({ json: kv.get(key) ?? null }),
+            kvSet: async ({ key, json }) => { nativeWrites.push(key); kv.set(key, json); },
+            secretGet: async () => ({ value: null }),
+            secretSet: async () => { nativeWrites.push('secret'); },
+        };
+        const repositoryContext = vm.createContext({ window: { Capacitor: { Plugins: { NativeStorage: plugin } } }, console: { error() {}, warn() {} } });
+        vm.runInContext(repositorySource.replace('export { RPHStorage };', 'globalThis.repository = RPHStorage;'), repositoryContext);
+        const repository = repositoryContext.repository;
+        state.context.initDB = async () => { await repository.init(); state.context.db = repository; };
+        state.context.setStoredValue = (name, value) => repository.set(`rp_hub_${name}`, value);
+        const loader = useDataLoader({
+            ...state.context,
+            initDB: state.context.initDB,
+            getStoredValue: name => repository.get(`rp_hub_${name}`),
+            setStoredValue: state.context.setStoredValue,
+            setDataLoadFailed: value => { state.context._dataLoadFailed = value; },
+            showToast: message => { state.context.errorToast = message; },
+        });
+        await loader.loadData();
+        assert.equal(state.context._dataLoadFailed, true);
+        assert.equal(state.context._dataLoaded, false);
+        assert.equal(state.context.errorToast, '读取本地数据失败，已停止自动保存，请勿清除数据');
+        state.context.activeTools.value = [{ id: 'synthetic-plugin' }];
+        await nextTick();
+        state.pending.forEach(callback => callback());
+        await vm.runInContext('saveData()', state.context);
+        assert.deepEqual(nativeWrites, []);
+        assert.equal(kv.get(key), raw, 'the unread source must remain byte-for-byte intact');
+        assert.equal(kv.get('rp_hub_presets'), '[{"name":"Saved preset"}]');
+    }
 });

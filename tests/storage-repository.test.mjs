@@ -7,6 +7,7 @@ const createRepository = async () => {
   const kv = new Map();
   const secrets = new Map();
   const chats = new Map();
+  const logs = [];
   const plugin = {
     async init() {},
     async kvSet({ key, json }) { kv.set(key, json); },
@@ -23,16 +24,18 @@ const createRepository = async () => {
       changes.upserts.forEach(item => rows.set(item.message.id, item));
       chats.set(characterId, [...rows.values()].sort((a, b) => a.position - b.position).map(row => row.message));
     },
-    async chatGet({ characterId }) { return { json: JSON.stringify(chats.get(characterId) || []) }; }
+    async chatGet({ characterId }) { return { json: JSON.stringify(chats.get(characterId) || []) }; },
+    async chatReplace({ characterId, messagesJson }) { chats.set(characterId, JSON.parse(messagesJson)); },
+    async chatDelete({ characterId }) { chats.delete(characterId); }
   };
   const window = { Capacitor: { Plugins: { NativeStorage: plugin } } };
-  const context = vm.createContext({ window, console });
+  const context = vm.createContext({ window, console: { ...console, error: (...args) => logs.push(args.join(' ')) } });
   const source = await readFile(new URL('../src/modules/storage-repository.mjs', import.meta.url), 'utf8');
   const cleanSource = source.replace(/^export\s*\{([^}]*)\};\s*$/m, (_, exports) => {
     return exports.split(',').map(s => { const n = s.trim(); return 'window.' + n + ' = ' + n + ';\nglobalThis.' + n + ' = ' + n + ';'; }).join('\n');
   }).replace(/^export default\s+(\S+);\s*$/m, (_, name) => { return 'window.' + name + ' = ' + name + ';\nglobalThis.' + name + ' = ' + name + ';'; });
   vm.runInContext(cleanSource, context);
-  return { repository: window.RPHStorage, kv, secrets };
+  return { repository: window.RPHStorage, kv, secrets, chats, plugin, logs };
 };
 
 test('settings secrets are excluded from SQLite JSON and restored from secure storage', async () => {
@@ -107,4 +110,76 @@ test('chat repository applies per-row upserts and deletes', async () => {
     JSON.parse(JSON.stringify(await repository.loadChat('character-1'))),
     [{ id: 'b', content: 'edited' }]
   );
+});
+
+test('corrupt JSON is preserved and cannot be overwritten after a failed read', async () => {
+  const { repository, kv } = await createRepository();
+  const key = 'rp_hub_characters';
+  const raw = '[{"uuid":"saved-card",';
+  kv.set(key, raw);
+  await assert.rejects(repository.get(key), error => error.code === 'STORAGE_INVALID_JSON' && error.storageKey === key);
+  await assert.rejects(repository.set(key, []), error => error.code === 'STORAGE_WRITE_BLOCKED');
+  await assert.rejects(repository.remove(key), error => error.code === 'STORAGE_WRITE_BLOCKED');
+  assert.equal(kv.get(key), raw);
+
+  await repository.get('unrelated-missing-key');
+  await assert.rejects(repository.set(key, []), error => error.code === 'STORAGE_WRITE_BLOCKED');
+  kv.set(key, '[{"uuid":"repaired-card"}]');
+  assert.equal((await repository.get(key))[0].uuid, 'repaired-card');
+  await repository.set(key, []);
+  assert.equal(kv.get(key), '[]', 'a successful reread permits an intentional empty value');
+});
+
+test('missing records allow defaults while present empty or wrongly shaped records fail', async () => {
+  const { repository, kv } = await createRepository();
+  assert.equal(await repository.get('rp_hub_characters'), undefined);
+  for (const raw of ['', ' ', 'null', '{}', '"text"']) {
+    kv.set('rp_hub_characters', raw);
+    await assert.rejects(repository.get('rp_hub_characters'));
+    assert.equal(kv.get('rp_hub_characters'), raw);
+  }
+  kv.set('rp_hub_characters', '[]');
+  assert.equal((await repository.get('rp_hub_characters')).length, 0);
+  for (const key of ['rp_hub_settings', 'rp_hub_user', 'rp_hub_memory_settings']) {
+    kv.set(key, '[]');
+    await assert.rejects(repository.get(key), error => error.code === 'STORAGE_INVALID_SHAPE');
+  }
+});
+
+test('secret parse failures block public and secret replacement without logging the payload', async () => {
+  const { repository, kv, secrets, logs } = await createRepository();
+  const key = 'rp_hub_settings';
+  const raw = 'private-synthetic-payload-is-not-json';
+  kv.set(key, '{"apiKey":"","model":"saved"}');
+  secrets.set(`config:${key}`, raw);
+  await assert.rejects(repository.get(key), error => error.code === 'STORAGE_INVALID_JSON');
+  await assert.rejects(repository.set(key, { apiKey: '', model: '' }), error => error.code === 'STORAGE_WRITE_BLOCKED');
+  await assert.rejects(repository.setSecret(`config:${key}`, '{}'), error => error.code === 'STORAGE_WRITE_BLOCKED');
+  await assert.rejects(repository.removeSecret(`config:${key}`), error => error.code === 'STORAGE_WRITE_BLOCKED');
+  assert.equal(secrets.get(`config:${key}`), raw);
+  assert.equal(kv.get(key), '{"apiKey":"","model":"saved"}');
+  assert.ok(!logs.join('\n').includes(raw));
+});
+
+test('a corrupt chat blocks incremental changes, replacement, and deletion', async () => {
+  const { repository, chats, plugin } = await createRepository();
+  const saved = [{ id: 'saved', role: 'user', content: 'Saved message' }];
+  chats.set('card', saved);
+  plugin.chatGet = async () => ({ json: '[{"id":' });
+  await assert.rejects(repository.loadChat('card'), error => error.code === 'STORAGE_INVALID_JSON');
+  await assert.rejects(repository.applyChatChanges('card', [], ['saved']), error => error.code === 'STORAGE_WRITE_BLOCKED');
+  await assert.rejects(repository.replaceChat('card', []), error => error.code === 'STORAGE_WRITE_BLOCKED');
+  await assert.rejects(repository.deleteChat('card'), error => error.code === 'STORAGE_WRITE_BLOCKED');
+  assert.deepEqual(chats.get('card'), saved);
+  plugin.chatGet = async () => ({ json: '{}' });
+  await assert.rejects(repository.loadChat('card'), error => error.code === 'STORAGE_INVALID_SHAPE');
+});
+
+test('native read errors do not allow callers to replace unread data', async () => {
+  const { repository, kv, plugin } = await createRepository();
+  kv.set('rp_hub_presets', '[{"name":"Saved"}]');
+  plugin.kvGet = async () => { throw new Error('Synthetic bridge failure'); };
+  await assert.rejects(repository.get('rp_hub_presets'), /Synthetic bridge failure/);
+  await assert.rejects(repository.set('rp_hub_presets', []), error => error.code === 'STORAGE_WRITE_BLOCKED');
+  assert.equal(kv.get('rp_hub_presets'), '[{"name":"Saved"}]');
 });

@@ -48,7 +48,6 @@ export function useCardOperations(deps) {
         deleteScopedStoredValue,
         collectCharacterScopeIds,
         getStoryBranchScopeId,
-        activeStoryBranchId,
         // app.mjs orchestration (persistence / confirm / toast / chat view)
         saveChatHistoryNow,
         flushPendingChatHistorySave,
@@ -83,7 +82,8 @@ export function useCardOperations(deps) {
         isAutoImageGenEnabled,
         // chat / branch / worldinfo loading
         loadStoredChatHistory,
-        loadStoryBranchesForCharacter,
+        readStoryBranchesForCharacter,
+        applyStoryBranchState,
         getCombinedWorldInfo,
     } = deps;
 
@@ -297,6 +297,7 @@ export function useCardOperations(deps) {
             }
 
             let loadedChatHistory;
+            let loadedBranchState;
             let initialBranchScopeId = null;
             try {
                 if (!char.uuid) {
@@ -304,8 +305,8 @@ export function useCardOperations(deps) {
                     if (!getDb()) await initDB();
                     await setStoredValue('characters', characters.value);
                 }
-                await loadStoryBranchesForCharacter(char);
-                initialBranchScopeId = getStoryBranchScopeId(char.uuid, activeStoryBranchId.value);
+                loadedBranchState = await readStoryBranchesForCharacter(char);
+                initialBranchScopeId = getStoryBranchScopeId(char.uuid, loadedBranchState.activeBranchId);
                 loadedChatHistory = await loadStoredChatHistory(char, index, initialBranchScopeId);
             } catch (error) {
                 console.error('Error loading chat history:', error);
@@ -317,6 +318,7 @@ export function useCardOperations(deps) {
             if (previousCharacterIndex !== -1 && previousCharacterIndex !== index) {
                 saveGlobalUiTemplateRuntimeForCharacter(previousCharacter);
             }
+            applyStoryBranchState(loadedBranchState);
             currentCharacterIndex.value = index;
             resetChatRenderWindow();
             normalizeCharacterUiTemplates(char);
