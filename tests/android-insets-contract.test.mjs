@@ -7,10 +7,15 @@ const [activity, manifest] = await Promise.all([
     readFile(new URL('../android/app/src/main/AndroidManifest.xml', import.meta.url), 'utf8'),
 ]);
 
-test('Android content respects status bar, cutout, and keyboard insets', () => {
+test('Android content respects status bar, cutout, keyboard, and navigation bar insets', () => {
     assert.match(activity, /Type\.statusBars\(\) \| WindowInsetsCompat\.Type\.displayCutout\(\)/);
     assert.match(activity, /isVisible\(WindowInsetsCompat\.Type\.ime\(\)\)/);
-    assert.match(activity, /view\.setPadding\(0, landscape \? 0 : topInsets\.top, 0, keyboardBottom\)/);
+    // Edge-to-edge: bottom padding must cover the system navigation bar
+    // (gesture pill / 3-button bar) as well as the keyboard, without
+    // double-padding while the IME is open.
+    assert.match(activity, /getInsets\(WindowInsetsCompat\.Type\.navigationBars\(\)\)/);
+    assert.match(activity, /Math\.max\(keyboardBottom, bottomInsets\.bottom\)/);
+    assert.match(activity, /view\.setPadding\(0, landscape \? 0 : topInsets\.top, 0, bottomPadding\)/);
 });
 
 test('Android hides the notch area in landscape', () => {

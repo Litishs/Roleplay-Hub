@@ -90,7 +90,13 @@ public class MainActivity extends BridgeActivity {
             int keyboardBottom = keyboardVisible
                 ? windowInsets.getInsets(WindowInsetsCompat.Type.ime()).bottom
                 : 0;
-            view.setPadding(0, landscape ? 0 : topInsets.top, 0, keyboardBottom);
+            // Edge-to-edge: the WebView must also clear the system navigation
+            // bar (gesture pill / 3-button bar). The IME inset already covers
+            // the nav-bar area while the keyboard is open, so max() never
+            // double-pads.
+            Insets bottomInsets = windowInsets.getInsets(WindowInsetsCompat.Type.navigationBars());
+            int bottomPadding = Math.max(keyboardBottom, bottomInsets.bottom);
+            view.setPadding(0, landscape ? 0 : topInsets.top, 0, bottomPadding);
             return windowInsets;
         });
         ViewCompat.requestApplyInsets(content);
