@@ -1298,11 +1298,15 @@
 
         /* Shared list/modal classes get their expansion at the class level so
            every consumer picks it up without markup churn (36px visuals need
-           -4px, the 40px settings icon button -2px). */
+           -4px, the 40px settings icon button -2px). Every base here MUST be
+           position:relative: an unpositioned base makes the absolute ::after
+           resolve against the nearest positioned ancestor (.app-main) and
+           cover the whole panel, hijacking every click in it. */
         .item-action-button,
         .modal-close-button,
         .pagination-button,
-        .settings-help-trigger {
+        .settings-help-trigger,
+        .settings-icon-button {
             position: relative;
         }
 
@@ -1345,6 +1349,27 @@
             position: absolute;
             inset: -5px;
             border-radius: inherit;
+        }
+
+        /* Dark theme: the action bar glass and its hover washes are hardcoded
+           light values above — neutral dark surfaces here (audit §2.7 rule). */
+        [data-theme='dark'] .message-action-bar {
+            background: rgba(31, 41, 55, 0.56);
+            box-shadow: 0 5px 14px -10px rgba(0, 0, 0, 0.6);
+        }
+
+        [data-theme='dark'] .message-action-button {
+            color: rgba(156, 163, 175, 0.85);
+        }
+
+        [data-theme='dark'] .message-action-button:hover {
+            color: #60a5fa;
+            background: rgba(55, 65, 81, 0.72);
+        }
+
+        [data-theme='dark'] .message-action-button--danger:hover {
+            color: #f87171;
+            background: rgba(82, 30, 30, 0.7);
         }
 
         /* Touch-friendly range inputs: the element itself becomes the 44px hit
