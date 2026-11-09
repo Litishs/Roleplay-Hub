@@ -272,3 +272,25 @@ test('saveData persists the global kv keys through one setStoredMany batch', asy
   }
   assert.match(batch, /if \(_initComplete\)/, 'persona keys stay gated on init completion');
 });
+
+test('native durability details: atomic media write and synchronous secret commits', async () => {
+  const pluginSource = await readFile(new URL('../android/app/src/main/java/com/roleplayhub/app/NativeStoragePlugin.java', import.meta.url), 'utf8');
+  const mediaFrom = pluginSource.indexOf('public void mediaWriteDataUrl');
+  const mediaTo = pluginSource.indexOf('public void exportFile', mediaFrom);
+  assert.ok(mediaFrom >= 0 && mediaTo > mediaFrom, 'mediaWriteDataUrl exists');
+  const media = pluginSource.slice(mediaFrom, mediaTo);
+  assert.match(media, /"\.tmp"/, 'media payload is written to a temp file first');
+  assert.match(media, /getFD\(\)\.sync\(\)/, 'the temp file is fsynced before rename');
+  assert.match(media, /temp\.renameTo\(target\)/, 'the completed file is renamed into place');
+  assert.match(pluginSource, /putString\(key, encrypt\(value\)\)\.commit\(\)/, 'secretSet commits synchronously');
+  assert.match(pluginSource, /edit\(\)\.remove\(key\)\.commit\(\)/, 'secretRemove commits synchronously');
+  assert.doesNotMatch(pluginSource.slice(pluginSource.indexOf('public void secretSet')), /\.apply\(\)/, 'no async secret writes remain');
+});
+
+test('deleteFragments keeps the write-block guard parity with deleteChat', async () => {
+  const source = await readFile(new URL('../src/modules/storage-repository.mjs', import.meta.url), 'utf8');
+  const from = source.indexOf('async deleteFragments(');
+  const to = source.indexOf('async writeMediaDataUrl', from);
+  assert.ok(from >= 0 && to > from, 'deleteFragments exists');
+  assert.match(source.slice(from, to), /assertWritable\(`fragments:/, 'scope writes are guarded');
+});

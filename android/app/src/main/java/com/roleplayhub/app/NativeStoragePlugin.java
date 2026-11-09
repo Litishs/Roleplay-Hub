@@ -311,7 +311,10 @@ public class NativeStoragePlugin extends Plugin {
         String value = call.getString("value");
         if (key == null || value == null) { call.reject("key and value are required"); return; }
         try {
-            getSecretPreferences().edit().putString(key, encrypt(value)).apply();
+            // commit() (not apply()): secrets are tiny and plugin calls run off
+            // the UI thread, so a synchronous write guarantees the value is on
+            // disk even if the process dies right after the call resolves.
+            getSecretPreferences().edit().putString(key, encrypt(value)).commit();
             call.resolve();
         } catch (Exception error) {
             call.reject("Unable to save secret", error);
@@ -336,7 +339,7 @@ public class NativeStoragePlugin extends Plugin {
     public void secretRemove(PluginCall call) {
         String key = call.getString("key");
         if (key == null) { call.reject("key is required"); return; }
-        getSecretPreferences().edit().remove(key).apply();
+        getSecretPreferences().edit().remove(key).commit();
         call.resolve();
     }
 
@@ -360,8 +363,23 @@ public class NativeStoragePlugin extends Plugin {
             if (!safeName.toLowerCase(Locale.ROOT).endsWith(extension)) safeName += extension;
             File mediaDirectory = getMediaDirectory();
             File target = uniqueFile(mediaDirectory, safeName);
-            try (OutputStream output = new BufferedOutputStream(new FileOutputStream(target))) {
+            // Atomic write (temp file + fsync + rename): a process kill mid-write
+            // can no longer leave a half-written file at the final name. The DB
+            // row is only inserted afterwards, so it never references a torn file.
+            File temp = new File(mediaDirectory, target.getName() + ".tmp");
+            try (FileOutputStream fileOutput = new FileOutputStream(temp);
+                 OutputStream output = new BufferedOutputStream(fileOutput)) {
                 output.write(bytes);
+                output.flush();
+                fileOutput.getFD().sync();
+            }
+            if (!temp.renameTo(target)) {
+                // Rename across the same directory should not fail, but fall
+                // back to a direct write so the operation still completes.
+                try (OutputStream output = new BufferedOutputStream(new FileOutputStream(target))) {
+                    output.write(bytes);
+                }
+                temp.delete();
             }
             String checksum = sha256(target);
             database.putMedia(

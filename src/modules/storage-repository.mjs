@@ -354,6 +354,10 @@
 
         async deleteFragments(characterId) {
             await this.init();
+            // Parity with deleteChat: a scope whose read previously failed must
+            // not be mutated. The fragment read path is currently dormant, so
+            // this mainly guards future callers.
+            assertWritable(`fragments:${characterId}`);
             const plugin = nativePlugin();
             if (plugin) await plugin.memoryDelete({ characterId: String(characterId) });
             else memoryFragments.delete(String(characterId));
