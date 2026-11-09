@@ -4,6 +4,7 @@ import android.content.ContentValues;
 import android.content.Context;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
+import android.database.sqlite.SQLiteBlobTooBigException;
 import android.database.sqlite.SQLiteDoneException;
 import android.database.sqlite.SQLiteOpenHelper;
 import android.database.sqlite.SQLiteStatement;
@@ -11,6 +12,9 @@ import android.database.sqlite.SQLiteStatement;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
+
+import java.util.ArrayList;
+import java.util.List;
 
 final class RoleplayDatabase extends SQLiteOpenHelper {
     static final String DATABASE_NAME = "roleplay_hub.db";
@@ -56,6 +60,30 @@ final class RoleplayDatabase extends SQLiteOpenHelper {
         getWritableDatabase().insertWithOnConflict("kv_store", null, values, SQLiteDatabase.CONFLICT_REPLACE);
     }
 
+    /**
+     * Batched kv write inside a single transaction: a process kill mid-save
+     * can no longer leave a partially updated generation of keys (each key
+     * individually consistent but mutually stale). Either every entry lands
+     * or none does.
+     */
+    void putValues(JSONArray items) throws JSONException {
+        SQLiteDatabase database = getWritableDatabase();
+        database.beginTransaction();
+        try {
+            for (int index = 0; index < items.length(); index++) {
+                JSONObject item = items.getJSONObject(index);
+                ContentValues values = new ContentValues();
+                values.put("key", item.getString("key"));
+                values.put("json", item.getString("json"));
+                values.put("updated_at", System.currentTimeMillis());
+                database.insertWithOnConflict("kv_store", null, values, SQLiteDatabase.CONFLICT_REPLACE);
+            }
+            database.setTransactionSuccessful();
+        } finally {
+            database.endTransaction();
+        }
+    }
+
     String getValue(String key) {
         // 用 SQLiteStatement.simpleQueryForString() 直接读取值，绕过 CursorWindow 的单行大小限制。
         // 角色等大 JSON（可达 1MB+）通过 Cursor 读取时会抛 SQLiteBlobTooBigException
@@ -77,6 +105,18 @@ final class RoleplayDatabase extends SQLiteOpenHelper {
     }
 
     JSONArray getChat(String characterId) throws JSONException {
+        try {
+            return getChatWithCursor(characterId);
+        } catch (SQLiteBlobTooBigException tooBig) {
+            // A single message row exceeded the 2MB CursorWindow limit —
+            // realistic for image-bearing messages. Re-read row by row through
+            // SQLiteStatement, which bypasses the window entirely (the same
+            // bypass getValue uses since the >1MB character JSON incident).
+            return getChatRowByRow(characterId);
+        }
+    }
+
+    private JSONArray getChatWithCursor(String characterId) throws JSONException {
         JSONArray result = new JSONArray();
         try (Cursor cursor = getReadableDatabase().query(
                 "chat_messages", new String[]{"message_json", "status"}, "character_id = ?",
@@ -86,6 +126,34 @@ final class RoleplayDatabase extends SQLiteOpenHelper {
                 message.put("storageStatus", cursor.getString(1));
                 result.put(message);
             }
+        }
+        return result;
+    }
+
+    private JSONArray getChatRowByRow(String characterId) throws JSONException {
+        List<String> messageIds = new ArrayList<>();
+        List<String> statuses = new ArrayList<>();
+        try (Cursor cursor = getReadableDatabase().query(
+                "chat_messages", new String[]{"message_id", "status"}, "character_id = ?",
+                new String[]{characterId}, null, null, "position ASC")) {
+            while (cursor.moveToNext()) {
+                messageIds.add(cursor.getString(0));
+                statuses.add(cursor.getString(1));
+            }
+        }
+        JSONArray result = new JSONArray();
+        SQLiteStatement statement = getReadableDatabase().compileStatement(
+                "SELECT message_json FROM chat_messages WHERE character_id = ? AND message_id = ?");
+        try {
+            for (int index = 0; index < messageIds.size(); index++) {
+                statement.bindString(1, characterId);
+                statement.bindString(2, messageIds.get(index));
+                JSONObject message = new JSONObject(statement.simpleQueryForString());
+                message.put("storageStatus", statuses.get(index));
+                result.put(message);
+            }
+        } finally {
+            statement.close();
         }
         return result;
     }

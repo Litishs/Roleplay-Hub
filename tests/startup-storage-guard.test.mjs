@@ -36,6 +36,9 @@ function fixture() {
         saveClassicMemoriesNow: async () => {},
         initDB: async () => { initCalls++; context.db = {}; },
         setStoredValue: async (key, value) => { writes.push({ key, value: JSON.parse(JSON.stringify(value)) }); },
+        setStoredMany: async (entries) => {
+            for (const [key, value] of entries) writes.push({ key, value: JSON.parse(JSON.stringify(value)) });
+        },
         debounce: fn => () => pending.push(fn),
     });
     vm.runInContext(section('const saveData = async (options = {}) => {', 'const saveConversationMutationNow ='), context);

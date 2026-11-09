@@ -11,6 +11,7 @@ const createRepository = async () => {
   const plugin = {
     async init() {},
     async kvSet({ key, json }) { kv.set(key, json); },
+    async kvSetMany({ items }) { items.forEach(({ key, json }) => kv.set(key, json)); },
     async kvGet({ key }) { return { json: kv.get(key) ?? null }; },
     async kvRemove({ key }) { kv.delete(key); },
     async secretSet({ key, value }) { secrets.set(key, value); },
@@ -182,4 +183,92 @@ test('native read errors do not allow callers to replace unread data', async () 
   await assert.rejects(repository.get('rp_hub_presets'), /Synthetic bridge failure/);
   await assert.rejects(repository.set('rp_hub_presets', []), error => error.code === 'STORAGE_WRITE_BLOCKED');
   assert.equal(kv.get('rp_hub_presets'), '[{"name":"Saved"}]');
+});
+
+test('setMany lands all keys in one batched call with secret extraction intact', async () => {
+  const { repository, kv, secrets, plugin } = await createRepository();
+  const batchedKeys = [];
+  const originalMany = plugin.kvSetMany;
+  plugin.kvSetMany = async (args) => { batchedKeys.push([...args.items.map(item => item.key)]); return originalMany(args); };
+  await repository.setMany([
+    { key: 'rp_hub_characters', value: [{ uuid: 'card-1' }] },
+    { key: 'rp_hub_settings', value: { model: 'm', apiKey: 'secret-1' } },
+    { key: 'rp_hub_presets', value: [] }
+  ]);
+  assert.equal(batchedKeys.length, 1, 'exactly one batched bridge call');
+  assert.deepEqual(batchedKeys[0], ['rp_hub_characters', 'rp_hub_settings', 'rp_hub_presets']);
+  const storedSettings = JSON.parse(kv.get('rp_hub_settings'));
+  assert.equal(storedSettings.apiKey, '', 'secret extraction still applies per entry');
+  assert.equal(kv.get('rp_hub_settings').includes('secret-1'), false, 'no secret leaks into plain SQLite');
+  assert.equal(secrets.size, 1, 'the secret rode the secret channel first');
+  assert.deepEqual(JSON.parse(kv.get('rp_hub_characters')), [{ uuid: 'card-1' }]);
+});
+
+test('setMany refuses duplicates, undefined values and blocked keys before writing anything', async () => {
+  const { repository, kv, plugin } = await createRepository();
+  await assert.rejects(
+    () => repository.setMany([{ key: 'rp_hub_characters', value: [] }, { key: 'rp_hub_characters', value: [] }]),
+    /duplicate key/
+  );
+  await assert.rejects(
+    () => repository.setMany([{ key: 'rp_hub_settings', value: undefined }]),
+    /value is undefined/
+  );
+  // A blocked key aborts the whole batch — no partial application.
+  kv.set('rp_hub_settings', '{"model":"saved"}');
+  plugin.kvGet = async () => { throw new Error('Synthetic bridge failure'); };
+  await assert.rejects(repository.get('rp_hub_settings'), /Synthetic bridge failure/);
+  plugin.kvGet = async ({ key }) => ({ json: kv.get(key) ?? null });
+  let batchCalls = 0;
+  const originalMany = plugin.kvSetMany;
+  plugin.kvSetMany = async (args) => { batchCalls += 1; return originalMany(args); };
+  await assert.rejects(
+    () => repository.setMany([
+      { key: 'rp_hub_presets', value: [] },
+      { key: 'rp_hub_settings', value: { model: 'overwritten' } }
+    ]),
+    error => error.code === 'STORAGE_WRITE_BLOCKED'
+  );
+  assert.equal(batchCalls, 0, 'a blocked key aborts the batch before any write');
+  assert.equal(kv.has('rp_hub_presets'), false, 'no entry of the aborted batch landed');
+  assert.equal(kv.get('rp_hub_settings'), '{"model":"saved"}', 'the unread source stays intact');
+});
+
+test('native kvSetMany writes inside a single SQLite transaction', async () => {
+  const [pluginSource, dbSource] = await Promise.all([
+    readFile(new URL('../android/app/src/main/java/com/roleplayhub/app/NativeStoragePlugin.java', import.meta.url), 'utf8'),
+    readFile(new URL('../android/app/src/main/java/com/roleplayhub/app/RoleplayDatabase.java', import.meta.url), 'utf8')
+  ]);
+  assert.match(pluginSource, /public void kvSetMany\(PluginCall call\)/, 'plugin exposes the batched write');
+  const from = dbSource.indexOf('void putValues(JSONArray items)');
+  const to = dbSource.indexOf('String getValue(String key)', from);
+  assert.ok(from >= 0 && to > from, 'putValues exists');
+  const putValues = dbSource.slice(from, to);
+  assert.match(putValues, /beginTransaction\(\)/);
+  assert.match(putValues, /setTransactionSuccessful\(\)/, 'the batch commit is transactional');
+});
+
+test('getChat falls back to row-by-row reads when a row exceeds the CursorWindow limit', async () => {
+  const dbSource = await readFile(new URL('../android/app/src/main/java/com/roleplayhub/app/RoleplayDatabase.java', import.meta.url), 'utf8');
+  assert.match(dbSource, /catch \(SQLiteBlobTooBigException tooBig\)/, 'oversized-row failure is caught');
+  const from = dbSource.indexOf('private JSONArray getChatRowByRow');
+  const to = dbSource.indexOf('void applyChatChanges', from);
+  assert.ok(from >= 0 && to > from, 'row-by-row fallback exists');
+  const fallback = dbSource.slice(from, to);
+  assert.match(fallback, /simpleQueryForString/, 'payloads bypass the CursorWindow');
+  assert.match(fallback, /new String\[\]\{"message_id", "status"\}/, 'small columns still read via cursor');
+});
+
+test('saveData persists the global kv keys through one setStoredMany batch', async () => {
+  const app = await readFile(new URL('../src/modules/app.mjs', import.meta.url), 'utf8');
+  const from = app.indexOf('const kvEntries = [');
+  const to = app.indexOf('await setStoredMany(kvEntries);', from);
+  assert.ok(from >= 0 && to > from, 'saveData builds one kv batch');
+  const batch = app.slice(from, to);
+  for (const name of ['characters', 'settings', 'presets', 'preset_groups', 'preset_definitions_version',
+    'deleted_default_presets', 'regex', 'global_regex', 'worldinfo', 'global_worldinfo',
+    'worldinfo_settings', 'global_ui_templates', 'active_tools', 'user', 'user_profiles', 'active_profile_id']) {
+    assert.ok(batch.includes(`'${name}'`), `key ${name} rides the batch`);
+  }
+  assert.match(batch, /if \(_initComplete\)/, 'persona keys stay gated on init completion');
 });

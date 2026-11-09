@@ -18,6 +18,7 @@ import android.util.Base64;
 
 import androidx.activity.result.ActivityResult;
 
+import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
@@ -93,6 +94,24 @@ public class NativeStoragePlugin extends Plugin {
             call.resolve();
         } catch (Exception error) {
             call.reject("Unable to save value", error);
+        }
+    }
+
+    /**
+     * Batched kv write inside one SQLite transaction: a multi-key save
+     * (saveData persists ~14 keys at once) either lands completely or not at
+     * all, instead of leaving a partially updated generation of keys when the
+     * process dies mid-save. items = [{ key, json }, ...]
+     */
+    @PluginMethod
+    public void kvSetMany(PluginCall call) {
+        JSArray items = call.getArray("items");
+        if (items == null || items.length() == 0) { call.reject("items are required"); return; }
+        try {
+            database.putValues(items);
+            call.resolve();
+        } catch (Exception error) {
+            call.reject("Unable to save values", error);
         }
     }
 

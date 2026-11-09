@@ -2221,8 +2221,17 @@ const __app = createApp({
             return db.get(key);
         };
 
+        // Batched kv write: one atomic SQLite transaction for a multi-key save
+        // instead of ~14 sequential bridge calls that a mid-save kill could
+        // leave partially applied.
+        const dbSetMany = async (entries) => {
+            if (!db) await initDB();
+            return db.setMany((entries || []).map(([key, value]) => ({ key, value })));
+        };
+
         const setStoredValue = (name, value, options = {}) => dbSet(storageKey(name), value, options);
         const getStoredValue = (name) => dbGet(storageKey(name));
+        const setStoredMany = (entries) => dbSetMany((entries || []).map(([name, value]) => [storageKey(name), value]));
         const setScopedStoredValue = async (name, id, value, options = {}) => {
             if (!db) await initDB();
             if (name === 'chat') return db.replaceChat(id, unwrapForStorage(value));
@@ -2543,27 +2552,32 @@ const __app = createApp({
                 settings.contextSize = MAX_CONTEXT_SIZE;
                 normalizeActiveToolAggressivenessSettings();
                 await persistNativeMediaAssets();
-                await setStoredValue('characters', characters.value);
-                await setStoredValue('settings', settings);
-                await setStoredValue('presets', presets.value);
-                await setStoredValue('preset_groups', presetGroups.value);
-                await setStoredValue('preset_definitions_version', presetDefinitionsVersionApplied.value);
-                await setStoredValue('deleted_default_presets', deletedDefaultPresetNames.value);
-                await setStoredValue('regex', regexScripts.value);
-                await setStoredValue('global_regex', globalRegexScripts.value);
-                await setStoredValue('worldinfo', worldInfo.value);
-                await setStoredValue('global_worldinfo', globalWorldInfo.value);
-                await setStoredValue('worldinfo_settings', worldInfoSettings);
-                await setStoredValue('global_ui_templates', globalUiTemplates.value);
-                await setStoredValue('active_tools', normalizeActiveTools(), { clone: false });
+                // All global kv keys land in one atomic transaction; a kill
+                // mid-save can no longer leave a partially updated generation.
+                const kvEntries = [
+                    ['characters', characters.value],
+                    ['settings', settings],
+                    ['presets', presets.value],
+                    ['preset_groups', presetGroups.value],
+                    ['preset_definitions_version', presetDefinitionsVersionApplied.value],
+                    ['deleted_default_presets', deletedDefaultPresetNames.value],
+                    ['regex', regexScripts.value],
+                    ['global_regex', globalRegexScripts.value],
+                    ['worldinfo', worldInfo.value],
+                    ['global_worldinfo', globalWorldInfo.value],
+                    ['worldinfo_settings', worldInfoSettings],
+                    ['global_ui_templates', globalUiTemplates.value],
+                    ['active_tools', normalizeActiveTools()]
+                ];
                 // await setStoredValue('recent_times', recentGenerationTimes.value); // Deprecated: Saved in character
 
                 // 守卫：初始化完成前不写入用户/记忆数据，防止默认值覆盖服务端已有数据
                 if (_initComplete) {
-                    await setStoredValue('user', user);
-                    await setStoredValue('user_profiles', JSON.parse(JSON.stringify(userProfiles.value)));
-                    if (activeProfileId.value) await setStoredValue('active_profile_id', activeProfileId.value);
+                    kvEntries.push(['user', user]);
+                    kvEntries.push(['user_profiles', JSON.parse(JSON.stringify(userProfiles.value))]);
+                    if (activeProfileId.value) kvEntries.push(['active_profile_id', activeProfileId.value]);
                 }
+                await setStoredMany(kvEntries);
 
                 // Save Chat State
                 if (currentCharacterIndex.value >= 0) {
