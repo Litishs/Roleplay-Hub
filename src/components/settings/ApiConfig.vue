@@ -169,7 +169,7 @@
                             </path>
                         </svg>
                     </div>
-                    <input v-model="settings.apiUrl" type="text"
+                    <input v-model="settings.apiUrl" type="text" inputmode="url"
                         class="w-full h-12 bg-gray-50/60 border-2 border-gray-100 rounded-xl pl-11 pr-4 py-0 text-gray-800 font-medium focus:bg-white focus:border-teal-500 focus:ring-4 focus:ring-teal-100 focus:outline-none transition-all placeholder-gray-400 font-mono text-sm"
                         placeholder="https://your-api.example/v1">
                 </div>

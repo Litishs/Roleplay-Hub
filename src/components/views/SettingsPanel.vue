@@ -200,7 +200,7 @@
                                 </div>
                                 <div class="grid grid-cols-3 gap-2 sm:flex sm:flex-shrink-0 sm:items-center sm:justify-end">
                                     <button type="button" @click="copyDiagnosticsSummary"
-                                        class="inline-flex items-center justify-center text-xs px-2 whitespace-nowrap rounded-lg bg-gray-50 hover:bg-gray-100 text-gray-600 font-medium border border-gray-200 transition-all active:scale-95"
+                                        class="inline-flex min-h-[44px] items-center justify-center text-xs px-2 whitespace-nowrap rounded-lg bg-gray-50 hover:bg-gray-100 text-gray-600 font-medium border border-gray-200 transition-all active:scale-95"
                                         title="复制一段可粘贴到群聊的文本摘要（≤10 行）">
                                         <svg class="w-3.5 h-3.5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -209,7 +209,7 @@
                                         复制摘要
                                     </button>
                                     <button type="button" @click="exportRequestDiagnostics('file')"
-                                        class="inline-flex items-center justify-center text-xs px-2 whitespace-nowrap rounded-lg bg-primary-600 hover:bg-primary-700 text-white font-medium border border-primary-600 transition-all active:scale-95 shadow-sm">
+                                        class="inline-flex min-h-[44px] items-center justify-center text-xs px-2 whitespace-nowrap rounded-lg bg-primary-600 hover:bg-primary-700 text-white font-medium border border-primary-600 transition-all active:scale-95 shadow-sm">
                                         <svg class="w-3.5 h-3.5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                                 d="M12 10v6m0 0l-3-3m3 3l3-3m4 4H5a2 2 0 01-2-2V6a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414A1 1 0 0121 11v7a2 2 0 01-2 2z"></path>
@@ -217,7 +217,7 @@
                                         导出日志
                                     </button>
                                     <button type="button" @click="clearRequestDiagnostics"
-                                        class="inline-flex items-center justify-center text-xs px-2 whitespace-nowrap rounded-lg bg-gray-50 hover:bg-red-50 text-gray-500 hover:text-red-600 font-medium border border-gray-200 transition-all active:scale-95"
+                                        class="inline-flex min-h-[44px] items-center justify-center text-xs px-2 whitespace-nowrap rounded-lg bg-gray-50 hover:bg-red-50 text-gray-500 hover:text-red-600 font-medium border border-gray-200 transition-all active:scale-95"
                                         title="清空运行日志">
                                         <svg class="w-3.5 h-3.5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"

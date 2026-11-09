@@ -14,7 +14,7 @@
                         <input type="file" accept=".json" @change="importMemories" class="hidden">
                     </label>
                         <button @click="clearAllMemories()"
-                            class="inline-flex items-center gap-1 px-2.5 py-2 bg-white text-red-600 rounded-xl border border-gray-200 shadow-sm active:scale-95 transition-all text-xs font-bold"
+                            class="inline-flex min-h-[44px] items-center gap-1 px-3 py-2 bg-white text-red-600 rounded-xl border border-gray-200 shadow-sm active:scale-95 transition-all text-xs font-bold"
                             title="清空并重建记忆（原文保留，摘要与关系从聊天记录重建）">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor"><use href="#icon-delete"></use></svg>
                             清空重建

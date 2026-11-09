@@ -50,7 +50,7 @@
                             {{ setting.label }}
                             <span v-if="setting.help" class="block text-[10px] text-gray-400 leading-snug">{{ setting.help }}</span>
                         </span>
-                        <input v-if="setting.type === 'number'" type="number" :min="setting.min" :max="setting.max"
+                        <input v-if="setting.type === 'number'" type="number" inputmode="decimal" :min="setting.min" :max="setting.max"
                             class="w-24 shrink-0 rounded-lg border border-gray-200 px-2 py-1 text-xs text-gray-700
                                 focus:outline-none focus:ring-2 focus:ring-primary-200"
                             :value="pluginSettingValue(plugin, setting)"

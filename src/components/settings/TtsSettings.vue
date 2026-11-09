@@ -52,7 +52,7 @@
                                                     </div>
                                                     <div>
                                                         <label class="block text-xs font-medium text-gray-500 mb-1">Base URL</label>
-                                                        <input type="text" v-model.trim="settings.ttsCloudBaseUrl" placeholder="https://api.example.com/v1"
+                                                        <input type="text" inputmode="url" v-model.trim="settings.ttsCloudBaseUrl" placeholder="https://api.example.com/v1"
                                                             class="w-full bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-teal-300">
                                                     </div>
                                                     <div>
@@ -138,7 +138,7 @@
                                                     <div>
                                                         <label class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 ml-1">最长朗读字数</label>
                                                         <div class="flex items-center gap-2">
-                                                            <input type="number" v-model.number="settings.ttsMaxChars" min="100" max="5000" step="100"
+                                                            <input type="number" inputmode="numeric" v-model.number="settings.ttsMaxChars" min="100" max="5000" step="100"
                                                                 class="w-full bg-gray-50/60 border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-teal-300 focus:bg-white transition-all">
                                                             <span class="text-[10px] text-gray-400">字</span>
                                                         </div>

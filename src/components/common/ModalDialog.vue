@@ -350,9 +350,9 @@
     <transition enter-active-class="transition-opacity duration-200" enter-from-class="opacity-0"
         enter-to-class="opacity-100" leave-active-class="transition-opacity duration-150"
         leave-from-class="opacity-100" leave-to-class="opacity-0">
+        <!-- No backdrop click-to-close: this is a data-entry form and a mis-tap would silently discard the draft name. -->
         <div v-if="showStoryBranchNameEditor"
-            class="fixed inset-0 z-[180] flex items-center justify-center bg-gray-900/40 backdrop-blur-sm p-4"
-            @click.self="showStoryBranchNameEditor = false">
+            class="fixed inset-0 z-[180] flex items-center justify-center bg-gray-900/40 backdrop-blur-sm p-4">
             <div class="w-full max-w-sm rounded-2xl border border-gray-200 bg-white p-5 shadow-2xl">
                 <h3 class="text-lg font-bold text-gray-800">编辑分支名称</h3>
                 <p class="mt-1 text-sm text-gray-500">名称最多 30 个字。</p>

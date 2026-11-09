@@ -158,7 +158,8 @@
         <!-- Chat Import Confirmation Modal -->
         <div v-if="showChatImportDialog"
             class="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fade-in">
-            <div class="fixed inset-0" @click="cancelChatImport"></div>
+            <!-- No backdrop click-to-close: dismissing here would silently discard the parsed import file. -->
+            <div class="fixed inset-0"></div>
             <div class="compact-modal-panel">
                 <div class="p-6">
                     <h3 class="text-lg font-bold text-gray-900 mb-4">导入聊天记录</h3>
@@ -190,7 +191,8 @@
         <!-- Import Preview / Conflict Summary Modal -->
         <div v-if="showImportPreview"
             class="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fade-in">
-            <div class="fixed inset-0" @click="cancelImportPreview"></div>
+            <!-- No backdrop click-to-close: dismissing here would silently discard the pending import. -->
+            <div class="fixed inset-0"></div>
             <div class="compact-modal-panel">
                 <div class="p-6">
                     <h3 class="text-lg font-bold text-gray-900 mb-4">{{ importPreview.title }}</h3>
@@ -562,7 +564,7 @@
                         </div>
                         <div>
                             <label class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">排序</label>
-                            <input v-model.number="editingUiTemplate.data.order" type="number"
+                            <input v-model.number="editingUiTemplate.data.order" type="number" inputmode="numeric"
                                 class="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:outline-none transition-all shadow-sm"
                                 placeholder="100">
                         </div>
@@ -682,7 +684,7 @@
                             <div class="relative">
                                 <span
                                     class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-mono text-sm">/</span>
-                                <input v-model="editingRegex.data.regex" type="text"
+                                <input v-model="editingRegex.data.regex" type="text" spellcheck="false" autocapitalize="off"
                                     class="w-full bg-white border border-gray-200 rounded-xl pl-6 pr-4 py-2.5 text-gray-800 font-mono text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:outline-none transition-all shadow-sm"
                                     placeholder="pattern">
                                 <span
@@ -779,14 +781,14 @@
                                 <div>
                                     <label
                                         class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">最小深度</label>
-                                    <input type="number" v-model.number="editingRegex.data.minDepth"
+                                    <input type="number" inputmode="numeric" v-model.number="editingRegex.data.minDepth"
                                         class="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-800 focus:ring-4 focus:ring-primary-500/10 focus:border-primary-500 focus:outline-none transition-all shadow-sm"
                                         placeholder="无限制">
                                 </div>
                                 <div>
                                     <label
                                         class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">最大深度</label>
-                                    <input type="number" v-model.number="editingRegex.data.maxDepth"
+                                    <input type="number" inputmode="numeric" v-model.number="editingRegex.data.maxDepth"
                                         class="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-800 focus:ring-4 focus:ring-primary-500/10 focus:border-primary-500 focus:outline-none transition-all shadow-sm"
                                         placeholder="无限制">
                                 </div>
@@ -1212,7 +1214,7 @@
                                 <div class="grid grid-cols-2 gap-3">
                                     <div>
                                         <label class="block text-xs text-gray-500 mb-1">顺序</label>
-                                        <input type="number" v-model.number="editingWorldInfo.data.order"
+                                        <input type="number" inputmode="numeric" v-model.number="editingWorldInfo.data.order"
                                             class="w-full bg-white border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-primary-500 focus:outline-none"
                                             placeholder="100">
                                     </div>
@@ -1233,7 +1235,7 @@
                                                         stroke-width="2.5" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
                                                 </svg>
                                             </button>
-                                            <input type="number" v-model.number="editingWorldInfo.data.probability"
+                                            <input type="number" inputmode="numeric" v-model.number="editingWorldInfo.data.probability"
                                                 min="0" max="100"
                                                 class="w-full bg-white px-3 py-1.5 text-sm font-bold text-gray-700 focus:outline-none"
                                                 :disabled="!editingWorldInfo.data.useProbability" placeholder="100">
@@ -1243,7 +1245,7 @@
                                 <div>
                                     <label
                                         class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">自定义扫描深度</label>
-                                    <input type="number" v-model.number="editingWorldInfo.data.scanDepth"
+                                    <input type="number" inputmode="numeric" v-model.number="editingWorldInfo.data.scanDepth"
                                         class="w-full bg-white border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-primary-500 focus:outline-none"
                                         placeholder="默认">
                                 </div>
@@ -1251,7 +1253,7 @@
                                     class="pt-2 border-t border-gray-100">
                                     <label class="block text-xs text-gray-500 mb-1">插入深度 <span
                                             class="text-[10px] text-gray-400">@D</span></label>
-                                    <input type="number" v-model.number="editingWorldInfo.data.depth"
+                                    <input type="number" inputmode="numeric" v-model.number="editingWorldInfo.data.depth"
                                         class="w-full bg-white border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-primary-500 focus:outline-none"
                                         placeholder="4">
                                 </div>
