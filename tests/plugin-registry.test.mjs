@@ -139,3 +139,17 @@ test('registry: onChange fires on registration and enable/disable', async () => 
     await registry.setEnabled('rph-demo', false);
     assert.equal(changes, 2);
 });
+
+test('registry: flushPersist resolves when idle and after writes have settled', async () => {
+    const storage = makeStorage();
+    const registry = createPluginRegistry({ storage });
+    assert.equal(typeof registry.flushPersist, 'function', 'flush hook is part of the registry API');
+    await registry.flushPersist();
+    await registry.register(makeToolPlugin());
+    await registry.setEnabled('rph-demo', false);
+    await registry.flushPersist();
+    assert.equal(
+        storage.store.get(PLUGIN_STATE_STORAGE_KEY).enabled['rph-demo'], false,
+        'the persisted state behind the flushed queue is committed'
+    );
+});

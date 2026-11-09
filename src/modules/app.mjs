@@ -2477,16 +2477,38 @@ const __app = createApp({
             await setStoredValue('memory_settings', cloneForStorage(memorySettings), { clone: false });
         };
 
+        // Memory dirty flags: any mutation after a completed load marks the
+        // scope's memories dirty until the next successful save. The
+        // background flush (flushAllPendingWrites) persists dirty memories
+        // only, so backgrounding the app never rewrites large memory blobs
+        // that have not changed.
+        let _memoriesDirty = false;
+        let _classicMemoriesDirty = false;
+
         const saveMemoriesNow = async () => {
             if (!_memoriesLoaded || !currentCharacter.value?.uuid) return;
             if (!db) await initDB();
-            await setScopedStoredValue('memories', getCurrentChatStorageScopeId(), await compactMemoriesForStorageAsync(memories.value), { clone: false });
+            // Clear the flag before awaiting so mutations landing mid-save
+            // re-mark it; a failed save re-marks it so the next flush retries.
+            _memoriesDirty = false;
+            try {
+                await setScopedStoredValue('memories', getCurrentChatStorageScopeId(), await compactMemoriesForStorageAsync(memories.value), { clone: false });
+            } catch (error) {
+                _memoriesDirty = true;
+                throw error;
+            }
         };
 
         const saveClassicMemoriesNow = async () => {
             if (!_classicMemoriesLoaded || !currentCharacter.value?.uuid) return;
             if (!db) await initDB();
-            await setScopedStoredValue('classic_memories', getCurrentChatStorageScopeId(), cloneForStorage(classicMemories.value), { clone: false });
+            _classicMemoriesDirty = false;
+            try {
+                await setScopedStoredValue('classic_memories', getCurrentChatStorageScopeId(), cloneForStorage(classicMemories.value), { clone: false });
+            } catch (error) {
+                _classicMemoriesDirty = true;
+                throw error;
+            }
         };
 
         const persistAvatarMedia = async (target, field, preferredName) => {
@@ -2599,6 +2621,17 @@ const __app = createApp({
                 saveMemorySettingsNow().catch(e => console.error('Save memory settings failed:', e));
             }, 500);
         }, { deep: true });
+
+        // Memory dirty tracking. Sync flush + the *_loaded guards exclude the
+        // load-time assignments in loadCharacterMemories (the guards flip
+        // after assignment); every later mutation marks the scope dirty until
+        // the next successful saveMemoriesNow/saveClassicMemoriesNow.
+        watch(memories, () => {
+            if (_memoriesLoaded) _memoriesDirty = true;
+        }, { deep: true, flush: 'sync' });
+        watch(classicMemories, () => {
+            if (_classicMemoriesLoaded) _classicMemoriesDirty = true;
+        }, { deep: true, flush: 'sync' });
 
         /* extracted loadData — src/composables/useDataLoader.mjs (Phase 3.0) */
 
@@ -2831,6 +2864,60 @@ const __app = createApp({
         const debouncedSave = debounce(() => {
             saveData({ saveMemories: false });
         }, 1000);
+
+        // Flush every pending persistence queue at once. Android may kill the
+        // WebView renderer of a backgrounded app at any moment; anything still
+        // sitting in a debounce window or write queue at that point is lost
+        // (only SQLite-committed data survives). Every step no-ops when its
+        // queue is empty, so frequent backgrounding stays cheap; concurrent
+        // triggers (appStateChange + visibilitychange) share one in-flight
+        // pass.
+        let _flushInFlight = null;
+        const flushAllPendingWrites = () => {
+            if (_flushInFlight) return _flushInFlight;
+            const run = async () => {
+                const tasks = [];
+                // Global kv state (characters/settings/presets/regex/...) — 1s debounce.
+                tasks.push(Promise.resolve(debouncedSave.flush())
+                    .catch(error => console.error('Background saveData flush failed:', error)));
+                // Memory settings — 500ms debounce timer.
+                if (_memorySettingsSaveTimer) {
+                    clearTimeout(_memorySettingsSaveTimer);
+                    _memorySettingsSaveTimer = null;
+                    tasks.push(saveMemorySettingsNow()
+                        .catch(error => console.error('Background memory settings flush failed:', error)));
+                }
+                // Token usage history write queue.
+                tasks.push(tokenUsageSaveQueue
+                    .catch(error => console.error('Background token usage flush failed:', error)));
+                // Plugin marketplace persist queue.
+                tasks.push((pluginRegistry.flushPersist?.() ?? Promise.resolve())
+                    .catch(error => console.error('Background plugin state flush failed:', error)));
+                // Active streaming draft + chat history queue.
+                const activeDraft = [...chatHistory.value]
+                    .reverse()
+                    .find(message => message?.storageStatus === 'draft');
+                if (activeDraft) {
+                    tasks.push(persistSingleDraft(activeDraft)
+                        .catch(error => console.error('Background draft save failed:', error)));
+                }
+                tasks.push(flushPendingChatHistorySave()
+                    .catch(error => console.error('Background chat save failed:', error)));
+                // Scoped memories — only when a mutation marked them dirty,
+                // so backgrounding does not rewrite unchanged memory blobs.
+                if (_memoriesDirty) {
+                    tasks.push(saveMemoriesNow()
+                        .catch(error => console.error('Background memories flush failed:', error)));
+                }
+                if (_classicMemoriesDirty) {
+                    tasks.push(saveClassicMemoriesNow()
+                        .catch(error => console.error('Background classic memories flush failed:', error)));
+                }
+                await Promise.all(tasks);
+            };
+            _flushInFlight = run().finally(() => { _flushInFlight = null; });
+            return _flushInFlight;
+        };
 
         // Watch for changes to auto-save
         watch([characters, settings, presets, regexScripts, globalRegexScripts, worldInfo, globalWorldInfo, globalUiTemplates, activeTools, user, recentGenerationTimes], () => {
@@ -9408,15 +9495,13 @@ const __app = createApp({
                 nativeAppStateListener = await nativeApp.addListener('appStateChange', ({ isActive }) => {
                     if (isActive) {
                         nextTick(() => syncMobileVisualViewport({ force: true }));
+                        // The background flush may have been cut short if the
+                        // renderer was killed right after hiding; run a
+                        // catch-up pass (no-op when nothing is pending).
+                        flushAllPendingWrites().catch(error => console.error('Resume flush failed:', error));
                         return;
                     }
-                    const activeDraft = [...chatHistory.value]
-                        .reverse()
-                        .find(message => message?.storageStatus === 'draft');
-                    if (activeDraft) {
-                        persistSingleDraft(activeDraft).catch(error => console.error('Background draft save failed:', error));
-                    }
-                    flushPendingChatHistorySave().catch(error => console.error('Background chat save failed:', error));
+                    flushAllPendingWrites().catch(error => console.error('Background flush failed:', error));
                 });
                 nativeBackButtonListener = await nativeApp.addListener('backButton', async () => {
                     if (globalConfirmModal.value.show) {
@@ -9432,6 +9517,19 @@ const __app = createApp({
                     }
                 });
             }
+
+            // Web-standard hide signals as a second flush trigger: appStateChange
+            // is delivered through the async bridge and may not complete before
+            // the renderer dies; visibilitychange/pagehide fire inside the page
+            // itself. They are also the only trigger in browser/dev mode.
+            document.addEventListener('visibilitychange', () => {
+                if (document.visibilityState === 'hidden') {
+                    flushAllPendingWrites().catch(error => console.error('Visibility flush failed:', error));
+                }
+            });
+            window.addEventListener('pagehide', () => {
+                flushAllPendingWrites().catch(error => console.error('Pagehide flush failed:', error));
+            });
 
             await loadData();
             if (_dataLoadFailed) return;

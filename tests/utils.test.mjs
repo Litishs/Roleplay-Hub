@@ -176,6 +176,25 @@ test('debounce coalesces bursts into a single trailing call', async () => {
     assert.equal(lastArg, 'c');
 });
 
+test('debounce flush runs a pending invocation immediately and no-ops when idle', async () => {
+    let calls = 0;
+    let lastArg = null;
+    const debounced = debounce((value) => { calls += 1; lastArg = value; return `saved:${value}`; }, 30);
+    assert.equal(debounced.flush(), undefined, 'flush with nothing pending does nothing');
+    debounced('a');
+    debounced('b');
+    assert.equal(debounced.flush(), 'saved:b', 'flush fires the pending call with the latest args and returns its result');
+    assert.equal(calls, 1);
+    await new Promise(resolve => setTimeout(resolve, 60));
+    assert.equal(calls, 1, 'the cancelled timer never fires after a flush');
+    assert.equal(lastArg, 'b');
+    // Normal debouncing keeps working after a flush.
+    debounced('c');
+    await new Promise(resolve => setTimeout(resolve, 60));
+    assert.equal(calls, 2);
+    assert.equal(lastArg, 'c');
+});
+
 test('buildKeywordToolSnippet keeps short text and slices long text around the first match', () => {
     const short = 'short text';
     assert.equal(buildKeywordToolSnippet(short, ['short']), short);

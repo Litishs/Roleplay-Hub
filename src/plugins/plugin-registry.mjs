@@ -66,6 +66,10 @@ export const createPluginRegistry = ({ storage = null, logger = console } = {}) 
     return {
         ready: load,
 
+        // Await the persist queue from outside (background flush): resolves
+        // immediately when nothing is pending.
+        flushPersist: () => persistQueue,
+
         async register(plugin) {
             await load();
             if (plugins.has(plugin.id)) {
