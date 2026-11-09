@@ -4368,9 +4368,13 @@ const __app = createApp({
 
         // Crash notice (4-layer plan L3-3 + L2-8): on launch, a last-crash
         // file written by the native layer (CrashFileWriter) is transcribed
-        // into the journal as a fatal record and surfaced once via a modal.
-        // Both buttons acknowledge — the file is cleared so the notice shows
-        // exactly once per crash.
+        // into the journal as a fatal record and surfaced once. A system_kill
+        // (Android reclaimed the renderer of a backgrounded app) shows only a
+        // toast — the native layer already recreated the activity and the
+        // session was restored from local storage, so a blocking modal would
+        // interrupt the seamless recovery. Real crashes keep the modal with
+        // the export-diagnostics affordance. Both paths acknowledge — the
+        // file is cleared so the notice shows exactly once per crash.
         const maybeShowLastCrashNotice = async () => {
             const nativeStorage = window.Capacitor?.Plugins?.NativeStorage;
             if (!nativeStorage?.readLastCrash) return;
@@ -4379,6 +4383,7 @@ const __app = createApp({
                 const crash = result?.crash;
                 if (!crash) return;
                 const isRenderGone = crash.type === 'webview_render_process_gone';
+                const isSystemKill = isRenderGone && crash.reason === 'system_kill';
                 const handle = RPHRequestDiagnostics?.begin?.({
                     category: 'runtime',
                     action: isRenderGone ? 'render_process_gone' : 'native_crash',
@@ -4389,20 +4394,25 @@ const __app = createApp({
                     result: 'ok',
                     meta: {
                         occurredAt: String(crash.occurredAt || '').slice(0, 19),
-                        appUptimeMs: Number(crash.appUptimeMs) || 0
+                        appUptimeMs: Number(crash.appUptimeMs) || 0,
+                        reason: String(crash.reason || '').slice(0, 32)
                     }
                 });
                 handle?.fail?.({
                     name: String(crash.type || 'Crash').slice(0, 64),
                     message: String(crash.message || '').slice(0, 200) || 'native crash'
                 });
-                const typeLabel = isRenderGone ? 'WebView 渲染进程崩溃' : 'Java 崩溃';
-                const confirmed = await showVueConfirmModal(
-                    '上次应用异常退出',
-                    `时间 ${crash.occurredAt || '未知'}\n类型 ${typeLabel}\n\n可导出诊断日志帮助定位问题。`,
-                    { confirmLabel: '导出诊断', cancelLabel: '知道了' }
-                );
-                if (confirmed) await exportRequestDiagnostics('copy');
+                if (isSystemKill) {
+                    showToast('检测到后台被系统回收，已恢复会话', 'info', 4000);
+                } else {
+                    const typeLabel = isRenderGone ? 'WebView 渲染进程崩溃' : 'Java 崩溃';
+                    const confirmed = await showVueConfirmModal(
+                        '上次应用异常退出',
+                        `时间 ${crash.occurredAt || '未知'}\n类型 ${typeLabel}\n\n可导出诊断日志帮助定位问题。`,
+                        { confirmLabel: '导出诊断', cancelLabel: '知道了' }
+                    );
+                    if (confirmed) await exportRequestDiagnostics('copy');
+                }
                 await nativeStorage.clearLastCrash?.();
             } catch (_) { /* crash notice is best-effort */ }
         };

@@ -98,14 +98,38 @@ test('native last-crash layer: writer, exception handler, WebView client, plugin
     assert.ok(writer.includes('MESSAGE_MAX = 500'), 'message is clamped');
     assert.ok(!writer.includes('StackTrace'), 'no stack trace is persisted');
     assert.ok(writer.includes('noteAppStart'), 'uptime base is noted at real app start');
+    assert.ok(writer.includes('REASON_SYSTEM_KILL'), 'writer distinguishes system kills from crashes');
+    assert.match(writer, /FILE_NAME \+ "\.tmp"/, 'crash file write is atomic (temp + rename)');
     assert.match(mainActivity, /CrashFileWriter\.noteAppStart\(\);/, 'MainActivity notes the app start');
     assert.ok(reporter.includes('previous.uncaughtException(thread, throwable)'), 'handler chains to the previous one');
     assert.ok(client.includes('extends BridgeWebViewClient'), 'client subclasses the Capacitor client');
-    assert.match(client, /onRenderProcessGone[\s\S]*?return false;/, 'render-process-gone keeps default termination');
+    // Renderer-death recovery: recreate the activity (seamless restore) with a
+    // sliding-window rate limiter; exhaustion or any failure falls back to the
+    // default termination (process death + next-launch notice).
+    assert.match(client, /onRenderProcessGone[\s\S]*?activity\.recreate\(\);[\s\S]*?return true;/, 'render-process-gone recovers by recreating the activity');
+    assert.match(client, /MAX_RECOVERIES_IN_WINDOW = 3/, 'recovery loop guard is bounded');
+    assert.match(client, /registerRecoveryAttempt\(\)[\s\S]*?return -1;/, 'exhausted window refuses recovery');
+    assert.match(client, /onRenderProcessGone[\s\S]*?return false;/, 'recovery fallback keeps default termination');
+    assert.match(client, /CrashFileWriter\.RENDER_PROCESS_GONE, reason, message/, 'crash record carries the reason');
     assert.match(mainActivity, /Thread\.setDefaultUncaughtExceptionHandler\(new CrashReporter\(/, 'MainActivity installs the handler');
     assert.match(mainActivity, /new CrashReportingWebViewClient\(/, 'MainActivity installs the WebView client');
+    assert.match(mainActivity, /crashVersionName, crashVersionCode, this\)/, 'client receives the activity for recreation');
     assert.match(plugin, /public void readLastCrash\(PluginCall call\)/, 'plugin exposes readLastCrash');
     assert.match(plugin, /public void clearLastCrash\(PluginCall call\)/, 'plugin exposes clearLastCrash');
+});
+
+test('system-kill renderer deaths surface as a toast, real crashes keep the modal', async () => {
+    const app = await readSource('../src/modules/app.mjs');
+    const from = app.indexOf('const maybeShowLastCrashNotice = async () => {');
+    const to = app.indexOf('const checkApiStatus = async', from);
+    assert.ok(from >= 0 && to > from, 'crash notice handler exists');
+    const body = app.slice(from, to);
+    assert.match(body, /crash\.reason === 'system_kill'/, 'system_kill is detected from the crash record');
+    assert.match(body, /showToast\('检测到后台被系统回收，已恢复会话', 'info', 4000\)/, 'system kill shows a light toast');
+    assert.match(body, /if \(isSystemKill\) \{[\s\S]*?\} else \{[\s\S]*?showVueConfirmModal/, 'real crashes keep the blocking modal');
+    assert.match(body, /reason: String\(crash\.reason \|\| ''\)/, 'reason is preserved in the journal context');
+    // Both paths acknowledge the crash file exactly once.
+    assert.match(body, /clearLastCrash\?\.\(\)/);
 });
 
 test('TTS engines record failures into the journal without the spoken text', async () => {
