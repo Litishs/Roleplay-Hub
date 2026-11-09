@@ -8,7 +8,7 @@
                 <div class="p-4 border-b border-gray-100 flex justify-between items-center">
                     <h3 class="text-lg font-bold text-gray-800">{{ isSlotMode ? '聊天模型' : '选择模型' }}</h3>
                     <button @click="closeModelSelector"
-                        class="text-gray-400 hover:text-gray-600 focus:outline-none transition-colors">
+                        class="text-gray-400 hover:text-gray-600 focus:outline-none transition-colors p-2.5 -m-2.5">
                         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                 d="M6 18L18 6M6 6l12 12"></path>
@@ -25,7 +25,7 @@
                     <!-- Model Category Tags -->
                     <div class="flex flex-wrap gap-2 max-h-[160px] overflow-y-auto custom-scrollbar items-center py-1">
                         <button v-for="tag in providerTags" :key="tag.id" @click="activeProviderTag = tag.id" :class="[
-                                'flex items-center px-3 py-1.5 text-xs font-bold rounded-full transition-all border outline-none active:scale-95 whitespace-nowrap',
+                                'flex items-center px-3 py-1.5 text-xs font-bold rounded-full transition-all border outline-none active:scale-95 whitespace-nowrap hit-expand [--hit-out:-4px]',
                                 activeProviderTag === tag.id
                                     ? 'bg-teal-600 text-white border-teal-600 shadow-sm'
                                     : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50 hover:text-gray-700 hover:border-gray-300 shadow-sm'
@@ -36,7 +36,7 @@
                     </div>
                     <div class="flex flex-wrap gap-2 max-h-[160px] overflow-y-auto custom-scrollbar items-center py-1">
                         <button v-for="tag in modelTags" :key="tag.name" @click="activeModelTag = tag.name" :class="[
-                                'flex items-center px-3.5 py-1.5 text-xs font-bold rounded-full transition-all border outline-none active:scale-95 whitespace-nowrap',
+                                'flex items-center px-3.5 py-1.5 text-xs font-bold rounded-full transition-all border outline-none active:scale-95 whitespace-nowrap hit-expand [--hit-out:-4px]',
                                 activeModelTag === tag.name
                                     ? 'bg-primary-50 text-primary-700 border-primary-300 shadow-sm'
                                     : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50 hover:text-gray-700 hover:border-gray-300 shadow-sm'
@@ -64,7 +64,16 @@
                     </button>
                 </div>
                 <div class="flex-1 overflow-y-auto p-2 min-h-[300px]">
-                    <div v-if="filteredModels.length === 0"
+                    <div v-if="modelsLoading"
+                        class="flex flex-col items-center justify-center py-12 text-gray-400">
+                        <svg class="w-8 h-8 mb-3 animate-spin text-primary-500" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor"
+                                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                        </svg>
+                        正在加载模型列表...
+                    </div>
+                    <div v-else-if="filteredModels.length === 0"
                         class="flex flex-col items-center justify-center py-12 text-gray-400">
                         <svg class="w-12 h-12 mb-3 opacity-20" fill="none" stroke="currentColor"
                             viewBox="0 0 24 24">
@@ -72,7 +81,8 @@
                                 d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z">
                             </path>
                         </svg>
-                        未找到模型或正在加载...
+                        未找到匹配的模型
+                        <p class="mt-1 text-xs">试试切换供应商/类型标签，或修改搜索关键词。</p>
                     </div>
                     <div class="space-y-1">
                         <button v-for="model in filteredModels" :key="model._providerId + ':' + model.id"
@@ -131,7 +141,7 @@
                         </div>
                     </div>
                     <button @click="showContextViewerModal = false"
-                        class="text-gray-400 hover:text-red-500 transition-colors bg-gray-100 hover:bg-red-50 p-2 rounded-full absolute top-4 right-4 z-50">
+                        class="text-gray-400 hover:text-red-500 transition-colors bg-gray-100 hover:bg-red-50 p-2 rounded-full absolute top-4 right-4 z-50 hit-expand [--hit-out:-4px]">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                 d="M6 18L18 6M6 6l12 12"></path>
@@ -274,7 +284,7 @@
                         </div>
                     </div>
                     <button @click="showStoryBranchModal = false"
-                        class="w-9 h-9 rounded-full bg-gray-50 hover:bg-red-50 text-gray-400 hover:text-red-500 flex items-center justify-center transition-colors flex-shrink-0">
+                        class="w-9 h-9 rounded-full bg-gray-50 hover:bg-red-50 text-gray-400 hover:text-red-500 flex items-center justify-center transition-colors flex-shrink-0 hit-expand [--hit-out:-4px]">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                 d="M6 18L18 6M6 6l12 12"></path>

@@ -422,7 +422,7 @@ const __app = createApp({
         let { activeToolQueueAbortController } = chatState;
         const {
             modelSearchQuery, activeModelTag, popularModelFamilies,
-            availableModels, providerModels, activeProviderTag
+            availableModels, providerModels, activeProviderTag, modelsLoading
         } = apiConfigState;
         const { characterSearchQuery } = characterState;
         const { toasts } = uiState;
@@ -935,6 +935,7 @@ const __app = createApp({
                 if (isManual) showToast('请先填写该供应商的 Key', 'info');
                 return;
             }
+            modelsLoading.value = true;
             try {
                 const baseUrl = (apiUrl || '').replace(/\/+$/, '');
                 const url = `${(/\/v\d+$/i.test(baseUrl) ? baseUrl : `${baseUrl}/v1`)}/models`;
@@ -951,6 +952,8 @@ const __app = createApp({
             } catch (error) {
                 console.error(error);
                 if (isManual) showToast('获取模型失败: ' + error.message, 'error');
+            } finally {
+                modelsLoading.value = false;
             }
         };
         const fetchAllConfiguredProviderModels = () => {
@@ -3865,6 +3868,7 @@ const __app = createApp({
                 if (isManual) showToast('请先填写当前 API 预设的 Key', 'info');
                 return;
             }
+            modelsLoading.value = true;
             try {
                 if (isManual) showToast('正在获取模型列表...', 'info');
                 const url = getApiEndpoint('models');
@@ -3882,6 +3886,8 @@ const __app = createApp({
                 // 2026-08-05: 仅手动拉取失败时弹 toast；启动/自动拉取失败保持静默，
                 // 避免断网启动应用时弹出无意义提示（连接状态由设置页状态灯呈现）。
                 if (isManual) showToast('获取模型失败: ' + error.message, 'error');
+            } finally {
+                modelsLoading.value = false;
             }
         };
 
@@ -9405,6 +9411,41 @@ const __app = createApp({
                 } catch (error) {
                     console.warn('Failed to read app version info:', error);
                 }
+                // Audit A2 (2026-11-09): ordered top-most-first overlay stack for
+                // the system back button. Each entry is [isOpen, close]; the
+                // close paths reuse the same reset semantics as the modals'
+                // own cancel/close buttons.
+                const backOverlayStack = [
+                    [() => showConfirmModal.value, () => { showConfirmModal.value = false; }],
+                    [() => showStoryBranchNameEditor.value, () => { showStoryBranchNameEditor.value = false; }],
+                    [() => showStoryBranchModal.value, () => { showStoryBranchModal.value = false; }],
+                    [() => showContextViewerModal.value, () => { showContextViewerModal.value = false; }],
+                    [() => showAuthorNoticeModal.value, () => closeAuthorNoticeModal()],
+                    [() => showModelSelector.value, () => { showModelSelector.value = false; }],
+                    [() => showExportModal.value, () => { showExportModal.value = false; }],
+                    [() => showImportPreview.value, () => cancelImportPreview()],
+                    [() => showChatImportDialog.value, () => cancelChatImport()],
+                    [() => showCharacterEditor.value, () => closeCharacterEditor()],
+                    [() => showActiveToolEditor.value, () => { showActiveToolEditor.value = false; editingActiveTool.id = undefined; editingActiveTool.data = {}; }],
+                    [() => editingPreset.id !== undefined, () => { editingPreset.id = undefined; editingPreset.data = {}; }],
+                    [() => editingUiTemplate.id !== undefined, () => { editingUiTemplate.id = undefined; editingUiTemplate.data = {}; }],
+                    [() => editingRegex.id !== undefined, () => { editingRegex.id = undefined; editingRegex.data = {}; }],
+                    [() => editingWorldInfo.id !== undefined, () => { editingWorldInfo.id = undefined; editingWorldInfo.data = {}; }],
+                    [() => showNoMemoryNeededModal.value, () => { showNoMemoryNeededModal.value = false; }],
+                    [() => showChatModelSelector.value, () => { showChatModelSelector.value = false; }],
+                    [() => showInstructionPanel.value, () => { showInstructionPanel.value = false; }],
+                    [() => showDescriptionPanel.value, () => { showDescriptionPanel.value = false; }],
+                ];
+                const dismissTopOverlayForBack = () => {
+                    for (const [isOpen, close] of backOverlayStack) {
+                        if (isOpen()) {
+                            close();
+                            return true;
+                        }
+                    }
+                    return false;
+                };
+
                 nativeAppStateListener = await nativeApp.addListener('appStateChange', ({ isActive }) => {
                     if (isActive) {
                         nextTick(() => syncMobileVisualViewport({ force: true }));
@@ -9421,7 +9462,16 @@ const __app = createApp({
                 nativeBackButtonListener = await nativeApp.addListener('backButton', async () => {
                     if (globalConfirmModal.value.show) {
                         globalConfirmModal.value.onCancel?.();
-                    } else if (isMobileSidebarOpen) {
+                        return;
+                    }
+                    // Audit A2 (2026-11-09): dismiss the top-most overlay first.
+                    // Backing out of an editor must never jump views (which would
+                    // unmount and silently drop the draft) or minimize the app
+                    // while a modal is still open. Picker overlays (model
+                    // selector) close as "cancel": uncommitted picks are dropped,
+                    // matching a cancel affordance.
+                    if (dismissTopOverlayForBack()) return;
+                    if (isMobileSidebarOpen) {
                         closeMobileMenu();
                     } else if (isChatFullscreen.value) {
                         await toggleChatFullscreen();
@@ -9966,6 +10016,7 @@ const __app = createApp({
             showCharacterExportModal, openCharacterExportModal, confirmCharacterExport, // Character Export Modal
             showConfirmModal, confirmMessage, modelMode, chatModelSlots, selectChatModelSlot, reasoningEffortSlider, reasoningEffortLabel, latestMainTokenUsage, showNoMemoryNeededModal, // Export for template
             showAuthorNoticeModal, closeAuthorNoticeModal, // Author Notice Modal
+            modelsLoading,
             isGenerating, isRemoteGenerating, remoteEstimatedTime, isReceiving, isThinking, hasActiveToolInlineWork, isConversationBusy, activeToolContinuationMessageId, activeToolContinuationHasResponse, userInput, modelSearchQuery, activeModelTag, modelTags, characterSearchQuery, filteredModels, filteredCharacters,
             user, settings, apiProviderOptions, selectedApiProvider, isCustomApiProvider, customApiProviderOptions, showApiProviderSelector, selectApiProvider, characters, currentCharacter, currentCharacterIndex, chatHistory, displayedChatMessages, chatTopSpacerHeight, chatBottomSpacerHeight, handleChatScroll, presets, presetRoleOptions, fontFamilyOptions, themeModeOptions, imageStyleOptions, imageModelOptions, availableImageStyleOptions, imageSizeOptions, imageGenCountOptions, scopeOptions, uiTemplatePlacementOptions, worldInfoPositionOptions, getPresetRoleLabel, getPresetRoleDisplayLabel, getPresetRoleBadgeClass, regexScripts, worldInfo,
             activeTools, activeToolAggressivenessOptions: ACTIVE_TOOL_AGGRESSIVENESS_OPTIONS, editingActiveTool, normalizeActiveTools, isWebActiveTool, getActiveToolDisplayDescription, getActiveToolResultCountMin, getActiveToolResultCountMax,

@@ -84,3 +84,119 @@ test("destructive and diagnostic buttons meet the 44px touch target", async () =
     `diagnostics copy/export/clear buttons must be at least 44px tall (found ${diagnosticsButtons.length})`
   );
 });
+
+test("hit-expansion utilities and shared-class expansions exist in styles.css", async () => {
+  const css = await read("assets/css/styles.css");
+  // Generic pseudo-element hit expansion (visual size untouched).
+  assert.match(css, /\.hit-expand::after\s*\{/, "hit-expand utility must exist");
+  assert.match(css, /inset:\s*var\(--hit-out,\s*-6px\)/, "hit-expand must honor the --hit-out override");
+  // Shared classes expand at the class level so every consumer benefits.
+  assert.match(css, /\.item-action-button::after/, "item-action-button needs hit expansion");
+  assert.match(css, /\.modal-close-button::after/, "modal-close-button needs hit expansion");
+  assert.match(css, /\.settings-icon-button::after/, "settings-icon-button needs hit expansion");
+  assert.match(css, /\.user-settings-toolbar \.settings-icon-button::after/, "toolbar icon button needs its own inset");
+  assert.match(css, /\.pagination-button::after/, "pagination-button needs hit expansion");
+  assert.match(css, /\.settings-help-trigger::after/, "settings-help-trigger needs hit expansion");
+  assert.match(css, /\.message-action-button::after/, "message-action-button needs hit expansion");
+  // Message action row: 34px buttons, 10px gap so 44px hit areas never overlap.
+  assert.match(css, /\.message-action-bar \{[^}]*gap:\s*0\.625rem/, "message action bar gap must be 10px");
+  assert.match(css, /\.message-action-button \{[^}]*width:\s*2\.125rem/, "message action buttons must be 34px");
+  // Segmented switch options (non-slim) reach 44px.
+  assert.match(
+    css,
+    /\.segmented-switch:not\(\.segmented-switch--slim\) \.segmented-switch__option \{[^}]*min-height:\s*2\.75rem/,
+    "segmented switch options must be at least 44px tall"
+  );
+});
+
+test("chat header and composer controls carry hit expansion", async () => {
+  const html = await read("index.html");
+  assert.match(html, /toggleMobileMenu[^>]*p-2\.5 -m-2\.5/, "mobile hamburger must reach a 44px hit area");
+  assert.match(html, /toggleChatFullscreen"\s*\n?\s*class="p-2\.5/, "fullscreen toggle must use real 44px padding");
+  assert.match(html, /clearChat"\s*\n?\s*class="p-2\.5/, "clear-chat must use real 44px padding");
+
+  const composer = await read("src/components/chat/MessageInput.vue");
+  const expanded = composer.match(/hit-expand/g) || [];
+  assert.ok(expanded.length >= 8, `composer icon row must carry hit expansion (found ${expanded.length})`);
+  assert.match(composer, /flex items-center gap-3">\s*<!-- Send Image Button -->|<!-- Left controls: SendImage \/ AutoImage -->\s*<div class="flex items-center gap-3">/,
+    "composer toolbar cluster must space expanded hits apart (gap-3)");
+  assert.match(composer, /hit-expand \[--hit-out:-12px\]/, "image chip remove button needs -12px expansion");
+});
+
+test("all range sliders use the touch-range class with track styling in styles.css", async () => {
+  const css = await read("assets/css/styles.css");
+  assert.match(css, /input\[type="range"\]\.touch-range \{[^}]*height:\s*2\.75rem/, "touch-range must be a 44px hit area");
+  assert.match(css, /touch-range::-webkit-slider-runnable-track/, "track must move into a pseudo-element");
+  assert.match(css, /\[data-theme='dark'\] input\[type="range"\]\.touch-range/, "dark theme must override track color");
+
+  const expected = [
+    ["src/components/chat/MessageInput.vue", 2],
+    ["src/components/settings/AdvancedSettings.vue", 1],
+    ["src/components/settings/ApiConfig.vue", 3],
+    ["src/components/settings/TtsSettings.vue", 3],
+    ["src/components/views/MemoryPanel.vue", 5],
+    ["src/components/views/UiTemplatePanel.vue", 2],
+    ["src/components/views/WorldInfoPanel.vue", 4],
+  ];
+  let total = 0;
+  for (const [file, count] of expected) {
+    const source = await read(file);
+    const found = (source.match(/touch-range/g) || []).length;
+    total += found;
+    assert.strictEqual(found, count, `${file} must wire ${count} range inputs to touch-range`);
+  }
+  assert.strictEqual(total, 20, "all 20 range sliders must be touch-friendly");
+
+  const stale = await Promise.all(expected.map(([file]) => read(file)));
+  for (const source of stale) {
+    assert.doesNotMatch(source, /h-1\.5 bg-gray-200 rounded-lg appearance-none|h-2 bg-gray-200 rounded-lg appearance-none/,
+      "legacy slider styling (6-8px track) must be fully replaced");
+  }
+});
+
+test("system back button dismisses overlays before navigating or minimizing", async () => {
+  const app = await read("src/modules/app.mjs");
+  assert.match(app, /const backOverlayStack = \[/, "back overlay stack must exist");
+  assert.match(app, /const dismissTopOverlayForBack = \(\) => \{/, "dismiss helper must exist");
+  // The handler must consult the overlay stack before the sidebar/fullscreen/view branches.
+  assert.match(
+    app,
+    /dismissTopOverlayForBack\(\)\) return;[\s\S]{0,200}isMobileSidebarOpen/,
+    "back handler must dismiss overlays before the sidebar branch"
+  );
+  // Editors and pickers must all be registered (audit A2 inventory).
+  for (const flag of ["showConfirmModal", "showStoryBranchNameEditor", "showStoryBranchModal", "showContextViewerModal",
+    "showModelSelector", "showExportModal", "showImportPreview", "showChatImportDialog",
+    "showCharacterEditor", "showActiveToolEditor", "editingPreset", "editingUiTemplate",
+    "editingRegex", "editingWorldInfo", "showNoMemoryNeededModal", "showChatModelSelector",
+    "showInstructionPanel", "showDescriptionPanel"]) {
+    assert.ok(app.includes(`[() => ${flag}`) || new RegExp(`\\[\\(\\) => !?${flag.replace("editing", "editing")}`).test(app),
+      `back overlay stack must cover ${flag}`);
+  }
+});
+
+test("list panels have empty states and the model selector splits loading from empty", async () => {
+  const cases = [
+    ["src/components/views/WorldInfoPanel.vue", "暂无世界书条目"],
+    ["src/components/views/RegexPanel.vue", "暂无正则脚本"],
+    ["src/components/views/ToolsPanel.vue", "暂无活跃工具"],
+    ["src/components/views/PresetsPanel.vue", "暂无预设分组"],
+  ];
+  for (const [file, marker] of cases) {
+    const source = await read(file);
+    assert.match(source, new RegExp(marker), `${file} must render an empty state`);
+  }
+
+  const apiConfig = await read("src/composables/useApiConfig.mjs");
+  assert.match(apiConfig, /const modelsLoading = ref\(false\);/, "modelsLoading ref must exist");
+  assert.match(apiConfig, /modelsLoading,/, "modelsLoading must be exported from useApiConfig");
+
+  const app = await read("src/modules/app.mjs");
+  assert.match(app, /modelsLoading\.value = true;/, "model fetches must set modelsLoading");
+  assert.match(app, /finally \{\s*modelsLoading\.value = false;\s*\}/, "model fetches must reset modelsLoading in finally");
+
+  const modal = await read("src/components/common/ModalDialog.vue");
+  assert.match(modal, /v-if="modelsLoading"/, "model selector must show a dedicated loading state");
+  assert.match(modal, /v-else-if="filteredModels\.length === 0"/, "model selector must split the empty state");
+  assert.doesNotMatch(modal, /未找到模型或正在加载/, "conflated loading/empty text must be gone");
+});

@@ -144,6 +144,9 @@ const getTtsProviderById = (id) => ttsProviderOptions.find(provider => provider.
     const availableModels = ref([]);
     const providerModels = reactive({});
     const activeProviderTag = ref('all');
+    // True while a /models fetch is in flight — lets the model selector split
+    // "loading" from a genuine empty result (mobile UX audit B2).
+    const modelsLoading = ref(false);
 
     // --- Quality/balanced/fast mode selection (settings write-back stays in app.mjs) ---
     const currentModelMode = ref('quality');
@@ -152,6 +155,7 @@ const getTtsProviderById = (id) => ttsProviderOptions.find(provider => provider.
     const showApiProviderSelector = ref(false);
 
     return {
+        modelsLoading,
         imageGenProviderOptions,
         getImageGenProviderById,
         imageGenUnavailable,
