@@ -22,6 +22,15 @@
                 </settings-page-header>
 
                 <div id="presets-list" class="space-y-4">
+                    <div v-if="presetGroupsView.length === 0"
+                        class="flex flex-col items-center justify-center py-12 text-gray-400">
+                        <svg class="w-12 h-12 mb-3 opacity-20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                                d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V7z"></path>
+                        </svg>
+                        <p class="text-sm font-medium">暂无预设分组</p>
+                        <p class="mt-1 text-xs">点击右上角「新建分组」创建，或导入预设文件。</p>
+                    </div>
                     <!-- 预设分组（手风琴） -->
                     <section v-for="group in presetGroupsView" :key="group.id"
                         class="settings-accordion" :class="{'is-open': isGroupOpen(group.id)}">
@@ -103,7 +112,7 @@
                                                 <div class="settings-toggle"></div>
                                             </label>
                                             <!-- 组内条目操作（蓝色） -->
-                                            <div class="flex space-x-1 border-l border-gray-200 pl-4">
+                                            <div class="flex space-x-2 border-l border-gray-200 pl-4">
                                                 <button @click="editPreset(item.index)"
                                                     class="item-action-button item-action-button--edit"
                                                     title="编辑">

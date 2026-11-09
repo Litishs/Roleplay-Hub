@@ -88,7 +88,7 @@
                     </div>
                     <input type="range" v-model.number="settings.fontSize" min="12" max="24"
                         step="1"
-                        class="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-500 hover:accent-indigo-400 transition-all">
+                        class="w-full touch-range cursor-pointer">
                 </div>
             </div>
         </div>

@@ -23,11 +23,20 @@
                     <span class="text-xs font-medium text-gray-500">美化模板（仅显示层，一键添加为全局正则）：</span>
                     <button v-for="pack in regexStylePacks" :key="pack.id" type="button"
                         @click="applyRegexStylePack(pack.id)"
-                        class="px-3 py-1.5 rounded-lg border border-primary-200 bg-primary-50/60 text-primary-700 text-xs font-bold hover:bg-primary-100 transition-colors">
+                        class="px-3 py-1.5 rounded-lg border border-primary-200 bg-primary-50/60 text-primary-700 text-xs font-bold hover:bg-primary-100 transition-colors hit-expand [--hit-out:-4px]">
                         {{ pack.label }}
                     </button>
                 </div>
                 <div id="regex-list" class="grid grid-cols-1 gap-4">
+                    <div v-if="regexScripts.length === 0"
+                        class="flex flex-col items-center justify-center py-12 text-gray-400">
+                        <svg class="w-12 h-12 mb-3 opacity-20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                                d="M4 7.5h16M7.5 3v9m9 0v9M4 16.5h16"></path>
+                        </svg>
+                        <p class="text-sm font-medium">暂无正则脚本</p>
+                        <p class="mt-1 text-xs">点击右上角「新建」添加，或从上方美化模板一键添加。</p>
+                    </div>
                     <div v-for="(script, index) in regexScripts" :key="script.name + index"
                         class="management-item-card bg-white p-4 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-all flex justify-between items-center group">
                         <div class="management-item-name flex-1 min-w-0 mr-4 flex items-center">
@@ -53,7 +62,7 @@
                                     :false-value="false">
                                 <div class="settings-toggle"></div>
                             </label>
-                            <div class="flex space-x-1 border-l border-gray-200 pl-4">
+                            <div class="flex space-x-2 border-l border-gray-200 pl-4">
                                 <button @click="editRegex(index)"
                                     class="item-action-button item-action-button--edit"
                                     title="编辑">

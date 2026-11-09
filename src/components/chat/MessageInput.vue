@@ -42,7 +42,7 @@
                                     <span v-else>识别失败</span>
                                 </div>
                                 <button type="button" @click.stop="removePendingChatImage(image.id)" title="移除图片"
-                                    class="absolute top-1 right-1 z-[2] flex items-center justify-center w-5 h-5 rounded-full bg-slate-900/70 text-white shadow-sm"
+                                    class="absolute top-1 right-1 z-[2] flex items-center justify-center w-5 h-5 rounded-full bg-slate-900/70 text-white shadow-sm hit-expand [--hit-out:-12px]"
                                     aria-label="移除图片">
                                     <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"
@@ -53,11 +53,11 @@
                         </div>
                         <div class="relative w-full flex justify-between items-center mb-2 px-1">
                             <!-- Left controls: SendImage / AutoImage -->
-                            <div class="flex items-center gap-2">
+                            <div class="flex items-center gap-3">
                                 <!-- Send Image Button -->
                                 <button type="button" @click="requestChatImageSelection($refs.chatImageInput)"
                                     :disabled="isConversationBusy"
-                                    class="relative rounded-full w-8 h-8 flex items-center justify-center border transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed bg-white text-gray-500 hover:text-primary-600 hover:bg-gray-50 border-gray-200 shadow-sm"
+                                    class="relative rounded-full w-8 h-8 flex items-center justify-center border transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed bg-white text-gray-500 hover:text-primary-600 hover:bg-gray-50 border-gray-200 shadow-sm hit-expand"
                                     :title="`发送图片（${pendingChatImages.length + pendingChatImageReadCount}/3）`">
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -70,7 +70,7 @@
                                 <!-- Auto Image Button -->
                                 <button @click="toggleAutoImageGen" :disabled="imageGenUnavailable"
                                     :class="[isAutoImageGenEnabled ? 'bg-primary-500 text-white shadow-primary-500/30 border-primary-500' : 'bg-white text-gray-500 hover:text-gray-700 hover:bg-gray-50 border-gray-200 shadow-sm']"
-                                    class="rounded-full w-8 h-8 flex items-center justify-center border transition-all active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
+                                    class="rounded-full w-8 h-8 flex items-center justify-center border transition-all active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 hit-expand"
                                     :title="imageGenUnavailable ? '生图服务暂不可用' : '自动生图开关'">
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -82,7 +82,7 @@
                                 <div class="relative instruction-panel-container">
                                     <button @click="showInstructionPanel = !showInstructionPanel"
                                         :class="[sysInstruction.trim() ? 'bg-primary-500 text-white shadow-primary-500/30 border-primary-500' : 'bg-white text-gray-500 hover:text-primary-600 hover:bg-gray-50 border-gray-200 shadow-sm']"
-                                        class="rounded-full w-8 h-8 flex items-center justify-center border transition-all active:scale-95"
+                                        class="rounded-full w-8 h-8 flex items-center justify-center border transition-all active:scale-95 hit-expand"
                                         title="单次系统指令">
                                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -113,7 +113,7 @@
                                                         临时指令
                                                     </span>
                                                     <button @click="showInstructionPanel = false"
-                                                        class="text-gray-400 hover:text-red-500 transition-colors bg-gray-100 hover:bg-red-50 p-1 rounded-full">
+                                                        class="text-gray-400 hover:text-red-500 transition-colors bg-gray-100 hover:bg-red-50 p-1 rounded-full hit-expand [--hit-out:-11px]">
                                                         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor"
                                                             viewBox="0 0 24 24">
                                                             <path stroke-linecap="round" stroke-linejoin="round"
@@ -130,7 +130,7 @@
                                 </div>
                                 <!-- Context Viewer Button -->
                                 <button @click="showContextViewerModal = true"
-                                    class="rounded-full w-8 h-8 flex items-center justify-center border transition-all active:scale-95 bg-white text-gray-500 hover:text-blue-600 hover:bg-blue-50 border-gray-200 shadow-sm"
+                                    class="rounded-full w-8 h-8 flex items-center justify-center border transition-all active:scale-95 bg-white text-gray-500 hover:text-blue-600 hover:bg-blue-50 border-gray-200 shadow-sm hit-expand"
                                     title="查看真实上下文请求">
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -140,7 +140,7 @@
                                 </button>
                                 <!-- Story Branch Button -->
                                 <button @click="openStoryBranchModal"
-                                    class="relative rounded-full w-8 h-8 flex items-center justify-center border transition-all active:scale-95 bg-white text-gray-500 hover:text-blue-600 hover:bg-blue-50 border-gray-200 shadow-sm"
+                                    class="relative rounded-full w-8 h-8 flex items-center justify-center border transition-all active:scale-95 bg-white text-gray-500 hover:text-blue-600 hover:bg-blue-50 border-gray-200 shadow-sm hit-expand"
                                     :title="'剧情分支：' + (currentStoryBranch?.name || '主线')">
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <use href="#icon-story-branch"></use>
@@ -152,7 +152,7 @@
                             <div class="relative flex items-center">
                                 <button @click.stop="showChatModelSelector = !showChatModelSelector"
                                     :class="[showChatModelSelector ? 'bg-primary-500 text-white shadow-primary-500/30 border-primary-500' : 'bg-white text-gray-500 hover:text-gray-700 hover:bg-gray-50 border-gray-200 shadow-sm']"
-                                    class="rounded-full w-8 h-8 flex items-center justify-center border transition-all active:scale-95"
+                                    class="rounded-full w-8 h-8 flex items-center justify-center border transition-all active:scale-95 hit-expand"
                                     title="快速设置" aria-label="快速设置">
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -202,7 +202,7 @@
                                                 </div>
                                                 <input v-model.number="reasoningEffortSlider" type="range" min="0"
                                                     max="5" step="1" aria-label="推理强度"
-                                                    class="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary-500">
+                                                    class="w-full touch-range cursor-pointer">
                                             </div>
                                             <!-- Temperature -->
                                             <div class="border-t border-gray-100 pt-3">
@@ -214,7 +214,7 @@
                                                 </div>
                                                 <input v-model.number="settings.temperature" type="range" min="0"
                                                     max="1" step="0.01" aria-label="温度"
-                                                    class="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary-500">
+                                                    class="w-full touch-range cursor-pointer">
                                             </div>
                                             <!-- Toggles -->
                                             <div class="flex flex-col gap-2 border-t border-gray-100 pt-3">

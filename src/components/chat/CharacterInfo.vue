@@ -28,7 +28,7 @@
                                     <h3 class="font-bold text-gray-900 text-lg leading-tight truncate">
                                         {{ currentCharacter.name }}</h3>
                                     <button @click="editCharacter(currentCharacterIndex)"
-                                        class="p-1.5 rounded-lg text-gray-400 hover:text-primary-600 hover:bg-primary-50 transition-colors flex-shrink-0"
+                                        class="p-1.5 rounded-lg text-gray-400 hover:text-primary-600 hover:bg-primary-50 transition-colors flex-shrink-0 hit-expand [--hit-out:-9px]"
                                         title="编辑角色">
                                         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -57,7 +57,7 @@
                             </div>
 
                             <button @click="showDescriptionPanel = false"
-                                class="absolute top-3 right-3 p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-xl transition-all z-20 desc-close-btn"
+                                class="absolute top-3 right-3 p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-xl transition-all z-20 desc-close-btn hit-expand [--hit-out:-6px]"
                                 title="关闭">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"

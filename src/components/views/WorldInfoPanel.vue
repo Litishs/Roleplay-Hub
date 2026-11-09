@@ -53,7 +53,7 @@
                                         worldInfoSettings.scanDepth }}</span>
                                 </div>
                                 <input type="range" v-model.number="worldInfoSettings.scanDepth" min="0" max="20"
-                                    class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary-600">
+                                    class="w-full touch-range cursor-pointer">
                             </div>
                             <!-- Max Scan Depth -->
                             <div>
@@ -63,7 +63,7 @@
                                         worldInfoSettings.maxDepth }}</span>
                                 </div>
                                 <input type="range" v-model.number="worldInfoSettings.maxDepth" min="0" max="50"
-                                    class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary-600">
+                                    class="w-full touch-range cursor-pointer">
                             </div>
                             <!-- World Info Token Budget -->
                             <div>
@@ -74,7 +74,7 @@
                                         }}</span>
                                 </div>
                                 <input type="range" v-model.number="settings.worldInfoTokenBudget" min="0" max="16000" step="500"
-                                    class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary-600">
+                                    class="w-full touch-range cursor-pointer">
                                 <div class="text-[10px] text-gray-400 mt-1">超预算时按优先级裁剪（常驻优先，触发按 order），始终保底保留最高优先常驻与触发各一条；0 表示不限。与角色卡描述重复的条目自动去重。</div>
                             </div>
                         </div>
@@ -82,6 +82,15 @@
                 </div>
 
                 <div id="worldinfo-list" class="space-y-4">
+                    <div v-if="worldInfo.length === 0"
+                        class="flex flex-col items-center justify-center py-12 text-gray-400">
+                        <svg class="w-12 h-12 mb-3 opacity-20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                                d="M12 6.25v13m0-13C10.83 5.48 9.25 5 7.5 5S4.17 5.48 3 6.25v13C4.17 18.48 5.75 18 7.5 18s3.33.48 4.5 1.25m0-13C13.17 5.48 14.75 5 16.5 5s4.25.48 6 1.25v13c-1.75-.77-3.33-1.25-6-1.25s-4.25.48-6 1.25"></path>
+                        </svg>
+                        <p class="text-sm font-medium">暂无世界书条目</p>
+                        <p class="mt-1 text-xs">点击右上角「新建条目」创建，或通过导出面板导入。</p>
+                    </div>
                     <div v-for="(entry, index) in worldInfo" :key="(entry.comment || '') + '_' + index"
                         class="management-item-card bg-white p-4 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-all flex justify-between items-center">
                         <div class="management-item-name flex-1 min-w-0 mr-4 flex items-center">
@@ -107,7 +116,7 @@
                                     @change="setWorldInfoEnabled(entry, $event.target.checked, $event)" class="settings-toggle-input sr-only">
                                 <div class="settings-toggle"></div>
                             </label>
-                            <div class="flex space-x-1 border-l border-gray-200 pl-4">
+                            <div class="flex space-x-2 border-l border-gray-200 pl-4">
                                 <button @click="editWorldInfo(index)"
                                     class="item-action-button item-action-button--edit"
                                     title="编辑">
@@ -242,7 +251,7 @@
                             {{ editingCharacter.id !== undefined ? '编辑角色' : '新建角色' }}
                         </h3>
                         <button @click="closeCharacterEditor"
-                            class="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-200/50 rounded-full transition-all">
+                            class="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-200/50 rounded-full transition-all hit-expand [--hit-out:-4px]">
                             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                     d="M6 18L18 6M6 6l12 12"></path>
@@ -252,23 +261,23 @@
                     <!-- Tab Switcher -->
                     <div class="flex p-1 bg-gray-200/50 rounded-xl overflow-x-auto no-scrollbar gap-1">
                         <button @click="editorTab = 'basic'"
-                            :class="['flex-1 px-4 py-2 text-sm font-bold transition-all rounded-lg whitespace-nowrap', editorTab === 'basic' ? 'bg-white text-primary-600 shadow-sm' : 'text-gray-500 hover:text-gray-700 hover:bg-white/50']">
+                            :class="['flex-1 px-4 py-3 text-sm font-bold transition-all rounded-lg whitespace-nowrap', editorTab === 'basic' ? 'bg-white text-primary-600 shadow-sm' : 'text-gray-500 hover:text-gray-700 hover:bg-white/50']">
                             基础
                         </button>
                         <button @click="editorTab = 'description'"
-                            :class="['flex-1 px-4 py-2 text-sm font-bold transition-all rounded-lg whitespace-nowrap', editorTab === 'description' ? 'bg-white text-primary-600 shadow-sm' : 'text-gray-500 hover:text-gray-700 hover:bg-white/50']">
+                            :class="['flex-1 px-4 py-3 text-sm font-bold transition-all rounded-lg whitespace-nowrap', editorTab === 'description' ? 'bg-white text-primary-600 shadow-sm' : 'text-gray-500 hover:text-gray-700 hover:bg-white/50']">
                             描述
                         </button>
                         <button @click="editorTab = 'personality'"
-                            :class="['flex-1 px-4 py-2 text-sm font-bold transition-all rounded-lg whitespace-nowrap', editorTab === 'personality' ? 'bg-white text-primary-600 shadow-sm' : 'text-gray-500 hover:text-gray-700 hover:bg-white/50']">
+                            :class="['flex-1 px-4 py-3 text-sm font-bold transition-all rounded-lg whitespace-nowrap', editorTab === 'personality' ? 'bg-white text-primary-600 shadow-sm' : 'text-gray-500 hover:text-gray-700 hover:bg-white/50']">
                             人设
                         </button>
                         <button @click="editorTab = 'first_mes'"
-                            :class="['flex-1 px-4 py-2 text-sm font-bold transition-all rounded-lg whitespace-nowrap', editorTab === 'first_mes' ? 'bg-white text-primary-600 shadow-sm' : 'text-gray-500 hover:text-gray-700 hover:bg-white/50']">
+                            :class="['flex-1 px-4 py-3 text-sm font-bold transition-all rounded-lg whitespace-nowrap', editorTab === 'first_mes' ? 'bg-white text-primary-600 shadow-sm' : 'text-gray-500 hover:text-gray-700 hover:bg-white/50']">
                             开场白
                         </button>
                         <button @click="editorTab = 'story'"
-                            :class="['flex-1 px-4 py-2 text-sm font-bold transition-all rounded-lg whitespace-nowrap', editorTab === 'story' ? 'bg-white text-primary-600 shadow-sm' : 'text-gray-500 hover:text-gray-700 hover:bg-white/50']">
+                            :class="['flex-1 px-4 py-3 text-sm font-bold transition-all rounded-lg whitespace-nowrap', editorTab === 'story' ? 'bg-white text-primary-600 shadow-sm' : 'text-gray-500 hover:text-gray-700 hover:bg-white/50']">
                             剧情演出
                         </button>
                     </div>
@@ -873,7 +882,7 @@
                         <input v-model.number="editingActiveTool.data.resultCount" type="range"
                             :min="getActiveToolResultCountMin(editingActiveTool.data)"
                             :max="getActiveToolResultCountMax(editingActiveTool.data)" step="1"
-                            class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary-600">
+                            class="w-full touch-range cursor-pointer">
                         <div class="mt-2 flex justify-between text-[11px] text-gray-400 font-medium">
                             <span>{{ getActiveToolResultCountMin(editingActiveTool.data) }} 条</span>
                             <span>{{ getActiveToolResultCountMax(editingActiveTool.data) }} 条</span>
@@ -969,7 +978,7 @@
                     class="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/80 backdrop-blur-sm flex-shrink-0">
                     <h3 class="text-lg font-bold text-gray-800">选择导出项目</h3>
                     <button @click="showExportModal = false"
-                        class="text-gray-400 hover:text-gray-600 hover:bg-gray-100 p-1 rounded-full transition-all">
+                        class="text-gray-400 hover:text-gray-600 hover:bg-gray-100 p-1 rounded-full transition-all hit-expand [--hit-out:-8px]">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                 d="M6 18L18 6M6 6l12 12"></path>
@@ -979,10 +988,10 @@
 
                 <div class="p-2 border-b border-gray-100 flex justify-between items-center bg-white">
                     <button @click="selectAllExportItems"
-                        class="px-3 py-1.5 text-xs font-bold text-primary-600 hover:bg-primary-50 rounded-lg transition-colors">全选</button>
+                        class="px-3 py-1.5 text-xs font-bold text-primary-600 hover:bg-primary-50 rounded-lg transition-colors hit-expand [--hit-out:-4px]">全选</button>
                     <span class="text-xs text-gray-500">已选: {{ selectedExportIndices.size }}</span>
                     <button @click="deselectAllExportItems"
-                        class="px-3 py-1.5 text-xs font-bold text-gray-500 hover:bg-gray-100 rounded-lg transition-colors">取消全选</button>
+                        class="px-3 py-1.5 text-xs font-bold text-gray-500 hover:bg-gray-100 rounded-lg transition-colors hit-expand [--hit-out:-4px]">取消全选</button>
                 </div>
 
                 <div class="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-2">
@@ -1227,7 +1236,7 @@
                                                      editingWorldInfo.data.useProbability ? 'border-primary-300 ring-2 ring-primary-500/10' : 'border-gray-200 opacity-60']">
                                             <button
                                                 @click="editingWorldInfo.data.useProbability = !editingWorldInfo.data.useProbability"
-                                                :class="['px-3 py-2 transition-colors border-r',
+                                                :class="['px-3 py-2.5 transition-colors border-r hit-expand [--hit-out:-4px]',
                                                              editingWorldInfo.data.useProbability ? 'bg-primary-600 text-white border-primary-600' : 'bg-gray-100 text-gray-400 border-gray-200']">
                                                 <svg class="w-4 h-4" fill="none" stroke="currentColor"
                                                     viewBox="0 0 24 24">

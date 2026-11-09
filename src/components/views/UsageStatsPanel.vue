@@ -42,7 +42,7 @@
                     </div>
                     <div class="token-usage-time-filter-container relative flex-none">
                         <button type="button" @click="showTokenUsageTimeFilter = !showTokenUsageTimeFilter"
-                            class="flex h-10 w-10 items-center justify-center rounded-xl border shadow-sm transition-all active:scale-95"
+                            class="flex h-10 w-10 items-center justify-center rounded-xl border shadow-sm transition-all active:scale-95 hit-expand [--hit-out:-2px]"
                             :class="tokenUsageTimeFilter === 'all' ? 'border-gray-200 bg-white text-gray-500 hover:bg-gray-50 hover:text-gray-700' : 'border-primary-200 bg-primary-50 text-primary-600'"
                             :title="'时间范围：' + tokenUsageTimeFilterLabel" aria-label="筛选 Token 记录时间范围"
                             :aria-expanded="showTokenUsageTimeFilter">
@@ -61,7 +61,7 @@
                                 class="absolute right-0 top-full z-30 mt-2 w-36 origin-top-right rounded-xl border border-gray-200 bg-white p-1.5 shadow-xl ring-1 ring-black/5">
                                 <button v-for="option in tokenUsageTimeFilterOptions" :key="option.value" type="button"
                                     @click="tokenUsageTimeFilter = option.value; showTokenUsageTimeFilter = false"
-                                    class="flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm font-medium transition-colors"
+                                    class="flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm font-medium transition-colors hit-expand [--hit-out:-4px]"
                                     :class="tokenUsageTimeFilter === option.value ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-800'">
                                     <span>{{ option.label }}</span>
                                     <svg v-if="tokenUsageTimeFilter === option.value" class="h-4 w-4" fill="none"

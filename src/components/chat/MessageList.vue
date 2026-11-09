@@ -18,11 +18,11 @@
                             </span>
                             <button v-if="summaryProgress.status === 'failed'" type="button"
                                 @click="retryRollingSummary"
-                                class="ml-auto flex-shrink-0 px-2 py-0.5 rounded-lg bg-rose-100 text-rose-700 hover:bg-rose-200 transition-colors">
+                                class="ml-auto flex-shrink-0 px-2 py-0.5 rounded-lg bg-rose-100 text-rose-700 hover:bg-rose-200 transition-colors hit-expand [--hit-out:-10px]">
                                 重试
                             </button>
                             <button v-else type="button" @click="clearSummaryProgress"
-                                class="ml-auto flex-shrink-0 px-1.5 text-gray-400 hover:text-gray-600 transition-colors">
+                                class="ml-auto flex-shrink-0 px-1.5 text-gray-400 hover:text-gray-600 transition-colors hit-expand [--hit-out:-14px]">
                                 ✕
                             </button>
                         </div>
@@ -39,11 +39,11 @@
                                 </svg>
                                 <span>前情提要</span>
                                 <button type="button" @click="recapExpanded = !recapExpanded"
-                                    class="ml-auto text-primary-600 hover:text-primary-700 transition-colors">
+                                    class="ml-auto text-primary-600 hover:text-primary-700 transition-colors hit-expand [--hit-out:-14px]">
                                     {{ recapExpanded ? '收起' : '展开' }}
                                 </button>
                                 <button type="button" @click="recapDismissed = true"
-                                    class="text-gray-400 hover:text-gray-600 transition-colors" title="本次会话不再显示">✕</button>
+                                    class="text-gray-400 hover:text-gray-600 transition-colors hit-expand [--hit-out:-14px]" title="本次会话不再显示">✕</button>
                             </div>
                             <p v-if="recapExpanded" class="mt-1.5 text-gray-700 leading-relaxed whitespace-pre-line">{{ chatRecapText }}</p>
                             <p v-else class="mt-1 text-gray-500 truncate">{{ chatRecapText }}</p>
@@ -138,11 +138,11 @@
                                                 placeholder="编辑消息..."></textarea>
                                             <div class="flex justify-end space-x-2 mt-3">
                                                 <button @click="cancelEditMessage(index)"
-                                                    class="px-4 py-1.5 text-xs font-bold text-gray-500 bg-white/80 hover:bg-white border border-gray-200 rounded-lg shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-gray-200">
+                                                    class="px-4 py-2.5 text-xs font-bold text-gray-500 bg-white/80 hover:bg-white border border-gray-200 rounded-lg shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-gray-200 hit-expand [--hit-out:-4px]">
                                                     取消
                                                 </button>
                                                 <button @click="saveEditMessage(index)"
-                                                    class="px-4 py-1.5 text-xs font-bold text-white bg-primary-500 hover:bg-primary-600 rounded-lg shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-primary-500">
+                                                    class="px-4 py-2.5 text-xs font-bold text-white bg-primary-500 hover:bg-primary-600 rounded-lg shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-primary-500 hit-expand [--hit-out:-4px]">
                                                     保存
                                                 </button>
                                             </div>
@@ -294,7 +294,7 @@
                                                     </svg>
                                                     <span class="truncate">变量分析失败：{{ uiTemplateUpdateStatus.message }}</span>
                                                     <button type="button" @click="updateUiTemplatesFromChat({ manual: true, targetMessageId: msg.id })"
-                                                        class="ml-auto flex-shrink-0 px-2 py-0.5 rounded-lg bg-rose-100 text-rose-700 hover:bg-rose-200 transition-colors">
+                                                        class="ml-auto flex-shrink-0 px-2 py-0.5 rounded-lg bg-rose-100 text-rose-700 hover:bg-rose-200 transition-colors hit-expand [--hit-out:-10px]">
                                                         重试
                                                     </button>
                                                 </div>

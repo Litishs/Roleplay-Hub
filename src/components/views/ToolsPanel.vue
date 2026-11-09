@@ -42,7 +42,7 @@
                                 <button v-for="option in activeToolAggressivenessOptions" :key="option.value"
                                     type="button"
                                     @click="settings.activeToolAggressiveness = option.value"
-                                    :class="['h-8 rounded-lg text-[13px] font-bold transition-all active:scale-[0.98]',
+                                    :class="['min-h-[44px] rounded-lg text-[13px] font-bold transition-all active:scale-[0.98]',
                                         settings.activeToolAggressiveness === option.value
                                             ? 'bg-primary-50 text-primary-700 shadow-sm ring-1 ring-primary-100'
                                             : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50']">
@@ -54,6 +54,15 @@
                 </div>
 
                 <div id="active-tools-list" class="space-y-4">
+                    <div v-if="activeTools.length === 0"
+                        class="flex flex-col items-center justify-center py-12 text-gray-400">
+                        <svg class="w-12 h-12 mb-3 opacity-20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                                d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94L14.7 6.3z"></path>
+                        </svg>
+                        <p class="text-sm font-medium">暂无活跃工具</p>
+                        <p class="mt-1 text-xs">点击右上角「新建工具」添加自定义工具。</p>
+                    </div>
                     <div v-for="(tool, index) in activeTools" :key="tool.id || index"
                         class="management-item-card bg-white p-4 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-all flex justify-between items-center">
                         <button type="button" @click="editActiveTool(index)"

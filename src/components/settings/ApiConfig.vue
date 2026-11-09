@@ -6,7 +6,7 @@
                 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4 flex items-center justify-between">
                 <span>服务连接状态</span>
                 <button @pointerdown="syncApiKeyInput" @click="checkAllStatuses"
-                    class="text-teal-600 hover:text-teal-700 hover:underline cursor-pointer transition-colors text-xs normal-case font-medium flex items-center">
+                    class="text-teal-600 hover:text-teal-700 hover:underline cursor-pointer transition-colors text-xs normal-case font-medium flex items-center hit-expand [--hit-out:-14px]">
                     <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                             d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15">
@@ -68,7 +68,7 @@
                         提供商</label>
                     <button type="button" v-if="selectedApiProvider.id === 'sta1n'"
                         @click="openExternal('https://cdn.sta1n.cn/keys')"
-                        class="text-teal-600 hover:text-teal-700 hover:underline cursor-pointer transition-colors text-xs normal-case font-medium flex items-center">
+                        class="text-teal-600 hover:text-teal-700 hover:underline cursor-pointer transition-colors text-xs normal-case font-medium flex items-center hit-expand [--hit-out:-14px]">
                         <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                 d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14">
@@ -198,7 +198,7 @@
                         class="absolute right-1.5 top-0 bottom-0 flex items-center gap-1">
                         <button type="button" @click="pasteApiKeyFromClipboard"
                             title="从剪贴板粘贴 API Key"
-                            class="h-9 px-2 rounded-lg bg-teal-50 hover:bg-teal-100 text-teal-700 text-xs font-bold border border-teal-100 transition-all active:scale-95 flex items-center gap-1 leading-none"
+                            class="h-9 px-2 rounded-lg bg-teal-50 hover:bg-teal-100 text-teal-700 text-xs font-bold border border-teal-100 transition-all active:scale-95 flex items-center gap-1 leading-none hit-expand [--hit-out:-4px]"
                             style="line-height: 1;">
                             <svg class="flex-shrink-0" style="display:block;width:1em;height:1em" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -208,7 +208,7 @@
                         </button>
                         <button type="button" @click="toggleApiKeyVisibility"
                             :title="apiKeyVisible ? '隐藏 API Key' : '显示 API Key'"
-                            class="w-9 h-9 rounded-lg bg-gray-50 hover:bg-gray-100 text-gray-500 border border-gray-200 flex items-center justify-center transition-all active:scale-95 flex-shrink-0">
+                            class="w-9 h-9 rounded-lg bg-gray-50 hover:bg-gray-100 text-gray-500 border border-gray-200 flex items-center justify-center transition-all active:scale-95 flex-shrink-0 hit-expand [--hit-out:-4px]">
                             <svg v-if="!apiKeyVisible" class="w-4 h-4" style="display:block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                     d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
@@ -300,7 +300,7 @@
                     </svg>
                     </button>
                     <button type="button" @click="restoreChatParamsDefaults"
-                        class="shrink-0 text-xs normal-case font-medium text-gray-400 hover:text-teal-600 transition-colors">
+                        class="shrink-0 text-xs normal-case font-medium text-gray-400 hover:text-teal-600 transition-colors hit-expand [--hit-out:-14px]">
                         恢复默认
                     </button>
                 </div>
@@ -320,7 +320,7 @@
                                 </div>
                                 <input v-model.number="settings.temperature" type="range" min="0" max="1"
                                     step="0.01"
-                                    class="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-teal-500 hover:accent-teal-400 transition-all">
+                                    class="w-full touch-range cursor-pointer">
                             </div>
 
                             <!-- 输出长度上限 -->
@@ -335,7 +335,7 @@
                                 </div>
                                 <input v-model.number="settings.maxOutputTokens" type="range" min="256" max="8192"
                                     step="256"
-                                    class="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-teal-500 hover:accent-teal-400 transition-all">
+                                    class="w-full touch-range cursor-pointer">
                                 <div class="text-[10px] text-gray-400 mt-1">单次回复的最大输出 token 数，按你的需求设定上限。</div>
                             </div>
 
@@ -360,7 +360,7 @@
                                         </div>
                                         <input v-model.number="settings[item.key]" type="range" min="10" max="1800"
                                             step="10" @change="normalizeRequestTimeout(item.key)"
-                                            class="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-teal-500 hover:accent-teal-400 transition-all">
+                                            class="w-full touch-range cursor-pointer">
                                         <p class="text-[10px] text-gray-400 mt-1 leading-relaxed">{{ item.description }}</p>
                                     </div>
                                 </div>
@@ -389,7 +389,7 @@
                         </svg>
                     </button>
                     <button type="button" @click="restoreImageGenDefaults"
-                        class="shrink-0 text-xs normal-case font-medium text-gray-400 hover:text-teal-600 transition-colors">
+                        class="shrink-0 text-xs normal-case font-medium text-gray-400 hover:text-teal-600 transition-colors hit-expand [--hit-out:-14px]">
                         恢复默认
                     </button>
                     <button type="button" @click="openExternal('https://cdn.sta1n.cn/keys')"
@@ -411,7 +411,7 @@
                             placeholder="STA1N-...">
                         <div class="text-[10px] text-gray-400 mt-1.5">推荐 STA1N 生图服务（nai.sta1n.cn），密钥可在
                             <button type="button" @click="openExternal('https://cdn.sta1n.cn/keys')"
-                                class="text-teal-600 hover:underline cursor-pointer">cdn.sta1n.cn</button>
+                                class="text-teal-600 hover:underline cursor-pointer hit-expand [--hit-out:-14px]">cdn.sta1n.cn</button>
                             获取</div>
                     </div>
 

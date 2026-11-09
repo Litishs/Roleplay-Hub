@@ -72,7 +72,7 @@
 
                                 <button type="button" @click="runRollingSummaryCheck({ force: true })"
                                     :disabled="!memorySettings.enabled"
-                                    class="inline-flex items-center text-xs px-3 py-1.5 bg-gradient-to-r from-primary-50 to-blue-50 hover:from-primary-100 hover:to-blue-100 text-primary-700 rounded-lg border border-primary-200/80 transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-sm hover:shadow font-medium active:scale-95">
+                                    class="inline-flex items-center text-xs px-3 py-1.5 bg-gradient-to-r from-primary-50 to-blue-50 hover:from-primary-100 hover:to-blue-100 text-primary-700 rounded-lg border border-primary-200/80 transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-sm hover:shadow font-medium active:scale-95 hit-expand [--hit-out:-8px]">
                                     <svg class="w-3.5 h-3.5 mr-1.5" fill="none" stroke="currentColor"
                                         viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -112,7 +112,7 @@
                                         </div>
                                         <div class="flex items-center justify-between gap-2">
                                             <span class="text-xs text-gray-500">{{ localEmbeddingStatusLabel }}</span>
-                                            <button type="button" @click="preloadLocalEmbedding()" class="text-xs px-2.5 py-1 rounded-lg bg-teal-50 hover:bg-teal-100 text-teal-700 font-medium border border-teal-100 transition-all active:scale-95">预加载模型</button>
+                                            <button type="button" @click="preloadLocalEmbedding()" class="text-xs px-2.5 py-1 rounded-lg bg-teal-50 hover:bg-teal-100 text-teal-700 font-medium border border-teal-100 transition-all active:scale-95 hit-expand [--hit-out:-10px]">预加载模型</button>
                                         </div>
                                     </div>
                                 </div>
@@ -175,7 +175,7 @@
                                             memorySettings.vectorTopK || 10 }} 个分片</span>
                                     </div>
                                     <input type="range" v-model.number="memorySettings.vectorTopK" min="10" max="20" step="1"
-                                        class="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary-500">
+                                        class="w-full touch-range cursor-pointer">
                                 </div>
                                 <div class="relative bg-gray-50/60 p-3 rounded-xl border border-gray-100">
                                     <div class="flex justify-between items-center mb-2">
@@ -202,7 +202,7 @@
                                             }}</span>
                                     </div>
                                     <input type="range" v-model.number="memorySettings.similarityThreshold" min="40" max="70" step="5"
-                                        class="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary-500">
+                                        class="w-full touch-range cursor-pointer">
                                 </div>
                             </div>
 
@@ -233,7 +233,7 @@
                                             }}</span>
                                     </div>
                                     <input type="range" v-model.number="keepFloorsSlider" :min="keepFloorsSliderMin" :max="keepFloorsSliderMax" step="2"
-                                        class="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary-500">
+                                        class="w-full touch-range cursor-pointer">
                                 </div>
                                 <div class="relative bg-gray-50/60 p-3 rounded-xl border border-gray-100 mt-2">
                                     <div class="flex justify-between items-center mb-2">
@@ -259,7 +259,7 @@
                                         </span>
                                     </div>
                                     <input type="range" v-model.number="summaryBatchSizeSlider" min="4" max="24" step="2"
-                                        class="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary-500">
+                                        class="w-full touch-range cursor-pointer">
                                 </div>
                                 <div class="relative bg-gray-50/60 p-3 rounded-xl border border-gray-100 mt-2">
                                     <div class="flex justify-between items-center mb-2">
@@ -286,7 +286,7 @@
                                             }}</span>
                                     </div>
                                     <input type="range" v-model.number="settings.contextTokenBudget" min="0" max="64000" step="1000"
-                                        class="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary-500">
+                                        class="w-full touch-range cursor-pointer">
                                 </div>
                             </div>
                         </div>
@@ -311,11 +311,11 @@
                         <div class="flex items-center gap-2 flex-shrink-0">
                             <div class="grid grid-cols-2 gap-1 bg-gray-50 border border-gray-200 rounded-lg p-0.5">
                                 <button type="button" @click="setMemoryGraphView('list')"
-                                    :class="['px-2.5 py-1 text-xs font-bold rounded-md transition-all', memoryGraphView === 'list' ? 'bg-white text-primary-700 shadow-sm border border-primary-100' : 'text-gray-400 hover:text-gray-600']">
+                                    :class="['px-2.5 py-1 text-xs font-bold rounded-md transition-all hit-expand [--hit-out:-10px]', memoryGraphView === 'list' ? 'bg-white text-primary-700 shadow-sm border border-primary-100' : 'text-gray-400 hover:text-gray-600']">
                                     检索
                                 </button>
                                 <button type="button" @click="setMemoryGraphView('summary')"
-                                    :class="['px-2.5 py-1 text-xs font-bold rounded-md transition-all', memoryGraphView === 'summary' ? 'bg-white text-primary-700 shadow-sm border border-primary-100' : 'text-gray-400 hover:text-gray-600']">
+                                    :class="['px-2.5 py-1 text-xs font-bold rounded-md transition-all hit-expand [--hit-out:-10px]', memoryGraphView === 'summary' ? 'bg-white text-primary-700 shadow-sm border border-primary-100' : 'text-gray-400 hover:text-gray-600']">
                                     摘要
                                 </button>
                             </div>
@@ -341,7 +341,7 @@
                             </span>
                             <button v-if="sliceBuildStatus.status === 'error'" type="button"
                                 @click="startVectorBatchMemoryExtraction({ manual: true })"
-                                class="flex-shrink-0 px-2 py-1 rounded-lg bg-rose-100 text-rose-700 hover:bg-rose-200 transition-colors">
+                                class="flex-shrink-0 px-2 py-1 rounded-lg bg-rose-100 text-rose-700 hover:bg-rose-200 transition-colors hit-expand [--hit-out:-10px]">
                                 重试
                             </button>
                         </div>
@@ -385,11 +385,11 @@
                                 </span>
                                 <div class="grid grid-cols-2 gap-1 bg-gray-50 border border-gray-200 rounded-lg p-0.5">
                                     <button type="button" @click="vectorMemorySearchSortMode = 'time'"
-                                        :class="['px-2 py-1 rounded-md transition-all', vectorMemorySearchSortMode === 'time' ? 'bg-white text-primary-700 shadow-sm border border-primary-100' : 'text-gray-400 hover:text-gray-600']">
+                                        :class="['px-2 py-1 rounded-md transition-all hit-expand [--hit-out:-10px]', vectorMemorySearchSortMode === 'time' ? 'bg-white text-primary-700 shadow-sm border border-primary-100' : 'text-gray-400 hover:text-gray-600']">
                                         时间
                                     </button>
                                     <button type="button" @click="vectorMemorySearchSortMode = 'score'"
-                                        :class="['px-2 py-1 rounded-md transition-all', vectorMemorySearchSortMode === 'score' ? 'bg-white text-primary-700 shadow-sm border border-primary-100' : 'text-gray-400 hover:text-gray-600']">
+                                        :class="['px-2 py-1 rounded-md transition-all hit-expand [--hit-out:-10px]', vectorMemorySearchSortMode === 'score' ? 'bg-white text-primary-700 shadow-sm border border-primary-100' : 'text-gray-400 hover:text-gray-600']">
                                         相关度
                                     </button>
                                 </div>

@@ -86,7 +86,7 @@
                                                             <span class="text-xs font-mono text-teal-600 bg-teal-50 px-1.5 py-0.5 rounded border border-teal-100">{{ (Number(settings.ttsCloudSpeed) || 1).toFixed(2) }}</span>
                                                         </div>
                                                         <input type="range" v-model.number="settings.ttsCloudSpeed" min="0.25" max="4" step="0.05"
-                                                            class="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-teal-500">
+                                                            class="w-full touch-range cursor-pointer">
                                                     </div>
                                                     <div class="text-[10px] text-gray-400 leading-relaxed">通过 OpenAI 兼容的 /audio/speech 接口合成，按句分段请求、顺序播放；合成失败自动回落系统语音。</div>
                                                 </div>
@@ -113,7 +113,7 @@
                                                             <span class="text-xs font-mono text-teal-600 bg-teal-50 px-1.5 py-0.5 rounded border border-teal-100">{{ (Number(settings.ttsRate) || 1).toFixed(2) }}</span>
                                                         </div>
                                                         <input type="range" v-model.number="settings.ttsRate" min="0.5" max="2" step="0.05"
-                                                            class="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-teal-500">
+                                                            class="w-full touch-range cursor-pointer">
                                                     </div>
                                                     <div>
                                                         <div class="flex justify-between items-center mb-1.5">
@@ -122,7 +122,7 @@
                                                         </div>
                                                         <input type="range" v-model.number="settings.ttsPitch" min="0.5" max="2" step="0.05"
                                                             :disabled="settings.ttsService === 'cloud'"
-                                                            :class="['w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-teal-500', settings.ttsService === 'cloud' ? 'opacity-40' : '']">
+                                                            :class="['w-full touch-range cursor-pointer', settings.ttsService === 'cloud' ? 'opacity-40' : '']">
                                                         <div v-if="settings.ttsService === 'cloud'" class="text-[10px] text-gray-400 mt-0.5">云端引擎不支持音调调节。</div>
                                                     </div>
                                                 </div>
@@ -151,7 +151,7 @@
                                                 <div class="flex items-center justify-between p-3 rounded-xl bg-gray-50/60 border border-gray-100">
                                                     <span class="text-xs text-gray-500">朗读效果受所选引擎与语速音调影响。</span>
                                                     <button type="button" @click="testTtsVoice"
-                                                        class="px-3 py-1.5 text-xs font-bold text-white bg-teal-500 hover:bg-teal-600 rounded-lg shadow-sm transition-all active:scale-95">
+                                                        class="px-3 py-1.5 text-xs font-bold text-white bg-teal-500 hover:bg-teal-600 rounded-lg shadow-sm transition-all active:scale-95 hit-expand [--hit-out:-4px]">
                                                         测试朗读
                                                     </button>
                                                 </div>

@@ -126,7 +126,7 @@
                     <div class="relative h-12 flex items-center justify-between px-4 pointer-events-auto">
                         <div class="flex items-center min-w-0">
                             <button v-if="!isChatFullscreen" @click="toggleMobileMenu"
-                                class="md:hidden mr-3 text-white/80 hover:text-white transition-colors flex-shrink-0">
+                                class="md:hidden mr-3 text-white/80 hover:text-white transition-colors flex-shrink-0 p-2.5 -m-2.5">
                                 <svg class="w-6 h-6" fill="none" stroke="currentColor"><use href="#icon-menu"></use></svg>
                             </button>
                             <div v-if="currentCharacter" class="flex items-center min-w-0 cursor-pointer"
@@ -136,7 +136,7 @@
                                 <span class="ml-2 font-medium text-white truncate drop-shadow-md">{{
                                     currentCharacter.name }}</span>
                                 <button
-                                    class="ml-1 p-1.5 text-white/60 hover:text-white hover:bg-white/20 rounded-full transition-all flex-shrink-0"
+                                    class="ml-1 p-1.5 text-white/60 hover:text-white hover:bg-white/20 rounded-full transition-all flex-shrink-0 hit-expand [--hit-out:-8px]"
                                     :class="{'bg-white/20 text-white': showDescriptionPanel}">
                                     <svg class="w-4 h-4 transition-transform duration-300 ease-out"
                                         :class="{'rotate-180': showDescriptionPanel}" fill="none" stroke="currentColor"
@@ -148,9 +148,9 @@
                             </div>
                             <div v-else class="text-white/60 italic drop-shadow-sm">未选择角色卡</div>
                         </div>
-                        <div class="flex items-center gap-0">
+                        <div class="flex items-center gap-2">
                             <button @click="toggleChatFullscreen"
-                                class="p-1.5 text-white/70 hover:text-white rounded-full hover:bg-white/10 transition-colors"
+                                class="p-2.5 text-white/70 hover:text-white rounded-full hover:bg-white/10 transition-colors"
                                 :title="isChatFullscreen ? '退出全屏' : '全屏聊天'">
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path v-if="!isChatFullscreen" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -162,7 +162,7 @@
                                 </svg>
                             </button>
                             <button @click="clearChat"
-                                class="p-1.5 text-white/70 hover:text-red-400 rounded-full hover:bg-white/10 transition-colors"
+                                class="p-2.5 text-white/70 hover:text-red-400 rounded-full hover:bg-white/10 transition-colors"
                                 title="清空聊天">
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor"><use href="#icon-delete"></use></svg>
                             </button>

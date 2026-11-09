@@ -79,7 +79,7 @@
                             <div class="flex items-center justify-end gap-2 min-h-[30px]">
                                 <button @click="updateUiTemplatesFromChat({ manual: true })"
                                     :disabled="!settings.uiTemplateEnabled"
-                                    class="inline-flex items-center text-xs px-3 py-1.5 bg-gradient-to-r from-primary-50 to-blue-50 hover:from-primary-100 hover:to-blue-100 text-primary-700 rounded-lg border border-primary-200/80 transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed shadow-sm hover:shadow font-medium active:scale-95"
+                                    class="inline-flex items-center text-xs px-3 py-1.5 bg-gradient-to-r from-primary-50 to-blue-50 hover:from-primary-100 hover:to-blue-100 text-primary-700 rounded-lg border border-primary-200/80 transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed shadow-sm hover:shadow font-medium active:scale-95 hit-expand [--hit-out:-4px]"
                                     :class="settings.uiTemplateMainModelAnalysis ? 'invisible opacity-0 pointer-events-none' : 'visible opacity-100'">
                                     <svg class="w-3.5 h-3.5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -194,7 +194,7 @@
                                 </div>
                                 <input type="range" v-model.number="uiTemplateAnalysisDepthSlider" min="4" max="10"
                                     step="1"
-                                    class="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary-500">
+                                    class="w-full touch-range cursor-pointer">
                             </div>
                             <div class="relative bg-gray-50/60 p-3 rounded-xl border border-gray-100">
                                 <div class="flex justify-between items-center mb-2">
@@ -222,7 +222,7 @@
                                 </div>
                                 <input type="range" v-model.number="settings.uiTemplateMaxOutputTokens" min="1024" max="16384"
                                     step="256"
-                                    class="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary-500">
+                                    class="w-full touch-range cursor-pointer">
                             </div>
                         </div>
                     </div>

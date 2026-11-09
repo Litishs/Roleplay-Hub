@@ -1221,7 +1221,9 @@
         }
 
         .message-action-bar {
-            gap: 0.125rem;
+            /* 10px so the -5px expanded 44px hit areas of adjacent 34px buttons
+               just touch without overlapping (audit A4, gate 04). */
+            gap: 0.625rem;
             padding: 0.1875rem;
             border-radius: 9999px;
             border: 1px solid rgba(255, 255, 255, 0.52);
@@ -1233,8 +1235,10 @@
 
         .message-action-button {
             display: inline-flex;
-            width: 1.875rem;
-            height: 1.875rem;
+            /* 34px visual + ::after -5px hit expansion = 44px touch target (audit A4). */
+            position: relative;
+            width: 2.125rem;
+            height: 2.125rem;
             flex: none;
             align-items: center;
             justify-content: center;
@@ -1271,6 +1275,118 @@
         .message-action-button:disabled {
             opacity: 0.38;
             pointer-events: none;
+        }
+
+        /* ---------------------------------------------------------------------
+           44px minimum touch targets (2026-11-09 mobile UX audit A4).
+           Visual size stays untouched; a transparent ::after grows the hit
+           area outward. Pair .hit-expand with the arbitrary property
+           [--hit-out:<px>] when the visual size is not ~32px (20px chips need
+           -12px, 24-28px icons -8/-10px, small text links -9/-14px). Adjacent
+           gaps must be >= the combined expansion so hit areas never overlap.
+           --------------------------------------------------------------------- */
+        .hit-expand {
+            position: relative;
+        }
+
+        .hit-expand::after {
+            content: '';
+            position: absolute;
+            inset: var(--hit-out, -6px);
+            border-radius: inherit;
+        }
+
+        /* Shared list/modal classes get their expansion at the class level so
+           every consumer picks it up without markup churn (36px visuals need
+           -4px, the 40px settings icon button -2px). */
+        .item-action-button,
+        .modal-close-button,
+        .pagination-button,
+        .settings-help-trigger {
+            position: relative;
+        }
+
+        .item-action-button::after,
+        .modal-close-button::after {
+            content: '';
+            position: absolute;
+            inset: -4px;
+            border-radius: inherit;
+        }
+
+        .settings-icon-button::after {
+            content: '';
+            position: absolute;
+            inset: -2px;
+            border-radius: inherit;
+        }
+
+        .user-settings-toolbar .settings-icon-button::after {
+            /* 36px visual inside the profile toolbar needs -4px, not -2px. */
+            inset: -4px;
+        }
+
+        .pagination-button::after {
+            content: '';
+            position: absolute;
+            inset: -8px;
+            border-radius: inherit;
+        }
+
+        .settings-help-trigger::after {
+            content: '';
+            position: absolute;
+            inset: -15px;
+            border-radius: 999px;
+        }
+
+        .message-action-button::after {
+            content: '';
+            position: absolute;
+            inset: -5px;
+            border-radius: inherit;
+        }
+
+        /* Touch-friendly range inputs: the element itself becomes the 44px hit
+           area and the visual track moves into a pseudo-element. Track/thumb
+           colors are CSS vars so the dark theme only needs a var override. */
+        input[type="range"].touch-range {
+            -webkit-appearance: none;
+            appearance: none;
+            height: 2.75rem;
+            margin: 0;
+            background: transparent;
+            cursor: pointer;
+            --range-track: #e5e7eb;
+            --range-thumb: #3b82f6;
+        }
+
+        input[type="range"].touch-range::-webkit-slider-runnable-track {
+            height: 0.375rem;
+            border-radius: 999px;
+            background: var(--range-track);
+        }
+
+        input[type="range"].touch-range::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 1.25rem;
+            height: 1.25rem;
+            /* (track 6px - thumb 20px) / 2 keeps the thumb centered. */
+            margin-top: -0.4375rem;
+            border: none;
+            border-radius: 999px;
+            background: var(--range-thumb);
+            box-shadow: 0 1px 3px rgba(15, 23, 42, 0.3);
+        }
+
+        [data-theme='dark'] input[type="range"].touch-range {
+            --range-track: #374151;
+        }
+
+        /* Segmented switches: option rows meet the 44px minimum (slim variant
+           is exempt — it is used where vertical space is constrained). */
+        .segmented-switch:not(.segmented-switch--slim) .segmented-switch__option {
+            min-height: 2.75rem;
         }
 
         /* Swipe candidate counter + arrows inside the action bar: same visual

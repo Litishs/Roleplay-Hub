@@ -36,7 +36,7 @@
                 </div>
                 <div class="flex-1 text-sm">{{ toast.message }}</div>
                 <button v-if="toast.action" type="button"
-                    class="ml-3 flex-shrink-0 text-xs font-medium text-primary-600 hover:text-primary-700 active:opacity-70"
+                    class="ml-3 flex-shrink-0 text-xs font-medium text-primary-600 hover:text-primary-700 active:opacity-70 hit-expand [--hit-out:-14px]"
                     @click="onToastAction(toast)">{{ toast.action.label }}</button>
             </div>
         </transition-group>
