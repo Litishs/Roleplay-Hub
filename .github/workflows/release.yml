@@ -62,7 +62,13 @@ jobs:
           TAG="${GITHUB_REF_NAME#v}"
           MAJOR=$(echo "$TAG" | cut -d. -f1)
           MINOR=$(echo "$TAG" | cut -d. -f2)
-          VERSION_CODE=$(( (MAJOR - 1) * 100 + MINOR ))
+          PATCH=$(echo "$TAG" | cut -d. -f3)
+          PATCH=${PATCH:-0}
+          # SemVer three-segment scheme (2026-11-10): versionCode =
+          # (X-1)*100000 + Y*1000 + Z.  Release codes start at 100000 and stay
+          # clear of the legacy X.Y line (< 1000) and the debug 10000+ segment.
+          # Two-segment tags map PATCH to 0, so v2.71 == v2.71.0.
+          VERSION_CODE=$(( (MAJOR - 1) * 100000 + MINOR * 1000 + PATCH ))
           cat > android/version.properties << EOF
           versionCode=$VERSION_CODE
           versionName=$TAG

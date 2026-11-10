@@ -21,10 +21,11 @@ $env:GRADLE_USER_HOME = Join-Path $projectRoot '.toolchains\gradle-home'
 # far past the actual release line (2.69-local vs released v2.43) and dirtied
 # the repo on every build.  Instead each debug build reads the release
 # baseline from version.properties and builds with gradle -P overrides:
-#   versionCode = 10000 + N   (release line caps at v9.99 = code 999, so the
-#                             two ranges never collide; N is GLOBAL and
-#                             monotonic so a new debug APK always installs
-#                             over any previously installed one)
+#   versionCode = 10000 + N   (the release line uses SemVer three-segment tags
+#                             with codes >= 100000, so the two ranges never
+#                             collide; N is GLOBAL and monotonic so a new
+#                             debug APK always installs over any previously
+#                             installed one)
 #   versionName = "<baseline>-debug.<seq>"
 # 2026-09-24: seq is the per-baseline debug sequence and restarts at 1
 # whenever the release baseline changes ("2.63-debug.1", not "-debug.27");

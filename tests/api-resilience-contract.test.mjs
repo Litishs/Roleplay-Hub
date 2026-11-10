@@ -185,12 +185,15 @@ test('release baseline stays clean; debug builds use the 10000+ -debug.N scheme'
     // while the actual shipped release was v2.60.  The file is now a
     // hand-maintained release baseline (bumped only by release commits); CI
     // derives the real version from the git tag and rewrites it.
+    // 2026-11-10: releases switched to SemVer three-segment tags.  CI derives
+    // versionCode = (X-1)*100000 + Y*1000 + Z, so release baselines live at
+    // >= 100000 (2.70.0 = 170000) — above the legacy X.Y line (< 1000) and the
+    // debug 10000+ segment, and monotonic against every installed build.
     const versionProps = readFileSync(new URL('../android/version.properties', import.meta.url), 'utf8');
     const codeMatch = versionProps.match(/^versionCode=(\d+)$/m);
-    const nameMatch = versionProps.match(/^versionName=(\d+\.\d+)$/m);
-    assert.ok(codeMatch && Number(codeMatch[1]) >= 9, 'versionCode must be initialized at >= 9');
-    assert.ok(codeMatch && Number(codeMatch[1]) < 10000, 'release baseline versionCode must stay below the 10000+ debug range');
-    assert.ok(nameMatch, 'versionName must look like X.Y (no -debug suffix in the baseline)');
+    const nameMatch = versionProps.match(/^versionName=(\d+\.\d+(\.\d+)?)$/m);
+    assert.ok(codeMatch && Number(codeMatch[1]) >= 100000, 'release baseline versionCode must stay above the legacy line and the 10000+ debug segment');
+    assert.ok(nameMatch, 'versionName must look like X.Y or X.Y.Z (no -debug suffix in the baseline)');
 
     const buildGradle = readFileSync(new URL('../android/app/build.gradle', import.meta.url), 'utf8');
     assert.ok(buildGradle.includes("file('../version.properties')"));

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
+import { compareVersions } from "../src/modules/update-checker.mjs";
 
 const [html, updateCheckerHtml, app, checker, java, uiState] = await Promise.all([
     readFile(new URL("../index.html", import.meta.url), "utf8"),
@@ -42,6 +43,18 @@ test("the version footer only advertises an upgrade when one exists", () => {
     // so an up-to-date install still read "v2.70 -> v2.70" as an update.
     assert.match(updateCheckerHtml, /v-if="updateAvailable && latestVersionName"[^>]*>→ v\{\{ latestVersionName \}\}/);
     assert.doesNotMatch(updateCheckerHtml, /<span v-if="latestVersionName" class="text-green-500">/);
+});
+
+test("compareVersions orders SemVer three-segment releases", () => {
+    // 2026-11-10: releases switched to three-segment tags (vX.Y.Z).  The app
+    // compares its installed version against the latest release, so a patch
+    // bump must register as an update and two-segment vs three-segment forms
+    // of the same release must compare equal.
+    assert.equal(compareVersions("2.70.1", "2.70"), 1, "patch bump over two-segment current version");
+    assert.equal(compareVersions("2.70", "2.70.0"), 0, "two-segment equals its .0 three-segment form");
+    assert.equal(compareVersions("2.70", "2.71"), -1);
+    assert.equal(compareVersions("2.71.1", "2.71.0"), 1);
+    assert.equal(compareVersions("3.0.0", "2.99.99"), 1);
 });
 
 test("app.js renders release notes inline for the settings-footer card", () => {
