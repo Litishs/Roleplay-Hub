@@ -1231,6 +1231,12 @@
             box-shadow: 0 5px 14px -10px rgba(15, 23, 42, 0.5);
             backdrop-filter: blur(10px) saturate(115%);
             -webkit-backdrop-filter: blur(10px) saturate(115%);
+            /* One line, always: the row never wraps and stays inside the
+               viewport. Only the message actions live here — the candidate
+               switcher sits on the name row above (see .message-switcher). */
+            flex-wrap: nowrap;
+            white-space: nowrap;
+            max-width: calc(100vw - 1rem);
         }
 
         .message-action-button {
@@ -1351,6 +1357,22 @@
             border-radius: inherit;
         }
 
+        /* Composer reserve: the chat log keeps enough bottom slack for the
+           floating composer AND the 44px action-bar overhang below the last
+           bubble, so the island can never hide the message action bar. Sized
+           for the tallest mobile composer (latest-usage strip on: 142px) plus
+           the bar and a breathing gap; the keyboard inset rides on top because
+           the island is lifted by --keyboard-inset while the log is not. */
+        .chat-scroll-bottom {
+            padding-bottom: calc(13rem + var(--keyboard-inset, 0px));
+        }
+
+        @media (min-width: 768px) {
+            .chat-scroll-bottom {
+                padding-bottom: 15rem;
+            }
+        }
+
         /* Dark theme: the action bar glass and its hover washes are hardcoded
            light values above — neutral dark surfaces here (audit §2.7 rule). */
         [data-theme='dark'] .message-action-bar {
@@ -1414,10 +1436,72 @@
             min-height: 2.75rem;
         }
 
-        /* Swipe candidate counter + arrows inside the action bar: same visual
-           language as the icon buttons — borderless, transparent, icon-colored. */
+        /* Swipe candidate counter + arrows now ride the name row above the
+           bubble (the action bar cannot hold them at the 44px touch pitch on
+           a phone). Same borderless visual language as the action buttons. */
+        .message-switcher {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.125rem;
+            flex: none;
+            padding: 0.0625rem 0.1875rem;
+            border-radius: 9999px;
+            border: 1px solid rgba(255, 255, 255, 0.52);
+            background: rgba(248, 250, 252, 0.56);
+        }
+
+        .message-switcher-button {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            /* 22px visual + ::after -11px = 44px touch target without growing
+               the row past the 20px name tag it sits beside. */
+            position: relative;
+            width: 1.375rem;
+            height: 1.375rem;
+            flex: none;
+            padding: 0;
+            border: 0;
+            border-radius: 9999px;
+            background: transparent;
+            color: rgba(75, 85, 99, 0.78);
+            transition: color 0.18s ease, background-color 0.18s ease;
+        }
+
+        .message-switcher-button:hover {
+            color: #2563eb;
+            background: rgba(255, 255, 255, 0.72);
+        }
+
+        .message-switcher-button:disabled {
+            opacity: 0.38;
+            pointer-events: none;
+        }
+
+        .message-switcher-button::after {
+            content: '';
+            position: absolute;
+            inset: -11px;
+            border-radius: inherit;
+        }
+
+        [data-theme='dark'] .message-switcher {
+            background: rgba(31, 41, 55, 0.56);
+        }
+
+        [data-theme='dark'] .message-switcher-button {
+            color: rgba(156, 163, 175, 0.85);
+        }
+
+        [data-theme='dark'] .message-switcher-button:hover {
+            color: #60a5fa;
+            background: rgba(55, 65, 81, 0.72);
+        }
+
+        /* Candidate counter inside the name-row switcher: mono digits so the
+           capsule never jitters between 1/2 and 10/12. */
         .message-action-swipe-counter {
-            min-width: 2.1rem;
+            min-width: 1.5rem;
             text-align: center;
             font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
             font-size: 0.6875rem;

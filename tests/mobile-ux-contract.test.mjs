@@ -200,3 +200,32 @@ test("list panels have empty states and the model selector splits loading from e
   assert.match(modal, /v-else-if="filteredModels\.length === 0"/, "model selector must split the empty state");
   assert.doesNotMatch(modal, /未找到模型或正在加载/, "conflated loading/empty text must be gone");
 });
+
+test("message action bar stays on one line and never overflows the phone viewport", async () => {
+  const css = await read("assets/css/styles.css");
+  // Single line: the row is nowrap and capped to the viewport width.
+  assert.match(css, /\.message-action-bar \{[^}]*flex-wrap:\s*nowrap/, "action bar must never wrap to a second line");
+  assert.match(css, /\.message-action-bar \{[^}]*max-width:\s*calc\(100vw - 1rem\)/, "action bar must cap at the viewport width");
+
+  const messageList = await read("src/components/chat/MessageList.vue");
+  // 2026-11-11 redesign (maintainer verdict): the candidate switcher moved out
+  // of the action bar onto the name row, so the bar holds actions only and
+  // every action stays one tap away. No overflow menu, no collapsing.
+  assert.match(messageList, /message-switcher', settings\.immersiveMode \? '' : 'ml-auto'/, "candidate switcher must ride the name row and right-align to the bubble");
+  assert.match(messageList, /class="message-switcher-button"/, "switcher arrows use their own compact button");
+  assert.match(css, /\.message-switcher-button \{[^}]*width:\s*1\.375rem/, "switcher arrows are 22px visuals");
+  assert.match(css, /\.message-switcher-button::after \{[^}]*inset:\s*-11px/, "22px arrows still reach a 44px touch target");
+  // The old in-bar switcher and the overflow popover are gone for good.
+  assert.doesNotMatch(messageList, /aria-label="更多操作"/, "the overflow menu must stay removed (maintainer verdict)");
+  assert.doesNotMatch(messageList, /message-action-button--desktop/, "actions must never be hidden per breakpoint");
+  assert.doesNotMatch(css, /\.message-action-button--desktop/, "the desktop-only action class must stay removed");
+  assert.doesNotMatch(css, /\.message-action-menu/, "the overflow popover styles must stay removed");
+  // The bar hugs the bubble's left edge again (no avatar-gutter offset).
+  assert.doesNotMatch(messageList, /message-action-bar--flush-start/, "action bar must align with the bubble, not the avatar gutter");
+  assert.doesNotMatch(css, /message-action-bar--flush-start/, "flush-start offset must stay removed");
+});
+
+test("quick-settings popover closes on a chat-log tap", async () => {
+  const messageList = await read("src/components/chat/MessageList.vue");
+  assert.match(messageList, /@click="showChatModelSelector = false"/, "tapping the log dismisses the quick-settings popover");
+});

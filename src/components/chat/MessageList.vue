@@ -2,7 +2,7 @@
                 <!-- Chat Messages -->
                 <div ref="chatContainer" @click="showChatModelSelector = false"
                     @scroll="handleChatScroll"
-                    class="flex-1 overflow-y-auto overflow-x-hidden px-2 pt-14 md:pt-16 pb-44 md:pb-60 relative z-0 space-y-14 md:space-y-16 transition-all duration-500"
+                    class="chat-scroll-bottom flex-1 overflow-y-auto overflow-x-hidden px-2 pt-14 md:pt-16 relative z-0 space-y-14 md:space-y-16 transition-all duration-500"
                     :class="!settings.useCharacterBackground || !currentCharacter || !currentCharacter?.avatar ? 'bg-gray-50' : ''">
                     <div v-if="summaryProgress" class="mx-auto max-w-2xl px-2 -mt-8 md:-mt-10">
                         <div :class="['flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold shadow-sm border',
@@ -102,10 +102,37 @@
 
                             <div
                                 :class="['flex flex-col min-w-0', settings.immersiveMode ? 'immersive-message-column' : '', messageUsesWideLayout(msg) ? 'flex-1 w-full' : '', msg.isSelf ? 'items-end' : 'items-start']">
-                                <!-- Name (Outside Bubble) -->
-                                <div v-show="!settings.immersiveMode"
-                                    :class="['text-[10px] font-bold text-gray-600 mb-1 select-none px-1.5 py-0.5 rounded-md bg-white/50 backdrop-blur-sm border border-white/20 w-fit shadow-sm truncate max-w-[150px] md:max-w-[250px] msg-name-tag', msg.isSelf ? 'ml-auto mr-1' : 'mr-auto ml-1', msg.shouldAnimate ? 'animate-message-fade-in' : '']">
-                                    {{ msg.name || (msg.role === 'user' ? user.name : (currentCharacter?.name || 'Unknown')) }}
+                                <!-- Name + candidate switcher. The switcher used to sit inside the
+                                     action bar, but 7 items at the 44px touch pitch cannot fit a phone
+                                     width on one line. It rides the name row's free space instead: the
+                                     bar stays aligned to the bubble's left edge with every action one tap
+                                     away, and the bubble swipe gesture is unchanged. -->
+                                <div v-if="!settings.immersiveMode || (msg.role === 'assistant' && index === chatHistory.length - 1 && msg.swipes && msg.swipes.length > 1 && !isConversationBusy)"
+                                    :class="['flex items-center gap-2 mb-1 select-none', settings.immersiveMode ? 'w-fit' : 'w-full', msg.isSelf ? 'flex-row-reverse' : '']">
+                                    <div v-show="!settings.immersiveMode"
+                                        :class="['text-[10px] font-bold text-gray-600 px-1.5 py-0.5 rounded-md bg-white/50 backdrop-blur-sm border border-white/20 w-fit shadow-sm truncate max-w-[150px] md:max-w-[250px] msg-name-tag', msg.shouldAnimate ? 'animate-message-fade-in' : '']">
+                                        {{ msg.name || (msg.role === 'user' ? user.name : (currentCharacter?.name || 'Unknown')) }}
+                                    </div>
+                                    <div v-if="msg.role === 'assistant' && index === chatHistory.length - 1 && msg.swipes && msg.swipes.length > 1 && !isConversationBusy"
+                                        :class="['message-switcher', settings.immersiveMode ? '' : 'ml-auto']">
+                                        <button type="button" @click="swipePrev(index)"
+                                            :disabled="msg.activeSwipeIndex <= 0"
+                                            class="message-switcher-button"
+                                            title="上一个候选" aria-label="上一个候选">
+                                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+                                            </svg>
+                                        </button>
+                                        <span class="message-action-swipe-counter">{{ msg.activeSwipeIndex + 1 }}/{{ msg.swipes.length }}</span>
+                                        <button type="button" @click="swipeNext(index)"
+                                            :disabled="msg.activeSwipeIndex >= msg.swipes.length - 1"
+                                            class="message-switcher-button"
+                                            title="下一个候选" aria-label="下一个候选">
+                                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                                            </svg>
+                                        </button>
+                                    </div>
                                 </div>
                                 <!-- Message Bubble -->
                                 <div class="group relative"
@@ -362,28 +389,7 @@
 
                                     <!-- Message Actions -->
                                     <div v-if="!msg.isEditing_Message && !isMessageThinkingOrRunning(msg) && !(index === chatHistory.length - 1 && !msg.isSelf && (isGenerating || isRemoteGenerating)) && !(msg.isSelf && isConversationBusy && !chatHistory.slice(index + 1).some(m => m.isSelf))"
-                                        :class="['message-action-bar absolute bottom-0 -mb-11 md:-mb-12 flex items-center opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-200', msg.isSelf ? 'right-0' : 'left-0']">
-                                        <!-- Swipe candidate switcher: last-floor assistant messages only.
-                                             Same borderless button style as the neighboring icon actions. -->
-                                        <template v-if="msg.role === 'assistant' && index === chatHistory.length - 1 && msg.swipes && msg.swipes.length > 1 && !isConversationBusy">
-                                            <button @click="swipePrev(index)"
-                                                :disabled="msg.activeSwipeIndex <= 0"
-                                                class="message-action-button"
-                                                title="上一个候选">
-                                                <svg class="w-3.5 h-3.5 md:w-4 md:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
-                                                </svg>
-                                            </button>
-                                            <span class="message-action-swipe-counter">{{ msg.activeSwipeIndex + 1 }}/{{ msg.swipes.length }}</span>
-                                            <button @click="swipeNext(index)"
-                                                :disabled="msg.activeSwipeIndex >= msg.swipes.length - 1"
-                                                class="message-action-button"
-                                                title="下一个候选">
-                                                <svg class="w-3.5 h-3.5 md:w-4 md:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
-                                                </svg>
-                                            </button>
-                                        </template>
+                                        :class="['message-action-bar absolute bottom-0 -mb-11 md:-mb-12 flex flex-nowrap items-center opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-200', msg.isSelf ? 'right-0' : 'left-0']">
                                         <button v-if="index === chatHistory.length - 1"
                                             @click="regenerateMessage(index)"
                                             class="message-action-button"
@@ -652,12 +658,20 @@ export default {
           el.style.transition = 'none';
           el.style.transform = `translateX(${dir === 'next' ? 160 : -160}px)`;
           el.style.opacity = '0.25';
-          requestAnimationFrame(() => requestAnimationFrame(() => {
+          let flyInStarted = false;
+          const startFlyIn = () => {
+            if (flyInStarted) return;
+            flyInStarted = true;
             el.style.transition = 'transform 220ms cubic-bezier(0.22, 0.61, 0.36, 1), opacity 220ms ease-out';
             el.style.transform = '';
             el.style.opacity = '';
             setTimeout(() => { el.style.transition = ''; el.style.transform = ''; el.style.opacity = ''; }, 260);
-          }));
+          };
+          requestAnimationFrame(() => requestAnimationFrame(startFlyIn));
+          // rAF is paused in a hidden/backgrounded tab, which used to leave the
+          // bubble parked at translateX(±160px) with 25% opacity forever. This
+          // wall-clock fallback guarantees the fly-in always starts.
+          setTimeout(startFlyIn, 200);
         }, 150);
       } else {
         // spring back

@@ -213,12 +213,17 @@ test('MessageList.vue: swipe switcher wired with arrows, counter, render conditi
 });
 
 test('MessageList.vue: candidate bar anchored above the bubble + bubble swipe gesture (M3)', () => {
-    // 2026-09-22 redesign: the top-position bar was removed — the switcher arrows +
-    // counter live INSIDE the message action bar with the same borderless style.
+    // 2026-11-11 maintainer verdict: the switcher moved from the action bar to
+    // the name row above the bubble (7 items cannot fit a phone width on one
+    // line, and collapsing actions behind a "more" menu was rejected).
     assert.ok(!messageList.includes('Swipe candidate bar (top position)'), 'top bar removed');
     assert.ok(!messageList.includes('滑动气泡也可切换'), 'hint text removed');
-    const barAt = messageList.indexOf('message-action-swipe-counter');
-    assert.ok(barAt > -1, 'counter styled via action-bar css');
+    const switcherAt = messageList.indexOf("'message-switcher'");
+    const counterAt = messageList.indexOf('message-action-swipe-counter');
+    const actionBarAt = messageList.indexOf('<!-- Message Actions -->');
+    assert.ok(switcherAt > -1, 'name-row switcher rendered');
+    assert.ok(counterAt > -1 && counterAt < actionBarAt, 'counter lives in the name row, not the action bar');
+    assert.ok(switcherAt < messageList.indexOf('<!-- Message Bubble -->'), 'switcher sits above the bubble');
     // bubble horizontal swipe gesture wired with touch guards
     // 2026-09-22 device fix: handlers bind UNCONDITIONALLY (inline ternary in the
     // template broke gesture dispatch in the device production build); guards live
@@ -252,6 +257,11 @@ test('MessageList.vue: candidate bar anchored above the bubble + bubble swipe ge
     assert.ok(messageList.includes('dist + velocity * 120'), 'velocity-based flick support (no separate flick branch)');
     assert.ok(messageList.includes('translateX('), 'fly-out / fly-in animation');
     assert.ok(messageList.includes("el.style.opacity = '0.25'"), 'fade during candidate swap');
+    // 2026-11-11: rAF is paused in hidden tabs and left the bubble parked at
+    // translateX(±160px) with 25% opacity; the wall-clock fallback guarantees
+    // the fly-in always starts.
+    assert.ok(messageList.includes('let flyInStarted = false;'), 'fly-in must be idempotent');
+    assert.ok(messageList.includes('setTimeout(startFlyIn, 200);'), 'fly-in needs a wall-clock fallback');
     // gesture state stays local to the component (no ctx pollution)
     assert.ok(messageList.includes('return { ...(ctx || {}), canSwipeGesture'), 'ctx spread with local handlers');
 });
