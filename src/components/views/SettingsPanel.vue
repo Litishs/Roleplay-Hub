@@ -11,266 +11,286 @@
                     </h2>
                     <span class="ml-auto text-[10px] md:text-[11px] text-gray-400 font-medium select-none">原作者 STA1N · 二次开发 Litishs</span>
                 </div>
+
+                <!-- Grouped settings list (2026-11-12 redesign): section captions
+                     carry the grouping, rows keep one card per group with hairline
+                     dividers. Icons are monochrome so the list reads as one system;
+                     state lives in a compact badge (red/green) instead of plain
+                     gray text, which used to make "连接失败" look like any value. -->
                 <div class="settings-stack">
 
+                    <!-- 账户 -->
+                    <section class="settings-group" aria-labelledby="settings-group-account">
+                        <h3 id="settings-group-account" class="settings-group-caption">账户</h3>
+                        <div class="settings-group-card" :class="{ 'is-open': settingsSectionsOpen.user }">
+                            <div class="settings-accordion">
+                                <button type="button"
+                                    @click="settingsSectionsOpen.user = !settingsSectionsOpen.user; settingsHelpTopic = ''; showProfileDropdown = false"
+                                    class="settings-accordion-trigger" :aria-expanded="settingsSectionsOpen.user"
+                                    aria-controls="user-settings-panel">
+                                    <span class="settings-accordion-icon settings-accordion-avatar">
+                                        <img v-if="user?.avatar" :src="user.avatar" alt="">
+                                        <span v-else>{{ (user.name || 'U').charAt(0).toUpperCase() }}</span>
+                                    </span>
+                                    <span class="settings-accordion-copy">
+                                        <span class="settings-accordion-title">用户设置</span>
+                                        <span class="settings-accordion-description">人设、头像与叙事视角</span>
+                                    </span>
+                                    <span class="settings-accordion-value">{{ user.name || '未命名' }} · {{ isSecondPerson ? '第二人称' : '第三人称' }}</span>
+                                    <svg :class="{'rotate-180': settingsSectionsOpen.user}"
+                                        class="settings-collapse-chevron settings-accordion-chevron" fill="none"
+                                        stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                                    </svg>
+                                </button>
 
-                    <!-- User Settings -->
-                    <section class="settings-accordion settings-accordion--user"
-                        :class="{'is-open': settingsSectionsOpen.user}">
-                        <button type="button"
-                            @click="settingsSectionsOpen.user = !settingsSectionsOpen.user; settingsHelpTopic = ''; showProfileDropdown = false"
-                            class="settings-accordion-trigger" :aria-expanded="settingsSectionsOpen.user"
-                            aria-controls="user-settings-panel">
-                            <span class="settings-accordion-icon settings-accordion-avatar">
-                                <img v-if="user?.avatar" :src="user.avatar" alt="" class="w-full h-full object-cover">
-                                <span v-else>{{ (user.name || 'U').charAt(0).toUpperCase() }}</span>
-                            </span>
-                            <span class="settings-accordion-copy">
-                                <span class="settings-accordion-title">用户设置</span>
-                                <span class="settings-accordion-description">人设、头像与叙事视角</span>
-                            </span>
-                            <span class="settings-accordion-summary">
-                                {{ user.name || '未命名' }} · {{ isSecondPerson ? '第二人称' : '第三人称' }}
-                            </span>
-                            <svg :class="{'rotate-180': settingsSectionsOpen.user}"
-                                class="settings-collapse-chevron settings-accordion-chevron" fill="none"
-                                stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
-                            </svg>
-                        </button>
-
-                        <div id="user-settings-panel" class="settings-collapse" :class="{'is-open': settingsSectionsOpen.user}"
-                            :aria-hidden="!settingsSectionsOpen.user" :inert="!settingsSectionsOpen.user">
-                            <div class="settings-collapse__inner">
-                                <div class="settings-collapse__content settings-panel-body">
-                                    <PresetManager />
-                                </div>
-                            </div>
-                        </div>
-                    </section>
-
-                    <!-- API Settings -->
-                    <section class="settings-accordion settings-accordion--api"
-                        :class="{'is-open': settingsSectionsOpen.api}">
-                        <button type="button" @click="settingsSectionsOpen.api = !settingsSectionsOpen.api; settingsHelpTopic = ''"
-                            class="settings-accordion-trigger"
-                            :aria-expanded="settingsSectionsOpen.api" aria-controls="api-settings-panel">
-                            <span class="settings-accordion-icon">
-                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                        d="M13 10V3L4 14h7v7l9-11h-7z"></path>
-                                </svg>
-                            </span>
-                            <span class="settings-accordion-copy">
-                                <span class="settings-accordion-title">API 连接与服务</span>
-                                <span class="settings-accordion-description">提供商、密钥与模型服务</span>
-                            </span>
-                            <span class="settings-accordion-summary">
-                                {{ selectedApiProvider.name }} · {{ apiStatus === 'connected' ? apiLatency + 'ms' : (apiStatus === 'checking' ? '检测中' : (apiStatus === 'error' ? '连接失败' : '未检测')) }}
-                            </span>
-                            <svg :class="{'transform rotate-180': settingsSectionsOpen.api}"
-                                class="settings-collapse-chevron settings-accordion-chevron" fill="none"
-                                stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
-                            </svg>
-                        </button>
-
-                        <div id="api-settings-panel" class="settings-collapse" :class="{'is-open': settingsSectionsOpen.api}"
-                            :aria-hidden="!settingsSectionsOpen.api" :inert="!settingsSectionsOpen.api">
-                            <div class="settings-collapse__inner">
-                                <div class="settings-collapse__content settings-panel-body">
-                        <ApiConfig />
-                        </div>
-                        </div>
-                    </div>
-                    </section>
-
-                    <!-- Advanced Settings -->
-                    <section class="settings-accordion settings-accordion--advanced"
-                        :class="{'is-open': settingsSectionsOpen.advanced}">
-                        <button type="button" @click="settingsSectionsOpen.advanced = !settingsSectionsOpen.advanced; settingsHelpTopic = ''"
-                            class="settings-accordion-trigger"
-                            :aria-expanded="settingsSectionsOpen.advanced" aria-controls="advanced-settings-panel">
-                            <span class="settings-accordion-icon">
-                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><use href="#icon-settings"></use></svg>
-                            </span>
-                            <span class="settings-accordion-copy">
-                                <span class="settings-accordion-title">高级设置</span>
-                                <span class="settings-accordion-description">生成策略与界面外观</span>
-                            </span>
-                            <span class="settings-accordion-summary">
-                                {{ settings.themeMode === 'dark' ? '深色' : (settings.themeMode === 'light' ? '浅色' : '跟随系统') }} · {{ settings.fontSize }}px
-                            </span>
-                            <svg :class="{'transform rotate-180': settingsSectionsOpen.advanced}"
-                                class="settings-collapse-chevron settings-accordion-chevron" fill="none"
-                                stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
-                            </svg>
-                        </button>
-
-                        <div id="advanced-settings-panel" class="settings-collapse" :class="{'is-open': settingsSectionsOpen.advanced}"
-                            :aria-hidden="!settingsSectionsOpen.advanced" :inert="!settingsSectionsOpen.advanced">
-                            <div class="settings-collapse__inner">
-                                <div class="settings-collapse__content settings-panel-body">
-                        <AdvancedSettings />
-                        </div>
-                        </div>
-                    </div>
-                    </section>
-
-                    <!-- 语音设置（TTS P0：Android 系统语音引擎） -->
-                    <section class="settings-accordion settings-accordion--voice"
-                        :class="{'is-open': ttsSettingsExpanded}">
-                        <button type="button" @click="ttsSettingsExpanded = !ttsSettingsExpanded; settingsHelpTopic = ''"
-                            class="settings-accordion-trigger" aria-controls="tts-settings-panel"
-                            :aria-expanded="ttsSettingsExpanded">
-                            <span class="settings-accordion-icon">
-                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5L6 9H2v6h4l5 4V5zM15.54 8.46a5 5 0 010 7.07M19.07 4.93a10 10 0 010 14.14"></path>
-                                </svg>
-                            </span>
-                            <span class="settings-accordion-copy">
-                                <span class="settings-accordion-title">语音设置</span>
-                                <span class="settings-accordion-description">朗读引擎与播放偏好</span>
-                            </span>
-                            <span class="settings-accordion-summary">{{ settings.ttsEnabled ? '已开启' : '已关闭' }}</span>
-                            <svg :class="{'transform rotate-180': ttsSettingsExpanded}"
-                                class="settings-collapse-chevron settings-accordion-chevron" fill="none"
-                                stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
-                            </svg>
-                        </button>
-                        <div id="tts-settings-panel" class="settings-collapse" :class="{ 'is-open': ttsSettingsExpanded }"
-                            :aria-hidden="!ttsSettingsExpanded" :inert="!ttsSettingsExpanded">
-                            <div class="settings-collapse__inner">
-                                <div class="settings-collapse__content settings-panel-body">
-                                    <TtsSettings />
-                                </div>
-                            </div>
-                        </div>
-                    </section>
-
-                    <!-- 本机数据（备份与恢复，置于设置页最底部） -->
-                    <section class="settings-accordion settings-accordion--local"
-                        :class="{'is-open': settingsSectionsOpen.localData}">
-                        <button type="button" @click="settingsSectionsOpen.localData = !settingsSectionsOpen.localData; settingsHelpTopic = ''"
-                            class="settings-accordion-trigger"
-                            :aria-expanded="settingsSectionsOpen.localData" aria-controls="local-data-panel">
-                            <span class="settings-accordion-icon">
-                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10a2 2 0 002 2h12a2 2 0 002-2V9.5L14.5 4H6a2 2 0 00-2 2v1zm4 12v-6h8v6M8 4v5h6V4"></path>
-                                </svg>
-                            </span>
-                            <span class="settings-accordion-copy">
-                                <span class="settings-accordion-title">本机数据</span>
-                                <span class="settings-accordion-description">完整备份与恢复</span>
-                            </span>
-                            <span class="settings-accordion-summary">备份与恢复</span>
-                            <svg :class="{'transform rotate-180': settingsSectionsOpen.localData}"
-                                class="settings-collapse-chevron settings-accordion-chevron" fill="none"
-                                stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
-                            </svg>
-                        </button>
-                        <div id="local-data-panel" class="settings-collapse" :class="{'is-open': settingsSectionsOpen.localData}"
-                            :aria-hidden="!settingsSectionsOpen.localData" :inert="!settingsSectionsOpen.localData">
-                            <div class="settings-collapse__inner">
-                                <div class="settings-collapse__content settings-panel-body">
-                        <DataManager />
-                        <div class="mt-4 rounded-xl border border-gray-200 bg-white p-3">
-                            <!-- Mobile: title block stacks above a 3-col button grid; sm+: side-by-side
-                                 (three inline buttons otherwise squeeze the min-w-0 title into vertical text). -->
-                            <div class="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
-                                <div class="min-w-0">
-                                    <div class="flex items-center gap-1.5">
-                                        <span class="text-sm font-bold text-gray-700">运行日志</span>
-                                        <button type="button" @click="diagnosticsHelpOpen = !diagnosticsHelpOpen"
-                                            class="settings-help-trigger" :class="{ 'is-open': diagnosticsHelpOpen }"
-                                            :aria-expanded="diagnosticsHelpOpen" aria-label="查看运行日志说明"
-                                            title="运行日志说明">
-                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                                    d="M9.1 9a3 3 0 115.8 1.1c-.6 1.1-1.9 1.3-2.5 2.2-.3.4-.4.8-.4 1.2M12 17h.01"></path>
-                                            </svg>
-                                        </button>
-                                    </div>
-                                    <div class="mt-0.5 text-[11px] text-gray-400">
-                                        最近 {{ requestDiagnosticsCount }} 条 / 其中 LLM 对话 {{ chatDiagnosticsCount }} 条
-                                    </div>
-                                </div>
-                                <div class="grid grid-cols-3 gap-2 sm:flex sm:flex-shrink-0 sm:items-center sm:justify-end">
-                                    <button type="button" @click="copyDiagnosticsSummary"
-                                        class="inline-flex min-h-[44px] items-center justify-center text-xs px-2 whitespace-nowrap rounded-lg bg-gray-50 hover:bg-gray-100 text-gray-600 font-medium border border-gray-200 transition-all active:scale-95"
-                                        title="复制一段可粘贴到群聊的文本摘要（≤10 行）">
-                                        <svg class="w-3.5 h-3.5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                                d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h8a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m0 0l3-3m-3 3h3"></path>
-                                        </svg>
-                                        复制摘要
-                                    </button>
-                                    <button type="button" @click="exportRequestDiagnostics('file')"
-                                        class="inline-flex min-h-[44px] items-center justify-center text-xs px-2 whitespace-nowrap rounded-lg bg-primary-600 hover:bg-primary-700 text-white font-medium border border-primary-600 transition-all active:scale-95 shadow-sm">
-                                        <svg class="w-3.5 h-3.5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                                d="M12 10v6m0 0l-3-3m3 3l3-3m4 4H5a2 2 0 01-2-2V6a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414A1 1 0 0121 11v7a2 2 0 01-2 2z"></path>
-                                        </svg>
-                                        导出日志
-                                    </button>
-                                    <button type="button" @click="clearRequestDiagnostics"
-                                        class="inline-flex min-h-[44px] items-center justify-center text-xs px-2 whitespace-nowrap rounded-lg bg-gray-50 hover:bg-red-50 text-gray-500 hover:text-red-600 font-medium border border-gray-200 transition-all active:scale-95"
-                                        title="清空运行日志">
-                                        <svg class="w-3.5 h-3.5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 100 2v3M4 7h16"></path>
-                                        </svg>
-                                        清空
-                                    </button>
-                                </div>
-                            </div>
-                            <div v-if="diagnosticsFailureRecords.length" class="mt-2 rounded-lg bg-gray-50 p-2.5">
-                                <div class="flex items-center justify-between">
-                                    <span class="text-[11px] font-medium text-gray-500">最近异常 ({{ diagnosticsFailureRecords.length }})</span>
-                                    <button type="button" @click="diagnosticsShowAll = !diagnosticsShowAll"
-                                        class="text-[11px] text-primary-600 hover:text-primary-700">
-                                        {{ diagnosticsShowAll ? '收起' : '展开' }}
-                                    </button>
-                                </div>
-                                <div class="mt-1.5 space-y-1.5">
-                                    <div v-for="record in (diagnosticsShowAll ? diagnosticsFailureRecords.slice(0, 10) : diagnosticsFailureRecords.slice(0, 4))"
-                                        :key="record.id" class="min-w-0">
-                                        <div class="flex items-center gap-1.5">
-                                            <span class="w-2 h-2 rounded-full flex-shrink-0" :class="diagnosticsSeverityDotClass(record.severity)"></span>
-                                            <span class="text-[11px] text-gray-500 truncate">{{ record.category }}/{{ record.action }}</span>
-                                            <span v-if="record.severity === 'fatal'" class="flex-shrink-0 text-[10px] font-medium text-red-600">崩溃</span>
-                                            <span class="ml-auto text-[10px] text-gray-400 flex-shrink-0">{{ formatDiagnosticsTime(record.startedAt) }}</span>
+                                <div id="user-settings-panel" class="settings-collapse" :class="{'is-open': settingsSectionsOpen.user}"
+                                    :aria-hidden="!settingsSectionsOpen.user" :inert="!settingsSectionsOpen.user">
+                                    <div class="settings-collapse__inner">
+                                        <div class="settings-collapse__content settings-panel-body">
+                                            <PresetManager />
                                         </div>
-                                        <div class="mt-0.5 text-xs text-gray-600 truncate" :title="diagnosticsResultLabel(record)">{{ diagnosticsResultLabel(record) }}</div>
                                     </div>
                                 </div>
                             </div>
-                            <div v-if="diagnosticsHelpOpen" class="mt-2 rounded-lg bg-gray-50 p-2.5 text-[11px] leading-5 text-gray-500">
-                                仅记录「行为摘要」（功能类型、耗时、字符数、哈希、短错误提示），不含聊天明文、思考过程或设定正文，可安全导出用于定位问题。
+                        </div>
+                    </section>
+
+                    <!-- 连接与模型 -->
+                    <section class="settings-group" aria-labelledby="settings-group-connection">
+                        <h3 id="settings-group-connection" class="settings-group-caption">连接与模型</h3>
+                        <div class="settings-group-card" :class="{ 'is-open': settingsSectionsOpen.api }">
+                            <div class="settings-accordion">
+                                <button type="button" @click="settingsSectionsOpen.api = !settingsSectionsOpen.api; settingsHelpTopic = ''"
+                                    class="settings-accordion-trigger"
+                                    :aria-expanded="settingsSectionsOpen.api" aria-controls="api-settings-panel">
+                                    <span class="settings-accordion-icon">
+                                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                                        </svg>
+                                    </span>
+                                    <span class="settings-accordion-copy">
+                                        <span class="settings-accordion-title">API 连接与服务</span>
+                                        <span class="settings-accordion-description">提供商、密钥与模型服务</span>
+                                    </span>
+                                    <span class="settings-accordion-badge" :class="apiBadge.className" :title="apiBadge.title">{{ apiBadge.text }}</span>
+                                    <svg :class="{'rotate-180': settingsSectionsOpen.api}"
+                                        class="settings-collapse-chevron settings-accordion-chevron" fill="none"
+                                        stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                                    </svg>
+                                </button>
+
+                                <div id="api-settings-panel" class="settings-collapse" :class="{'is-open': settingsSectionsOpen.api}"
+                                    :aria-hidden="!settingsSectionsOpen.api" :inert="!settingsSectionsOpen.api">
+                                    <div class="settings-collapse__inner">
+                                        <div class="settings-collapse__content settings-panel-body">
+                                            <ApiConfig />
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
+                    </section>
+
+                    <!-- 外观与语音 -->
+                    <section class="settings-group" aria-labelledby="settings-group-appearance">
+                        <h3 id="settings-group-appearance" class="settings-group-caption">外观与语音</h3>
+                        <div class="settings-group-card" :class="{ 'is-open': settingsSectionsOpen.advanced || ttsSettingsExpanded }">
+                            <div class="settings-accordion">
+                                <button type="button" @click="settingsSectionsOpen.advanced = !settingsSectionsOpen.advanced; settingsHelpTopic = ''"
+                                    class="settings-accordion-trigger"
+                                    :aria-expanded="settingsSectionsOpen.advanced" aria-controls="advanced-settings-panel">
+                                    <span class="settings-accordion-icon">
+                                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                d="M4 7h11M4 12h7M4 17h13M17 5v4M13 10v4M19 15v4"></path>
+                                        </svg>
+                                    </span>
+                                    <span class="settings-accordion-copy">
+                                        <span class="settings-accordion-title">高级设置</span>
+                                        <span class="settings-accordion-description">生成策略与界面外观</span>
+                                    </span>
+                                    <span class="settings-accordion-value">{{ themeModeLabel }} · {{ settings.fontSize }}px</span>
+                                    <svg :class="{'rotate-180': settingsSectionsOpen.advanced}"
+                                        class="settings-collapse-chevron settings-accordion-chevron" fill="none"
+                                        stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                                    </svg>
+                                </button>
+
+                                <div id="advanced-settings-panel" class="settings-collapse" :class="{'is-open': settingsSectionsOpen.advanced}"
+                                    :aria-hidden="!settingsSectionsOpen.advanced" :inert="!settingsSectionsOpen.advanced">
+                                    <div class="settings-collapse__inner">
+                                        <div class="settings-collapse__content settings-panel-body">
+                                            <AdvancedSettings />
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 语音设置（TTS P0：Android 系统语音引擎） -->
+                            <div class="settings-accordion">
+                                <button type="button" @click="ttsSettingsExpanded = !ttsSettingsExpanded; settingsHelpTopic = ''"
+                                    class="settings-accordion-trigger" aria-controls="tts-settings-panel"
+                                    :aria-expanded="ttsSettingsExpanded">
+                                    <span class="settings-accordion-icon">
+                                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5L6 9H2v6h4l5 4V5zM15.54 8.46a5 5 0 010 7.07M19.07 4.93a10 10 0 010 14.14"></path>
+                                        </svg>
+                                    </span>
+                                    <span class="settings-accordion-copy">
+                                        <span class="settings-accordion-title">语音设置</span>
+                                        <span class="settings-accordion-description">朗读引擎与播放偏好</span>
+                                    </span>
+                                    <span class="settings-accordion-badge" :class="settings.ttsEnabled ? 'settings-accordion-badge--ok' : ''">{{ settings.ttsEnabled ? '已开启' : '已关闭' }}</span>
+                                    <svg :class="{'rotate-180': ttsSettingsExpanded}"
+                                        class="settings-collapse-chevron settings-accordion-chevron" fill="none"
+                                        stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                                    </svg>
+                                </button>
+                                <div id="tts-settings-panel" class="settings-collapse" :class="{ 'is-open': ttsSettingsExpanded }"
+                                    :aria-hidden="!ttsSettingsExpanded" :inert="!ttsSettingsExpanded">
+                                    <div class="settings-collapse__inner">
+                                        <div class="settings-collapse__content settings-panel-body">
+                                            <TtsSettings />
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- 数据 -->
+                    <section class="settings-group" aria-labelledby="settings-group-data">
+                        <h3 id="settings-group-data" class="settings-group-caption">数据</h3>
+                        <div class="settings-group-card" :class="{ 'is-open': settingsSectionsOpen.localData }">
+                            <div class="settings-accordion">
+                                <button type="button" @click="settingsSectionsOpen.localData = !settingsSectionsOpen.localData; settingsHelpTopic = ''"
+                                    class="settings-accordion-trigger"
+                                    :aria-expanded="settingsSectionsOpen.localData" aria-controls="local-data-panel">
+                                    <span class="settings-accordion-icon">
+                                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10a2 2 0 002 2h12a2 2 0 002-2V9.5L14.5 4H6a2 2 0 00-2 2v1zm4 12v-6h8v6M8 4v5h6V4"></path>
+                                        </svg>
+                                    </span>
+                                    <span class="settings-accordion-copy">
+                                        <span class="settings-accordion-title">本机数据</span>
+                                        <span class="settings-accordion-description">完整备份与恢复</span>
+                                    </span>
+                                    <span class="settings-accordion-value">备份 · 恢复</span>
+                                    <svg :class="{'rotate-180': settingsSectionsOpen.localData}"
+                                        class="settings-collapse-chevron settings-accordion-chevron" fill="none"
+                                        stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                                    </svg>
+                                </button>
+                                <div id="local-data-panel" class="settings-collapse" :class="{ 'is-open': settingsSectionsOpen.localData }"
+                                    :aria-hidden="!settingsSectionsOpen.localData" :inert="!settingsSectionsOpen.localData">
+                                    <div class="settings-collapse__inner">
+                                        <div class="settings-collapse__content settings-panel-body">
+                                            <DataManager />
+                                            <div class="mt-4 rounded-xl border border-gray-200 bg-white p-3">
+                                                <!-- Mobile: title block stacks above a 3-col button grid; sm+: side-by-side
+                                                     (three inline buttons otherwise squeeze the min-w-0 title into vertical text). -->
+                                                <div class="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
+                                                    <div class="min-w-0">
+                                                        <div class="flex items-center gap-1.5">
+                                                            <span class="text-sm font-bold text-gray-700">运行日志</span>
+                                                            <button type="button" @click="diagnosticsHelpOpen = !diagnosticsHelpOpen"
+                                                                class="settings-help-trigger" :class="{ 'is-open': diagnosticsHelpOpen }"
+                                                                :aria-expanded="diagnosticsHelpOpen" aria-label="查看运行日志说明"
+                                                                title="运行日志说明">
+                                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                                        d="M9.1 9a3 3 0 115.8 1.1c-.6 1.1-1.9 1.3-2.5 2.2-.3.4-.4.8-.4 1.2M12 17h.01"></path>
+                                                                </svg>
+                                                            </button>
+                                                        </div>
+                                                        <div class="mt-0.5 text-[11px] text-gray-400">
+                                                            最近 {{ requestDiagnosticsCount }} 条 / 其中 LLM 对话 {{ chatDiagnosticsCount }} 条
+                                                        </div>
+                                                    </div>
+                                                    <div class="grid grid-cols-3 gap-2 sm:flex sm:flex-shrink-0 sm:items-center sm:justify-end">
+                                                        <button type="button" @click="copyDiagnosticsSummary"
+                                                            class="inline-flex min-h-[44px] items-center justify-center text-xs px-2 whitespace-nowrap rounded-lg bg-gray-50 hover:bg-gray-100 text-gray-600 font-medium border border-gray-200 transition-all active:scale-95"
+                                                            title="复制一段可粘贴到群聊的文本摘要（≤10 行）">
+                                                            <svg class="w-3.5 h-3.5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                                    d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h8a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m0 0l3-3m-3 3h3"></path>
+                                                            </svg>
+                                                            复制摘要
+                                                        </button>
+                                                        <button type="button" @click="exportRequestDiagnostics('file')"
+                                                            class="inline-flex min-h-[44px] items-center justify-center text-xs px-2 whitespace-nowrap rounded-lg bg-primary-600 hover:bg-primary-700 text-white font-medium border border-primary-600 transition-all active:scale-95 shadow-sm">
+                                                            <svg class="w-3.5 h-3.5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                                    d="M12 10v6m0 0l-3-3m3 3l3-3m4 4H5a2 2 0 01-2-2V6a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414A1 1 0 0121 11v7a2 2 0 01-2 2z"></path>
+                                                            </svg>
+                                                            导出日志
+                                                        </button>
+                                                        <button type="button" @click="clearRequestDiagnostics"
+                                                            class="inline-flex min-h-[44px] items-center justify-center text-xs px-2 whitespace-nowrap rounded-lg bg-gray-50 hover:bg-red-50 text-gray-500 hover:text-red-600 font-medium border border-gray-200 transition-all active:scale-95"
+                                                            title="清空运行日志">
+                                                            <svg class="w-3.5 h-3.5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 100 2v3M4 7h16"></path>
+                                                            </svg>
+                                                            清空
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                                <div v-if="diagnosticsFailureRecords.length" class="mt-2 rounded-lg bg-gray-50 p-2.5">
+                                                    <div class="flex items-center justify-between">
+                                                        <span class="text-[11px] font-medium text-gray-500">最近异常 ({{ diagnosticsFailureRecords.length }})</span>
+                                                        <button type="button" @click="diagnosticsShowAll = !diagnosticsShowAll"
+                                                            class="text-[11px] text-primary-600 hover:text-primary-700">
+                                                            {{ diagnosticsShowAll ? '收起' : '展开' }}
+                                                        </button>
+                                                    </div>
+                                                    <div class="mt-1.5 space-y-1.5">
+                                                        <div v-for="record in (diagnosticsShowAll ? diagnosticsFailureRecords.slice(0, 10) : diagnosticsFailureRecords.slice(0, 4))"
+                                                            :key="record.id" class="min-w-0">
+                                                            <div class="flex items-center gap-1.5">
+                                                                <span class="w-2 h-2 rounded-full flex-shrink-0" :class="diagnosticsSeverityDotClass(record.severity)"></span>
+                                                                <span class="text-[11px] text-gray-500 truncate">{{ record.category }}/{{ record.action }}</span>
+                                                                <span v-if="record.severity === 'fatal'" class="flex-shrink-0 text-[10px] font-medium text-red-600">崩溃</span>
+                                                                <span class="ml-auto text-[10px] text-gray-400 flex-shrink-0">{{ formatDiagnosticsTime(record.startedAt) }}</span>
+                                                            </div>
+                                                            <div class="mt-0.5 text-xs text-gray-600 truncate" :title="diagnosticsResultLabel(record)">{{ diagnosticsResultLabel(record) }}</div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div v-if="diagnosticsHelpOpen" class="mt-2 rounded-lg bg-gray-50 p-2.5 text-[11px] leading-5 text-gray-500">
+                                                    仅记录「行为摘要」（功能类型、耗时、字符数、哈希、短错误提示），不含聊天明文、思考过程或设定正文，可安全导出用于定位问题。
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
                     </section>
                 </div>
-                            <UpdateChecker />
-
-            <!-- Presets View -->
+                <UpdateChecker />
             </div>
 </template>
 
 <script>
-import { inject, ref } from "vue";
+import { computed, inject, ref } from "vue";
 import ApiConfig from "../settings/ApiConfig.vue";
 import PresetManager from "../settings/PresetManager.vue";
 import DataManager from "../settings/DataManager.vue";
 import UpdateChecker from "../settings/UpdateChecker.vue";
 import AdvancedSettings from "../settings/AdvancedSettings.vue";
 import TtsSettings from "../settings/TtsSettings.vue";
+
+// appContext carries a mix of refs and plain values depending on the module
+// that created them; read either shape without assuming one.
+const readCtx = (value) => (value && typeof value === 'object' && 'value' in value ? value.value : value);
+
 // 2026-08-28 Phase 1.6: shared components are declared locally now that the
 // app-level global registration workaround has been removed.
 export default {
@@ -279,7 +299,30 @@ export default {
     const ctx = inject("appContext");
     const diagnosticsHelpOpen = ref(false);
     const diagnosticsShowAll = ref(false);
-    return { ...(ctx || {}), diagnosticsHelpOpen, diagnosticsShowAll };
+
+    // Connection state as a semantic badge: the old plain-gray summary made an
+    // error ("连接失败") indistinguishable from a benign value.
+    const apiBadge = computed(() => {
+      const status = readCtx(ctx?.apiStatus);
+      const latency = readCtx(ctx?.apiLatency);
+      if (status === 'connected') {
+        return { text: latency ? `${latency}ms` : '已连接', className: 'settings-accordion-badge--ok', title: '连接正常' };
+      }
+      if (status === 'checking') {
+        return { text: '检测中', className: 'settings-accordion-badge--warn', title: '正在检测连接' };
+      }
+      if (status === 'error') {
+        return { text: '连接失败', className: 'settings-accordion-badge--bad', title: '无法连接到当前 API 提供商' };
+      }
+      return { text: '未检测', className: '', title: '尚未检测连接状态' };
+    });
+
+    const themeModeLabel = computed(() => {
+      const mode = ctx?.settings?.themeMode;
+      return mode === 'dark' ? '深色' : (mode === 'light' ? '浅色' : '跟随系统');
+    });
+
+    return { ...(ctx || {}), diagnosticsHelpOpen, diagnosticsShowAll, apiBadge, themeModeLabel };
   }
 };
 </script>

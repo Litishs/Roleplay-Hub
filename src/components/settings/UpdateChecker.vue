@@ -40,7 +40,10 @@
             <span>Roleplay Hub</span>
             <span v-if="appVersionName" class="font-mono">v{{ appVersionName }}</span>
             <span v-if="appBuildType" class="font-mono">({{ appBuildType }})</span>
-            <span v-if="latestVersionName" class="text-green-500">→ v{{ latestVersionName }}</span>
+            <!-- Only advertise an upgrade when one actually exists: rendering the
+                 arrow whenever the release list had a name made "v2.70 → v2.70"
+                 read as an available update. -->
+            <span v-if="updateAvailable && latestVersionName" class="text-green-500">→ v{{ latestVersionName }}</span>
             <button @click="checkForUpdates(true)" :disabled="checkingUpdate" class="hover:text-primary-500 transition-colors ml-1.5 hit-expand [--hit-out:-15px]" title="检查更新">
                 <svg class="w-3.5 h-3.5 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>

@@ -37,6 +37,13 @@ test("update-checker.js fetches release body for display", () => {
     assert.match(checker, /body:\s*data\.body\s*\|\|\s*""/);
 });
 
+test("the version footer only advertises an upgrade when one exists", () => {
+    // Regression: the arrow was rendered whenever the release list had a name,
+    // so an up-to-date install still read "v2.70 -> v2.70" as an update.
+    assert.match(updateCheckerHtml, /v-if="updateAvailable && latestVersionName"[^>]*>→ v\{\{ latestVersionName \}\}/);
+    assert.doesNotMatch(updateCheckerHtml, /<span v-if="latestVersionName" class="text-green-500">/);
+});
+
 test("app.js renders release notes inline for the settings-footer card", () => {
     assert.match(app, /const checkForUpdates = async/);
     assert.match(app, /const downloadAndInstallUpdate = async/);
