@@ -371,7 +371,7 @@ year 2025, textless version, {{petite,loli}}, Petite figure, no text, The image 
             description: character.description,
             personality: character.personality,
             first_mes: character.first_mes,
-            creator_notes: character.creator_notes || 'Exported from RolePlay Hub',
+            creator_notes: character.creator_notes || 'Exported from RoleplayHub',
             ...Object.fromEntries(preservedCardFields.map(field => {
                 const entry = includeCardFieldIfPresent(character, field);
                 return Object.keys(entry).length ? [field, entry[field]] : null;

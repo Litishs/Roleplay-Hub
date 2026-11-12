@@ -1,6 +1,6 @@
 {
   "appId": "com.roleplayhub.app",
-  "appName": "Roleplay Hub",
+  "appName": "RoleplayHub",
   "webDir": "dist",
   "android": {
     "minWebViewVersion": 83,

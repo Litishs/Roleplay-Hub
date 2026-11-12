@@ -420,7 +420,7 @@
                             d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
                     </svg>
                 </div>
-                <h3 class="text-xl font-bold text-gray-900 mb-2 text-center">欢迎使用 RolePlay Hub</h3>
+                <h3 class="text-xl font-bold text-gray-900 mb-2 text-center">欢迎使用 RoleplayHub</h3>
                 <p class="text-sm text-gray-500 mb-6 text-center">为了获得更好的沉浸式体验，请先进行个性化设置。</p>
 
                 <div class="space-y-4">

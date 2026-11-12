@@ -188,7 +188,7 @@ public class NativeStoragePlugin extends Plugin {
         try {
             ClipboardManager clipboard = (ClipboardManager) getContext().getSystemService(Context.CLIPBOARD_SERVICE);
             if (clipboard == null) throw new IOException("Clipboard unavailable");
-            clipboard.setPrimaryClip(ClipData.newPlainText("Roleplay Hub", text));
+            clipboard.setPrimaryClip(ClipData.newPlainText("RoleplayHub", text));
             call.resolve();
         } catch (Exception error) {
             call.reject("Unable to write clipboard", error);

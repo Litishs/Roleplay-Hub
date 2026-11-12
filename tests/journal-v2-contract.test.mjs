@@ -177,7 +177,7 @@ test('buildShortSummary: at most 10 lines, version header, error lines or clean 
   const clean = diagnostics.buildShortSummary();
   const cleanLines = clean.split('\n');
   assert.ok(cleanLines.length <= 10, 'short summary stays within 10 lines');
-  assert.ok(cleanLines[0].includes('Roleplay Hub 2.63 (161)'), 'first line carries app version');
+  assert.ok(cleanLines[0].includes('RoleplayHub 2.63 (161)'), 'first line carries app version');
   assert.ok(cleanLines[0].includes('release'), 'first line carries build type');
   assert.ok(clean.includes('无异常记录'));
 

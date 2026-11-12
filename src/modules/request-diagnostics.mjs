@@ -945,7 +945,7 @@ const buildShortSummary = () => {
     const summary = summarizeRecords();
     const lines = [];
     const version = sessionMeta.appVersion || 'unknown version';
-    lines.push(`Roleplay Hub ${version}${sessionMeta.buildType ? ` · ${sessionMeta.buildType}` : ''}`);
+    lines.push(`RoleplayHub ${version}${sessionMeta.buildType ? ` · ${sessionMeta.buildType}` : ''}`);
     lines.push(`${formatLocalTimestamp()} · 最近 ${records.length} 条活动记录`);
     const categoryText = Object.entries(summary.recordsByCategory).map(([name, count]) => `${name} ${count}`).join(' / ');
     if (categoryText) lines.push(`分布 ${categoryText}`);

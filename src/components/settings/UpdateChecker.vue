@@ -37,7 +37,7 @@
 
         <!-- Version footer line -->
         <div class="flex items-center justify-center gap-1.5 text-xs text-gray-400">
-            <span>Roleplay Hub</span>
+            <span>RoleplayHub</span>
             <span v-if="appVersionName" class="font-mono">v{{ appVersionName }}</span>
             <span v-if="appBuildType" class="font-mono">({{ appBuildType }})</span>
             <!-- Only advertise an upgrade when one actually exists: rendering the
