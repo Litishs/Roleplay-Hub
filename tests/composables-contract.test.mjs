@@ -298,7 +298,7 @@ test('useUiState returns live reactive state (runtime)', async () => {
     const other = useUiState();
     assert.notEqual(state.globalConfirmModal, other.globalConfirmModal, 'independent instances per call');
 
-    assert.equal(state.currentView.value, 'chat');
+    assert.equal(state.currentView.value, 'home', 'the app lands on the conversation list');
     assert.equal(state.isSidebarCollapsed.value, false);
     assert.ok(isReactive(state.uiTemplateUpdateStatus), 'uiTemplateUpdateStatus is reactive');
     assert.equal(state.uiTemplateUpdateStatus.state, 'idle');

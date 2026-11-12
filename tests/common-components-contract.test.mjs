@@ -75,46 +75,51 @@ test("SideNav user profile click opens the user setup modal", async () => {
   assert.match(vue, /showUserSetupModal = true/, "must reference the exposed showUserSetupModal");
 });
 
-test("SideNav groups 角色卡生成, 小说生成 and 万相广场 behind a collapsible 在线 nav", async () => {
+test("SideNav renders every destination as a flat, sectioned list", async () => {
   const vue = await readFile(new URL("./SideNav.vue", COMMON_DIR), "utf8");
-  // trigger: globe icon + chevron, active when either child view is current
-  assert.match(vue, /class="online-nav"/, "online nav wrapper must exist");
-  assert.match(vue, /@click="toggleOnlineNav"/, "trigger must toggle the online nav");
-  assert.match(vue, /title="在线"/, "trigger label must be 在线");
-  assert.match(vue, /\[\s*'generator',\s*'square',\s*'novel'\s*\]\.includes\(currentView\)/, "trigger highlights when generator, square or novel is active");
-  assert.match(vue, /aria-controls="online-nav-panel"/, "trigger must reference the panel");
-  // children live inside the panel and navigate to their views
-  const panelIdx = vue.indexOf('id="online-nav-panel"');
-  const genIdx = vue.indexOf("currentView = 'generator'");
-  const sqIdx = vue.indexOf("currentView = 'square'");
-  const novelIdx = vue.indexOf("currentView = 'novel'");
-  assert.ok(panelIdx > 0, "online nav panel must exist");
-  assert.ok(genIdx > panelIdx && sqIdx > genIdx && novelIdx > sqIdx, "generator, square and novel buttons must live inside the panel, after the panel opens");
-  // the old top-level standalone buttons are gone (no direct generator/square buttons outside the panel)
-  const standalone = /<button[^>]*@click="currentView = 'generator'; closeMobileMenu\(\)"\s*\n\s*title="角色卡生成"/;
-  assert.ok(!standalone.test(vue), "generator must not be a standalone top-level button anymore");
-  assert.match(vue, /<span>角色卡生成<\/span>/, "generator child item keeps its label");
-  assert.match(vue, /<span>万相广场<\/span>/, "square child item keeps its label");
-  assert.match(vue, /<span>小说生成<\/span>/, "novel child item keeps its label");
+  // 2026-11-12: the collapsible 在线/高级 groups became plain captions. A
+  // collapsed rail used to make those 7 children unreachable; flattening keeps
+  // every destination one tap away at any width.
+  for (const caption of ["常用", "在线", "高级", "系统"]) {
+    assert.ok(
+      vue.includes(`class="sidebar-nav-caption">${caption}`),
+      `missing section caption ${caption}`
+    );
+  }
+  assert.ok(!vue.includes("advanced-nav-trigger"), "no accordion trigger may remain");
+  assert.ok(!vue.includes("online-nav-panel"), "no collapsible child panel may remain");
+  assert.ok(!vue.includes("toggleOnlineNav"), "the online toggle is gone");
+
+  // 会话 replaces the old separate 聊天 + 角色卡管理 entries.
+  assert.match(vue, /currentView = 'home'/, "会话 navigates to the home view");
+  assert.match(vue, /\[\s*'home',\s*'chat'\s*\]\.includes\(currentView\)/, "the chat detail view keeps 会话 highlighted");
+  assert.ok(!vue.includes("currentView = 'chat'"), "chat is a detail view, not a sidebar destination");
+  assert.ok(!vue.includes("currentView = 'characters'"), "character management moved into the home header");
+
+  for (const view of ["memory", "uitemplates", "usage", "generator", "square", "novel",
+    "presets", "worldinfo", "regex", "tools", "plugins", "settings"]) {
+    assert.ok(vue.includes(`currentView = '${view}'`), `missing destination ${view}`);
+  }
+
+  // Captions lead each section and are hidden in the collapsed rail.
+  const sections = (vue.match(/class="sidebar-nav-caption"/g) || []).length;
+  assert.equal(sections, 4, "one caption per section");
 });
 
-test("subnav child items are indented under their group with a tree guide line", async () => {
+test("sidebar section captions and the single active signal exist in styles.css", async () => {
   const css = await readFile(new URL("../assets/css/styles.css", import.meta.url), "utf8");
-  // shared list for both 在线 and 高级 groups: indented from the parent trigger icon column
-  const listIdx = css.indexOf(".advanced-nav-list {");
-  assert.ok(listIdx > 0, "advanced-nav-list rule must exist");
-  const listBlock = css.slice(listIdx, css.indexOf("}", listIdx));
-  assert.match(listBlock, /margin:\s*[^;]*1\.375rem/, "subnav list must be indented under the parent icon column");
-  assert.match(listBlock, /padding-left:\s*0\.5rem/, "subnav list keeps inner padding for the guide line");
-  // tree guide line drawn by the list itself
-  assert.match(css, /\.advanced-nav-list::before[\s\S]*?background:\s*linear-gradient/, "subnav list draws a vertical guide line");
-  // child items are visually smaller than top-level entries
-  const itemIdx = css.indexOf(".advanced-nav-item {");
-  assert.ok(itemIdx > 0, "advanced-nav-item rule must exist");
-  const itemBlock = css.slice(itemIdx, css.indexOf("}", itemIdx));
-  assert.match(itemBlock, /font-size:\s*0\.9375rem/, "subnav items render one step smaller than top-level nav");
-  // dark mode keeps the guide line visible but muted
-  assert.match(css, /\[data-theme='dark'\] \.advanced-nav-list::before/, "dark mode overrides the guide line color");
+  assert.match(css, /\.sidebar-nav-caption\s*\{/, "section caption rule must exist");
+  assert.match(css, /\[data-theme='dark'\] \.sidebar-nav-caption/, "captions need a dark-mode colour");
+  // One active signal: flat tint + left bar. No gradient/ring/shadow stack.
+  const activeIdx = css.indexOf(".sidebar-nav-button.bg-primary-50 {");
+  assert.ok(activeIdx > 0, "active item rule must exist");
+  const activeBlock = css.slice(activeIdx, css.indexOf("}", activeIdx));
+  assert.match(activeBlock, /background:\s*rgba\(59, 130, 246, 0\.12\)/, "active row uses a flat tint");
+  assert.doesNotMatch(activeBlock, /linear-gradient/, "active row must not stack a gradient");
+  assert.doesNotMatch(activeBlock, /box-shadow/, "active row must not stack a shadow");
+  // The removed accordion styles must not come back.
+  assert.ok(!css.includes(".advanced-nav-list"), "subnav tree guide styles removed");
+  assert.ok(!css.includes(".online-nav-panel"), "collapsible panel styles removed");
 });
 
 test("management item rows stack name above controls on narrow viewports", async () => {

@@ -59,7 +59,8 @@ export function useUiState() {
     // instead of a modal; only the dismiss flag lives here.
 
     // --- View / navigation shell ---
-    const currentView = ref('chat');
+    // The app lands on the conversation list; the chat is a detail view.
+    const currentView = ref('home');
     let isMobileSidebarOpen = false;
     let nativeAppStateListener = null;
     let nativeBackButtonListener = null;

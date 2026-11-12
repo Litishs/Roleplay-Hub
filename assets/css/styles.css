@@ -551,6 +551,57 @@
             overflow-x: hidden;
         }
 
+        /* Section captions replace the old collapsible groups: every item stays
+           visible and one tap away, including in the collapsed icon rail. */
+        .sidebar-nav-caption {
+            margin: 0.75rem 0 0.375rem;
+            padding: 0 0.75rem;
+            color: #94a3b8;
+            font-size: 0.6875rem;
+            font-weight: 700;
+            letter-spacing: 0.06em;
+            line-height: 1rem;
+        }
+
+        .sidebar-nav-caption:first-child {
+            margin-top: 0;
+        }
+
+        [data-theme='dark'] .sidebar-nav-caption {
+            color: #7f8b9c;
+        }
+
+        /* Conversation list rows. The active row needs its own themed tint:
+           bg-primary-50 is not remapped for dark mode, and pairing it with the
+           dark text override produced near-white text on a pale blue row. */
+        .conversation-row:hover {
+            background: rgba(148, 163, 184, 0.12);
+        }
+
+        .conversation-row.is-active,
+        .conversation-row.is-active:hover {
+            background: rgba(59, 130, 246, 0.14);
+        }
+
+        [data-theme='dark'] .conversation-row:hover {
+            background: rgba(148, 163, 184, 0.14);
+        }
+
+        [data-theme='dark'] .conversation-row.is-active,
+        [data-theme='dark'] .conversation-row.is-active:hover {
+            background: rgba(59, 130, 246, 0.22);
+        }
+
+        /* Wide-screen chat keeps the conversation list in its own column. */
+        .chat-dual-pane {
+            min-height: 0;
+            background: #f9fafb;
+        }
+
+        .chat-pane {
+            min-height: 0;
+        }
+
         .sidebar-nav-button {
             position: relative;
             min-height: 2.75rem;
@@ -568,11 +619,10 @@
             transform: translateY(-1px);
         }
 
+        /* One active signal: a soft tint plus the left bar. The old gradient +
+           inset ring + drop shadow stacked three more cues on the same row. */
         .sidebar-nav-button.bg-primary-50 {
-            background: linear-gradient(135deg, rgba(239, 246, 255, 0.98), rgba(238, 242, 255, 0.92));
-            box-shadow:
-                inset 0 0 0 1px rgba(59, 130, 246, 0.12),
-                0 8px 22px -18px rgba(37, 99, 235, 0.45);
+            background: rgba(59, 130, 246, 0.12);
         }
 
         .sidebar-nav-button.bg-primary-50::before {
@@ -592,18 +642,6 @@
             height: 1.35rem;
         }
 
-        .advanced-nav.is-open .advanced-nav-trigger,
-        .online-nav.is-open .online-nav-trigger {
-            color: #374151;
-            background: transparent;
-            box-shadow: none;
-        }
-
-        .advanced-nav.is-open .advanced-nav-trigger::before,
-        .online-nav.is-open .online-nav-trigger::before {
-            display: none;
-        }
-
         .sidebar-nav-button:focus {
             outline: none;
         }
@@ -611,42 +649,6 @@
         .sidebar-nav-button:focus-visible {
             outline: 1px solid rgba(59, 130, 246, 0.34);
             outline-offset: -1px;
-        }
-
-        .advanced-nav-trigger .advanced-nav-chevron,
-        .online-nav-trigger .online-nav-chevron {
-            transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
-        }
-
-        .advanced-nav.is-open .advanced-nav-chevron,
-        .online-nav.is-open .online-nav-chevron {
-            transform: rotate(90deg);
-        }
-
-        .advanced-nav.is-open .advanced-nav-trigger:hover .advanced-nav-chevron,
-        .online-nav.is-open .online-nav-trigger:hover .online-nav-chevron {
-            transform: rotate(90deg) translateY(-1px);
-        }
-
-        .advanced-nav-panel,
-        .online-nav-panel {
-            display: grid;
-            grid-template-rows: 0fr;
-            opacity: 0;
-            transition:
-                grid-template-rows 0.32s cubic-bezier(0.22, 1, 0.36, 1),
-                opacity 0.2s ease;
-        }
-
-        .advanced-nav.is-open .advanced-nav-panel,
-        .online-nav.is-open .online-nav-panel {
-            grid-template-rows: 1fr;
-            opacity: 1;
-        }
-
-        .advanced-nav-panel-inner {
-            min-height: 0;
-            overflow: hidden;
         }
 
         .settings-collapse {
@@ -1077,46 +1079,6 @@
 
         .settings-collapse-chevron {
             transition: transform 0.36s cubic-bezier(0.22, 1, 0.36, 1) !important;
-        }
-
-        .advanced-nav-list {
-            position: relative;
-            display: grid;
-            gap: 0.125rem;
-            /* Indent the whole subtree under the parent trigger icon (icon center ≈ 1.375rem). */
-            margin: 0.25rem 0 0 1.375rem;
-            padding-left: 0.5rem;
-        }
-
-        .advanced-nav-list::before {
-            content: '';
-            position: absolute;
-            left: 0;
-            top: 0.2rem;
-            bottom: 0.3rem;
-            width: 2px;
-            border-radius: 999px;
-            background: linear-gradient(180deg, rgba(148, 163, 184, 0.5), rgba(148, 163, 184, 0.14));
-            pointer-events: none;
-        }
-
-        .advanced-nav-item {
-            display: flex;
-            align-items: center;
-            width: 100%;
-            min-height: 2.375rem;
-            padding: 0.5rem 0.625rem;
-            border-radius: 0.65rem;
-            font-size: 0.9375rem;
-            line-height: 1.375rem;
-            text-align: left;
-        }
-
-        .advanced-nav-item svg {
-            width: 1.125rem;
-            height: 1.125rem;
-            margin-right: 0.625rem;
-            flex-shrink: 0;
         }
 
         .segmented-switch {
@@ -2074,10 +2036,6 @@
         }
 
         @media (prefers-reduced-motion: reduce) {
-            .advanced-nav-trigger .advanced-nav-chevron,
-            .online-nav-trigger .online-nav-chevron,
-            .advanced-nav-panel,
-            .online-nav-panel,
             .settings-collapse,
             .settings-collapse__content,
             .settings-collapse-chevron,
@@ -3338,14 +3296,8 @@ opacity: 0;
             background-clip: content-box;
         }
         [data-theme='dark'] .sidebar-nav-button.bg-primary-50 {
-            background: linear-gradient(135deg, rgba(30, 58, 138, 0.45), rgba(30, 64, 175, 0.35));
+            background: rgba(59, 130, 246, 0.2);
             color: #93c5fd !important;
-            box-shadow:
-                inset 0 0 0 1px rgba(59, 130, 246, 0.2),
-                0 8px 22px -18px rgba(37, 99, 235, 0.5);
-        }
-        [data-theme='dark'] .advanced-nav-list::before {
-            background: linear-gradient(180deg, rgba(71, 85, 105, 0.65), rgba(71, 85, 105, 0.2));
         }
         [data-theme='dark'] .management-item-controls {
             border-top-color: rgba(55, 65, 81, 0.9);

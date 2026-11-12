@@ -52,9 +52,11 @@ test('plugin marketplace is a standalone sidebar view', () => {
     assert.match(app, /const AsyncPluginsPanel = defineAsyncComponent\(\(\) => import\('\.\.\/components\/views\/PluginsPanel\.vue'\)\);/);
     assert.match(indexHtml, /<plugins-panel v-if="currentView === 'plugins'"><\/plugins-panel>/);
     // The sidebar entry comes after "Character Management" (character button first, then the marketplace button)
+    // 2026-11-12: the character manager moved out of the sidebar (it now lives
+    // behind the home header), so the order check anchors on 会话 instead.
     assert.ok(
-        sideNav.indexOf("currentView = 'characters'") < sideNav.indexOf("currentView = 'plugins'"),
-        'sidebar order: characters before plugins'
+        sideNav.indexOf("currentView = 'home'") < sideNav.indexOf("currentView = 'plugins'"),
+        'sidebar order: conversation list before the plugin marketplace'
     );
 });
 

@@ -58,6 +58,7 @@ import WorldInfoPanel from '../components/views/WorldInfoPanel.vue';
 import CharacterInfo from '../components/chat/CharacterInfo.vue';
 import MessageList from '../components/chat/MessageList.vue';
 import MessageInput from '../components/chat/MessageInput.vue';
+import ConversationList from '../components/chat/ConversationList.vue';
 
 // Phase 4.2 build optimization: view panels only render behind
 // `v-if="currentView === ..."` (index.html), so they are async components and
@@ -80,6 +81,7 @@ const AsyncToolsPanel = defineAsyncComponent(() => import('../components/views/T
 const AsyncUsageStatsPanel = defineAsyncComponent(() => import('../components/views/UsageStatsPanel.vue'));
 const AsyncMemoryPanel = defineAsyncComponent(() => import('../components/views/MemoryPanel.vue'));
 import { generateUUID, parseCot } from './utils.mjs';
+import { buildConversationEntry, markConversationRead, mergeConversationEntry, sortConversations } from './conversation-summary.mjs';
 import { useMemorySystem } from '../composables/useMemorySystem.mjs';
 import { useWorldInfo } from '../composables/useWorldInfo.mjs';
 import { useCharacterState } from '../composables/useCharacterState.mjs';
@@ -110,7 +112,7 @@ const __app = createApp({
         CharacterPanel: AsyncCharacterPanel, GeneratorPanel: AsyncGeneratorPanel, SquarePanel: AsyncSquarePanel, NovelPanel: AsyncNovelPanel, SettingsPanel: AsyncSettingsPanel, PluginsPanel: AsyncPluginsPanel, PresetsPanel: AsyncPresetsPanel, UiTemplatePanel: AsyncUiTemplatePanel, RegexPanel: AsyncRegexPanel, ToolsPanel: AsyncToolsPanel, UsageStatsPanel: AsyncUsageStatsPanel, MemoryPanel: AsyncMemoryPanel, WorldInfoPanel,
         UiTemplatePending, EmbeddedViewContent, GenerationTimer, SettingsPageHeader,
         SideNav, ToastNotification, ConfirmDialog, ModalDialog,
-        CharacterInfo, MessageList, MessageInput,
+        CharacterInfo, MessageList, MessageInput, ConversationList,
         CustomSelect: RPHubCustomSelect,
         UiTemplateFrame: UiTemplateFrame,
         'settings-page-header': SettingsPageHeader,
@@ -122,6 +124,7 @@ const __app = createApp({
         'character-info': CharacterInfo,
         'message-list': MessageList,
         'message-input': MessageInput,
+        'conversation-list': ConversationList,
         'side-nav': SideNav,
         'toast-notification': ToastNotification,
         'confirm-dialog': ConfirmDialog,
@@ -1985,6 +1988,42 @@ const __app = createApp({
         };
         const getCurrentChatStorageScopeId = () => getCurrentStoryBranchScopeId() || currentCharacter.value?.uuid || null;
         const { lastContextMessages, lastTriggeredWorldInfos, lastContextTotalLength } = chatState;
+        // Per-character conversation summary (last line + unread marker) shown by
+        // the home conversation list. Keyed by character uuid, persisted under its
+        // own small KV key so the home list never has to read every chat.
+        const conversationSummaries = ref({});
+        const sortedConversations = computed(() => sortConversations(characters.value, conversationSummaries.value));
+        let conversationSummarySaveTimer = null;
+        const saveConversationSummariesNow = () => {
+            if (conversationSummarySaveTimer) {
+                clearTimeout(conversationSummarySaveTimer);
+                conversationSummarySaveTimer = null;
+            }
+            return setStoredValue('chat_summaries', conversationSummaries.value)
+                .catch(error => console.error('Conversation summary save failed:', error));
+        };
+        const scheduleConversationSummarySave = () => {
+            if (conversationSummarySaveTimer) clearTimeout(conversationSummarySaveTimer);
+            conversationSummarySaveTimer = setTimeout(() => {
+                conversationSummarySaveTimer = null;
+                saveConversationSummariesNow();
+            }, 1200);
+        };
+        // refreshConversationSummary: read the newest speakable line from the live
+        // history. `read` is true only while that chat is the open one, otherwise a
+        // background save would silently clear the unread marker.
+        const refreshConversationSummary = ({ read = true, at = Date.now() } = {}) => {
+            const char = currentCharacter.value;
+            if (!char?.uuid) return;
+            const entry = buildConversationEntry(chatHistory.value);
+            const before = conversationSummaries.value;
+            let next = before;
+            if (entry) next = mergeConversationEntry(before, char.uuid, entry, { read });
+            if (read) next = markConversationRead(next, char.uuid, at);
+            if (next === before) return;
+            conversationSummaries.value = next;
+            scheduleConversationSummarySave();
+        };
         const tokenUsageHistory = ref([]);
         const tokenUsagePage = ref(1);
         const tokenUsageFilter = ref('all');
@@ -2059,9 +2098,17 @@ const __app = createApp({
             });
         };
 
+        // Keep the conversation entry fresh when the open chat changes shape
+        // (new message appended, character switched, history replaced).
+        watch([currentCharacterIndex, () => chatHistory.value.length], () => {
+            refreshConversationSummary({ read: currentView.value === 'chat' });
+        });
+
         // Watch view change to refresh embedded pages and sortable lists
         watch(currentView, (newView) => {
             settingsHelpTopic.value = '';
+            // Entering the chat means the user is looking at it: clear the unread marker.
+            if (newView === 'chat') refreshConversationSummary({ read: true });
             if (newView === 'generator') {
                 isGeneratorLoading.value = true;
                 generatorUrl.value = `./character/index.html?t=${Date.now()}`;
@@ -2409,6 +2456,8 @@ const __app = createApp({
                 clearTimeout(chatHistorySaveTimer);
                 chatHistorySaveTimer = null;
             }
+            // The home list reads this instead of loading every chat.
+            refreshConversationSummary({ read: currentView.value === 'chat' });
             const characterId = getCurrentChatStorageScopeId();
             if (currentCharacterIndex.value < 0 || !characterId) return Promise.resolve(false);
 
@@ -9458,6 +9507,7 @@ const __app = createApp({
                         persistSingleDraft(activeDraft).catch(error => console.error('Background draft save failed:', error));
                     }
                     flushPendingChatHistorySave().catch(error => console.error('Background chat save failed:', error));
+                    saveConversationSummariesNow();
                 });
                 nativeBackButtonListener = await nativeApp.addListener('backButton', async () => {
                     if (globalConfirmModal.value.show) {
@@ -9475,8 +9525,10 @@ const __app = createApp({
                         closeMobileMenu();
                     } else if (isChatFullscreen.value) {
                         await toggleChatFullscreen();
-                    } else if (currentView.value !== 'chat') {
-                        currentView.value = 'chat';
+                    } else if (currentView.value !== 'home') {
+                        // Chat is a detail view now: back returns to the list
+                        // instead of jumping straight out of the app.
+                        currentView.value = 'home';
                     } else {
                         await nativeApp.minimizeApp();
                     }
@@ -9484,6 +9536,14 @@ const __app = createApp({
             }
 
             await loadData();
+            try {
+                const storedSummaries = await getStoredValue('chat_summaries');
+                if (storedSummaries && typeof storedSummaries === 'object' && !Array.isArray(storedSummaries)) {
+                    conversationSummaries.value = storedSummaries;
+                }
+            } catch (error) {
+                console.error('Conversation summary restore failed:', error);
+            }
             if (_dataLoadFailed) return;
             _dataLoaded = true;
             await initializePlugins().catch(error => console.error('[PluginRegistry] Plugin initialization failed:', error));
@@ -9735,8 +9795,10 @@ const __app = createApp({
 
                 await scrollChatToBottom();
             } else if (characters.value.length > 0) {
-                // Fallback to first character if no last active
-                selectCharacter(0);
+                // Fallback to first character if no last active. selectCharacter
+                // opens the chat, so return to the list afterwards: the home
+                // screen is the landing view.
+                selectCharacter(0).then(() => { currentView.value = 'home'; });
             }
 
             // Phase 4.3 startup optimization: everything below is
@@ -10018,7 +10080,7 @@ const __app = createApp({
             showAuthorNoticeModal, closeAuthorNoticeModal, // Author Notice Modal
             modelsLoading,
             isGenerating, isRemoteGenerating, remoteEstimatedTime, isReceiving, isThinking, hasActiveToolInlineWork, isConversationBusy, activeToolContinuationMessageId, activeToolContinuationHasResponse, userInput, modelSearchQuery, activeModelTag, modelTags, characterSearchQuery, filteredModels, filteredCharacters,
-            user, settings, apiProviderOptions, selectedApiProvider, isCustomApiProvider, customApiProviderOptions, showApiProviderSelector, selectApiProvider, characters, currentCharacter, currentCharacterIndex, chatHistory, displayedChatMessages, chatTopSpacerHeight, chatBottomSpacerHeight, handleChatScroll, presets, presetRoleOptions, fontFamilyOptions, themeModeOptions, imageStyleOptions, imageModelOptions, availableImageStyleOptions, imageSizeOptions, imageGenCountOptions, scopeOptions, uiTemplatePlacementOptions, worldInfoPositionOptions, getPresetRoleLabel, getPresetRoleDisplayLabel, getPresetRoleBadgeClass, regexScripts, worldInfo,
+            user, settings, apiProviderOptions, selectedApiProvider, isCustomApiProvider, customApiProviderOptions, showApiProviderSelector, selectApiProvider, characters, currentCharacter, currentCharacterIndex, chatHistory, sortedConversations, conversationSummaries, displayedChatMessages, chatTopSpacerHeight, chatBottomSpacerHeight, handleChatScroll, presets, presetRoleOptions, fontFamilyOptions, themeModeOptions, imageStyleOptions, imageModelOptions, availableImageStyleOptions, imageSizeOptions, imageGenCountOptions, scopeOptions, uiTemplatePlacementOptions, worldInfoPositionOptions, getPresetRoleLabel, getPresetRoleDisplayLabel, getPresetRoleBadgeClass, regexScripts, worldInfo,
             activeTools, activeToolAggressivenessOptions: ACTIVE_TOOL_AGGRESSIVENESS_OPTIONS, editingActiveTool, normalizeActiveTools, isWebActiveTool, getActiveToolDisplayDescription, getActiveToolResultCountMin, getActiveToolResultCountMax,
             getToolCallModeText, hasThinkingOrTools, isMessageThinkingOrRunning, isThinkingSummaryOpen, toggleThinkingSummary, markThinkingSummaryDetailOpened, getTimelineSteps,
             chatRoundStats, conversationBodyLength, summaryCompressedBodyLength,
