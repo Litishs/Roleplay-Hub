@@ -25,6 +25,30 @@ export default defineConfig({
     // entry point from package.json "module" field before the alias is applied.
     exclude: ['vue'],
   },
+  server: {
+    // Only src/, index.html, assets/ and the standalone pages belong to the
+    // dev module graph. The rest of the tree is build output, device test
+    // notes, or the toolchain — and .toolchains/ alone is ~35k files (JDK +
+    // Android SDK). Recursive watching all of it on Windows stalls Vite's
+    // event loop in multi-second bursts: an idle reload of `/` measured 1-50s
+    // with the watcher on versus ~5ms with these directories ignored.
+    // Irrelevant changes also triggered spurious full-reloads.
+    watch: {
+      ignored: [
+        // Keep Vite's own defaults, since an explicit list replaces them.
+        '**/.git/**',
+        '**/node_modules/**',
+        '**/.toolchains/**',
+        '**/android/**',
+        '**/dist/**',
+        '**/debug_apk/**',
+        '**/documents/**',
+        '**/.zcode/**',
+        '**/.mimosa/**',
+        '**/.openclaw*/**',
+      ],
+    },
+  },
   define: {
     // vue.esm-bundler.js expects these feature flags at compile time
     __VUE_OPTIONS_API__: JSON.stringify(true),
