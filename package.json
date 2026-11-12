@@ -24,7 +24,7 @@
         "@capacitor/core": "^7.4.0",
         "@capacitor/filesystem": "^7.1.4",
         "@fontsource-variable/lora": "^5.2.8",
-        "dompurify": "^3.2.6",
+        "dompurify": "^3.4.17",
         "jquery": "^3.7.1",
         "marked": "^15.0.12",
         "sortablejs": "^1.15.6",
