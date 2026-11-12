@@ -13,10 +13,14 @@
         <!-- Sidebar Header -->
         <div class="h-16 flex items-center border-b border-gray-100/80 bg-white/70 backdrop-blur-xl transition-all duration-300"
             :class="isSidebarCollapsed ? 'justify-center px-0' : 'justify-between px-6'">
-            <div v-show="!isSidebarCollapsed" class="app-logo relative inline-flex items-baseline gap-1.5 pr-1 min-w-0">
-                <span class="text-[21px] font-extrabold text-gray-800 tracking-[0.08em] leading-none">RP</span>
-                <span class="text-[16px] font-semibold text-primary-600 tracking-[0.18em] leading-none">HUB</span>
-                <span class="absolute -bottom-1 left-0 h-[2px] w-11 rounded-full bg-primary-500/60"></span>
+            <!-- The wordmark is one camel-case token, so the two spans sit flush
+                 (no gap) with tight tracking — otherwise it reads "Roleplay Hub".
+                 Standard scale utilities only: assets/generated/tailwind.css is
+                 prebuilt, and a brand-new arbitrary value would not exist there. -->
+            <div v-show="!isSidebarCollapsed" class="app-logo relative inline-flex items-baseline pr-1 min-w-0">
+                <span class="text-xl font-extrabold text-gray-800 tracking-tight leading-none">Roleplay</span>
+                <span class="text-xl font-semibold text-primary-600 leading-none">Hub</span>
+                <span class="absolute -bottom-1 left-0 h-[2px] w-14 rounded-full bg-primary-500/60"></span>
             </div>
             <button @click="isSidebarCollapsed = !isSidebarCollapsed"
                 :class="['hidden md:flex items-center justify-center bg-white hover:bg-gray-50 border border-gray-200/80 rounded-xl text-gray-500 hover:text-primary-600 transition-all shadow-sm active:scale-95', isSidebarCollapsed ? 'w-12 h-12 p-0' : 'p-2']"
