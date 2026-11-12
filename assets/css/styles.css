@@ -3245,6 +3245,7 @@ opacity: 0;
         [data-theme='dark'] .border-gray-200 { border-color: var(--d-border) !important; }
         [data-theme='dark'] .border-gray-300 { border-color: #4b5563 !important; }
         [data-theme='dark'] .border-gray-100\/80 { border-color: rgba(55,65,81,.8) !important; }
+        [data-theme='dark'] .border-gray-100\/60 { border-color: rgba(55,65,81,.6) !important; }
         [data-theme='dark'] .border-gray-200\/50 { border-color: rgba(55,65,81,.5) !important; }
         [data-theme='dark'] .border-gray-200\/60 { border-color: rgba(55,65,81,.6) !important; }
         [data-theme='dark'] .border-gray-200\/70 { border-color: rgba(55,65,81,.7) !important; }

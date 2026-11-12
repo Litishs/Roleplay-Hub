@@ -4,7 +4,10 @@
          wide-screen side column next to the open chat. -->
     <div class="conversation-list flex flex-col h-full min-h-0 bg-gray-50"
         :class="compact ? 'conversation-list--compact' : ''">
-        <header class="flex items-center gap-2 flex-shrink-0 border-b border-gray-200 bg-white/85 px-3"
+        <!-- bg-white/90, not /85: the dark-theme override in styles.css covers
+             the 10-step opacity scale (40/50/60/70/80/90/95) only, so a stray
+             /85 stayed white in dark mode and lit up this whole bar. -->
+        <header class="flex items-center gap-2 flex-shrink-0 border-b border-gray-200 bg-white/90 px-3"
             :class="compact ? 'h-12' : 'h-14'">
             <button type="button" v-if="!compact" @click="toggleMobileMenu"
                 class="md:hidden -ml-1 p-2.5 rounded-xl text-gray-500 hover:text-gray-800 hover:bg-gray-100 transition-colors"
