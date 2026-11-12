@@ -1,10 +1,11 @@
 import { existsSync, statSync } from 'node:fs';
 import { createWriteStream } from 'node:fs';
-import { copyFile, mkdir, rm } from 'node:fs/promises';
+import { mkdir, rm } from 'node:fs/promises';
 import { pipeline } from 'node:stream/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { x as extractTar } from 'tar';
+import { copyWithoutSourceMap } from './lib/strip-source-map.mjs';
 
 const root = process.cwd();
 const target = path.join(root, 'assets', 'vendor', 'transformers');
@@ -23,7 +24,7 @@ const libPairs = [
 let copied = 0;
 for (const [source, destination] of libPairs) {
   if (!existsSync(path.join(root, source))) continue;
-  await copyFile(path.join(root, source), path.join(target, destination));
+  await copyWithoutSourceMap(path.join(root, source), path.join(target, destination));
   copied++;
 }
 

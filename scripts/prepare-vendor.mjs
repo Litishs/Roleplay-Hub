@@ -1,5 +1,6 @@
-import { copyFile, mkdir } from 'node:fs/promises';
+import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
+import { copyWithoutSourceMap } from './lib/strip-source-map.mjs';
 
 const root = process.cwd();
 const target = path.join(root, 'assets', 'vendor');
@@ -19,5 +20,5 @@ const files = [
 ];
 
 for (const [source, destination] of files) {
-  await copyFile(path.join(root, source), path.join(target, destination));
+  await copyWithoutSourceMap(path.join(root, source), path.join(target, destination));
 }
