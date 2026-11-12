@@ -134,8 +134,6 @@ export function useUiState() {
     const checkingUpdate = ref(false);
     const lastUpdateCheck = ref(null);
     const latestVersionName = ref('');
-    const downloadingUpdate = ref(false);
-    const downloadProgress = ref(0);
     // True once the user has dismissed the update announcement today; the
     // settings-footer card hides until the date rolls over.
     const updateNoticeDismissedToday = ref(false);
@@ -190,8 +188,6 @@ export function useUiState() {
         checkingUpdate,
         lastUpdateCheck,
         latestVersionName,
-        downloadingUpdate,
-        downloadProgress,
         updateNoticeDismissedToday,
         showAuthorNoticeModal,
         showConfirmModal,

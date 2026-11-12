@@ -28,14 +28,23 @@ test("index.html uses Vite module entry point", () => {
     assert.ok(html.includes('<script type="module" src="/src/main.js">'), "Vite module entry should be present");
 });
 
-test("update-checker.js fetches release body for display", () => {
-    assert.match(checker, /export { compareVersions, checkForUpdate/);
+test("update-checker fetches release body for display", () => {
+    assert.match(checker, /export { compareVersions, checkForUpdate, fetchLatestRelease, GITHUB_REPO, RELEASES_PAGE_URL }/);
     assert.match(checker, /checkForUpdate/);
-    assert.match(checker, /downloadApk/);
-    assert.match(checker, /saveAndInstallApk/);
     assert.match(checker, /Litishs\/Roleplay-Hub/);
     // Latest release body (GitHub release notes) must be surfaced for display
     assert.match(checker, /body:\s*data\.body\s*\|\|\s*""/);
+});
+
+test("the in-app APK download path stays removed", () => {
+    // Regression (2026-11-12): the old flow downloaded the APK with WebView
+    // fetch, which the release asset host blocks with CORS, then handed a
+    // file:// URI to a native installer that cannot open it. The update card
+    // now opens the release page; a native download+install flow is planned.
+    assert.doesNotMatch(checker, /downloadApk/);
+    assert.doesNotMatch(checker, /saveAndInstallApk/);
+    assert.doesNotMatch(app, /downloadAndInstallUpdate/);
+    assert.doesNotMatch(app, /saveAndInstallApk/);
 });
 
 test("the version footer only advertises an upgrade when one exists", () => {
@@ -43,6 +52,9 @@ test("the version footer only advertises an upgrade when one exists", () => {
     // so an up-to-date install still read "v2.70 -> v2.70" as an update.
     assert.match(updateCheckerHtml, /v-if="updateAvailable && latestVersionName"[^>]*>→ v\{\{ latestVersionName \}\}/);
     assert.doesNotMatch(updateCheckerHtml, /<span v-if="latestVersionName" class="text-green-500">/);
+    // The arrow also opens the release page, so the update stays reachable
+    // after the announcement card was dismissed for the day.
+    assert.match(updateCheckerHtml, /<button v-if="updateAvailable && latestVersionName" @click="openReleasePage\(\)"/);
 });
 
 test("compareVersions orders SemVer three-segment releases", () => {
@@ -59,8 +71,13 @@ test("compareVersions orders SemVer three-segment releases", () => {
 
 test("app.js renders release notes inline for the settings-footer card", () => {
     assert.match(app, /const checkForUpdates = async/);
-    assert.match(app, /const downloadAndInstallUpdate = async/);
     assert.match(app, /RPHUpdateChecker/);
+    // The update action opens the browser release page instead of downloading
+    // the APK inside the WebView (see the removed-download regression test).
+    assert.match(app, /const openReleasePage = async/);
+    assert.match(app, /updateInfo\.value\.html_url\) \|\| RELEASES_PAGE_URL/);
+    assert.match(app, /browser\.open\(\{ url: url \}\)/);
+    assert.match(app, /window\.open\(url, '_blank', 'noopener,noreferrer'\)/);
     // Release body is converted to sanitized HTML for the inline update card
     assert.match(app, /const renderReleaseNotesHtml/);
     assert.match(app, /DOMPurify\.sanitize/);
@@ -70,10 +87,10 @@ test("app.js renders release notes inline for the settings-footer card", () => {
     assert.ok(!/releaseNotesModal/.test(app), "release-notes modal state removed");
     // Update display state lives in useUiState (Phase 2); app.mjs keeps the logic
     assert.match(uiState, /const latestVersionName = ref/);
-    assert.match(uiState, /const downloadingUpdate = ref/);
-    assert.match(uiState, /const downloadProgress = ref/);
+    assert.ok(!/const downloadingUpdate = ref/.test(uiState), "download state removed with the dead flow");
+    assert.ok(!/const downloadProgress = ref/.test(uiState), "progress state removed with the dead flow");
     assert.match(app, /const uiState = useUiState\(\);/);
-    assert.match(app, /checkForUpdates, checkingUpdate, updateAvailable, updateInfo, latestVersionName, downloadingUpdate, downloadProgress, downloadAndInstallUpdate,/);
+    assert.match(app, /checkForUpdates, checkingUpdate, updateAvailable, updateInfo, latestVersionName, openReleasePage,/);
     assert.match(app, /updateNoticeDismissedToday, dismissUpdateNoticeToday, renderReleaseNotesHtml,/);
 });
 
@@ -103,15 +120,16 @@ test("build type (release/debug) is bridged from native to the version footer", 
     assert.match(app, /appVersionName, appVersionCode, appBuildType, checkForUpdates/);
 });
 
-test("UpdateChecker.vue shows an inline update card with dismiss + install, plus version footer", () => {
+test("UpdateChecker.vue shows an inline update card with dismiss + release page, plus version footer", () => {
     // Inline announcement card gates on update availability and today's dismiss
     assert.match(updateCheckerHtml, /v-if="updateAvailable && !updateNoticeDismissedToday"/);
     assert.match(updateCheckerHtml, /@click="dismissUpdateNoticeToday"/);
     assert.match(updateCheckerHtml, /v-html="renderReleaseNotesHtml\(updateInfo && updateInfo\.body\)"/);
-    // The update button must invoke download with no event argument so the
-    // retry-count default (2) is not clobbered by the click event object.
-    assert.match(updateCheckerHtml, /@click="downloadAndInstallUpdate\(\)"/);
-    assert.match(updateCheckerHtml, /downloadProgress/);
+    // The update action opens the release page in the browser; the WebView
+    // cannot download GitHub release assets itself.
+    assert.match(updateCheckerHtml, /@click="openReleasePage\(\)"/);
+    assert.match(updateCheckerHtml, /前往发布页更新/);
+    assert.ok(!/downloadProgress/.test(updateCheckerHtml), "no download progress in the card");
     // Footer still has the manual check button and build type
     assert.match(updateCheckerHtml, /@click="checkForUpdates\(true\)"/);
     assert.match(updateCheckerHtml, /v-if="appBuildType"/);
@@ -124,7 +142,10 @@ test("release notes modal component is fully removed from the app", () => {
     assert.ok(!html.includes('<release-notes-modal>'), "index.html no longer mounts release-notes-modal");
 });
 
-test("auto-update installs APK without wiping user data", () => {
+test("installApk stays dormant until the native update path is rebuilt", () => {
+    // The JS side no longer calls installApk (see the removed-download
+    // regression test); the native method is kept as the scaffold for the
+    // planned native download+install flow.
     // installApk launches the system package installer via ACTION_VIEW — it never
     // touches app storage, so a same-package APK upgrade preserves user data.
     assert.match(java, /public void installApk/);

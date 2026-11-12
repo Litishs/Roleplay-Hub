@@ -26,8 +26,8 @@ import { installGlobalErrorHandlers } from './global-error-handler.mjs';
 // added anywhere in the document and suspends offscreen frames.
 import './html-frame-lifecycle.mjs';
 
-import { compareVersions, checkForUpdate, fetchLatestRelease, downloadApk, saveAndInstallApk, GITHUB_REPO, RELEASES_PAGE_URL } from './update-checker.mjs';
-const RPHUpdateChecker = { compareVersions, checkForUpdate, fetchLatestRelease, downloadApk, saveAndInstallApk, GITHUB_REPO, RELEASES_PAGE_URL };
+import { compareVersions, checkForUpdate, fetchLatestRelease, GITHUB_REPO, RELEASES_PAGE_URL } from './update-checker.mjs';
+const RPHUpdateChecker = { compareVersions, checkForUpdate, fetchLatestRelease, GITHUB_REPO, RELEASES_PAGE_URL };
 
 // STA1N 生图服务地址（用于状态检测 + quota 查询）
 const IMAGE_GEN_BASE_URL = 'https://nai.sta1n.cn';
@@ -265,8 +265,6 @@ const __app = createApp({
             checkingUpdate,
             lastUpdateCheck,
             latestVersionName,
-            downloadingUpdate,
-            downloadProgress,
             updateNoticeDismissedToday
         } = uiState;
 
@@ -332,54 +330,22 @@ const __app = createApp({
                 .catch(error => console.error('Update notice dismiss save failed:', error));
         };
 
-        const downloadAndInstallUpdate = async (maxRetries = 2) => {
-            if (downloadingUpdate.value) return;
-            downloadingUpdate.value = true;
-            downloadProgress.value = 0;
-            let lastError = '';
+        // The update action hands the download off to the browser: WebView fetch
+        // cannot read GitHub release assets (the asset host sends no CORS
+        // headers), so the old in-app download/install path was retired on
+        // 2026-11-12. A native download+install flow is a planned follow-up.
+        const openReleasePage = async () => {
+            const url = (updateInfo.value && updateInfo.value.html_url) || RELEASES_PAGE_URL;
             try {
-                const checker = RPHUpdateChecker;
-                if (!checker) { showToast('\u66f4\u65b0\u6a21\u5757\u672a\u52a0\u8f7d', 'error'); return; }
-                for (let attempt = 1; attempt <= maxRetries; attempt++) {
-                    if (attempt > 1) {
-                        showToast('\u91cd\u8bd5\u4e0b\u8f7d\u7b2c ' + attempt + ' / ' + maxRetries + ' \u6b21...', 'info', 2000);
-                    }
-                    showToast('\u6b63\u5728\u4e0b\u8f7d\u66f4\u65b0...', 'info', 0);
-                    const dlResult = await checker.downloadApk(function(pct) {
-                        downloadProgress.value = pct;
-                    });
-                    if (dlResult.error) {
-                        lastError = dlResult.error;
-                        if (attempt < maxRetries) {
-                            continue;
-                        }
-                        showToast('\u4e0b\u8f7d\u5931\u8d25: ' + dlResult.error, 'error', 5000);
-                        return;
-                    }
-                    showToast('\u6b63\u5728\u5b89\u88c5...', 'info', 0);
-                    const installResult = await checker.saveAndInstallApk(dlResult.data, dlResult.tag);
-                    if (installResult.error) {
-                        showToast('\u5b89\u88c5\u5931\u8d25: ' + installResult.error, 'error', 5000);
-                        return;
-                    }
-                    // Clean up cached APK after successful handoff to installer
-                    try {
-                        const Capacitor = window.Capacitor;
-                        if (Capacitor && Capacitor.Plugins.Filesystem) {
-                            const fileName = 'Roleplay-Hub-' + dlResult.tag + '-release.apk';
-                            await Capacitor.Plugins.Filesystem.deleteFile({ path: fileName, directory: 'CACHE' });
-                        }
-                    } catch (e) {}
-                    showToast('\u5df2\u5f00\u59cb\u5b89\u88c5\u66f4\u65b0', 'success');
+                const browser = window.Capacitor?.Plugins?.Browser;
+                if (browser) {
+                    await browser.open({ url: url });
                     return;
                 }
-                showToast('\u4e0b\u8f7d\u5931\u8d25\uff08\u5df2\u91cd\u8bd5 ' + maxRetries + ' \u6b21\uff09: ' + lastError, 'error', 5000);
-            } catch (e) {
-                showToast('\u66f4\u65b0\u5931\u8d25: ' + e.message, 'error', 5000);
-            } finally {
-                downloadingUpdate.value = false;
-                downloadProgress.value = 0;
+            } catch (error) {
+                console.error('Release page open failed:', error);
             }
+            window.open(url, '_blank', 'noopener,noreferrer');
         };
 
         // Startup auto-check: fetch release info silently, so the settings-footer
@@ -10452,7 +10418,7 @@ const __app = createApp({
 
             showRegexEditor, showWorldInfoEditor, editingRegex, editingWorldInfo, worldInfoKeysText, updateEditingWorldInfoKeys,
             worldInfoSettings, showWorldInfoSettings, showMemorySettings, settingsHelpTopic, showActiveToolSettings, showUiTemplateSettings, estimatedGenerationTime, currentWaitTime, waitHint,
-            appVersionName, appVersionCode, appBuildType, checkForUpdates, checkingUpdate, updateAvailable, updateInfo, latestVersionName, downloadingUpdate, downloadProgress, downloadAndInstallUpdate,
+            appVersionName, appVersionCode, appBuildType, checkForUpdates, checkingUpdate, updateAvailable, updateInfo, latestVersionName, openReleasePage,
             globalConfirmModal,
             updateNoticeDismissedToday, dismissUpdateNoticeToday, renderReleaseNotesHtml,
             togglePlacement: (val) => {

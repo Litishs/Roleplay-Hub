@@ -841,6 +841,11 @@ public class NativeStoragePlugin extends Plugin {
 
     @PluginMethod
     public void installApk(PluginCall call) {
+        // NOTE (2026-11-12): not reachable from the UI right now. Before
+        // re-enabling the in-app update path, this method must accept the
+        // file:// URI that Capacitor Filesystem returns, and the manifest needs
+        // REQUEST_INSTALL_PACKAGES plus a <queries> entry for the package
+        // installer (Android 11+). See UpdateChecker.vue.
         String filePath = call.getString("filePath");
         if (filePath == null) { call.reject("filePath is required"); return; }
         try {

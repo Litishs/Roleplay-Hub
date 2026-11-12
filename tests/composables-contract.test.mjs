@@ -277,7 +277,7 @@ test('app.mjs wires useUiState with single call and site destructuring', () => {
     // useChatState wiring test)
     // check/update logic stays in app.mjs while display state moved
     assert.ok(app.includes('const checkForUpdates = async (showResult = false) => {'));
-    assert.ok(app.includes('const downloadAndInstallUpdate = async (maxRetries = 2) => {'));
+    assert.ok(app.includes('const openReleasePage = async () => {'));
 });
 
 test('app.mjs no longer declares UI shell state inline', () => {
@@ -309,7 +309,7 @@ test('useUiState returns live reactive state (runtime)', async () => {
     for (const key of [
         'appVersionName', 'appVersionCode', 'appBuildType', 'isAdvancedNavOpen', 'isOnlineNavOpen', 'showModelSelector',
         'showPresetEditor', 'showUiTemplateEditor', 'showRegexEditor', 'showUserSetupModal',
-        'quotaValue', 'backupInProgress', 'updateAvailable', 'downloadingUpdate',
+        'quotaValue', 'backupInProgress', 'updateAvailable',
         'showConfirmModal', 'confirmMessage', 'confirmCallback', 'updateNoticeDismissedToday'
     ]) {
         assert.ok(isRef(state[key]), `exposes ref ${key}`);

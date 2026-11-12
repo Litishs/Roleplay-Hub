@@ -27,11 +27,11 @@
             <div class="px-4 py-3 max-h-48 overflow-y-auto text-[13px] text-gray-600 leading-relaxed release-notes-body"
                 v-html="renderReleaseNotesHtml(updateInfo && updateInfo.body)"></div>
             <div class="px-4 pb-3">
-                <button @click="downloadAndInstallUpdate()" :disabled="downloadingUpdate || checkingUpdate"
+                <button @click="openReleasePage()" :disabled="checkingUpdate"
                     class="w-full py-2.5 bg-primary-600 hover:bg-primary-700 text-white text-sm font-bold rounded-xl shadow-md transition-all disabled:opacity-60">
-                    <template v-if="!downloadingUpdate">立即更新</template>
-                    <template v-else>{{ Math.round(downloadProgress * 100) }}%</template>
+                    前往发布页更新
                 </button>
+                <p class="mt-2 text-[11px] text-gray-400 text-center">在浏览器中下载 APK 后安装</p>
             </div>
         </div>
 
@@ -42,8 +42,10 @@
             <span v-if="appBuildType" class="font-mono">({{ appBuildType }})</span>
             <!-- Only advertise an upgrade when one actually exists: rendering the
                  arrow whenever the release list had a name made "v2.70 → v2.70"
-                 read as an available update. -->
-            <span v-if="updateAvailable && latestVersionName" class="text-green-500">→ v{{ latestVersionName }}</span>
+                 read as an available update. It stays clickable so the release
+                 page is reachable after the card was dismissed for the day. -->
+            <button v-if="updateAvailable && latestVersionName" @click="openReleasePage()"
+                class="text-green-500 hover:text-green-600 transition-colors" title="前往发布页更新">→ v{{ latestVersionName }}</button>
             <button @click="checkForUpdates(true)" :disabled="checkingUpdate" class="hover:text-primary-500 transition-colors ml-1.5 hit-expand [--hit-out:-15px]" title="检查更新">
                 <svg class="w-3.5 h-3.5 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
