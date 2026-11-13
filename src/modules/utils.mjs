@@ -457,10 +457,30 @@ ${content}
 
 export const debounce = (fn, delay) => {
             let timeoutId;
-            return (...args) => {
+            let pendingArgs = null;
+            const debounced = (...args) => {
+                pendingArgs = args;
                 clearTimeout(timeoutId);
-                timeoutId = setTimeout(() => fn(...args), delay);
+                timeoutId = setTimeout(() => {
+                    const callArgs = pendingArgs;
+                    pendingArgs = null;
+                    fn(...callArgs);
+                }, delay);
             };
+            // Run a pending invocation immediately and cancel the timer. Used
+            // by the background flush (flushAllPendingWrites): anything still
+            // inside the debounce window is lost if Android kills the WebView
+            // renderer of a backgrounded app. No-op when nothing is pending;
+            // returns the debounced function's result when it ran.
+            debounced.flush = () => {
+                if (pendingArgs === null) return undefined;
+                clearTimeout(timeoutId);
+                timeoutId = null;
+                const callArgs = pendingArgs;
+                pendingArgs = null;
+                return fn(...callArgs);
+            };
+            return debounced;
         };
 
 export const isDesktopSidebarViewport = () => window.matchMedia('(min-width: 768px)').matches;

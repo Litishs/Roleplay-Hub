@@ -43,7 +43,7 @@ public class MainActivity extends BridgeActivity {
                     Thread.getDefaultUncaughtExceptionHandler(), getFilesDir(), crashVersionName, crashVersionCode));
             if (getBridge() != null && getBridge().getWebView() != null) {
                 getBridge().getWebView().setWebViewClient(
-                        new CrashReportingWebViewClient(getBridge(), getFilesDir(), crashVersionName, crashVersionCode));
+                        new CrashReportingWebViewClient(getBridge(), getFilesDir(), crashVersionName, crashVersionCode, this));
             }
         } catch (Throwable ignored) {
             // Crash bookkeeping must never break app startup.

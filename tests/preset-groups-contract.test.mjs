@@ -71,8 +71,12 @@ test('app.mjs exposes preset group management', () => {
 });
 
 test('saveData persists preset_groups and the applied definition version', () => {
-    assert.ok(app.includes("await setStoredValue('preset_groups', presetGroups.value);"), '持久化 preset_groups');
-    assert.ok(app.includes("await setStoredValue('preset_definitions_version', presetDefinitionsVersionApplied.value);"), '持久化已应用版本');
+    // saveData 现在把全部全局 kv 键放进一次 setStoredMany 原子批量提交。
+    const from = app.indexOf('const kvEntries = [');
+    const to = app.indexOf('await setStoredMany(kvEntries);', from);
+    const batch = app.slice(from, to);
+    assert.ok(batch.includes("['preset_groups', presetGroups.value]"), '持久化 preset_groups');
+    assert.ok(batch.includes("['preset_definitions_version', presetDefinitionsVersionApplied.value]"), '持久化已应用版本');
 });
 
 test('useDataLoader restores preset_groups and the applied version', () => {

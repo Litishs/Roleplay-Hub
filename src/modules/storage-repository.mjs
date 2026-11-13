@@ -213,6 +213,48 @@
             else kvFallbackSet(key, json);
         },
 
+        /**
+         * Batched variant of set() for multi-key saves (saveData persists ~14
+         * keys at once): per-key guards and secret extraction behave exactly
+         * like sequential set() calls (secrets first, then public payloads),
+         * but all public payloads land in a single atomic SQLite transaction
+         * so a mid-save kill can no longer leave a partially updated
+         * generation of keys. In the browser fallback the entries are written
+         * sequentially (no transactionality available there).
+         */
+        async setMany(entries) {
+            await this.init();
+            const list = (Array.isArray(entries) ? entries : [])
+                .map(entry => ({ key: entry?.key, value: entry?.value }));
+            if (!list.length) return;
+            const seen = new Set();
+            for (const entry of list) {
+                const storageKey = String(entry.key);
+                if (seen.has(storageKey)) {
+                    throw new Error(`[StorageRepository] setMany rejected: duplicate key "${storageKey}"`);
+                }
+                seen.add(storageKey);
+                if (entry.value === undefined) {
+                    throw new Error(`[StorageRepository] setMany("${storageKey}") rejected: value is undefined`);
+                }
+            }
+            list.forEach(entry => assertWritable(entry.key));
+            const items = [];
+            for (const entry of list) {
+                let storedValue = cloneJson(entry.value);
+                if (isSecretBearingKey(entry.key)) {
+                    const extracted = extractSecrets(storedValue);
+                    storedValue = extracted.publicValue;
+                    await this.setSecret(`config:${entry.key}`, JSON.stringify(extracted.secrets));
+                    assertWritable(entry.key);
+                }
+                items.push({ key: String(entry.key), json: JSON.stringify(storedValue) });
+            }
+            const plugin = nativePlugin();
+            if (plugin) await plugin.kvSetMany({ items });
+            else items.forEach(item => kvFallbackSet(item.key, item.json));
+        },
+
         async get(key) {
             await this.init();
             return protectedRead(key, async () => {
@@ -312,6 +354,10 @@
 
         async deleteFragments(characterId) {
             await this.init();
+            // Parity with deleteChat: a scope whose read previously failed must
+            // not be mutated. The fragment read path is currently dormant, so
+            // this mainly guards future callers.
+            assertWritable(`fragments:${characterId}`);
             const plugin = nativePlugin();
             if (plugin) await plugin.memoryDelete({ characterId: String(characterId) });
             else memoryFragments.delete(String(characterId));

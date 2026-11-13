@@ -2237,8 +2237,17 @@ const __app = createApp({
             return db.get(key);
         };
 
+        // Batched kv write: one atomic SQLite transaction for a multi-key save
+        // instead of ~14 sequential bridge calls that a mid-save kill could
+        // leave partially applied.
+        const dbSetMany = async (entries) => {
+            if (!db) await initDB();
+            return db.setMany((entries || []).map(([key, value]) => ({ key, value })));
+        };
+
         const setStoredValue = (name, value, options = {}) => dbSet(storageKey(name), value, options);
         const getStoredValue = (name) => dbGet(storageKey(name));
+        const setStoredMany = (entries) => dbSetMany((entries || []).map(([name, value]) => [storageKey(name), value]));
         const setScopedStoredValue = async (name, id, value, options = {}) => {
             if (!db) await initDB();
             if (name === 'chat') return db.replaceChat(id, unwrapForStorage(value));
@@ -2495,16 +2504,38 @@ const __app = createApp({
             await setStoredValue('memory_settings', cloneForStorage(memorySettings), { clone: false });
         };
 
+        // Memory dirty flags: any mutation after a completed load marks the
+        // scope's memories dirty until the next successful save. The
+        // background flush (flushAllPendingWrites) persists dirty memories
+        // only, so backgrounding the app never rewrites large memory blobs
+        // that have not changed.
+        let _memoriesDirty = false;
+        let _classicMemoriesDirty = false;
+
         const saveMemoriesNow = async () => {
             if (!_memoriesLoaded || !currentCharacter.value?.uuid) return;
             if (!db) await initDB();
-            await setScopedStoredValue('memories', getCurrentChatStorageScopeId(), await compactMemoriesForStorageAsync(memories.value), { clone: false });
+            // Clear the flag before awaiting so mutations landing mid-save
+            // re-mark it; a failed save re-marks it so the next flush retries.
+            _memoriesDirty = false;
+            try {
+                await setScopedStoredValue('memories', getCurrentChatStorageScopeId(), await compactMemoriesForStorageAsync(memories.value), { clone: false });
+            } catch (error) {
+                _memoriesDirty = true;
+                throw error;
+            }
         };
 
         const saveClassicMemoriesNow = async () => {
             if (!_classicMemoriesLoaded || !currentCharacter.value?.uuid) return;
             if (!db) await initDB();
-            await setScopedStoredValue('classic_memories', getCurrentChatStorageScopeId(), cloneForStorage(classicMemories.value), { clone: false });
+            _classicMemoriesDirty = false;
+            try {
+                await setScopedStoredValue('classic_memories', getCurrentChatStorageScopeId(), cloneForStorage(classicMemories.value), { clone: false });
+            } catch (error) {
+                _classicMemoriesDirty = true;
+                throw error;
+            }
         };
 
         const persistAvatarMedia = async (target, field, preferredName) => {
@@ -2539,27 +2570,32 @@ const __app = createApp({
                 settings.contextSize = MAX_CONTEXT_SIZE;
                 normalizeActiveToolAggressivenessSettings();
                 await persistNativeMediaAssets();
-                await setStoredValue('characters', characters.value);
-                await setStoredValue('settings', settings);
-                await setStoredValue('presets', presets.value);
-                await setStoredValue('preset_groups', presetGroups.value);
-                await setStoredValue('preset_definitions_version', presetDefinitionsVersionApplied.value);
-                await setStoredValue('deleted_default_presets', deletedDefaultPresetNames.value);
-                await setStoredValue('regex', regexScripts.value);
-                await setStoredValue('global_regex', globalRegexScripts.value);
-                await setStoredValue('worldinfo', worldInfo.value);
-                await setStoredValue('global_worldinfo', globalWorldInfo.value);
-                await setStoredValue('worldinfo_settings', worldInfoSettings);
-                await setStoredValue('global_ui_templates', globalUiTemplates.value);
-                await setStoredValue('active_tools', normalizeActiveTools(), { clone: false });
+                // All global kv keys land in one atomic transaction; a kill
+                // mid-save can no longer leave a partially updated generation.
+                const kvEntries = [
+                    ['characters', characters.value],
+                    ['settings', settings],
+                    ['presets', presets.value],
+                    ['preset_groups', presetGroups.value],
+                    ['preset_definitions_version', presetDefinitionsVersionApplied.value],
+                    ['deleted_default_presets', deletedDefaultPresetNames.value],
+                    ['regex', regexScripts.value],
+                    ['global_regex', globalRegexScripts.value],
+                    ['worldinfo', worldInfo.value],
+                    ['global_worldinfo', globalWorldInfo.value],
+                    ['worldinfo_settings', worldInfoSettings],
+                    ['global_ui_templates', globalUiTemplates.value],
+                    ['active_tools', normalizeActiveTools()]
+                ];
                 // await setStoredValue('recent_times', recentGenerationTimes.value); // Deprecated: Saved in character
 
                 // 守卫：初始化完成前不写入用户/记忆数据，防止默认值覆盖服务端已有数据
                 if (_initComplete) {
-                    await setStoredValue('user', user);
-                    await setStoredValue('user_profiles', JSON.parse(JSON.stringify(userProfiles.value)));
-                    if (activeProfileId.value) await setStoredValue('active_profile_id', activeProfileId.value);
+                    kvEntries.push(['user', user]);
+                    kvEntries.push(['user_profiles', JSON.parse(JSON.stringify(userProfiles.value))]);
+                    if (activeProfileId.value) kvEntries.push(['active_profile_id', activeProfileId.value]);
                 }
+                await setStoredMany(kvEntries);
 
                 // Save Chat State
                 if (currentCharacterIndex.value >= 0) {
@@ -2617,6 +2653,17 @@ const __app = createApp({
                 saveMemorySettingsNow().catch(e => console.error('Save memory settings failed:', e));
             }, 500);
         }, { deep: true });
+
+        // Memory dirty tracking. Sync flush + the *_loaded guards exclude the
+        // load-time assignments in loadCharacterMemories (the guards flip
+        // after assignment); every later mutation marks the scope dirty until
+        // the next successful saveMemoriesNow/saveClassicMemoriesNow.
+        watch(memories, () => {
+            if (_memoriesLoaded) _memoriesDirty = true;
+        }, { deep: true, flush: 'sync' });
+        watch(classicMemories, () => {
+            if (_classicMemoriesLoaded) _classicMemoriesDirty = true;
+        }, { deep: true, flush: 'sync' });
 
         /* extracted loadData — src/composables/useDataLoader.mjs (Phase 3.0) */
 
@@ -2849,6 +2896,60 @@ const __app = createApp({
         const debouncedSave = debounce(() => {
             saveData({ saveMemories: false });
         }, 1000);
+
+        // Flush every pending persistence queue at once. Android may kill the
+        // WebView renderer of a backgrounded app at any moment; anything still
+        // sitting in a debounce window or write queue at that point is lost
+        // (only SQLite-committed data survives). Every step no-ops when its
+        // queue is empty, so frequent backgrounding stays cheap; concurrent
+        // triggers (appStateChange + visibilitychange) share one in-flight
+        // pass.
+        let _flushInFlight = null;
+        const flushAllPendingWrites = () => {
+            if (_flushInFlight) return _flushInFlight;
+            const run = async () => {
+                const tasks = [];
+                // Global kv state (characters/settings/presets/regex/...) — 1s debounce.
+                tasks.push(Promise.resolve(debouncedSave.flush())
+                    .catch(error => console.error('Background saveData flush failed:', error)));
+                // Memory settings — 500ms debounce timer.
+                if (_memorySettingsSaveTimer) {
+                    clearTimeout(_memorySettingsSaveTimer);
+                    _memorySettingsSaveTimer = null;
+                    tasks.push(saveMemorySettingsNow()
+                        .catch(error => console.error('Background memory settings flush failed:', error)));
+                }
+                // Token usage history write queue.
+                tasks.push(tokenUsageSaveQueue
+                    .catch(error => console.error('Background token usage flush failed:', error)));
+                // Plugin marketplace persist queue.
+                tasks.push((pluginRegistry.flushPersist?.() ?? Promise.resolve())
+                    .catch(error => console.error('Background plugin state flush failed:', error)));
+                // Active streaming draft + chat history queue.
+                const activeDraft = [...chatHistory.value]
+                    .reverse()
+                    .find(message => message?.storageStatus === 'draft');
+                if (activeDraft) {
+                    tasks.push(persistSingleDraft(activeDraft)
+                        .catch(error => console.error('Background draft save failed:', error)));
+                }
+                tasks.push(flushPendingChatHistorySave()
+                    .catch(error => console.error('Background chat save failed:', error)));
+                // Scoped memories — only when a mutation marked them dirty,
+                // so backgrounding does not rewrite unchanged memory blobs.
+                if (_memoriesDirty) {
+                    tasks.push(saveMemoriesNow()
+                        .catch(error => console.error('Background memories flush failed:', error)));
+                }
+                if (_classicMemoriesDirty) {
+                    tasks.push(saveClassicMemoriesNow()
+                        .catch(error => console.error('Background classic memories flush failed:', error)));
+                }
+                await Promise.all(tasks);
+            };
+            _flushInFlight = run().finally(() => { _flushInFlight = null; });
+            return _flushInFlight;
+        };
 
         // Watch for changes to auto-save
         watch([characters, settings, presets, regexScripts, globalRegexScripts, worldInfo, globalWorldInfo, globalUiTemplates, activeTools, user, recentGenerationTimes], () => {
@@ -4302,9 +4403,13 @@ const __app = createApp({
 
         // Crash notice (4-layer plan L3-3 + L2-8): on launch, a last-crash
         // file written by the native layer (CrashFileWriter) is transcribed
-        // into the journal as a fatal record and surfaced once via a modal.
-        // Both buttons acknowledge — the file is cleared so the notice shows
-        // exactly once per crash.
+        // into the journal as a fatal record and surfaced once. A system_kill
+        // (Android reclaimed the renderer of a backgrounded app) shows only a
+        // toast — the native layer already recreated the activity and the
+        // session was restored from local storage, so a blocking modal would
+        // interrupt the seamless recovery. Real crashes keep the modal with
+        // the export-diagnostics affordance. Both paths acknowledge — the
+        // file is cleared so the notice shows exactly once per crash.
         const maybeShowLastCrashNotice = async () => {
             const nativeStorage = window.Capacitor?.Plugins?.NativeStorage;
             if (!nativeStorage?.readLastCrash) return;
@@ -4313,6 +4418,7 @@ const __app = createApp({
                 const crash = result?.crash;
                 if (!crash) return;
                 const isRenderGone = crash.type === 'webview_render_process_gone';
+                const isSystemKill = isRenderGone && crash.reason === 'system_kill';
                 const handle = RPHRequestDiagnostics?.begin?.({
                     category: 'runtime',
                     action: isRenderGone ? 'render_process_gone' : 'native_crash',
@@ -4323,20 +4429,25 @@ const __app = createApp({
                     result: 'ok',
                     meta: {
                         occurredAt: String(crash.occurredAt || '').slice(0, 19),
-                        appUptimeMs: Number(crash.appUptimeMs) || 0
+                        appUptimeMs: Number(crash.appUptimeMs) || 0,
+                        reason: String(crash.reason || '').slice(0, 32)
                     }
                 });
                 handle?.fail?.({
                     name: String(crash.type || 'Crash').slice(0, 64),
                     message: String(crash.message || '').slice(0, 200) || 'native crash'
                 });
-                const typeLabel = isRenderGone ? 'WebView 渲染进程崩溃' : 'Java 崩溃';
-                const confirmed = await showVueConfirmModal(
-                    '上次应用异常退出',
-                    `时间 ${crash.occurredAt || '未知'}\n类型 ${typeLabel}\n\n可导出诊断日志帮助定位问题。`,
-                    { confirmLabel: '导出诊断', cancelLabel: '知道了' }
-                );
-                if (confirmed) await exportRequestDiagnostics('copy');
+                if (isSystemKill) {
+                    showToast('检测到后台被系统回收，已恢复会话', 'info', 4000);
+                } else {
+                    const typeLabel = isRenderGone ? 'WebView 渲染进程崩溃' : 'Java 崩溃';
+                    const confirmed = await showVueConfirmModal(
+                        '上次应用异常退出',
+                        `时间 ${crash.occurredAt || '未知'}\n类型 ${typeLabel}\n\n可导出诊断日志帮助定位问题。`,
+                        { confirmLabel: '导出诊断', cancelLabel: '知道了' }
+                    );
+                    if (confirmed) await exportRequestDiagnostics('copy');
+                }
                 await nativeStorage.clearLastCrash?.();
             } catch (_) { /* crash notice is best-effort */ }
         };
@@ -9464,15 +9575,16 @@ const __app = createApp({
                 nativeAppStateListener = await nativeApp.addListener('appStateChange', ({ isActive }) => {
                     if (isActive) {
                         nextTick(() => syncMobileVisualViewport({ force: true }));
+                        // The background flush may have been cut short if the
+                        // renderer was killed right after hiding; run a
+                        // catch-up pass (no-op when nothing is pending).
+                        flushAllPendingWrites().catch(error => console.error('Resume flush failed:', error));
                         return;
                     }
-                    const activeDraft = [...chatHistory.value]
-                        .reverse()
-                        .find(message => message?.storageStatus === 'draft');
-                    if (activeDraft) {
-                        persistSingleDraft(activeDraft).catch(error => console.error('Background draft save failed:', error));
-                    }
-                    flushPendingChatHistorySave().catch(error => console.error('Background chat save failed:', error));
+                    flushAllPendingWrites().catch(error => console.error('Background flush failed:', error));
+                    // Conversation summaries live outside the kv/chat queues, so
+                    // they are flushed separately (drafts and chat history are
+                    // already covered by flushAllPendingWrites).
                     saveConversationSummariesNow();
                 });
                 nativeBackButtonListener = await nativeApp.addListener('backButton', async () => {
@@ -9500,6 +9612,19 @@ const __app = createApp({
                     }
                 });
             }
+
+            // Web-standard hide signals as a second flush trigger: appStateChange
+            // is delivered through the async bridge and may not complete before
+            // the renderer dies; visibilitychange/pagehide fire inside the page
+            // itself. They are also the only trigger in browser/dev mode.
+            document.addEventListener('visibilitychange', () => {
+                if (document.visibilityState === 'hidden') {
+                    flushAllPendingWrites().catch(error => console.error('Visibility flush failed:', error));
+                }
+            });
+            window.addEventListener('pagehide', () => {
+                flushAllPendingWrites().catch(error => console.error('Pagehide flush failed:', error));
+            });
 
             await loadData();
             try {
