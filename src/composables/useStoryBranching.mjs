@@ -3,10 +3,13 @@
 // Owns createStoryBranch, previously inlined in app.mjs setup(): snapshots
 // the parent branch chat/memories/summaries/profile (optionally forking at
 // a specific assistant message), seeds the new branch scope, registers the
-// branch, switches into it and rolls everything back on failure. The moved
-// code is byte-identical to the app.mjs original except that the shared
-// mutable guards it mutates are reached through setter bridges (deps are
-// passed by value, so raw reassignment cannot reach the app.mjs bindings):
+// branch, switches into it and rolls everything back on failure. A fork
+// that cuts the parent timeline rewrites the branch's derived summary and
+// profile layers from its own chat instead of inheriting the parent's
+// final-state text (which describes events after the fork point). The moved
+// code follows the app.mjs original; the shared mutable guards/refs it
+// mutates are reached through setter bridges (deps are passed by value, so
+// raw reassignment cannot reach the app.mjs bindings):
 // _isApplyingCharacterScopedData via the existing
 // setApplyingCharacterScopedData bridge, plus dedicated setters for
 // _memoriesLoaded / _classicMemoriesLoaded; the storage handle is read
@@ -34,6 +37,8 @@ export function useStoryBranching(deps) {
         classicMemories,
         storyBranches,
         currentStoryBranch,
+        memorySummaries,
+        memoryProfile,
         selectedStoryBranchId,
         activeStoryBranchId,
         storyBranchSwitching,
@@ -44,6 +49,8 @@ export function useStoryBranching(deps) {
         finishApplyingCharacterScopedData,
         setMemoriesLoaded,
         setClassicMemoriesLoaded,
+        setMemorySummaries,
+        setMemoryProfile,
         getDb,
         // storage layer
         flushCurrentBranchState,
@@ -90,7 +97,9 @@ export function useStoryBranching(deps) {
                 activeId: activeStoryBranchId.value,
                 chatHistory: chatHistory.value,
                 memories: memories.value,
-                classicMemories: classicMemories.value
+                classicMemories: classicMemories.value,
+                summaries: memorySummaries.value,
+                profile: memoryProfile.value
             };
             try {
                 if (!await flushCurrentBranchState()) return;
@@ -132,6 +141,10 @@ export function useStoryBranching(deps) {
                     if (sourceIndex < 0 || branchChat[sourceIndex]?.role !== 'assistant') {
                         throw new Error('目标消息已发生变化，请重试');
                     }
+                    const parentTurnCount = buildConversationTurnSnapshot(
+                        prepareLoadedChatHistoryForDisplay(branchChat),
+                        { includeSystem: false }
+                    ).turns.length;
                     branchChat = branchChat.slice(0, sourceIndex + 1);
                     forkTurn = buildConversationTurnSnapshot(
                         prepareLoadedChatHistoryForDisplay(branchChat),
@@ -139,7 +152,14 @@ export function useStoryBranching(deps) {
                     ).turns.length;
                     branchMemories = branchMemories.filter(memory => Number(memory?.turn) <= forkTurn);
                     branchClassicMemories = branchClassicMemories.filter(memory => Number(memory?.turn) <= forkTurn);
-                    if (branchSummaries && Array.isArray(branchSummaries.batches)) {
+                    // Summary/profile records store final-state text, not per-batch
+                    // snapshots, so a mid-history fork cannot trim them. Rebuild
+                    // both layers from the branch's own chat instead of carrying
+                    // the parent's post-fork events into this branch.
+                    if (forkTurn < parentTurnCount) {
+                        branchSummaries = { long: '', short: '', batches: [], updatedAt: now };
+                        branchProfile = null;
+                    } else if (branchSummaries && Array.isArray(branchSummaries.batches)) {
                         branchSummaries.batches = branchSummaries.batches.filter(b => Number(b?.toTurn) <= forkTurn);
                     }
                 }
@@ -181,6 +201,8 @@ export function useStoryBranching(deps) {
                     : createInitialChatHistory(char);
                 memories.value = branchMemories.length ? prepareMemoriesForRuntime(branchMemories) : [];
                 classicMemories.value = prepareClassicMemoriesForRuntime(branchClassicMemories);
+                setMemorySummaries(branchSummaries ? cloneForStorage(branchSummaries) : null);
+                setMemoryProfile(branchProfile ? cloneForStorage(branchProfile) : null);
                 setMemoriesLoaded(true);
                 setClassicMemoriesLoaded(true);
                 finishApplyingCharacterScopedData();
@@ -195,6 +217,8 @@ export function useStoryBranching(deps) {
                     chatHistory.value = previousState.chatHistory;
                     memories.value = previousState.memories;
                     classicMemories.value = previousState.classicMemories;
+                    setMemorySummaries(previousState.summaries);
+                    setMemoryProfile(previousState.profile);
                     if (memorySettings.emptyTurns) {
                         delete memorySettings.emptyTurns[getMemoryEmptyTurnsKey(createdBranch.branchScopeId)];
                     }
@@ -206,6 +230,8 @@ export function useStoryBranching(deps) {
                         deleteScopedStoredValue('chat', createdBranch.branchScopeId),
                         deleteScopedStoredValue('memories', createdBranch.branchScopeId),
                         deleteScopedStoredValue('classic_memories', createdBranch.branchScopeId),
+                        deleteScopedStoredValue('memory_summaries', createdBranch.branchScopeId),
+                        deleteScopedStoredValue('memory_profile', createdBranch.branchScopeId),
                         getDb() ? getDb().deleteFragments(createdBranch.branchScopeId) : Promise.resolve(),
                         saveStoryBranchesForCharacter(char),
                         saveMemorySettingsNow(),

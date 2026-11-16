@@ -1514,6 +1514,8 @@ const __app = createApp({
         // cannot reach the app.mjs bindings)
         const setMemoriesLoaded = (value) => { _memoriesLoaded = value; };
         const setClassicMemoriesLoaded = (value) => { _classicMemoriesLoaded = value; };
+        const setMemorySummaries = (value) => { memorySummaries.value = value; };
+        const setMemoryProfile = (value) => { memoryProfile.value = value; };
         let _isApplyingCharacterScopedData = false;
         let _initComplete = false; // 守卫标志：防止 onMounted 初始化阶段写入默认值覆盖服务端数据
         let _dataLoadFailed = false; // 守卫标志：loadData 失败时禁止 saveData 用默认空值覆盖存储中的数据
@@ -8658,6 +8660,7 @@ const __app = createApp({
             abortUiTemplateUpdate();
             abortVectorBatchExtraction();
             abortClassicBatchExtraction();
+            abortRollingSummary();
             saveGlobalUiTemplateRuntimeForCharacter();
             await flushPendingChatHistorySave();
             await saveMemoriesNow();
@@ -8699,6 +8702,8 @@ const __app = createApp({
             chatHistory,
             memories,
             classicMemories,
+            memorySummaries,
+            memoryProfile,
             storyBranches,
             currentStoryBranch,
             selectedStoryBranchId,
@@ -8711,6 +8716,8 @@ const __app = createApp({
             finishApplyingCharacterScopedData,
             setMemoriesLoaded,
             setClassicMemoriesLoaded,
+            setMemorySummaries,
+            setMemoryProfile,
             getDb,
             // storage layer
             flushCurrentBranchState,

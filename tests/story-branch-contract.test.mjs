@@ -99,6 +99,10 @@ test('useStoryBranching owns createStoryBranch with rollback and guards', () => 
     // fact-layer guard resets removed with the fact layer (2026-09-06 audit)
     assert.ok(!branching.includes('setFactLoadedCharacterId') && !branching.includes('memoryFacts'), 'fact reset removed');
     assert.ok(branching.includes('getDb() ? getDb().deleteFragments(createdBranch.branchScopeId) : Promise.resolve(),'), 'db reached through accessor');
+    assert.ok(branching.includes('setMemorySummaries(previousState.summaries);'));
+    assert.ok(branching.includes('setMemoryProfile(previousState.profile);'));
+    assert.ok(branching.includes("deleteScopedStoredValue('memory_summaries', createdBranch.branchScopeId)"));
+    assert.ok(branching.includes("deleteScopedStoredValue('memory_profile', createdBranch.branchScopeId)"));
     assert.ok(!/_(isApplyingCharacterScopedData|memoriesLoaded|classicMemoriesLoaded)\b/.test(branching.replace(/^\/\/.*$/gm, '')), 'no direct guard access in code');
     assert.ok(!branching.includes('\ndb ?') && !branching.includes(' db ? db.deleteFragments'), 'no direct db binding access');
     assert.ok(branching.includes('return { createStoryBranch };'));
@@ -120,6 +124,19 @@ test('app.js falls back to in-memory history when fork target is missing from st
     // 2026-08-29 (Phase 3.0): createStoryBranch moved to useStoryBranching.mjs
     assert.ok(branching.includes('const memorySourceIndex = forkMessageId'), '分支创建须尝试内存回退定位目标消息');
     assert.ok(branching.includes("branchChat = chatHistory.value.map(message => serializeChatMessage(message, 'final'))"), '内存回退须序列化消息后再写入分支');
+});
+
+test('mid-history forks rebuild derived memory layers from the branch timeline', () => {
+    // Summary/profile records hold final-state text (not per-batch snapshots),
+    // so trimming the batch list alone would keep the parent's post-fork events.
+    assert.ok(branching.includes('const parentTurnCount = buildConversationTurnSnapshot('), 'fork must measure the parent timeline before slicing');
+    assert.ok(branching.includes('if (forkTurn < parentTurnCount) {'), 'mid-history forks must be detected');
+    assert.ok(branching.includes("branchSummaries = { long: '', short: '', batches: [], updatedAt: now };"), 'summary text and batch list reset together');
+    assert.ok(branching.includes('branchProfile = null;'), 'profile reset for a mid-history fork');
+    assert.ok(branching.includes('setMemorySummaries(branchSummaries ? cloneForStorage(branchSummaries) : null);'), 'in-memory summary ref must not alias the parent branch');
+    assert.ok(branching.includes('setMemoryProfile(branchProfile ? cloneForStorage(branchProfile) : null);'), 'in-memory profile ref must not alias the parent branch');
+    assert.ok(app.includes('setMemorySummaries,') && app.includes('setMemoryProfile,'), 'setter bridges wired into useStoryBranching');
+    assert.ok(app.includes('abortClassicBatchExtraction();\n            abortRollingSummary();'), 'leaving a branch aborts the rolling summary chain');
 });
 
 test('app.js keeps branch scope ids in the outer function scope (no try-block leakage)', () => {
