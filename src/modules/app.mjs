@@ -8888,6 +8888,17 @@ const __app = createApp({
             cloneForStorage,
             saveMemorySettingsNow,
             saveStoryBranchesForCharacter,
+            // v6 §7: branch memory inheritance is a covers ⊆ survivors filter.
+            buildMemorySummariesProjection: (ledger, chatMessages) => {
+                const messages = prepareLoadedChatHistoryForDisplay(chatMessages);
+                const view = buildMemoryView(ledger, buildLiveTurnIndex(messages));
+                return {
+                    long: view.long,
+                    short: view.short,
+                    batches: view.batches,
+                    updatedAt: Number(ledger?.updatedAt) || Date.now()
+                };
+            },
             // context / runtime helpers
             buildConversationTurnSnapshot,
             getPostprocessedChatMessages,

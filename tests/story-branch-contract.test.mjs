@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import * as storyBranch from '../src/modules/story-branch.mjs';
+import { filterLedgerForBranch, makeDigestEntry } from '../src/modules/memory-ledger.mjs';
 
 const [html, app, presets, cardOps, branching] = await Promise.all([
     readFile(new URL('../index.html', import.meta.url), 'utf8'),
@@ -170,15 +171,18 @@ test('useStoryBranching receives flushCurrentBranchState as a dep', () => {
     assert.ok(wiring.slice(0, wiringEnd).includes('flushCurrentBranchState,'), 'app.mjs passes flushCurrentBranchState');
 });
 
-test('v6 L1: story branches carry the memory ledger across forks', () => {
-    // Full-timeline forks copy the parent ledger as-is (message ids are
-    // preserved in the branch chat, so covers stay valid).
+test('v6 L2: branch memory is a covers ⊆ survivors filter (zero API)', () => {
     assert.ok(branching.includes("getScopedStoredValue('memory_ledger', parentScopeId)"));
-    assert.ok(branching.includes("setScopedStoredValue('memory_ledger', branchScopeId, cloneForStorage(branchLedger)"));
-    // Mid-history forks cannot trim content-addressed entries yet: L1 starts
-    // from an empty ledger; L2 replaces this with the covers ⊆ survivors
-    // filter (memory-ledger.filterLedgerForBranch).
-    assert.ok(branching.includes('branchLedger = null;'));
+    // The child ledger keeps only entries whose consumed messages survived.
+    assert.ok(branching.includes("const survivorIds = new Set(branchChat.map(message => message?.id).filter(Boolean));"));
+    assert.ok(branching.includes('filterLedgerForBranch(branchLedger, survivorIds)'));
+    // The child projection is folded from the filtered ledger, not copied.
+    assert.ok(branching.includes('buildMemorySummariesProjection(branchLedger, branchChat)'));
+    assert.ok(app.includes('buildMemorySummariesProjection: (ledger, chatMessages) => {'));
+    // Zero API calls on branch creation: inheritance is pure filtering.
+    assert.ok(!branching.includes('fetch('), 'branch creation never calls the model');
+    // Legacy fallback: data without covers rebuilds from the child chat.
+    assert.ok(branching.includes("branchSummaries = { long: '', short: '', batches: [], updatedAt: now };"));
     // In-memory state and rollback follow the same pattern as summaries.
     assert.ok(branching.includes('setMemoryLedger(branchLedger ? cloneForStorage(branchLedger) : null);'));
     assert.ok(branching.includes('setMemoryLedger(previousState.ledger);'));
@@ -187,4 +191,24 @@ test('v6 L1: story branches carry the memory ledger across forks', () => {
     // Ledger loaders wired at both scope entry points.
     assert.ok(app.includes('await loadMemoryLedger(characterId);'));
     assert.ok(app.includes('await loadMemoryLedger(targetScopeId);'));
+});
+
+test('v6 L2: forks of forks filter recursively (no post-fork leakage)', () => {
+    const ledger = {
+        version: 1,
+        hashVersion: 1,
+        updatedAt: 0,
+        entries: [
+            makeDigestEntry({ id: 'early', covers: [{ id: 'm1', h: 'h1' }], text: '早期' }),
+            makeDigestEntry({ id: 'mid', covers: [{ id: 'm1', h: 'h1' }, { id: 'm3', h: 'h3' }], text: '中段' }),
+            makeDigestEntry({ id: 'late', covers: [{ id: 'm5', h: 'h5' }], text: '后段' }),
+            makeDigestEntry({ id: 'pin', covers: [], text: '置顶' })
+        ]
+    };
+    // Fork after m1..m3 → mid/late dropped, pin follows.
+    const child = filterLedgerForBranch(ledger, new Set(['m1', 'm2', 'm3']));
+    assert.deepEqual(child.entries.map(entry => entry.id).sort(), ['early', 'mid', 'pin']);
+    // Fork the fork after m1..m2 → only entries fully inside the new tail.
+    const grandchild = filterLedgerForBranch(child, new Set(['m1', 'm2']));
+    assert.deepEqual(grandchild.entries.map(entry => entry.id).sort(), ['early', 'pin']);
 });

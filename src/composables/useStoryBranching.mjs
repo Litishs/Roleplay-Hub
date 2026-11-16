@@ -1,12 +1,14 @@
 // useStoryBranching — story branch creation (Phase 3.0, roadmap 3.0)
 //
 // Owns createStoryBranch, previously inlined in app.mjs setup(): snapshots
-// the parent branch chat/memories/summaries/profile (optionally forking at
-// a specific assistant message), seeds the new branch scope, registers the
-// branch, switches into it and rolls everything back on failure. A fork
-// that cuts the parent timeline rewrites the branch's derived summary and
-// profile layers from its own chat instead of inheriting the parent's
-// final-state text (which describes events after the fork point). The moved
+// the parent branch chat/memories/ledger (optionally forking at a specific
+// assistant message), seeds the new branch scope, registers the branch,
+// switches into it and rolls everything back on failure. A fork that cuts
+// the parent timeline trims the child's derived memory with the v6 ledger
+// filter — an entry survives iff every message it consumed survived, so
+// post-fork events cannot leak into the child (no API call, no rebuild).
+// Branches created before the ledger existed fall back to rebuilding the
+// final-state summary/profile layers from the child's own chat. The moved
 // code follows the app.mjs original; the shared mutable guards/refs it
 // mutates are reached through setter bridges (deps are passed by value, so
 // raw reassignment cannot reach the app.mjs bindings):
@@ -26,7 +28,7 @@
 
 import { generateUUID } from '../modules/utils.mjs';
 import { getMemoryEmptyTurnsKey } from '../modules/memory-utils.mjs';
-import { normalizeLedger } from '../modules/memory-ledger.mjs';
+import { filterLedgerForBranch, normalizeLedger } from '../modules/memory-ledger.mjs';
 import { createId as rphBranchCreateId, defaultBranchName as rphBranchDefaultBranchName } from '../modules/story-branch.mjs';
 
 export function useStoryBranching(deps) {
@@ -66,6 +68,8 @@ export function useStoryBranching(deps) {
         cloneForStorage,
         saveMemorySettingsNow,
         saveStoryBranchesForCharacter,
+        // memory ledger projection (v6 §7: branch inheritance is a filter)
+        buildMemorySummariesProjection,
         // context / runtime helpers
         buildConversationTurnSnapshot,
         getPostprocessedChatMessages,
@@ -158,17 +162,33 @@ export function useStoryBranching(deps) {
                     ).turns.length;
                     branchMemories = branchMemories.filter(memory => Number(memory?.turn) <= forkTurn);
                     branchClassicMemories = branchClassicMemories.filter(memory => Number(memory?.turn) <= forkTurn);
+                    // The info card is final-state text (no covers until L4), so a
+                    // mid-history fork resets it; fact entries will make this a
+                    // filter in L4.
                     if (forkTurn < parentTurnCount) {
-                        branchSummaries = { long: '', short: '', batches: [], updatedAt: now };
                         branchProfile = null;
-                        // L1 rule: a mid-history fork cannot trim content-addressed
-                        // entries yet, so it starts with a fresh ledger and rebuilds
-                        // from the branch's own chat. L2 replaces this with the
-                        // covers ⊆ survivors filter (v6 §7).
-                        branchLedger = null;
+                    }
+                    if (branchLedger) {
+                        // v6 §7: an entry survives iff every message it consumed
+                        // survived. Structural guarantee — zero API calls, no
+                        // rebuild, no amnesia window. Pins (covers:[]) follow the
+                        // branch by definition.
+                        const survivorIds = new Set(branchChat.map(message => message?.id).filter(Boolean));
+                        branchLedger = filterLedgerForBranch(branchLedger, survivorIds);
+                        branchSummaries = buildMemorySummariesProjection
+                            ? buildMemorySummariesProjection(branchLedger, branchChat)
+                            : branchSummaries;
+                    } else if (forkTurn < parentTurnCount) {
+                        // Legacy fallback (data without covers): final-state
+                        // summary text cannot be trimmed, rebuild from raw chat.
+                        branchSummaries = { long: '', short: '', batches: [], updatedAt: now };
                     } else if (branchSummaries && Array.isArray(branchSummaries.batches)) {
                         branchSummaries.batches = branchSummaries.batches.filter(b => Number(b?.toTurn) <= forkTurn);
                     }
+                } else if (branchLedger && buildMemorySummariesProjection) {
+                    // Full-timeline fork: every cover survives; refresh the
+                    // projection from the copied ledger.
+                    branchSummaries = buildMemorySummariesProjection(branchLedger, branchChat);
                 }
                 await setScopedStoredValue('chat', branchScopeId, branchChat, { clone: false });
                 await setScopedStoredValue('memories', branchScopeId, branchMemories, { clone: false });
