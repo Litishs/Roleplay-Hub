@@ -212,3 +212,10 @@ test('v6 L2: forks of forks filter recursively (no post-fork leakage)', () => {
     const grandchild = filterLedgerForBranch(child, new Set(['m1', 'm2']));
     assert.deepEqual(grandchild.entries.map(entry => entry.id).sort(), ['early', 'pin']);
 });
+
+test('v6: branch deletion clears the memory ledger', () => {
+    const flatMapStart = app.indexOf("const scopeIds = deleteIds.map(branchId => getStoryBranchScopeId(char.uuid, branchId));");
+    assert.ok(flatMapStart > 0, 'branch deletion cleanup block found');
+    const flatMapBlock = app.slice(flatMapStart, flatMapStart + 800);
+    assert.ok(flatMapBlock.includes("deleteScopedStoredValue('memory_ledger', scopeId)"), 'branch deletion clears ledger');
+});

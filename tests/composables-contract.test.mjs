@@ -1209,3 +1209,8 @@ test('Phase 3.0 device-caught dep regressions stay locked', () => {
     assert.ok(branchingSource.includes('        cloneForStorage,'), 'branching destructures cloneForStorage');
     assert.ok(!branchingSource.includes('memoryFacts'), 'fact dep stays removed');
 });
+
+test('v6: character deletion clears the memory ledger', () => {
+    const hits = cardOpsSource.split("deleteScopedStoredValue('memory_ledger', scopeId)").length - 1;
+    assert.equal(hits, 2, 'single and batch deletion both clear the ledger');
+});

@@ -119,8 +119,23 @@ test('ledger: covered ranges project from live turn numbers and skip stale entri
         { id: 'c', kind: 'fact', covers: [cover('m3', 'h3')] }
     );
     const liveTurnIndex = new Map([['m1', 1], ['m2', 2], ['m3', 3], ['m4', 4]]);
-    assert.deepEqual(projectCoveredRanges(ledger, liveTurnIndex), [{ fromTurn: 1, toTurn: 4 }]);
+    // Exact union of covered turns: m2 (stale) and m3 (fact) do not count,
+    // and turns 2-3 stay uncovered between the two covered turns.
+    assert.deepEqual(projectCoveredRanges(ledger, liveTurnIndex), [{ fromTurn: 1, toTurn: 1 }, { fromTurn: 4, toTurn: 4 }]);
     assert.deepEqual(rangesToDoneBatches([{ fromTurn: 1, toTurn: 4 }]), [{ fromTurn: 1, toTurn: 4, status: 'done' }]);
+});
+
+test('ledger: adopted union entries never paint over failed holes', () => {
+    // Regression (acceptance finding): the level-1 legacy entry carries the
+    // union of all done ranges. A min/max projection would turn 1-2 + 5-5
+    // into 1-5 and the failed batch 3-4 would never be retried.
+    const covers = [cover('u1', 'h'), cover('a1', 'h'), cover('u2', 'h'), cover('a2', 'h'), cover('u5', 'h'), cover('a5', 'h')];
+    const ledger = makeLedger(
+        { id: 'early', covers },
+        { id: 'legacy', level: 1, covers }
+    );
+    const liveTurnIndex = new Map([['u1', 1], ['a1', 1], ['u2', 2], ['a2', 2], ['u5', 5], ['a5', 5]]);
+    assert.deepEqual(projectCoveredRanges(ledger, liveTurnIndex), [{ fromTurn: 1, toTurn: 2 }, { fromTurn: 5, toTurn: 5 }]);
 });
 
 test('ledger: GC removes stale entries only after their turns were rewritten', () => {

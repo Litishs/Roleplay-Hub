@@ -9053,6 +9053,7 @@ const __app = createApp({
                             deleteScopedStoredValue('classic_memories', scopeId),
                             deleteScopedStoredValue('memory_summaries', scopeId),
                             deleteScopedStoredValue('memory_profile', scopeId),
+                            deleteScopedStoredValue('memory_ledger', scopeId),
                             db.deleteFragments(scopeId)
                         ]));
                         scopeIds.forEach(scopeId => {

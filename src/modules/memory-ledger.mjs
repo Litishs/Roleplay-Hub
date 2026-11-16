@@ -156,13 +156,29 @@ export const projectEntryTurns = (entry, liveTurnIndex) => {
     return turns;
 };
 
+// Coverage is the *union of the individual covered turns*, not the min/max
+// span of each entry: the adopted legacy entry carries the union of all
+// done ranges, so a min/max projection would paint over failed holes and
+// the hole-fill mechanism would never retry them (design doc §6.1 step 2).
+// Contiguous runs are merged so computePendingBatch sees done-range shape.
 export const projectCoveredRanges = (ledger, liveTurnIndex) => {
-    const ranges = [];
+    const coveredTurns = new Set();
     for (const entry of ledger.entries) {
-        if (entry.kind !== 'digest' || entry.meta.stale || entry.covers.length === 0) continue;
-        const turns = projectEntryTurns(entry, liveTurnIndex);
-        if (turns.length === 0) continue;
-        ranges.push({ fromTurn: Math.min(...turns), toTurn: Math.max(...turns) });
+        if (entry.kind !== 'digest' || entry.meta.stale) continue;
+        for (const cover of entry.covers) {
+            const turn = liveTurnIndex.get(cover.id);
+            if (Number.isFinite(turn)) coveredTurns.add(turn);
+        }
+    }
+    const turns = Array.from(coveredTurns).sort((a, b) => a - b);
+    const ranges = [];
+    for (const turn of turns) {
+        const last = ranges[ranges.length - 1];
+        if (last && turn <= last.toTurn + 1) {
+            last.toTurn = Math.max(last.toTurn, turn);
+        } else {
+            ranges.push({ fromTurn: turn, toTurn: turn });
+        }
     }
     return ranges;
 };
