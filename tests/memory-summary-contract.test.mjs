@@ -3,14 +3,16 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import * as memorySummary from '../src/modules/memory-summary.mjs';
 
-const [html, app, sender, messageList, memoryState, vectorPatrol, rollingSummary] = await Promise.all([
+const [html, app, sender, messageList, memoryState, vectorPatrol, rollingSummary, reconcileModule, summaryModule] = await Promise.all([
     readFile(new URL('../src/components/views/MemoryPanel.vue', import.meta.url), 'utf8'),
     readFile(new URL('../src/modules/app.mjs', import.meta.url), 'utf8'),
     readFile(new URL('../src/composables/useMessageSender.mjs', import.meta.url), 'utf8'),
     readFile(new URL('../src/components/chat/MessageList.vue', import.meta.url), 'utf8'),
     readFile(new URL('../src/composables/useMemorySystem.mjs', import.meta.url), 'utf8'),
     readFile(new URL('../src/composables/useVectorMemoryPatrol.mjs', import.meta.url), 'utf8'),
-    readFile(new URL('../src/composables/useRollingSummary.mjs', import.meta.url), 'utf8')
+    readFile(new URL('../src/composables/useRollingSummary.mjs', import.meta.url), 'utf8'),
+    readFile(new URL('../src/modules/memory-reconcile.mjs', import.meta.url), 'utf8'),
+    readFile(new URL('../src/modules/memory-summary.mjs', import.meta.url), 'utf8')
 ]);
     const mainJs = await readFile(new URL("../src/main.js", import.meta.url), "utf8");
 
@@ -172,30 +174,33 @@ test('记忆重构:单一引擎且旧模式/事实层 UI 已移除', () => {
 
 test('立即总结按钮使用强制模式', () => {
     assert.ok(html.includes("runRollingSummaryCheck({ force: true })"));
-    // 2026-08-29 (Phase 3.0): the summary chain moved to useRollingSummary.mjs
-    assert.ok(rollingSummary.includes('const force = options.force === true'));
+    // v6 L1: the trigger adapter forwards force into the single writer.
+    assert.ok(rollingSummary.includes('force: options.force === true'));
+    assert.ok(rollingSummary.includes('reconcileMemory'));
 });
 
 test('滚动总结循环处理全部待总结批次', () => {
-    // 2026-08-29 (Phase 3.0): chain loop moved to useRollingSummary.mjs
-    assert.ok(rollingSummary.includes('while (true)'));
-    assert.ok(rollingSummary.includes('processed > 200'));
+    // v6 L1: the chain loop moved to memory-reconcile.mjs (single writer).
+    assert.ok(reconcileModule.includes('while (processed < MAX_BATCHES_PER_RUN)'));
+    assert.ok(reconcileModule.includes('MAX_BATCHES_PER_RUN = 200'));
     assert.ok(app.includes('withTimeoutSignal(signal, 180000)'));
-    assert.ok(rollingSummary.includes("status: 'failed'"));
+    assert.ok(reconcileModule.includes("status: 'failed'"));
 });
 
-test('滚动摘要:链内使用快照且切换角色/分支/清空重建时中止（v4）', () => {
-    // 链快照：批次请求只读链启动捕获的数据，不逐批读共享 ref
-    // 2026-08-29 (Phase 3.0): chain snapshot moved to useRollingSummary.mjs
-    assert.ok(rollingSummary.includes('const chainContext = {'));
-    assert.ok(rollingSummary.includes('historySnapshot,'));
-    assert.ok(rollingSummary.includes('requestRollingSummary(batch, abortController.signal, chainContext)'));
-    // 中止接线与每批前 scope 校验双保险
+test('滚动摘要:链内使用快照且切换角色/分支/清空重建时中止（v6 L1）', () => {
+    // Chain snapshot: one live snapshot per pass; every batch reads it.
+    assert.ok(reconcileModule.includes('const live = deps.buildLiveSnapshot();'));
+    // Abort: the reconciler owns the signal and the pending flag; scope
+    // switches discard pending work (§6.4).
     assert.ok(app.includes('const abortRollingSummary = () => {'));
     assert.ok(app.includes('_summaryAbortController'));
-    assert.ok(rollingSummary.includes('getCurrentChatStorageScopeId() !== scopeId'));
-    // 失败批次补上后自动清理记录
-    assert.ok(rollingSummary.includes('pruneCoveredFailedBatches'));
+    assert.ok(reconcileModule.includes('if (deps.getScopeId() !== scopeId) return { processed, reason: \'aborted\' };'));
+    assert.ok(reconcileModule.includes('if (signal?.aborted)'));
+    assert.ok(reconcileModule.includes("error?.name === 'AbortError'"));
+    assert.ok(reconcileModule.includes('state.pending = null;'));
+    // Failed-batch pruning helper stays in the module (unused by the ledger
+    // chain; ledger holes supersede it) — nothing is deleted in L1.
+    assert.ok(summaryModule.includes('pruneCoveredFailedBatches'));
 });
 
 // 2026-08-29 (Phase 2.2): timeline digest injection moved to useMessageSender
@@ -235,10 +240,71 @@ test('本地嵌入模型默认自动加载（v4）', () => {
 test('总结批次大小可配置', () => {
     // memorySettings defaults moved to src/composables/useMemorySystem.mjs (Phase 2)
     assert.ok(memoryState.includes('summaryBatchSize: SUMMARY_BATCH_SIZE_DEFAULT'));
-    assert.ok(rollingSummary.includes('batchSize: memorySettings.summaryBatchSize'));
+    // v6 L1: the writer reads the batch size through the reconciler settings.
+    assert.ok(reconcileModule.includes('batchSize: settings.summaryBatchSize'));
     assert.ok(app.includes('const summaryBatchSizeSlider'));
     assert.ok(html.includes('summaryBatchSizeSlider'));
     assert.ok(html.includes('总结批次大小'));
     assert.equal(memorySummary.normalizeState({ batchSize: 5 }).batchSize, 5);
     assert.equal(memorySummary.normalizeState({ batchSize: 0 }).batchSize, memorySummary.DEFAULTS.batchSize);
+});
+
+// --- v6 ledger era (L1): independent batch digests + ledger read path ---
+
+test('v6 批次提示词：独立批次 + 一行上下文，不再重写旧 long/short', () => {
+    const messages = memorySummary.buildDigestMessages({
+        contextLine: '上一段末尾',
+        profileText: '旧信息卡',
+        batch: { fromTurn: 3, toTurn: 4 },
+        turns: [
+            { turn: 3, userText: '第三轮用户', assistantText: '第三轮AI' },
+            { turn: 4, userText: '第四轮用户', assistantText: '第四轮AI' },
+            { turn: 9, userText: '不应出现' }
+        ],
+        characterName: '林夕瑶',
+        userRoleName: '我'
+    });
+    const system = messages[0].content;
+    const joined = messages.map(m => m.content).join('\n');
+    assert.ok(system.includes('批次摘要器'));
+    assert.ok(system.includes('{"digest"'));
+    assert.ok(system.includes('不要续写、重写或扩写任何旧摘要'));
+    // Independence: the old cumulative texts are no longer inputs at all.
+    assert.ok(!joined.includes('旧短期摘要'));
+    assert.ok(!joined.includes('旧长期摘要'));
+    assert.ok(joined.includes('目前为止'));
+    assert.ok(joined.includes('第三轮用户'));
+    assert.ok(joined.includes('第四轮AI'));
+    assert.ok(!joined.includes('不应出现'));
+    assert.ok(joined.includes('旧信息卡'));
+});
+
+test('v6 批次解析：direct / 包裹 / 纯文本降级', () => {
+    assert.deepEqual(
+        memorySummary.parseDigestJson('{"digest":"d","profile":{"characters":[]}}'),
+        { digest: 'd', profile: { characters: [] } }
+    );
+    assert.deepEqual(memorySummary.parseDigestJson('```json\n{"digest":"d2"}\n```'), { digest: 'd2', profile: null });
+    assert.deepEqual(memorySummary.parseDigestJson('纯文本摘要'), { digest: '纯文本摘要', profile: null });
+});
+
+test('v6 注入谓词识别 role_memory 块（§12.2 修复）', () => {
+    assert.ok(app.includes('const ROLE_MEMORY_OPEN_TAG = `<${ROLE_MEMORY_TAG}>`;'));
+    assert.ok(app.includes('text.startsWith(ROLE_MEMORY_OPEN_TAG)'));
+    assert.ok(app.includes('ROLE_MEMORY_CLOSE_TAG'));
+    // Dead v4 timeline constants are gone (defined but never produced).
+    assert.ok(!app.includes('ROLE_MEMORY_TIMELINE_TAG'));
+});
+
+test('v6 写入链：ledger 为唯一派生存储，投影双写，编辑/删除同步失效', () => {
+    assert.ok(app.includes("const saveMemoryLedgerNow = async (scopeId, data) => {"));
+    assert.ok(app.includes("const loadMemoryLedger = async (characterId) => {"));
+    assert.ok(app.includes("'memory_ledger'"));
+    assert.ok(app.includes('persistMemoryLedgerAndProjection'));
+    assert.ok(app.includes('invalidateMemoryLedgerNow()'));
+    assert.ok(app.includes("await deleteScopedStoredValue('memory_ledger', scopeId);"));
+    // Read priority: the ledger fold wins when it has entries; the legacy
+    // strings only serve scopes that never reconciled.
+    assert.ok(app.includes('if (ledger && Array.isArray(ledger.entries) && ledger.entries.length > 0)'));
+    assert.ok(app.includes('const view = buildMemoryView(ledger, buildLiveTurnIndex());'));
 });

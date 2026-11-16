@@ -169,3 +169,22 @@ test('useStoryBranching receives flushCurrentBranchState as a dep', () => {
     const wiringEnd = wiring.indexOf('});');
     assert.ok(wiring.slice(0, wiringEnd).includes('flushCurrentBranchState,'), 'app.mjs passes flushCurrentBranchState');
 });
+
+test('v6 L1: story branches carry the memory ledger across forks', () => {
+    // Full-timeline forks copy the parent ledger as-is (message ids are
+    // preserved in the branch chat, so covers stay valid).
+    assert.ok(branching.includes("getScopedStoredValue('memory_ledger', parentScopeId)"));
+    assert.ok(branching.includes("setScopedStoredValue('memory_ledger', branchScopeId, cloneForStorage(branchLedger)"));
+    // Mid-history forks cannot trim content-addressed entries yet: L1 starts
+    // from an empty ledger; L2 replaces this with the covers ⊆ survivors
+    // filter (memory-ledger.filterLedgerForBranch).
+    assert.ok(branching.includes('branchLedger = null;'));
+    // In-memory state and rollback follow the same pattern as summaries.
+    assert.ok(branching.includes('setMemoryLedger(branchLedger ? cloneForStorage(branchLedger) : null);'));
+    assert.ok(branching.includes('setMemoryLedger(previousState.ledger);'));
+    assert.ok(branching.includes("deleteScopedStoredValue('memory_ledger', createdBranch.branchScopeId)"));
+    assert.ok(app.includes('memoryLedger,') && app.includes('setMemoryLedger,'), 'ledger refs bridged into useStoryBranching');
+    // Ledger loaders wired at both scope entry points.
+    assert.ok(app.includes('await loadMemoryLedger(characterId);'));
+    assert.ok(app.includes('await loadMemoryLedger(targetScopeId);'));
+});

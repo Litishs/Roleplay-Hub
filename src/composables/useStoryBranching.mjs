@@ -26,6 +26,7 @@
 
 import { generateUUID } from '../modules/utils.mjs';
 import { getMemoryEmptyTurnsKey } from '../modules/memory-utils.mjs';
+import { normalizeLedger } from '../modules/memory-ledger.mjs';
 import { createId as rphBranchCreateId, defaultBranchName as rphBranchDefaultBranchName } from '../modules/story-branch.mjs';
 
 export function useStoryBranching(deps) {
@@ -39,6 +40,7 @@ export function useStoryBranching(deps) {
         currentStoryBranch,
         memorySummaries,
         memoryProfile,
+        memoryLedger,
         selectedStoryBranchId,
         activeStoryBranchId,
         storyBranchSwitching,
@@ -51,6 +53,7 @@ export function useStoryBranching(deps) {
         setClassicMemoriesLoaded,
         setMemorySummaries,
         setMemoryProfile,
+        setMemoryLedger,
         getDb,
         // storage layer
         flushCurrentBranchState,
@@ -99,7 +102,8 @@ export function useStoryBranching(deps) {
                 memories: memories.value,
                 classicMemories: classicMemories.value,
                 summaries: memorySummaries.value,
-                profile: memoryProfile.value
+                profile: memoryProfile.value,
+                ledger: memoryLedger.value
             };
             try {
                 if (!await flushCurrentBranchState()) return;
@@ -112,18 +116,20 @@ export function useStoryBranching(deps) {
                 const branchNumber = storyBranches.value.filter(branch => branch.id !== 'main').length + 1;
                 const branchName = api ? api.defaultBranchName(branchNumber) : `分支 ${branchNumber}`;
                 const now = Date.now();
-                const [savedChat, savedMemories, savedClassicMemories, savedSummaries, savedProfile] = await Promise.all([
+                const [savedChat, savedMemories, savedClassicMemories, savedSummaries, savedProfile, savedLedger] = await Promise.all([
                     getStoredChatHistoryWithRetry(parentScopeId),
                     getScopedStoredValue('memories', parentScopeId),
                     getScopedStoredValue('classic_memories', parentScopeId),
                     getScopedStoredValue('memory_summaries', parentScopeId),
-                    getScopedStoredValue('memory_profile', parentScopeId)
+                    getScopedStoredValue('memory_profile', parentScopeId),
+                    getScopedStoredValue('memory_ledger', parentScopeId)
                 ]);
                 let branchChat = Array.isArray(savedChat) ? savedChat : [];
                 let branchMemories = Array.isArray(savedMemories) ? savedMemories : [];
                 let branchClassicMemories = Array.isArray(savedClassicMemories) ? savedClassicMemories : [];
                 let branchSummaries = savedSummaries && typeof savedSummaries === 'object' ? { ...savedSummaries } : null;
                 let branchProfile = savedProfile && typeof savedProfile === 'object' ? { ...savedProfile } : null;
+                let branchLedger = savedLedger && typeof savedLedger === 'object' ? normalizeLedger(savedLedger) : null;
                 let forkTurn = null;
                 if (forkFromMessage) {
                     let sourceIndex = forkMessageId
@@ -152,13 +158,14 @@ export function useStoryBranching(deps) {
                     ).turns.length;
                     branchMemories = branchMemories.filter(memory => Number(memory?.turn) <= forkTurn);
                     branchClassicMemories = branchClassicMemories.filter(memory => Number(memory?.turn) <= forkTurn);
-                    // Summary/profile records store final-state text, not per-batch
-                    // snapshots, so a mid-history fork cannot trim them. Rebuild
-                    // both layers from the branch's own chat instead of carrying
-                    // the parent's post-fork events into this branch.
                     if (forkTurn < parentTurnCount) {
                         branchSummaries = { long: '', short: '', batches: [], updatedAt: now };
                         branchProfile = null;
+                        // L1 rule: a mid-history fork cannot trim content-addressed
+                        // entries yet, so it starts with a fresh ledger and rebuilds
+                        // from the branch's own chat. L2 replaces this with the
+                        // covers ⊆ survivors filter (v6 §7).
+                        branchLedger = null;
                     } else if (branchSummaries && Array.isArray(branchSummaries.batches)) {
                         branchSummaries.batches = branchSummaries.batches.filter(b => Number(b?.toTurn) <= forkTurn);
                     }
@@ -171,6 +178,9 @@ export function useStoryBranching(deps) {
                 }
                 if (branchProfile) {
                     await setScopedStoredValue('memory_profile', branchScopeId, cloneForStorage(branchProfile), { clone: false });
+                }
+                if (branchLedger) {
+                    await setScopedStoredValue('memory_ledger', branchScopeId, cloneForStorage(branchLedger), { clone: false });
                 }
                 copyUiTemplateRuntimeForBranch(parentScopeId, branchScopeId, forkTurn);
                 const floorCount = getPostprocessedChatMessages(branchChat, { includeSystem: false }).length;
@@ -203,6 +213,7 @@ export function useStoryBranching(deps) {
                 classicMemories.value = prepareClassicMemoriesForRuntime(branchClassicMemories);
                 setMemorySummaries(branchSummaries ? cloneForStorage(branchSummaries) : null);
                 setMemoryProfile(branchProfile ? cloneForStorage(branchProfile) : null);
+                setMemoryLedger(branchLedger ? cloneForStorage(branchLedger) : null);
                 setMemoriesLoaded(true);
                 setClassicMemoriesLoaded(true);
                 finishApplyingCharacterScopedData();
@@ -219,6 +230,7 @@ export function useStoryBranching(deps) {
                     classicMemories.value = previousState.classicMemories;
                     setMemorySummaries(previousState.summaries);
                     setMemoryProfile(previousState.profile);
+                    setMemoryLedger(previousState.ledger);
                     if (memorySettings.emptyTurns) {
                         delete memorySettings.emptyTurns[getMemoryEmptyTurnsKey(createdBranch.branchScopeId)];
                     }
@@ -232,6 +244,7 @@ export function useStoryBranching(deps) {
                         deleteScopedStoredValue('classic_memories', createdBranch.branchScopeId),
                         deleteScopedStoredValue('memory_summaries', createdBranch.branchScopeId),
                         deleteScopedStoredValue('memory_profile', createdBranch.branchScopeId),
+                        deleteScopedStoredValue('memory_ledger', createdBranch.branchScopeId),
                         getDb() ? getDb().deleteFragments(createdBranch.branchScopeId) : Promise.resolve(),
                         saveStoryBranchesForCharacter(char),
                         saveMemorySettingsNow(),

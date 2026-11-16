@@ -47,6 +47,9 @@ export function useMemorySystem() {
     // --- 滚动摘要（记忆重构 P0：原文真相源 + 派生摘要层） ---
     const memorySummaries = ref(null);
     const memoryProfile = ref(null);
+    // v6 ledger (L1): append-only derived store; memorySummaries above stays
+    // as the folded projection consumed by the unchanged panel/injection.
+    const memoryLedger = ref(null);
     const summaryProgress = ref(null); // {fromTurn,toTurn,status:'running'|'done'|'failed'}
     let _summaryInFlight = false;
     let _summaryAbortController = null;
@@ -114,6 +117,7 @@ export function useMemorySystem() {
         classicMemoryPage,
         memorySummaries,
         memoryProfile,
+        memoryLedger,
         summaryProgress,
         memorySettings,
         isBatchExtracting,

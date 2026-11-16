@@ -45,6 +45,10 @@ import RPHTtsText from './tts-text.mjs';
 import { MAIN_ID, SCOPE_SEPARATOR, createId, getScopeId, getOwnerId, isBranchScopeId, defaultBranchName, createMainBranch, normalizeBranches, collectSubtreeIds, buildBranchTree, formatWordCount } from './story-branch.mjs';
 import * as RPHMemorySummary from './memory-summary.mjs';
 import * as RPHMemoryProfile from './memory-profile.mjs';
+import { buildMemoryView } from './memory-view.mjs';
+import { createMemoryReconciler } from './memory-reconcile.mjs';
+import { invalidateEntries, normalizeLedger, propagateStaleUpward } from './memory-ledger.mjs';
+import { canonicalMemoryText, canonicalMessageHash } from './content-hash.mjs';
 const RPHStoryBranch = { MAIN_ID, SCOPE_SEPARATOR, createId, getScopeId, getOwnerId, isBranchScopeId, defaultBranchName, createMainBranch, normalizeBranches, collectSubtreeIds, buildBranchTree, formatWordCount };
 import UiTemplatePending from '../components/common/UiTemplatePending.vue';
 import EmbeddedViewContent from '../components/common/EmbeddedViewContent.vue';
@@ -1223,9 +1227,13 @@ const __app = createApp({
         const ROLE_MEMORY_VECTOR_RECALL_TAG = 'role_memory_vector_recall';
         const ROLE_MEMORY_VECTOR_RECALL_OPEN_TAG = `<${ROLE_MEMORY_VECTOR_RECALL_TAG}>`;
         const ROLE_MEMORY_VECTOR_RECALL_CLOSE_TAG = `</${ROLE_MEMORY_VECTOR_RECALL_TAG}>`;
-        const ROLE_MEMORY_TIMELINE_TAG = 'role_memory_timeline';
-        const ROLE_MEMORY_TIMELINE_OPEN_TAG = `<${ROLE_MEMORY_TIMELINE_TAG}>`;
-        const ROLE_MEMORY_TIMELINE_CLOSE_TAG = `</${ROLE_MEMORY_TIMELINE_TAG}>`;
+        // v6 §12.2: the summary block's own open/close tags. The v4 predicate
+        // below never matched '<role_memory>' (the '[角色记忆' prefix has no
+        // producer anywhere), so injection-detection predicates must include
+        // it; the TOC block (L3) will ride inside the same tag.
+        const ROLE_MEMORY_TAG = 'role_memory';
+        const ROLE_MEMORY_OPEN_TAG = `<${ROLE_MEMORY_TAG}>`;
+        const ROLE_MEMORY_CLOSE_TAG = `</${ROLE_MEMORY_TAG}>`;
                                 const isVectorMemoryRecallContent = (content) => {
             const text = String(content || '').trimStart();
             return text.startsWith(ROLE_MEMORY_VECTOR_RECALL_OPEN_TAG)
@@ -1233,7 +1241,9 @@ const __app = createApp({
         };
         const isRoleMemoryContextContent = (content) => {
             const text = String(content || '').trimStart();
-            return text.startsWith('[角色记忆') || text.startsWith(ROLE_MEMORY_VECTOR_RECALL_OPEN_TAG);
+            return text.startsWith(ROLE_MEMORY_OPEN_TAG)
+                || text.startsWith('[角色记忆')
+                || text.startsWith(ROLE_MEMORY_VECTOR_RECALL_OPEN_TAG);
         };
         const getMessageSourceIndexes = (message, index, trackSources) => {
             const source = message?._sourceIndexes;
@@ -1478,6 +1488,7 @@ const __app = createApp({
             classicMemoryPage,
             memorySummaries,
             memoryProfile,
+            memoryLedger,
             summaryProgress,
             memorySettings,
             isBatchExtracting,
@@ -1516,6 +1527,7 @@ const __app = createApp({
         const setClassicMemoriesLoaded = (value) => { _classicMemoriesLoaded = value; };
         const setMemorySummaries = (value) => { memorySummaries.value = value; };
         const setMemoryProfile = (value) => { memoryProfile.value = value; };
+        const setMemoryLedger = (value) => { memoryLedger.value = value; };
         let _isApplyingCharacterScopedData = false;
         let _initComplete = false; // 守卫标志：防止 onMounted 初始化阶段写入默认值覆盖服务端数据
         let _dataLoadFailed = false; // 守卫标志：loadData 失败时禁止 saveData 用默认空值覆盖存储中的数据
@@ -4847,6 +4859,11 @@ const __app = createApp({
                 delete msg.originalSys;
                 scheduleChatStatsRecompute(0);
                 saveData();
+                // v6 §6.3: an edit changes the canonical text of this
+                // message, so every digest that consumed it goes stale. The
+                // invalidation is synchronous and local; the rewrite happens
+                // through the hole-fill mechanism on the next reconcile.
+                invalidateMemoryLedgerNow().catch(error => console.error('Memory ledger invalidation failed:', error));
                 showToast('消息已保存', 'success');
             }
         };
@@ -4985,6 +5002,11 @@ const __app = createApp({
                     ? await removeMemoriesForConversationTurn(snapshot, affectedTurn)
                     : 0;
                 chatHistory.value.splice(index, 1);
+                // v6 §6.3: the deleted message vanishes from every digest's
+                // covers, so those entries go stale and their ranges become
+                // holes for the next reconcile. Turn labels are recomputed
+                // from live data — no renumbering surgery.
+                invalidateMemoryLedgerNow().catch(error => console.error('Memory ledger invalidation failed:', error));
                 scheduleChatStatsRecompute(0);
                 await saveConversationMutationNow({ saveTemplateRuntime: uiCleanup.logs > 0 || uiCleanup.blocks > 0 });
                 const extras = [];
@@ -6890,6 +6912,112 @@ const __app = createApp({
             }
         };
 
+        const saveMemoryLedgerNow = async (scopeId, data) => {
+            if (!currentCharacter.value?.uuid || !data) return;
+            await setScopedStoredValue(
+                'memory_ledger',
+                scopeId || getCurrentChatStorageScopeId(),
+                cloneForStorage(data),
+                { clone: false }
+            );
+        };
+
+        const loadMemoryLedger = async (characterId) => {
+            try {
+                const saved = await getScopedStoredValue('memory_ledger', characterId);
+                memoryLedger.value = saved && typeof saved === 'object' ? normalizeLedger(saved) : null;
+            } catch (error) {
+                console.error('Error loading memory ledger:', error);
+                memoryLedger.value = null;
+            }
+        };
+
+        // Content-addressed snapshots. liveTurnIndex maps message id -> turn
+        // number of the current live timeline (never persisted); liveIndex
+        // maps id -> canonical hash for staleness checks. Hash cost is paid
+        // once per reconcile, never on render or per-message save paths.
+        const buildMemoryLiveSnapshot = (historySnapshot = chatHistory.value) => {
+            const messages = Array.isArray(historySnapshot) ? historySnapshot : chatHistory.value;
+            const snapshot = buildConversationTurnSnapshot(messages, { includeSystem: false });
+            const liveIndex = new Map();
+            const liveTurnIndex = new Map();
+            const turnCovers = new Map();
+            const turns = [];
+            snapshot.turns.forEach(turnInfo => {
+                const covers = [];
+                (turnInfo.sourceIndexes || []).forEach(index => {
+                    const message = messages[index];
+                    if (!message?.id) return;
+                    const hash = canonicalMessageHash(message);
+                    liveIndex.set(message.id, hash);
+                    liveTurnIndex.set(message.id, turnInfo.turn);
+                    covers.push({ id: message.id, h: hash });
+                });
+                turnCovers.set(turnInfo.turn, covers);
+                turns.push({
+                    turn: turnInfo.turn,
+                    userText: canonicalMemoryText(turnInfo.user?.content),
+                    assistantText: canonicalMemoryText(turnInfo.assistant?.content)
+                });
+            });
+            return {
+                turns,
+                turnCount: snapshot.turns.length,
+                liveIndex,
+                liveTurnIndex,
+                turnCovers
+            };
+        };
+
+        const buildLiveTurnIndex = (historySnapshot = chatHistory.value) => {
+            const messages = Array.isArray(historySnapshot) ? historySnapshot : chatHistory.value;
+            const snapshot = buildConversationTurnSnapshot(messages, { includeSystem: false });
+            const turnIndex = new Map();
+            snapshot.turns.forEach(turnInfo => {
+                (turnInfo.sourceIndexes || []).forEach(index => {
+                    const id = messages[index]?.id;
+                    if (id) turnIndex.set(id, turnInfo.turn);
+                });
+            });
+            return turnIndex;
+        };
+
+        // Fold the ledger into the memorySummaries projection so the panel
+        // and buildMemoryContextForPrompt consume ledger truth while v4
+        // storage keys stay readable (dual-write eases rollback, v6 §11).
+        const applyMemoryLedgerProjection = (ledger, live = null) => {
+            const turnIndex = live?.liveTurnIndex || buildLiveTurnIndex();
+            const view = buildMemoryView(ledger, turnIndex);
+            memorySummaries.value = {
+                long: view.long,
+                short: view.short,
+                batches: view.batches,
+                updatedAt: Number(ledger?.updatedAt) || 0
+            };
+            return view;
+        };
+
+        const persistMemoryLedgerAndProjection = async (scopeId, ledger) => {
+            await saveMemoryLedgerNow(scopeId, ledger);
+            applyMemoryLedgerProjection(ledger);
+            await saveMemorySummariesNow(scopeId, memorySummaries.value).catch(() => { });
+        };
+
+        // Synchronous local invalidation for edit/delete: no API call, the
+        // hole-fill mechanism rewrites stale ranges on the next reconcile
+        // (v6 §6.3).
+        const invalidateMemoryLedgerNow = async () => {
+            const ledger = memoryLedger.value;
+            if (!currentCharacter.value?.uuid || !ledger || !Array.isArray(ledger.entries) || ledger.entries.length === 0) return;
+            const scopeId = getCurrentChatStorageScopeId();
+            const live = buildMemoryLiveSnapshot();
+            let changed = invalidateEntries(ledger, live.liveIndex);
+            changed += propagateStaleUpward(ledger);
+            if (changed === 0) return;
+            applyMemoryLedgerProjection(ledger, live);
+            await persistMemoryLedgerAndProjection(scopeId, ledger);
+        };
+
         const clearSummaryProgress = () => {
             if (_summaryDoneTimer) {
                 clearTimeout(_summaryDoneTimer);
@@ -6909,18 +7037,10 @@ const __app = createApp({
             }
         };
 
-        const collectTurnsForBatch = (historySnapshot, fromTurn, toTurn) => {
-            const snapshot = buildConversationTurnSnapshot(historySnapshot || chatHistory.value, { includeSystem: false });
-            return snapshot.turns
-                .filter(turnInfo => Number(turnInfo.turn) >= fromTurn && Number(turnInfo.turn) <= toTurn)
-                .map(turnInfo => ({
-                    turn: turnInfo.turn,
-                    userContent: turnInfo.user?.content,
-                    assistantContent: turnInfo.assistant?.content
-                }));
-        };
-
-        // v4：链快照——批次请求只读链启动时捕获的数据，杜绝切换角色/分支后的混合写入
+        // v6 (ledger era): one independent batch digest per call. The only
+        // inputs are this batch's canonical text plus a one-line context —
+        // never the cumulative long/short text, so a failed or rewritten
+        // batch cannot contaminate later batches (v6 §6.3 / §9.2).
         const requestRollingSummary = async (batch, signal, context) => {
             const lib = summaryLib();
             if (!lib) throw new Error('滚动摘要模块未加载');
@@ -6928,23 +7048,20 @@ const __app = createApp({
             const memoryProvider = getMemoryProvider();
             if (!memoryProvider.apiUrl || !memoryProvider.apiKey) throw new Error('请先配置记忆供应商的 API 地址和 Key');
             if (!model) throw new Error('请先选择记忆模型');
-            const current = context.summaries || getMemorySummaries();
-            const profile = context.profile || getMemoryProfile();
-            const turns = collectTurnsForBatch(context.historySnapshot, batch.fromTurn, batch.toTurn);
+            const profile = getMemoryProfile();
             const profileText = profileLib()
                 ? profileLib().buildProfileContext(profile, {
-                    userRoleName: context.userRoleName || '用户',
+                    userRoleName: user.name || '用户',
                     currentTurn: batch.toTurn
                 })
                 : '';
-            const messages = lib.buildRewriteMessages({
-                shortSummary: current.short,
-                longSummary: current.long,
+            const messages = lib.buildDigestMessages({
+                contextLine: context?.contextLine || '',
                 profileText,
                 batch,
-                turns,
-                characterName: context.characterName || '角色',
-                userRoleName: context.userRoleName || '用户'
+                turns: context?.turns || [],
+                characterName: currentCharacter.value?.name || '角色',
+                userRoleName: user.name || '用户'
             });
             const response = await fetch(getMemoryApiEndpoint('chat/completions'), {
                 method: 'POST',
@@ -6967,37 +7084,60 @@ const __app = createApp({
                 throw new Error(extractApiErrorMessage(payload, response.status) || `API Error: ${response.status}`);
             }
             const content = getClassicSummaryResponseContent(rawText);
-            const parsed = lib.parseSummaryJson(content);
-            if (!parsed.short) throw new Error('记忆模型没有返回有效摘要');
+            const parsed = lib.parseDigestJson(content);
+            if (!parsed.digest) throw new Error('记忆模型没有返回有效摘要');
             return parsed;
         };
 
-        // Rolling summary chain lives in useRollingSummary (Phase 3.0); wired here
-        // after its last dep (requestRollingSummary, above) is defined.
+        const applyMemoryProfileDelta = async (profileData, batch) => {
+            if (!profileLib() || !profileData) return;
+            const currentProfile = getMemoryProfile();
+            // v4 contract: the info card only refreshes once it exists.
+            if (!currentProfile) return;
+            const scopeId = getCurrentChatStorageScopeId();
+            const currentTurn = Number(batch?.toTurn) || undefined;
+            const mergedCharacters = profileLib().mergeCharacters(profileData.characters, currentProfile, currentTurn);
+            const mergedPlots = profileLib().mergeOpenPlots(profileData.openPlots, currentProfile, currentTurn);
+            const nextProfile = {
+                ...currentProfile,
+                characters: mergedCharacters.characters,
+                openPlots: mergedPlots.openPlots,
+                updatedAt: Date.now()
+            };
+            memoryProfile.value = nextProfile;
+            await saveMemoryProfileNow(scopeId, nextProfile);
+        };
+
+        // v6 L1: the ledger reconciler is the single writer of derived
+        // memory. It owns invalidation → hole filling → append → persist;
+        // useRollingSummary is now only the trigger adapter.
+        const memoryReconciler = createMemoryReconciler({
+            getSettings: () => memorySettings,
+            getScopeId: getCurrentChatStorageScopeId,
+            getLedger: () => memoryLedger.value,
+            setLedger: (value) => { memoryLedger.value = value; },
+            loadLegacySummaries: () => getMemorySummaries(),
+            saveLedgerNow: persistMemoryLedgerAndProjection,
+            buildLiveSnapshot: () => buildMemoryLiveSnapshot(),
+            requestBatchDigest: requestRollingSummary,
+            applyProfileDelta: applyMemoryProfileDelta,
+            applyProjection: (ledger, live) => { applyMemoryLedgerProjection(ledger, live); },
+            setProgress: setSummaryProgress,
+            clearProgress: clearSummaryProgress,
+            setAbortController: (controller) => { _summaryAbortController = controller; },
+            releaseAbortController: (controller) => {
+                if (_summaryAbortController === controller) _summaryAbortController = null;
+            },
+            makeId: generateUUID
+        });
+
         const { runRollingSummaryCheck } = useRollingSummary({
-            // memory state
             currentCharacter,
             chatHistory,
-            user,
             memorySettings,
-            memoryProfile,
-            // shared guard bridges
-            getSummaryInFlight,
-            setSummaryInFlight,
-            getSummaryAbortController,
-            setSummaryAbortController,
-            // summary domain helpers
-            getMemorySummaries,
-            getMemoryProfile,
-            saveMemorySummariesNow,
-            saveMemoryProfileNow,
-            setSummaryProgress,
-            clearSummaryProgress,
-            requestRollingSummary,
-            // context helpers
-            getCurrentChatStorageScopeId,
+            showToast,
             buildConversationTurnSnapshot,
-            showToast
+            reconcileMemory: memoryReconciler.reconcile
         });
         const abortRollingSummary = () => {
             if (_summaryAbortController) {
@@ -7017,10 +7157,24 @@ const __app = createApp({
         const buildMemoryContextForPrompt = () => {
             const lib = summaryLib();
             if (!lib || !memorySummaries.value) return '';
-            const current = getMemorySummaries();
+            let longText = '';
+            let shortText = '';
+            const ledger = memoryLedger.value;
+            if (ledger && Array.isArray(ledger.entries) && ledger.entries.length > 0) {
+                // v6 read priority: the ledger fold wins; the legacy strings
+                // are only a fallback for scopes that never reconciled
+                // (design doc §16 risk 7 — never two books at once).
+                const view = buildMemoryView(ledger, buildLiveTurnIndex());
+                longText = view.long;
+                shortText = view.short;
+            } else {
+                const current = getMemorySummaries();
+                longText = current.long;
+                shortText = current.short;
+            }
             const parts = [];
-            if (current.long) parts.push(`<long_summary>\n${current.long}\n</long_summary>`);
-            if (current.short) parts.push(`<short_summary>\n${current.short}\n</short_summary>`);
+            if (longText) parts.push(`<long_summary>\n${longText}\n</long_summary>`);
+            if (shortText) parts.push(`<short_summary>\n${shortText}\n</short_summary>`);
             if (memoryProfile.value && profileLib()) {
                 const currentTurn = buildConversationTurnSnapshot(chatHistory.value, { includeSystem: false }).turns.length;
                 const profileText = profileLib().buildProfileContext(memoryProfile.value, {
@@ -7031,10 +7185,10 @@ const __app = createApp({
             }
             if (parts.length === 0) return '';
             return [
-                '<role_memory>',
+                ROLE_MEMORY_OPEN_TAG,
                 '  <description>以下为滚出上下文的旧对话摘要：长期摘要为整体要点，短期摘要为最近一段历史的细节；事件时间均为剧情时间。</description>',
                 ...parts.map(part => indentXmlText(part, 2)),
-                '</role_memory>'
+                ROLE_MEMORY_CLOSE_TAG
             ].join('\n');
         };
 
@@ -8470,6 +8624,7 @@ const __app = createApp({
             vectorMemorySearchError.value = '';
             await loadMemorySummaries(characterId);
             await loadMemoryProfile(characterId);
+            await loadMemoryLedger(characterId);
             try {
                 const savedMemories = await getScopedStoredValue('memories', characterId);
                 memories.value = savedMemories?.length
@@ -8665,6 +8820,7 @@ const __app = createApp({
             await flushPendingChatHistorySave();
             await saveMemoriesNow();
             await saveClassicMemoriesNow();
+            await saveMemoryLedgerNow(getCurrentChatStorageScopeId(), memoryLedger.value);
             return true;
         };
 
@@ -8704,6 +8860,7 @@ const __app = createApp({
             classicMemories,
             memorySummaries,
             memoryProfile,
+            memoryLedger,
             storyBranches,
             currentStoryBranch,
             selectedStoryBranchId,
@@ -8718,6 +8875,7 @@ const __app = createApp({
             setClassicMemoriesLoaded,
             setMemorySummaries,
             setMemoryProfile,
+            setMemoryLedger,
             getDb,
             // storage layer
             flushCurrentBranchState,
@@ -8768,6 +8926,7 @@ const __app = createApp({
                 ]);
                 await loadMemorySummaries(targetScopeId);
                 await loadMemoryProfile(targetScopeId);
+                await loadMemoryLedger(targetScopeId);
                 _isApplyingCharacterScopedData = true;
                 activeStoryBranchId.value = branchId;
                 resetChatRenderWindow();
@@ -10283,11 +10442,13 @@ const __app = createApp({
                     abortRollingSummary();
                     memorySummaries.value = null;
                     memoryProfile.value = null;
+                    memoryLedger.value = null;
                     clearSummaryProgress();
                     if (currentCharacter.value?.uuid) {
                         const scopeId = getCurrentChatStorageScopeId();
                         await deleteScopedStoredValue('memory_summaries', scopeId);
                         await deleteScopedStoredValue('memory_profile', scopeId);
+                        await deleteScopedStoredValue('memory_ledger', scopeId);
                         // v4：同步重置向量已提取标记与空转日志，否则自动补录认为全部已归档，分片永远为 0
                         const extractedKey = getMemoryVectorExtractedKey(scopeId);
                         const emptyKey = getMemoryEmptyTurnsKey(scopeId);

@@ -103,7 +103,7 @@ test('useMemorySystem returns live reactive state (runtime)', async () => {
     assert.equal(state.memorySettings.localEmbeddingModel, 'bge-small-zh-v1.5');
 
     for (const key of [
-        'classicMemories', 'classicMemoryPage', 'memorySummaries', 'memoryProfile',
+        'classicMemories', 'classicMemoryPage', 'memorySummaries', 'memoryProfile', 'memoryLedger',
         'summaryProgress', 'sliceBuildStatus', 'memoryGraphView', 'showNoMemoryNeededModal',
         'showMemorySettings',
         'MEMORY_VECTOR_BATCH_SIZE', 'LIST_PAGE_SIZE', 'MEMORY_MODE_VECTOR',
@@ -1125,31 +1125,27 @@ test('app.mjs wires useVectorMemoryPatrol with guard accessors', () => {
 
 // --- useRollingSummary (Phase 3.0): rolling memory summary chain ---
 
-test('useRollingSummary composable owns the summary chain run', () => {
-    assert.ok(rollingSummarySource.includes("import * as RPHMemorySummary from '../modules/memory-summary.mjs';"), 'imports summary lib');
-    assert.ok(rollingSummarySource.includes("import * as RPHMemoryProfile from '../modules/memory-profile.mjs';"), 'imports profile lib');
-    assert.ok(rollingSummarySource.includes('const summaryLib = () => RPHMemorySummary;'), 'module alias recreated');
+test('useRollingSummary composable is the reconcile trigger adapter (v6 L1)', () => {
     assert.ok(rollingSummarySource.includes('export function useRollingSummary(deps)'), 'deps-injecting factory export');
     assert.ok(rollingSummarySource.includes('const runRollingSummaryCheck = async (options = {}) => {'), 'owns runRollingSummaryCheck');
-    // shared guards reached through accessors, never rebound locally
-    assert.ok(rollingSummarySource.includes('if (getSummaryInFlight()) return false;'), 'in-flight guard read through bridge');
-    assert.ok(rollingSummarySource.includes('setSummaryInFlight(true);'), 'in-flight guard set through bridge');
-    assert.ok(rollingSummarySource.includes('if (getSummaryAbortController() === abortController) setSummaryAbortController(null);'), 'controller cleared through bridge');
+    // The chain moved to memory-reconcile.mjs (single writer); the
+    // composable only forwards the trigger and keeps the force toast.
+    assert.ok(rollingSummarySource.includes('reconcileMemory({ force: options.force === true })'), 'delegates to the single writer');
+    assert.ok(rollingSummarySource.includes('暂无需要总结的内容'), 'force-with-nothing-to-do toast kept');
     assert.ok(!/_(summaryInFlight|summaryAbortController)/.test(rollingSummarySource.replace(/^\/\/.*$/gm, '')), 'no direct guard access in code');
-    // chain behavior markers stay
-    assert.ok(rollingSummarySource.includes('if (processed > 200) break;'), 'safety cap kept');
-    assert.ok(rollingSummarySource.includes("if (getCurrentChatStorageScopeId() !== scopeId) break;"), 'scope-switch double guard kept');
+    assert.ok(!rollingSummarySource.includes('fetch('), 'no network in the adapter');
     assert.ok(rollingSummarySource.includes('return { runRollingSummaryCheck };'));
 });
 
-test('app.mjs wires useRollingSummary with guard accessors', () => {
+test('app.mjs wires useRollingSummary with the ledger reconciler', () => {
     assert.ok(app.includes("import { useRollingSummary } from '../composables/useRollingSummary.mjs';"), 'import');
     assert.equal(app.split('useRollingSummary(').length - 1, 1, 'exactly one composable call per setup()');
     assert.ok(app.includes('const { runRollingSummaryCheck } = useRollingSummary({'), 'destructures at the wiring site');
+    assert.ok(app.includes('reconcileMemory: memoryReconciler.reconcile'), 'reconciler injected');
+    assert.ok(app.includes('const memoryReconciler = createMemoryReconciler({'), 'single reconciler instance');
     assert.ok(!app.includes('const runRollingSummaryCheck = async'), 'moved out of app.mjs');
     // the shared guard bindings stay in app.mjs for abortRollingSummary / memory patrol
     assert.ok(app.includes('const getSummaryInFlight = () => _summaryInFlight;'), 'getter accessor defined');
-    assert.ok(app.includes('const setSummaryAbortController = (value) => { _summaryAbortController = value; };'), 'setter accessor defined');
     assert.ok(app.includes('if (!_summaryInFlight) {'), 'memory patrol still reads the flag');
     assert.ok(app.includes('runRollingSummaryCheck,'), 'ctx export kept');
 });
