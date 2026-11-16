@@ -43,7 +43,7 @@ const makeTurns = (count, prefix = 'T') => Array.from({ length: count }, (_, ind
 // test below).
 let globalIdSeq = 0;
 
-const createHarness = ({ live, legacy = null, settings = {}, failOnCall = 0, gated = false }) => {
+const createHarness = ({ live, legacy = null, settings = {}, failOnCall = 0, gated = false, profile = null, failProfile = false }) => {
     let ledger = null;
     let controller = null;
     let releaseGate = () => {};
@@ -68,9 +68,11 @@ const createHarness = ({ live, legacy = null, settings = {}, failOnCall = 0, gat
                 throw error;
             }
             if (failOnCall > 0 && calls.length === failOnCall) throw new Error('api down');
-            return { digest: `摘要 ${batch.fromTurn}-${batch.toTurn}`, profile: null };
+            return { digest: `摘要 ${batch.fromTurn}-${batch.toTurn}`, profile };
         },
-        applyProfileDelta: async () => {},
+        applyProfileDelta: async () => {
+            if (failProfile) throw new Error('profile storage down');
+        },
         applyProjection: () => {},
         setProgress: (value) => progress.push(value),
         clearProgress: () => { progress.push(null); },
@@ -221,4 +223,15 @@ test('reconcile: adopted entries replace a missing ledger only once', async () =
     const entryCount = harness.getLedger().entries.length;
     await harness.reconciler.reconcile({});
     assert.equal(harness.getLedger().entries.length, entryCount, 'no double adoption');
+});
+test('reconcile: a profile-save failure does not fail the persisted batch', async () => {
+    const live = createLive(makeTurns(8));
+    const harness = createHarness({
+        live,
+        profile: { characters: [{ name: '甲', status: '受伤' }], openPlots: [] },
+        failProfile: true
+    });
+    const result = await harness.reconciler.reconcile({});
+    assert.equal(result.reason, 'processed');
+    assert.equal(harness.getLedger().entries.length, 2, 'digest entries stay persisted');
 });

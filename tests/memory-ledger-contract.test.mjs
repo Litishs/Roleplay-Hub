@@ -213,3 +213,15 @@ test('ledger: branch filter keeps only entries whose covers all survived', () =>
     child.entries.find(entry => entry.id === 'early').meta.stale = true;
     assert.equal(ledger.entries.find(entry => entry.id === 'early').meta.stale, false);
 });
+test('ledger: adoption does not duplicate short text already inside long', () => {
+    // Recovery from a projection: short is a suffix of long in L1, so the
+    // merged legacy entry must keep the text once.
+    const entries = adoptLegacySummaries({
+        summaries: { long: '早期事件\n\n最近事件', short: '最近事件', batches: [] },
+        turnCovers: new Map(),
+        makeId: () => 'legacy-text',
+        now: 1
+    });
+    assert.equal(entries.length, 1);
+    assert.equal(entries[0].text, '早期事件\n\n最近事件');
+});

@@ -305,6 +305,7 @@ test('v6 写入链：ledger 为唯一派生存储，投影双写，编辑/删除
     assert.ok(app.includes("await deleteScopedStoredValue('memory_ledger', scopeId);"));
     // Read priority: the ledger fold wins when it has entries; the legacy
     // strings only serve scopes that never reconciled.
-    assert.ok(app.includes('if (ledger && Array.isArray(ledger.entries) && ledger.entries.length > 0)'));
+    assert.ok(app.includes('const hasLedger = Boolean(ledger && Array.isArray(ledger.entries) && ledger.entries.length > 0);'));
+    assert.ok(app.includes("if (!hasLedger && !memorySummaries.value) return '';"), 'ledger-only state still injects');
     assert.ok(app.includes('const view = buildMemoryView(ledger, buildLiveTurnIndex());'));
 });

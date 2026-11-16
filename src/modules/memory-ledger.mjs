@@ -242,7 +242,11 @@ export const adoptLegacySummaries = ({ summaries, turnCovers, makeId, now = Date
         covered.push(...covers);
         entries.push(entry);
     }
-    const combined = [String(summaries?.long || '').trim(), String(summaries?.short || '').trim()]
+    const longText = String(summaries?.long || '').trim();
+    const shortText = String(summaries?.short || '').trim();
+    // The L1 projection keeps short as a suffix of long, so a recovery run
+    // would otherwise inject the recent digests twice.
+    const combined = [longText, shortText && !longText.includes(shortText) ? shortText : '']
         .filter(Boolean)
         .join('\n\n');
     if (combined) {

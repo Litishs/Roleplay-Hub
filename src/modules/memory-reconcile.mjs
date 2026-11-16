@@ -171,7 +171,13 @@ export function createMemoryReconciler(deps) {
             deps.applyProjection?.(ledger, live);
             await deps.saveLedgerNow(scopeId, ledger);
             if (parsed.profile && deps.getScopeId() === scopeId) {
-                await deps.applyProfileDelta?.(parsed.profile, batch);
+                try {
+                    await deps.applyProfileDelta?.(parsed.profile, batch);
+                } catch (error) {
+                    // The digest entry is already persisted; a profile-save
+                    // failure must not turn a completed batch into a failure.
+                    console.error('Memory profile delta failed:', error);
+                }
             }
             processed += 1;
         }

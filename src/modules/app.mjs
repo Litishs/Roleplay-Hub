@@ -7156,11 +7156,16 @@ const __app = createApp({
 
         const buildMemoryContextForPrompt = () => {
             const lib = summaryLib();
-            if (!lib || !memorySummaries.value) return '';
+            if (!lib) return '';
             let longText = '';
             let shortText = '';
             const ledger = memoryLedger.value;
-            if (ledger && Array.isArray(ledger.entries) && ledger.entries.length > 0) {
+            const hasLedger = Boolean(ledger && Array.isArray(ledger.entries) && ledger.entries.length > 0);
+            // The legacy summaries object may legitimately be missing while
+            // the ledger holds the truth (projection key deleted, partial
+            // restore) — only bail when neither source has anything.
+            if (!hasLedger && !memorySummaries.value) return '';
+            if (hasLedger) {
                 // v6 read priority: the ledger fold wins; the legacy strings
                 // are only a fallback for scopes that never reconciled
                 // (design doc §16 risk 7 — never two books at once).
