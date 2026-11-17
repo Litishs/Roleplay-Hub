@@ -109,3 +109,103 @@ test('memory view: empty ledger folds to an empty view', () => {
     assert.deepEqual(view.pins, []);
     assert.deepEqual(view.tokens, { long: 0, short: 0, toc: 0 });
 });
+// --- v6 L4: fact card projection + pin gating -----------------------------
+
+const fact = (id, factKind, factKey, text, covers, meta = {}) => ({
+    id,
+    kind: 'fact',
+    level: 0,
+    covers,
+    base: [],
+    text,
+    meta: {
+        at: 0,
+        stale: false,
+        folded: false,
+        manual: false,
+        factKind,
+        factKey,
+        factStatus: '',
+        factDeadline: '',
+        ...meta
+    }
+});
+
+test('memory view: card takes the newest non-stale/folded fact per key', () => {
+    const ledger = {
+        entries: [
+            fact('old-anna', 'character', '安娜', '受伤', [{ id: 'u1', h: 'h' }], { at: 1 }),
+            fact('new-anna', 'character', '安娜', '痊愈', [{ id: 'u2', h: 'h' }], { at: 2 }),
+            fact('folded-anna', 'character', '安娜', '被覆盖', [{ id: 'u3', h: 'h' }], { at: 3, folded: true }),
+            fact('stale-bella', 'character', '贝拉', '失踪', [{ id: 'u4', h: 'h' }], { at: 4, stale: true }),
+            fact('plot-old', 'plot', '寻药', '寻药', [{ id: 'u1', h: 'h' }], { at: 1, factStatus: 'open', factDeadline: '三日后' }),
+            fact('plot-new', 'plot', '寻药', '寻药', [{ id: 'u2', h: 'h' }], { at: 2, factStatus: 'closed' })
+        ]
+    };
+    const view = buildMemoryView(ledger, turnIndexFor([['u1', 1], ['u2', 2], ['u3', 3], ['u4', 4]]));
+    assert.equal(view.card.characters.length, 1);
+    assert.deepEqual(view.card.characters[0], {
+        entryId: 'new-anna',
+        name: '安娜',
+        status: '痊愈',
+        lastSeenTurn: 2,
+        manual: false,
+        legacy: false,
+        at: 2
+    });
+    assert.equal(view.card.openPlots.length, 1);
+    assert.equal(view.card.openPlots[0].status, 'closed');
+    assert.equal(view.card.openPlots[0].deadline, '');
+    assert.equal(view.card.openPlots[0].lastSeenTurn, 2);
+});
+
+test('memory view: a manual (covers:[]) fact wins over newer auto rows', () => {
+    const ledger = {
+        entries: [
+            fact('manual', 'character', '安娜', '被囚', [], { at: 1, manual: true }),
+            fact('auto', 'character', '安娜', '痊愈', [{ id: 'u2', h: 'h' }], { at: 9 })
+        ]
+    };
+    const view = buildMemoryView(ledger, turnIndexFor([['u2', 2]]));
+    assert.equal(view.card.characters.length, 1);
+    assert.equal(view.card.characters[0].entryId, 'manual');
+    assert.equal(view.card.characters[0].manual, true);
+    assert.equal(view.card.characters[0].lastSeenTurn, 0, 'manual rows have no timeline freshness');
+});
+
+test('memory view: facts whose covers vanished are not projected', () => {
+    const ledger = {
+        entries: [fact('gone', 'character', '安娜', '受伤', [{ id: 'missing', h: 'h' }])]
+    };
+    const view = buildMemoryView(ledger, new Map());
+    assert.deepEqual(view.card, { characters: [], openPlots: [] });
+});
+
+test('memory view: card lastSeenTurn re-projects from live turns (no skew)', () => {
+    const ledger = {
+        entries: [fact('f1', 'plot', '寻药', '寻药', [{ id: 'u9', h: 'h' }], { factStatus: 'open' })]
+    };
+    const before = buildMemoryView(ledger, turnIndexFor([['u9', 5]]));
+    const after = buildMemoryView(ledger, turnIndexFor([['u9', 3]]));
+    assert.equal(before.card.openPlots[0].lastSeenTurn, 5);
+    assert.equal(after.card.openPlots[0].lastSeenTurn, 3, 'deleting floors shifts freshness without touching storage');
+});
+
+test('memory view: pins exclude disabled rows, keep creation order and cap at 10', () => {
+    const entries = [];
+    for (let index = 0; index < 12; index += 1) {
+        entries.push({
+            id: `p${index}`,
+            kind: 'pin',
+            level: 0,
+            covers: [],
+            base: [],
+            text: `记忆${index}`,
+            meta: { at: 20 - index, stale: false, folded: false, enabled: index !== 0 }
+        });
+    }
+    const view = buildMemoryView({ entries }, new Map());
+    assert.equal(view.pins.length, 10);
+    assert.ok(!view.pins.includes('记忆0'), 'disabled pin is excluded');
+    assert.deepEqual(view.pins.slice(0, 3), ['记忆11', '记忆10', '记忆9'], 'oldest -> newest');
+});

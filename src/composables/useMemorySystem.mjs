@@ -47,6 +47,7 @@ export function useMemorySystem() {
         classicModel: '',
         keepFloors: MEMORY_KEEP_FLOORS_DEFAULT,
         summaryBatchSize: SUMMARY_BATCH_SIZE_DEFAULT,
+        profileStaleAfter: 40,           // 信息卡过期标注轮数（10–100，v5 M2）
         memoryProviderId: ''             // 记忆供应商（滚动总结），空=聊天供应商
     });
     const memoryGraphView = ref('list');

@@ -95,6 +95,8 @@ test('useMemorySystem returns live reactive state (runtime)', async () => {
     assert.equal(state.memorySettings.enabled, false);
     assert.equal(state.memorySettings.keepFloors, 16);
     assert.equal(state.memorySettings.summaryBatchSize, 12);
+    assert.equal(state.memorySettings.profileStaleAfter, 40);
+    assert.ok(!('relations' in state.memorySettings), 'relations never lived in memory settings');
     // v6 L3: the vector/embedding knobs are gone from the settings shape.
     for (const dead of ['mode', 'embeddingBackend', 'embeddingModel', 'localEmbeddingModel',
         'vectorTopK', 'similarityThreshold', 'defaultDepth', 'vectorExtractedTurns', 'emptyTurns']) {

@@ -6,9 +6,9 @@
 // semantics (v6 design doc §6 / §6.3 / §6.4 / §15).
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { canonicalMessageHash } from '../src/modules/content-hash.mjs';
+import { HASH_VERSION, canonicalMessageHash } from '../src/modules/content-hash.mjs';
 import { createMemoryReconciler } from '../src/modules/memory-reconcile.mjs';
-import { makeDigestEntry } from '../src/modules/memory-ledger.mjs';
+import { makeDigestEntry, makePinEntry } from '../src/modules/memory-ledger.mjs';
 
 // Fake live snapshot builder: turnTexts[i] = { user, assistant, userId?, assistantId? }.
 const createLive = (turnTexts) => {
@@ -43,7 +43,7 @@ const makeTurns = (count, prefix = 'T') => Array.from({ length: count }, (_, ind
 // test below).
 let globalIdSeq = 0;
 
-const createHarness = ({ live, legacy = null, settings = {}, failOnCall = 0, gated = false, profile = null, failProfile = false }) => {
+const createHarness = ({ live, legacy = null, legacyProfile = null, settings = {}, failOnCall = 0, gated = false, profile = null }) => {
     let ledger = null;
     let controller = null;
     let releaseGate = () => {};
@@ -57,6 +57,7 @@ const createHarness = ({ live, legacy = null, settings = {}, failOnCall = 0, gat
         getLedger: () => ledger,
         setLedger: (next) => { ledger = next; },
         loadLegacySummaries: () => legacy,
+        loadLegacyProfile: () => legacyProfile,
         saveLedgerNow: async (scopeId, data) => { saves.push(JSON.parse(JSON.stringify(data))); },
         buildLiveSnapshot: () => live,
         requestBatchDigest: async (batch, signal, context) => {
@@ -69,9 +70,6 @@ const createHarness = ({ live, legacy = null, settings = {}, failOnCall = 0, gat
             }
             if (failOnCall > 0 && calls.length === failOnCall) throw new Error('api down');
             return { digest: `摘要 ${batch.fromTurn}-${batch.toTurn}`, profile };
-        },
-        applyProfileDelta: async () => {
-            if (failProfile) throw new Error('profile storage down');
         },
         applyProjection: () => {},
         setProgress: (value) => progress.push(value),
@@ -224,14 +222,97 @@ test('reconcile: adopted entries replace a missing ledger only once', async () =
     await harness.reconciler.reconcile({});
     assert.equal(harness.getLedger().entries.length, entryCount, 'no double adoption');
 });
-test('reconcile: a profile-save failure does not fail the persisted batch', async () => {
+test('reconcile: profile delta becomes fact entries in the same save as the digest', async () => {
     const live = createLive(makeTurns(8));
     const harness = createHarness({
         live,
-        profile: { characters: [{ name: '甲', status: '受伤' }], openPlots: [] },
-        failProfile: true
+        profile: { characters: [{ name: '甲', status: '受伤' }], openPlots: [] }
     });
     const result = await harness.reconciler.reconcile({});
     assert.equal(result.reason, 'processed');
-    assert.equal(harness.getLedger().entries.length, 2, 'digest entries stay persisted');
+    const ledger = harness.getLedger();
+    assert.equal(ledger.entries.filter(entry => entry.kind === 'digest').length, 2);
+    const facts = ledger.entries.filter(entry => entry.kind === 'fact');
+    assert.equal(facts.length, 2, 'one fact appended per batch (the later one folds the earlier)');
+    assert.equal(facts.filter(entry => !entry.meta.folded).length, 1);
+    assert.equal(facts.find(entry => !entry.meta.folded).text, '受伤');
+    assert.deepEqual(
+        facts.find(entry => !entry.meta.folded).covers.map(cover => cover.id).sort(),
+        ['a3', 'a4', 'u3', 'u4'],
+        'freshness comes from the batch that produced it'
+    );
+    // Digest and fact share the persistence point: no half-written card.
+    assert.ok(harness.saves.some(save => save.entries.some(entry => entry.kind === 'digest')
+        && save.entries.some(entry => entry.kind === 'fact')));
+});
+
+test('reconcile: legacy info card is adopted once as fact entries', async () => {
+    const live = createLive(makeTurns(8));
+    const harness = createHarness({
+        live,
+        legacyProfile: {
+            characters: [{ name: '安娜', status: '受伤' }],
+            openPlots: [{ summary: '寻药', status: 'open', deadline: '三日后' }]
+        }
+    });
+    await harness.reconciler.reconcile({});
+    const ledger = harness.getLedger();
+    assert.equal(ledger.profileAdopted, true);
+    const adopted = ledger.entries.filter(entry => entry.kind === 'fact');
+    assert.equal(adopted.length, 2);
+    assert.ok(adopted.every(entry => entry.covers.length === 0 && entry.meta.legacy));
+    // A second pass neither re-adopts nor duplicates.
+    await harness.reconciler.reconcile({});
+    assert.equal(harness.getLedger().entries.filter(entry => entry.kind === 'fact').length, 2);
+});
+
+test('reconcile: a manually locked fact is never overwritten by a batch', async () => {
+    const live = createLive(makeTurns(8));
+    const harness = createHarness({
+        live,
+        profile: { characters: [{ name: '安娜', status: '自动状态' }], openPlots: [] }
+    });
+    harness.deps.setLedger({
+        version: 1,
+        hashVersion: HASH_VERSION,
+        updatedAt: 0,
+        profileAdopted: true,
+        entries: [{
+            id: 'manual',
+            kind: 'fact',
+            level: 0,
+            covers: [],
+            base: [],
+            text: '用户锁定状态',
+            meta: {
+                at: 1, stale: false, folded: false, legacy: false,
+                manual: true, enabled: true,
+                factKind: 'character', factKey: '安娜', factStatus: '', factDeadline: ''
+            }
+        }]
+    });
+    await harness.reconciler.reconcile({});
+    const rows = harness.getLedger().entries.filter(entry => entry.kind === 'fact' && entry.meta.factKey === '安娜');
+    assert.equal(rows.length, 1, 'no auto fact is appended for a locked key');
+    assert.equal(rows[0].text, '用户锁定状态');
+});
+
+test('reconcile: pins in the ledger do not block legacy summary adoption', async () => {
+    const live = createLive(makeTurns(8));
+    const legacy = { long: '旧长期', short: '', batches: [{ fromTurn: 1, toTurn: 2, status: 'done' }] };
+    const harness = createHarness({ live, legacy });
+    harness.deps.setLedger({
+        version: 1,
+        hashVersion: HASH_VERSION,
+        updatedAt: 0,
+        profileAdopted: true,
+        entries: [makePinEntry({ id: 'pin', text: '用户置顶', at: 1 })]
+    });
+    await harness.reconciler.reconcile({});
+    const ledger = harness.getLedger();
+    assert.ok(ledger.entries.some(entry => entry.kind === 'pin'), 'the pin survives');
+    assert.ok(ledger.entries.some(entry => entry.kind === 'digest' && entry.text === '旧长期'),
+        'the legacy long text is adopted despite the pin');
+    assert.deepEqual(harness.calls[0].batch, { fromTurn: 3, toTurn: 4 },
+        'adopted coverage prevents resummarizing turns 1-2');
 });

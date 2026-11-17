@@ -1,75 +1,42 @@
+// Contract test: legacy info-card shape + <role_profile> rendering (v6 L4).
+//
+// L4 moved fact merging into the ledger (append + fold) and deleted the
+// memory-profile merge family plus the dead relations field. What remains
+// here is the read-only legacy shape used for adoption/import and the pure
+// renderer shared by injection and the panel (design doc §5.4 / §10).
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import * as memoryProfile from '../src/modules/memory-profile.mjs';
 
 const [html, app] = await Promise.all([
-    readFile(new URL('../index.html', import.meta.url), 'utf8'),
+    readFile(new URL('../src/components/views/MemoryPanel.vue', import.meta.url), 'utf8'),
     readFile(new URL('../src/modules/app.mjs', import.meta.url), 'utf8')
 ]);
-    const mainJs = await readFile(new URL("../src/main.js", import.meta.url), "utf8");
 
-test('固定信息卡:关系有向边去重与更新', () => {
-    const profile = memoryProfile.createEmptyProfile();
-    const first = memoryProfile.mergeRelations(
-        [{ from: 'A', to: 'B', relation: '老师' }],
-        profile,
-        8
-    );
-    assert.equal(first.added, 1);
-    assert.equal(first.updated, 0);
-    const second = memoryProfile.mergeRelations(
-        [{ from: 'A', to: 'B', relation: '老师', status: 'ended' }],
-        { ...profile, relations: first.relations },
-        16
-    );
-    assert.equal(second.added, 0);
-    assert.equal(second.updated, 1);
-    assert.equal(second.relations[0].status, 'ended');
-    assert.equal(second.relations[0].updatedTurn, 16);
-});
-
-test('固定信息卡:对称关系双向各存一条', () => {
-    const profile = memoryProfile.createEmptyProfile();
-    const merged = memoryProfile.mergeRelations(
-        [
-            { from: '我', to: '林夕瑶', relation: '恋人' },
-            { from: '林夕瑶', to: '我', relation: '恋人' }
-        ],
-        profile,
-        8
-    );
-    assert.equal(merged.relations.length, 2);
-    assert.equal(memoryProfile.relationKey(merged.relations[0]) !== memoryProfile.relationKey(merged.relations[1]), true);
-});
-
-test('固定信息卡:角色状态与伏笔合并', () => {
-    const profile = memoryProfile.createEmptyProfile();
-    const chars = memoryProfile.mergeCharacters([{ name: '林夕瑶', status: '剑修,灵力受损' }], profile, 8);
-    assert.equal(chars.added, 1);
-    const chars2 = memoryProfile.mergeCharacters([{ name: '林夕瑶', status: '灵力恢复' }], { ...profile, characters: chars.characters }, 16);
-    assert.equal(chars2.added, 0);
-    assert.equal(chars2.updated, 1);
-    assert.equal(chars2.characters[0].status, '灵力恢复');
-    const plots = memoryProfile.mergeOpenPlots([{ summary: '调查失踪案' }], profile, 8);
-    assert.equal(plots.added, 1);
-    const plots2 = memoryProfile.mergeOpenPlots(
-        [{ summary: '调查失踪案', status: 'closed' }],
-        { ...profile, openPlots: plots.openPlots },
-        16
-    );
-    assert.equal(plots2.openPlots[0].status, 'closed');
+test('固定信息卡:legacy shape keeps characters/openPlots and drops relations', () => {
+    const empty = memoryProfile.createEmptyProfile();
+    assert.deepEqual(empty, { characters: [], openPlots: [], updatedAt: 0 });
+    const normalized = memoryProfile.normalizeProfile({
+        characters: [{ name: '甲', status: '受伤' }],
+        relations: [{ from: '甲', to: '乙', relation: '师徒' }],
+        openPlots: [{ summary: '寻药', status: 'open' }],
+        updatedAt: 7
+    });
+    assert.deepEqual(normalized.characters.map(item => item.name), ['甲']);
+    assert.deepEqual(normalized.openPlots.map(item => item.summary), ['寻药']);
+    assert.equal(normalized.updatedAt, 7);
+    assert.equal('relations' in normalized, false, 'relations is a dead field');
+    assert.equal(memoryProfile.mergeCharacters, undefined);
+    assert.equal(memoryProfile.mergeOpenPlots, undefined);
+    assert.equal(memoryProfile.mergeRelations, undefined);
+    assert.equal(memoryProfile.relationKey, undefined);
 });
 
 test('固定信息卡:注入文本只含动态状态与伏笔，不含关系', () => {
     const profile = {
         characters: [{ name: '林夕瑶', status: '剑修' }],
-        relations: [
-            { from: '我', to: '林夕瑶', relation: '恋人', status: 'active' },
-            { from: '林夕瑶', to: '我', relation: '恋人', status: 'active' },
-            { from: '我', to: '师父', relation: '学生', status: 'active' },
-            { from: '旧友', to: '我', relation: '朋友', status: 'ended' }
-        ],
+        relations: [{ from: '我', to: '林夕瑶', relation: '恋人', status: 'active' }],
         openPlots: [{ summary: '调查失踪案', status: 'open', deadline: '三日后' }]
     };
     const text = memoryProfile.buildProfileContext(profile, { userRoleName: '我' });
@@ -78,57 +45,49 @@ test('固定信息卡:注入文本只含动态状态与伏笔，不含关系', (
     assert.ok(!text.includes('→'));
     assert.ok(text.includes('林夕瑶:剑修'));
     assert.ok(text.includes('调查失踪案（三日后）'));
+    // Closed plots stay in the card data but are not injected.
+    const closed = memoryProfile.buildProfileContext({
+        openPlots: [{ summary: '已解决', status: 'closed' }]
+    });
+    assert.equal(closed, '');
 });
 
-test('固定信息卡:过期标注——lastSeenTurn 超阈值标「未再出现」，重复输出刷新（v4）', () => {
-    const profile = memoryProfile.createEmptyProfile();
-    const merged = memoryProfile.mergeCharacters(
-        [{ name: '安娜', status: '净化者' }],
-        profile,
-        10
-    );
-    // 距第 10 轮超过 40 轮未再出现 → 标注
+test('固定信息卡:新鲜度按 covers 投影的 lastSeenTurn 精确判定（v6 §5.4）', () => {
+    // Re-affirming an unchanged status appends a new fact whose covers
+    // project to the current turn, so freshness advances without a
+    // "last mentioned" heuristic.
+    assert.equal(memoryProfile.isProfileStale({ lastSeenTurn: 10 }, 60, 40), true);
+    assert.equal(memoryProfile.isProfileStale({ lastSeenTurn: 30 }, 60, 40), false);
+    assert.equal(memoryProfile.isProfileStale({ lastSeenTurn: 55 }, 60, 40), false);
+    // No live covers (manual / legacy fact / pin) is never annotated.
+    assert.equal(memoryProfile.isProfileStale({ lastSeenTurn: 0 }, 600, 40), false);
+    assert.equal(memoryProfile.isProfileStale(null, 600, 40), false);
+
     const staleText = memoryProfile.buildProfileContext(
-        { characters: merged.characters },
-        { userRoleName: '我', currentTurn: 60 }
+        { characters: [{ name: '安娜', status: '净化者', lastSeenTurn: 10 }] },
+        { currentTurn: 60, staleAfter: 40 }
     );
     assert.ok(staleText.includes('安娜:净化者（第10轮后未再出现）'));
-    // 未超阈值不标注
     const freshText = memoryProfile.buildProfileContext(
-        { characters: merged.characters },
-        { userRoleName: '我', currentTurn: 30 }
+        { characters: [{ name: '安娜', status: '净化者', lastSeenTurn: 55 }] },
+        { currentTurn: 60, staleAfter: 40 }
     );
     assert.ok(freshText.includes('安娜:净化者'));
     assert.ok(!freshText.includes('未再出现'));
-    // 模型重复输出（状态未变）刷新 lastSeenTurn，解除过期
-    const remerged = memoryProfile.mergeCharacters(
-        [{ name: '安娜', status: '净化者' }],
-        { characters: merged.characters },
-        55
-    );
-    const refreshedText = memoryProfile.buildProfileContext(
-        { characters: remerged.characters },
-        { userRoleName: '我', currentTurn: 60 }
-    );
-    assert.ok(refreshedText.includes('安娜:净化者'));
-    assert.ok(!refreshedText.includes('未再出现'));
-    // 伏笔同样支持过期标注
-    const plots = memoryProfile.mergeOpenPlots([{ summary: '寻找至宝' }], profile, 5);
     const plotText = memoryProfile.buildProfileContext(
-        { openPlots: plots.openPlots },
-        { userRoleName: '我', currentTurn: 60 }
+        { openPlots: [{ summary: '寻找至宝', status: 'open', lastSeenTurn: 5 }] },
+        { currentTurn: 60, staleAfter: 40 }
     );
     assert.ok(plotText.includes('寻找至宝（第5轮后未再出现）'));
 });
 
-test('固定信息卡:index.html 加载模块且不再有关系视图', () => {
+test('固定信息卡:L4 不再有合并写路径，profile 只做旧数据读取', () => {
     assert.ok(app.includes('./memory-profile.mjs'));
+    assert.ok(app.includes("'memory_profile'"), 'legacy key stays readable for adoption');
+    assert.ok(!app.includes('applyMemoryProfileDelta'), 'no profile merge writer remains');
+    assert.ok(!app.includes('mergeCharacters('), 'facts are merged by the ledger, not by memory-profile');
+    assert.ok(!app.includes('mergeOpenPlots('));
     assert.ok(!html.includes("setMemoryGraphView('relations')"));
     assert.ok(!html.includes('memoryRelationCanvas'));
-});
-
-test('固定信息卡:app.js 接入存储与注入，移除关系渲染', () => {
-    assert.ok(app.includes("'memory_profile'"));
     assert.ok(!app.includes('drawRelationView'));
-    assert.ok(!app.includes('memoryRelationCanvas'));
 });

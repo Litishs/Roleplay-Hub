@@ -4,17 +4,17 @@
 // storage, no network, no Vue reactivity, no globals. That is what makes
 // branch/edit/delete scenarios unit-testable without mocks (design doc §5).
 //
-// L1 scope: digest folding (long/short/toc + a batches projection the
-// unmodified MemoryPanel keeps rendering). pins and card are part of the
-// output shape but stay empty until L4 moves fact/pin entries into the
-// ledger. Budgets use deliberately loose L1 defaults — tightening happens
-// in L5 (design doc §17 Q7) so upgraded users do not see summaries
-// abruptly shrink.
+// Output: digest folding (long/short/toc + the batches projection the
+// panel keeps rendering), the pin layer and the info-card projection
+// (L4, design doc §10). Budgets use deliberately loose L1 defaults —
+// tightening happens in L5 (design doc §17 Q7) so upgraded users do not
+// see summaries abruptly shrink.
 //
 // Contract locks: tests/memory-view-contract.test.mjs.
 
 import { estimateTokens } from './utils.mjs';
 import { extractVectorQueryTerms } from './memory-utils.mjs';
+import { PIN_ENABLED_LIMIT } from './memory-ledger.mjs';
 
 export const VIEW_DEFAULTS = Object.freeze({
     longBudget: 12000,
@@ -124,16 +124,76 @@ export const buildMemoryView = (ledger, liveTurnIndex, settings = {}) => {
         at: item.entry.meta.at
     }));
 
+    // Pins are user-authored and never invalidated by timeline edits
+    // (covers:[]). Disabled pins stay in the ledger but out of the prompt.
     const pins = entries
-        .filter(entry => entry.kind === 'pin' && isVisible(entry))
-        .map(entry => String(entry.text || '').trim())
-        .filter(Boolean);
+        .filter(entry => entry.kind === 'pin' && isVisible(entry) && entry.meta.enabled !== false)
+        .map(entry => ({
+            text: String(entry.text || '').trim(),
+            at: Number(entry.meta.at) || 0
+        }))
+        .filter(item => item.text)
+        .sort((a, b) => a.at - b.at)
+        .slice(0, PIN_ENABLED_LIMIT)
+        .map(item => item.text);
+
+    // Info-card projection (design doc §10): one row per dedup key, newest
+    // non-stale/non-folded fact wins; a manual (locked) fact wins over any
+    // auto fact for the same key. lastSeenTurn is a render-time projection of
+    // the still-live covers, so freshness is exact rather than a heuristic.
+    const factGroups = new Map();
+    for (const entry of entries) {
+        if (entry.kind !== 'fact' || !isVisible(entry) || entry.meta.folded) continue;
+        const factKind = entry.meta.factKind;
+        const factKey = String(entry.meta.factKey || '').trim();
+        if (!factKind || !factKey) continue;
+        const turns = resolveTurns(entry);
+        const candidate = {
+            entry,
+            factKind,
+            factKey,
+            lastSeenTurn: turns.length ? Math.max(...turns) : 0,
+            at: Number(entry.meta.at) || 0
+        };
+        const group = factGroups.get(`${factKind}:${factKey}`);
+        if (!group) {
+            factGroups.set(`${factKind}:${factKey}`, candidate);
+            continue;
+        }
+        const groupManual = group.entry.meta.manual === true;
+        const candidateManual = entry.meta.manual === true;
+        if (candidateManual && !groupManual) {
+            factGroups.set(`${factKind}:${factKey}`, candidate);
+        } else if (candidateManual === groupManual && candidate.at >= group.at) {
+            factGroups.set(`${factKind}:${factKey}`, candidate);
+        }
+    }
+    const card = { characters: [], openPlots: [] };
+    factGroups.forEach(({ entry, factKind, factKey, lastSeenTurn, at }) => {
+        const common = {
+            entryId: entry.id,
+            lastSeenTurn,
+            manual: entry.meta.manual === true,
+            legacy: entry.meta.legacy === true,
+            at
+        };
+        if (factKind === 'character') {
+            card.characters.push({ ...common, name: factKey, status: String(entry.text || '').trim() });
+        } else {
+            card.openPlots.push({
+                ...common,
+                summary: factKey,
+                status: entry.meta.factStatus === 'closed' ? 'closed' : 'open',
+                deadline: String(entry.meta.factDeadline || '').trim()
+            });
+        }
+    });
 
     return {
         pins,
         long: longText,
         short: shortText,
-        card: { characters: [], openPlots: [] },
+        card,
         toc,
         batches,
         tokens: {

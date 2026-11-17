@@ -154,9 +154,9 @@ export function useStoryBranching(deps) {
                         { includeSystem: false }
                     ).turns.length;
                     branchClassicMemories = branchClassicMemories.filter(memory => Number(memory?.turn) <= forkTurn);
-                    // The info card is final-state text (no covers until L4), so a
-                    // mid-history fork resets it; fact entries will make this a
-                    // filter in L4.
+                    // The legacy memory_profile key is final-state text; v6 fact
+                    // entries follow the covers filter below, so only this
+                    // pre-L4 copy needs a mid-history reset.
                     if (forkTurn < parentTurnCount) {
                         branchProfile = null;
                     }

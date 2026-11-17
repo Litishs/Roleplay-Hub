@@ -1,11 +1,11 @@
 // memory-ledger — append-only ledger of derived memory entries (v6 L1)
 //
 // The ledger is the single derived store for the memory subsystem. Entries
-// are immutable once appended: text/covers/base never change, only
-// meta.stale / meta.folded bookkeeping flags do. Identity comes from
-// content (covers = consumed message ids + content hashes), never from
-// turn numbers — turn ranges are recomputed from live messages at view
-// time (design doc §3.2 / §5.3).
+// are immutable once appended: text/covers/base never change, only meta
+// bookkeeping flags do (stale/folded, plus manual/enabled and the fact key
+// fields added in L4). Identity comes from content (covers = consumed
+// message ids + content hashes), never from turn numbers — turn ranges are
+// recomputed from live messages at view time (design doc §3.2 / §5.3).
 //
 // Pure module: no storage, no network, no Vue. Contract locks:
 // tests/memory-ledger-contract.test.mjs.
@@ -15,11 +15,23 @@ import { HASH_VERSION } from './content-hash.mjs';
 export const LEDGER_VERSION = 1;
 export const ENTRY_KINDS = Object.freeze(['digest', 'fact', 'pin']);
 export const FOLDED_ENTRY_LIMIT = 200;
+export const FACT_KIND_CHARACTER = 'character';
+export const FACT_KIND_PLOT = 'plot';
+// v5 M2 UX limits: the pin layer is user-authored content, so it is bounded
+// by count and per-entry length instead of a token budget (design doc §10).
+export const PIN_TEXT_LIMIT = 500;
+export const PIN_ENABLED_LIMIT = 10;
 
 const asCount = (value, fallback = 0) => {
     const number = Math.floor(Number(value));
     return Number.isFinite(number) && number >= 0 ? number : fallback;
 };
+
+const normalizeFactKind = (value) => (
+    value === FACT_KIND_CHARACTER || value === FACT_KIND_PLOT ? value : ''
+);
+
+const normalizeFactStatus = (value) => (value === 'closed' ? 'closed' : value === 'open' ? 'open' : '');
 
 const normalizeCover = (rawCover) => {
     if (!rawCover || typeof rawCover !== 'object') return null;
@@ -48,7 +60,15 @@ export const normalizeEntry = (rawEntry) => {
             tokens: asCount(meta.tokens),
             stale: meta.stale === true,
             folded: meta.folded === true,
-            legacy: meta.legacy === true
+            legacy: meta.legacy === true,
+            // Fact/pin bookkeeping (L4). These are mutable flags, not text:
+            // the entry body itself stays append-only.
+            manual: meta.manual === true,
+            enabled: meta.enabled !== false,
+            factKind: normalizeFactKind(meta.factKind),
+            factKey: String(meta.factKey || '').trim(),
+            factStatus: normalizeFactStatus(meta.factStatus),
+            factDeadline: String(meta.factDeadline || '').trim()
         }
     };
 };
@@ -57,7 +77,11 @@ export const createEmptyLedger = () => ({
     version: LEDGER_VERSION,
     hashVersion: HASH_VERSION,
     updatedAt: 0,
-    entries: []
+    entries: [],
+    // Set once after the v4 info card was adopted as fact entries. Kept on
+    // the ledger (not inferred from entries) so a later GC can never
+    // resurrect a profile the user deleted (design doc §11).
+    profileAdopted: false
 });
 
 // A stored ledger whose hashVersion no longer matches is a *controlled*
@@ -65,15 +89,19 @@ export const createEmptyLedger = () => ({
 // normalization definition, so nothing can be verified. Source messages
 // stay on device, so reconciliation simply rebuilds from raw text
 // (design doc §4 / §16 risk 4).
+// Normalization is in-place on purpose: the reconciler holds the ledger
+// across a multi-minute model call, and manual pin/fact CRUD mutates the same
+// object. Returning a detached copy here would let the next save overwrite a
+// user edit made while a batch was in flight.
 export const normalizeLedger = (rawLedger) => {
     if (!rawLedger || typeof rawLedger !== 'object' || !Array.isArray(rawLedger.entries)) return null;
     if (asCount(rawLedger.hashVersion) !== HASH_VERSION) return createEmptyLedger();
-    return {
-        version: LEDGER_VERSION,
-        hashVersion: HASH_VERSION,
-        updatedAt: asCount(rawLedger.updatedAt),
-        entries: rawLedger.entries.map(normalizeEntry).filter(Boolean)
-    };
+    rawLedger.version = LEDGER_VERSION;
+    rawLedger.hashVersion = HASH_VERSION;
+    rawLedger.updatedAt = asCount(rawLedger.updatedAt);
+    rawLedger.entries = rawLedger.entries.map(normalizeEntry).filter(Boolean);
+    rawLedger.profileAdopted = rawLedger.profileAdopted === true;
+    return rawLedger;
 };
 
 export const makeDigestEntry = ({ id, covers = [], text = '', level = 0, base = [], model = '', tokens = 0, at = Date.now(), legacy = false }) => normalizeEntry({
@@ -86,9 +114,202 @@ export const makeDigestEntry = ({ id, covers = [], text = '', level = 0, base = 
     meta: { at, model, tokens, stale: false, folded: false, legacy }
 });
 
+// A fact is one projected info-card row (character status or open plot).
+// covers is the batch that produced it; an empty covers set is the manual
+// lock (never invalidated by timeline edits, design doc §10).
+export const makeFactEntry = ({
+    id,
+    factKind,
+    factKey,
+    text = '',
+    status = '',
+    deadline = '',
+    covers = [],
+    base = [],
+    manual = false,
+    legacy = false,
+    model = '',
+    tokens = 0,
+    at = Date.now()
+}) => normalizeEntry({
+    id,
+    kind: 'fact',
+    level: 0,
+    covers,
+    base,
+    text,
+    meta: {
+        at,
+        model,
+        tokens,
+        stale: false,
+        folded: false,
+        legacy,
+        manual,
+        factKind,
+        factKey,
+        factStatus: status,
+        factDeadline: deadline
+    }
+});
+
+// Pins are user-authored: only user CRUD writes them, never reconcile.
+export const makePinEntry = ({ id, text = '', enabled = true, at = Date.now() }) => normalizeEntry({
+    id,
+    kind: 'pin',
+    level: 0,
+    covers: [],
+    base: [],
+    text,
+    meta: { at, enabled }
+});
+
 export const findEntry = (ledger, entryId) => (Array.isArray(ledger?.entries)
     ? ledger.entries.find(entry => entry.id === entryId) || null
     : null);
+
+export const factGroupKey = (factKind, factKey) => `${factKind}:${String(factKey || '').trim()}`;
+
+const isSameFactGroup = (entry, factKind, factKey) => (
+    entry.kind === 'fact'
+    && entry.meta.factKind === factKind
+    && entry.meta.factKey === String(factKey || '').trim()
+);
+
+// Merging a fact never rewrites the old row: the previous visible entry for
+// the same dedup key is folded (kept for traceability) and a new immutable
+// entry is appended (design doc §10).
+export const foldFactsForKey = (ledger, factKind, factKey) => {
+    let changed = 0;
+    for (const entry of ledger.entries) {
+        if (entry.meta.folded || !isSameFactGroup(entry, factKind, factKey)) continue;
+        entry.meta.folded = true;
+        changed += 1;
+    }
+    return changed;
+};
+
+export const hasLiveManualFact = (ledger, factKind, factKey) => ledger.entries.some(entry => (
+    !entry.meta.folded
+    && !entry.meta.stale
+    && entry.meta.manual === true
+    && entry.covers.length === 0
+    && isSameFactGroup(entry, factKind, factKey)
+));
+
+const asTrimmedText = (value) => String(value ?? '').trim();
+
+// Turn the model's per-batch profile delta into immutable fact entries.
+// Unchanged rows are still appended: covers carry the freshness of the
+// batch that just re-affirmed them (design doc §5.4 / §10). Rows locked by
+// the user (manual, covers:[]) are skipped, exactly like v5's merge skip.
+export const appendProfileFacts = (ledger, profileData, {
+    covers = [],
+    at = Date.now(),
+    model = '',
+    makeId
+} = {}) => {
+    if (!profileData || typeof profileData !== 'object' || typeof makeId !== 'function') return 0;
+    const incoming = new Map();
+
+    (Array.isArray(profileData.characters) ? profileData.characters : []).forEach(rawCharacter => {
+        const name = asTrimmedText(rawCharacter?.name);
+        const status = asTrimmedText(rawCharacter?.status);
+        // An empty status would blank a known character in the projection;
+        // treat it as "no information" rather than a real update.
+        if (!name || !status) return;
+        incoming.set(factGroupKey(FACT_KIND_CHARACTER, name), {
+            factKind: FACT_KIND_CHARACTER,
+            factKey: name,
+            text: status,
+            status: '',
+            deadline: ''
+        });
+    });
+
+    (Array.isArray(profileData.openPlots) ? profileData.openPlots : []).forEach(rawPlot => {
+        const summary = asTrimmedText(rawPlot?.summary);
+        if (!summary) return;
+        incoming.set(factGroupKey(FACT_KIND_PLOT, summary), {
+            factKind: FACT_KIND_PLOT,
+            factKey: summary,
+            text: summary,
+            status: rawPlot?.status === 'closed' ? 'closed' : 'open',
+            deadline: asTrimmedText(rawPlot?.deadline)
+        });
+    });
+
+    let appended = 0;
+    incoming.forEach(fact => {
+        if (hasLiveManualFact(ledger, fact.factKind, fact.factKey)) return;
+        foldFactsForKey(ledger, fact.factKind, fact.factKey);
+        appendEntry(ledger, makeFactEntry({
+            id: makeId(),
+            covers,
+            at,
+            model,
+            ...fact
+        }));
+        appended += 1;
+    });
+    return appended;
+};
+
+// Adopt the v4 memory_profile key as fact entries. Legacy rows keep covers:[]
+// so the text survives until the next batch supersedes it; they are not
+// marked manual, so a fresh auto fact can take the key over.
+export const adoptLegacyProfile = ({ profile, makeId, now = Date.now() } = {}) => {
+    if (!profile || typeof profile !== 'object' || typeof makeId !== 'function') return [];
+    const entries = [];
+    (Array.isArray(profile.characters) ? profile.characters : []).forEach(rawCharacter => {
+        const name = asTrimmedText(rawCharacter?.name);
+        const status = asTrimmedText(rawCharacter?.status);
+        if (!name || !status) return;
+        entries.push(makeFactEntry({
+            id: makeId(),
+            factKind: FACT_KIND_CHARACTER,
+            factKey: name,
+            text: status,
+            covers: [],
+            legacy: true,
+            at: now
+        }));
+    });
+    (Array.isArray(profile.openPlots) ? profile.openPlots : []).forEach(rawPlot => {
+        const summary = asTrimmedText(rawPlot?.summary);
+        if (!summary) return;
+        entries.push(makeFactEntry({
+            id: makeId(),
+            factKind: FACT_KIND_PLOT,
+            factKey: summary,
+            text: summary,
+            status: rawPlot?.status === 'closed' ? 'closed' : 'open',
+            deadline: asTrimmedText(rawPlot?.deadline),
+            covers: [],
+            legacy: true,
+            at: now
+        }));
+    });
+    return entries;
+};
+
+// --- Pins ------------------------------------------------------------------
+
+export const normalizePinText = (value) => String(value ?? '').trim();
+
+export const validatePinText = (value) => {
+    const text = normalizePinText(value);
+    if (!text) return '手动记忆内容不能为空';
+    if (text.length > PIN_TEXT_LIMIT) return `单条手动记忆不能超过 ${PIN_TEXT_LIMIT} 字`;
+    return '';
+};
+
+export const countEnabledPins = (ledger) => (Array.isArray(ledger?.entries)
+    ? ledger.entries.filter(entry => entry.kind === 'pin'
+        && !entry.meta.folded
+        && entry.meta.enabled !== false
+        && normalizePinText(entry.text)).length
+    : 0);
 
 export const appendEntry = (ledger, rawEntry) => {
     const entry = normalizeEntry(rawEntry);

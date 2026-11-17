@@ -8,20 +8,30 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { HASH_VERSION } from '../src/modules/content-hash.mjs';
 import {
+    FACT_KIND_CHARACTER,
+    FACT_KIND_PLOT,
     LEDGER_VERSION,
+    PIN_ENABLED_LIMIT,
+    PIN_TEXT_LIMIT,
+    adoptLegacyProfile,
     adoptLegacySummaries,
     appendEntry,
+    appendProfileFacts,
+    countEnabledPins,
     createEmptyLedger,
     filterLedgerForBranch,
     invalidateEntries,
     makeDigestEntry,
+    makeFactEntry,
+    makePinEntry,
     normalizeEntry,
     normalizeLedger,
     projectCoveredRanges,
     pruneFoldedEntries,
     pruneRewrittenStaleEntries,
     rangesToDoneBatches,
-    propagateStaleUpward
+    propagateStaleUpward,
+    validatePinText
 } from '../src/modules/memory-ledger.mjs';
 
 const cover = (id, h) => ({ id, h });
@@ -239,4 +249,132 @@ test('ledger: adoption does not duplicate short text already inside long', () =>
     });
     assert.equal(entries.length, 1);
     assert.equal(entries[0].text, '早期事件\n\n最近事件');
+});
+
+// --- v6 L4: fact / pin entries --------------------------------------------
+
+test('ledger facts: makeFactEntry keeps the dedup key and manual flag', () => {
+    const entry = makeFactEntry({
+        id: 'f1',
+        factKind: FACT_KIND_CHARACTER,
+        factKey: '安娜',
+        text: '受伤',
+        covers: [cover('m1', 'h')],
+        at: 5
+    });
+    assert.equal(entry.kind, 'fact');
+    assert.equal(entry.meta.factKind, FACT_KIND_CHARACTER);
+    assert.equal(entry.meta.factKey, '安娜');
+    assert.equal(entry.meta.manual, false);
+    assert.equal(entry.meta.enabled, true);
+    assert.deepEqual(entry.covers, [cover('m1', 'h')]);
+    const legacy = normalizeEntry({
+        id: 'f2',
+        kind: 'fact',
+        covers: [],
+        meta: { factKind: 'plot', factKey: '寻药', factStatus: 'closed', factDeadline: '三日后', manual: true }
+    });
+    assert.equal(legacy.meta.factStatus, 'closed');
+    assert.equal(legacy.meta.factDeadline, '三日后');
+    assert.equal(legacy.meta.manual, true);
+});
+
+test('ledger facts: profile delta appends and folds the previous row for a key', () => {
+    const ledger = createEmptyLedger();
+    let seq = 0;
+    const makeId = () => `f${++seq}`;
+    const coversA = [cover('m1', 'h1')];
+    const coversB = [cover('m2', 'h2')];
+    const first = appendProfileFacts(ledger, {
+        characters: [{ name: '安娜', status: '受伤' }],
+        openPlots: [{ summary: '寻药', status: 'open', deadline: '三日后' }]
+    }, { covers: coversA, makeId, at: 1 });
+    assert.equal(first, 2);
+    const firstChar = ledger.entries.find(entry => entry.meta.factKind === 'character');
+    assert.deepEqual(firstChar.covers, coversA);
+
+    // Same key re-affirmed in a later batch: append (freshness = covers),
+    // fold the previous row. Duplicate keys inside one batch collapse.
+    const second = appendProfileFacts(ledger, {
+        characters: [{ name: '安娜', status: '受伤' }, { name: '安娜', status: '痊愈' }],
+        openPlots: []
+    }, { covers: coversB, makeId, at: 2 });
+    assert.equal(second, 1, 'deduped to one character row');
+    const rows = ledger.entries.filter(entry => entry.meta.factKind === 'character');
+    assert.equal(rows.filter(entry => !entry.meta.folded).length, 1);
+    assert.equal(rows.find(entry => !entry.meta.folded).text, '痊愈');
+    assert.deepEqual(rows.find(entry => !entry.meta.folded).covers, coversB);
+    assert.equal(rows.filter(entry => entry.meta.folded).length, 1);
+    // A key missing from this batch keeps its previous visible row.
+    assert.equal(ledger.entries.filter(entry => entry.meta.factKind === 'plot' && !entry.meta.folded).length, 1);
+});
+
+test('ledger facts: manual lock skips automatic merges for the key', () => {
+    const ledger = createEmptyLedger();
+    appendEntry(ledger, makeFactEntry({
+        id: 'manual',
+        factKind: FACT_KIND_CHARACTER,
+        factKey: '安娜',
+        text: '被囚',
+        covers: [],
+        manual: true
+    }));
+    const appended = appendProfileFacts(ledger, {
+        characters: [{ name: '安娜', status: '痊愈' }]
+    }, { covers: [cover('m1', 'h')], makeId: () => 'auto', at: 2 });
+    assert.equal(appended, 0);
+    assert.equal(ledger.entries.length, 1);
+    assert.equal(ledger.entries[0].text, '被囚');
+});
+
+test('ledger facts: a blank character status is not treated as an update', () => {
+    const ledger = createEmptyLedger();
+    const appended = appendProfileFacts(ledger, {
+        characters: [{ name: '安娜', status: '  ' }],
+        openPlots: [{ summary: '' }]
+    }, { covers: [], makeId: () => 'x' });
+    assert.equal(appended, 0);
+    assert.equal(ledger.entries.length, 0);
+});
+
+test('ledger facts: legacy profile adopts as unlocked covers:[] rows', () => {
+    let seq = 0;
+    const entries = adoptLegacyProfile({
+        profile: {
+            characters: [{ name: '安娜', status: '受伤' }],
+            openPlots: [{ summary: '寻药', status: 'open', deadline: '三日后' }],
+            relations: [{ from: 'a', to: 'b', relation: 'x' }]
+        },
+        makeId: () => `l${++seq}`,
+        now: 9
+    });
+    assert.equal(entries.length, 2);
+    assert.ok(entries.every(entry => entry.meta.legacy && !entry.meta.manual && entry.covers.length === 0));
+    const plot = entries.find(entry => entry.meta.factKind === FACT_KIND_PLOT);
+    assert.equal(plot.meta.factDeadline, '三日后');
+    assert.equal(plot.text, '寻药');
+    assert.equal(entries.some(entry => entry.meta.factKind === 'relation'), false);
+});
+
+test('ledger: profileAdopted survives normalization and branch filtering', () => {
+    const raw = { version: 1, hashVersion: HASH_VERSION, entries: [], profileAdopted: true };
+    assert.equal(normalizeLedger(raw).profileAdopted, true);
+    assert.equal(createEmptyLedger().profileAdopted, false);
+    const child = filterLedgerForBranch({ ...createEmptyLedger(), profileAdopted: true }, []);
+    assert.equal(child.profileAdopted, true);
+});
+
+test('ledger pins: text limits and enabled counting', () => {
+    assert.equal(PIN_TEXT_LIMIT, 500);
+    assert.equal(PIN_ENABLED_LIMIT, 10);
+    assert.equal(validatePinText('  '), '手动记忆内容不能为空');
+    assert.equal(validatePinText('甲'.repeat(PIN_TEXT_LIMIT + 1)).includes(String(PIN_TEXT_LIMIT)), true);
+    assert.equal(validatePinText('记住'), '');
+    const ledger = createEmptyLedger();
+    appendEntry(ledger, makePinEntry({ id: 'p1', text: '甲', at: 1 }));
+    appendEntry(ledger, makePinEntry({ id: 'p2', text: '乙', enabled: false, at: 2 }));
+    appendEntry(ledger, makePinEntry({ id: 'p3', text: '  ', at: 3 }));
+    assert.equal(countEnabledPins(ledger), 1, 'disabled and blank pins do not count');
+    assert.equal(ledger.entries[0].covers.length, 0);
+    assert.equal(ledger.entries[0].meta.enabled, true);
 });

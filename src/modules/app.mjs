@@ -45,7 +45,25 @@ import * as RPHMemorySummary from './memory-summary.mjs';
 import * as RPHMemoryProfile from './memory-profile.mjs';
 import { buildMemoryRecall, buildMemoryView } from './memory-view.mjs';
 import { createMemoryReconciler } from './memory-reconcile.mjs';
-import { invalidateEntries, normalizeLedger, propagateStaleUpward, projectEntryTurns } from './memory-ledger.mjs';
+import {
+    FACT_KIND_CHARACTER,
+    FACT_KIND_PLOT,
+    PIN_ENABLED_LIMIT,
+    PIN_TEXT_LIMIT,
+    appendEntry,
+    countEnabledPins,
+    createEmptyLedger,
+    findEntry,
+    foldFactsForKey,
+    invalidateEntries,
+    makeFactEntry,
+    makePinEntry,
+    normalizeLedger,
+    normalizePinText,
+    projectEntryTurns,
+    propagateStaleUpward,
+    validatePinText
+} from './memory-ledger.mjs';
 import { canonicalMemoryText, canonicalMessageHash } from './content-hash.mjs';
 const RPHStoryBranch = { MAIN_ID, SCOPE_SEPARATOR, createId, getScopeId, getOwnerId, isBranchScopeId, defaultBranchName, createMainBranch, normalizeBranches, collectSubtreeIds, buildBranchTree, formatWordCount };
 import UiTemplatePending from '../components/common/UiTemplatePending.vue';
@@ -1637,6 +1655,11 @@ const __app = createApp({
                 SUMMARY_BATCH_SIZE_MAX,
                 SUMMARY_BATCH_SIZE_DEFAULT
             );
+            // L4: info-card freshness annotation remains user-configurable
+            // (v5 M2 conclusion); the basis is now covers-based, not
+            // "the model last mentioned it" (v6 §5.4).
+            memorySettings.profileStaleAfter = Math.max(10, Math.min(100,
+                Math.floor(Number(memorySettings.profileStaleAfter) || 40)));
             const memoryProviderId = String(memorySettings.memoryProviderId || '').trim();
             memorySettings.memoryProviderId = memoryProviderId
                 && (getApiProviderById(memoryProviderId) || isCustomApiProviderId(memoryProviderId))
@@ -5818,14 +5841,6 @@ const __app = createApp({
         const summaryLib = () => RPHMemorySummary;
         const profileLib = () => RPHMemoryProfile;
 
-        const getMemoryProfile = () => {
-            const lib = profileLib();
-            if (!memoryProfile.value) {
-                memoryProfile.value = lib ? lib.createEmptyProfile() : { characters: [], relations: [], openPlots: [], updatedAt: 0 };
-            }
-            return memoryProfile.value;
-        };
-
         const saveMemoryProfileNow = async (scopeId, data) => {
             const target = data || memoryProfile.value;
             if (!currentCharacter.value?.uuid || !target) return;
@@ -6031,6 +6046,30 @@ const __app = createApp({
             }
         };
 
+        // v6 L4: the info card injected into the digest prompt is the ledger
+// projection. The legacy memory_profile key is only a fallback before the
+// first reconcile adopted it (design doc §11).
+        const getMemoryProfileText = (currentTurn) => {
+            if (!profileLib()) return '';
+            const ledger = memoryLedger.value;
+            const view = ledger && Array.isArray(ledger.entries) && ledger.entries.length > 0
+                ? buildMemoryView(ledger, buildLiveTurnIndex())
+                : null;
+            const hasCard = Boolean(view && (view.card.characters.length > 0 || view.card.openPlots.length > 0));
+            // Once the ledger owns facts, the legacy key is historical: a
+            // temporarily empty card (e.g. everything stale after an edit)
+            // must not resurrect pre-L4 text.
+            const hasFactEntries = Boolean(ledger && Array.isArray(ledger.entries)
+                && ledger.entries.some(entry => entry.kind === 'fact'));
+            const source = (hasCard || hasFactEntries) ? view?.card : memoryProfile.value;
+            if (!source) return '';
+            return profileLib().buildProfileContext(source, {
+                userRoleName: user.name || '用户',
+                currentTurn,
+                staleAfter: memorySettings.profileStaleAfter
+            });
+        };
+
         // v6 (ledger era): one independent batch digest per call. The only
         // inputs are this batch's canonical text plus a one-line context —
         // never the cumulative long/short text, so a failed or rewritten
@@ -6042,13 +6081,7 @@ const __app = createApp({
             const memoryProvider = getMemoryProvider();
             if (!memoryProvider.apiUrl || !memoryProvider.apiKey) throw new Error('请先配置记忆供应商的 API 地址和 Key');
             if (!model) throw new Error('请先选择记忆模型');
-            const profile = getMemoryProfile();
-            const profileText = profileLib()
-                ? profileLib().buildProfileContext(profile, {
-                    userRoleName: user.name || '用户',
-                    currentTurn: batch.toTurn
-                })
-                : '';
+            const profileText = getMemoryProfileText(batch.toTurn);
             const messages = lib.buildDigestMessages({
                 contextLine: context?.contextLine || '',
                 profileText,
@@ -6083,38 +6116,22 @@ const __app = createApp({
             return parsed;
         };
 
-        const applyMemoryProfileDelta = async (profileData, batch) => {
-            if (!profileLib() || !profileData) return;
-            const currentProfile = getMemoryProfile();
-            // v4 contract: the info card only refreshes once it exists.
-            if (!currentProfile) return;
-            const scopeId = getCurrentChatStorageScopeId();
-            const currentTurn = Number(batch?.toTurn) || undefined;
-            const mergedCharacters = profileLib().mergeCharacters(profileData.characters, currentProfile, currentTurn);
-            const mergedPlots = profileLib().mergeOpenPlots(profileData.openPlots, currentProfile, currentTurn);
-            const nextProfile = {
-                ...currentProfile,
-                characters: mergedCharacters.characters,
-                openPlots: mergedPlots.openPlots,
-                updatedAt: Date.now()
-            };
-            memoryProfile.value = nextProfile;
-            await saveMemoryProfileNow(scopeId, nextProfile);
-        };
-
         // v6 L1: the ledger reconciler is the single writer of derived
         // memory. It owns invalidation → hole filling → append → persist;
-        // useRollingSummary is now only the trigger adapter.
+        // useRollingSummary is now only the trigger adapter. L4 adds the v4
+        // info card as an adoption input; facts are written by the same pass.
         const memoryReconciler = createMemoryReconciler({
             getSettings: () => memorySettings,
             getScopeId: getCurrentChatStorageScopeId,
             getLedger: () => memoryLedger.value,
             setLedger: (value) => { memoryLedger.value = value; },
             loadLegacySummaries: () => getMemorySummaries(),
+            loadLegacyProfile: () => (memoryProfile.value && profileLib()
+                ? profileLib().normalizeProfile(memoryProfile.value)
+                : null),
             saveLedgerNow: persistMemoryLedgerAndProjection,
             buildLiveSnapshot: () => buildMemoryLiveSnapshot(),
             requestBatchDigest: requestRollingSummary,
-            applyProfileDelta: applyMemoryProfileDelta,
             applyProjection: (ledger, live) => { applyMemoryLedgerProjection(ledger, live); },
             setProgress: setSummaryProgress,
             clearProgress: clearSummaryProgress,
@@ -6156,12 +6173,16 @@ const __app = createApp({
             let shortText = '';
             let toc = [];
             let recall = [];
+            let pins = [];
+            let profileText = '';
             const ledger = memoryLedger.value;
             const hasLedger = Boolean(ledger && Array.isArray(ledger.entries) && ledger.entries.length > 0);
             // The legacy summaries object may legitimately be missing while
             // the ledger holds the truth (projection key deleted, partial
-            // restore) — only bail when neither source has anything.
-            if (!hasLedger && !memorySummaries.value) return '';
+            // restore) — only bail when no source has anything. A legacy
+            // profile alone still injects its <role_profile> block.
+            if (!hasLedger && !memorySummaries.value && !memoryProfile.value) return '';
+            const currentTurn = buildConversationTurnSnapshot(chatHistory.value, { includeSystem: false }).turns.length;
             if (hasLedger) {
                 // v6 read priority: the ledger fold wins; the legacy strings
                 // are only a fallback for scopes that never reconciled
@@ -6170,13 +6191,44 @@ const __app = createApp({
                 longText = view.long;
                 shortText = view.short;
                 toc = view.toc;
+                pins = view.pins;
                 recall = selectMemoryLedgerRecall();
+                const hasCard = view.card.characters.length > 0 || view.card.openPlots.length > 0;
+                const hasFactEntries = ledger.entries.some(entry => entry.kind === 'fact');
+                // Before the first reconcile adopts the v4 card, keep
+                // injecting it so an upgrade has no memory gap (§11). Once
+                // facts exist, an empty card is authoritative (no fallback).
+                const cardSource = (hasCard || hasFactEntries) ? view.card : memoryProfile.value;
+                if (cardSource && profileLib()) {
+                    profileText = profileLib().buildProfileContext(cardSource, {
+                        userRoleName: user.name || '用户',
+                        currentTurn,
+                        staleAfter: memorySettings.profileStaleAfter
+                    });
+                }
             } else {
                 const current = getMemorySummaries();
                 longText = current.long;
                 shortText = current.short;
+                if (memoryProfile.value && profileLib()) {
+                    profileText = profileLib().buildProfileContext(memoryProfile.value, {
+                        userRoleName: user.name || '用户',
+                        currentTurn,
+                        staleAfter: memorySettings.profileStaleAfter
+                    });
+                }
             }
             const parts = [];
+            // v5 M2 / v6 §10: user-authored pins sit above every derived
+            // block; their text is user content, never summarized.
+            if (pins.length > 0) {
+                const pinLines = pins.map(text => [
+                    '  <memory_pin>',
+                    indentXmlText(text, 4),
+                    '  </memory_pin>'
+                ].join('\n')).join('\n');
+                parts.push(`<user_pinned>\n${pinLines}\n</user_pinned>`);
+            }
             if (longText) parts.push(`<long_summary>\n${longText}\n</long_summary>`);
             if (shortText) parts.push(`<short_summary>\n${shortText}\n</short_summary>`);
             // v6 L3 §8.2: lexical auto-recall (hit count → recency) over the
@@ -6192,28 +6244,198 @@ const __app = createApp({
                 });
                 parts.push(`<memory_recall>\n${lines.join('\n')}\n</memory_recall>`);
             }
-            // v6 L3 §8.1: the TOC is always injected (Q5) so the model can
-            // name the range it needs through tool_memory; the list is
-            // already hard-capped by the view's tocBudget.
+            // v6 §3.1 order: pinned/user blocks and summaries first, then the
+            // dynamic info card, then the TOC the model uses for tool_memory.
+            if (profileText) parts.push(profileText);
             if (toc.length > 0) {
                 const tocLines = toc.map(item => `- [${item.label}] ${item.summary}`);
                 parts.push(`<memory_toc>\n${tocLines.join('\n')}\n</memory_toc>`);
             }
-            if (memoryProfile.value && profileLib()) {
-                const currentTurn = buildConversationTurnSnapshot(chatHistory.value, { includeSystem: false }).turns.length;
-                const profileText = profileLib().buildProfileContext(memoryProfile.value, {
-                    userRoleName: user.name || '用户',
-                    currentTurn
-                });
-                if (profileText) parts.push(profileText);
-            }
             if (parts.length === 0) return '';
             return [
                 ROLE_MEMORY_OPEN_TAG,
-                '  <description>以下为滚出上下文的旧对话摘要：长期摘要为整体要点，短期摘要为最近一段历史的细节；事件时间均为剧情时间。</description>',
+                '  <description>以下为角色记忆：用户置顶设定、滚出上下文的旧对话摘要、动态信息卡与记忆目录；事件时间均为剧情时间。</description>',
                 ...parts.map(part => indentXmlText(part, 2)),
                 ROLE_MEMORY_CLOSE_TAG
             ].join('\n');
+        };
+
+        // --- v6 L4: manual memory (pins) + info-card editing -------------
+        // Pins and manual facts live in the same ledger as derived entries;
+        // only user CRUD writes them (covers:[] is the natural lock, §4/§10).
+        const ensureMemoryLedger = () => {
+            if (!memoryLedger.value || !Array.isArray(memoryLedger.value.entries)) {
+                memoryLedger.value = createEmptyLedger();
+            }
+            return memoryLedger.value;
+        };
+
+        const persistMemoryLedger = async (ledger) => {
+            memoryLedger.value = ledger;
+            await persistMemoryLedgerAndProjection(getCurrentChatStorageScopeId(), ledger);
+        };
+
+        const memoryPinCountError = () => `启用的手动记忆最多 ${PIN_ENABLED_LIMIT} 条`;
+
+        const addMemoryPin = async (text) => {
+            const error = validatePinText(text);
+            if (error) {
+                showToast(error, 'warning');
+                return false;
+            }
+            if (countEnabledPins(memoryLedger.value) >= PIN_ENABLED_LIMIT) {
+                showToast(memoryPinCountError(), 'warning');
+                return false;
+            }
+            const ledger = ensureMemoryLedger();
+            appendEntry(ledger, makePinEntry({
+                id: generateUUID(),
+                text: normalizePinText(text),
+                at: Date.now()
+            }));
+            await persistMemoryLedger(ledger);
+            showToast('手动记忆已添加', 'success');
+            return true;
+        };
+
+        const updateMemoryPin = async (entryId, text) => {
+            const error = validatePinText(text);
+            if (error) {
+                showToast(error, 'warning');
+                return false;
+            }
+            const ledger = ensureMemoryLedger();
+            const entry = findEntry(ledger, entryId);
+            if (!entry || entry.kind !== 'pin' || entry.meta.folded) return false;
+            entry.meta.folded = true;
+            appendEntry(ledger, makePinEntry({
+                id: generateUUID(),
+                text: normalizePinText(text),
+                enabled: entry.meta.enabled !== false,
+                at: Date.now()
+            }));
+            await persistMemoryLedger(ledger);
+            showToast('手动记忆已更新', 'success');
+            return true;
+        };
+
+        const deleteMemoryPin = async (entryId) => {
+            const ledger = ensureMemoryLedger();
+            const entry = findEntry(ledger, entryId);
+            if (!entry || entry.kind !== 'pin' || entry.meta.folded) return false;
+            entry.meta.folded = true;
+            await persistMemoryLedger(ledger);
+            return true;
+        };
+
+        const toggleMemoryPinEnabled = async (entryId) => {
+            const ledger = ensureMemoryLedger();
+            const entry = findEntry(ledger, entryId);
+            if (!entry || entry.kind !== 'pin' || entry.meta.folded) return false;
+            const enabling = entry.meta.enabled === false;
+            if (enabling && countEnabledPins(ledger) >= PIN_ENABLED_LIMIT) {
+                showToast(memoryPinCountError(), 'warning');
+                return false;
+            }
+            entry.meta.enabled = enabling;
+            await persistMemoryLedger(ledger);
+            return true;
+        };
+
+        const normalizeMemoryFactPayload = (payload = {}) => {
+            const factKind = payload.factKind === FACT_KIND_PLOT ? FACT_KIND_PLOT : FACT_KIND_CHARACTER;
+            const factKey = String(payload.factKey || '').trim();
+            // For plots the summary *is* the row content; for characters the
+            // name is the key and the text is the dynamic status.
+            const text = String(factKind === FACT_KIND_PLOT ? (payload.text || factKey) : payload.text || '').trim();
+            const deadline = factKind === FACT_KIND_PLOT ? String(payload.deadline || '').trim() : '';
+            const status = factKind === FACT_KIND_PLOT
+                ? (payload.status === 'closed' ? 'closed' : 'open')
+                : '';
+            if (!factKey) {
+                return { error: factKind === FACT_KIND_PLOT ? '伏笔内容不能为空' : '角色名称不能为空' };
+            }
+            if (!text) {
+                return { error: factKind === FACT_KIND_PLOT ? '伏笔内容不能为空' : '角色状态不能为空' };
+            }
+            return { factKind, factKey, text, status, deadline };
+        };
+
+        // Creating or editing an info-card row appends a manual fact with
+        // covers:[] and folds the previously projected row. Renaming a key
+        // also folds the old row (v5's known duplicate-row edge is closed).
+        const saveMemoryFact = async (payload = {}) => {
+            const normalized = normalizeMemoryFactPayload(payload);
+            if (normalized.error) {
+                showToast(normalized.error, 'warning');
+                return false;
+            }
+            const ledger = ensureMemoryLedger();
+            if (payload.entryId) {
+                const existing = findEntry(ledger, payload.entryId);
+                if (!existing || existing.kind !== 'fact') return false;
+                existing.meta.folded = true;
+            }
+            foldFactsForKey(ledger, normalized.factKind, normalized.factKey);
+            appendEntry(ledger, makeFactEntry({
+                id: generateUUID(),
+                ...normalized,
+                covers: [],
+                manual: true,
+                at: Date.now()
+            }));
+            await persistMemoryLedger(ledger);
+            showToast('信息卡已更新，该条目已锁定', 'success');
+            return true;
+        };
+
+        const deleteMemoryFact = async (entryId) => {
+            const ledger = ensureMemoryLedger();
+            const entry = findEntry(ledger, entryId);
+            if (!entry || entry.kind !== 'fact' || entry.meta.folded) return false;
+            entry.meta.folded = true;
+            await persistMemoryLedger(ledger);
+            return true;
+        };
+
+        // Lock = detach the row from the timeline (covers:[]); unlock drops
+        // the manual flag so the next batch can supersede it (§10).
+        const toggleMemoryFactLock = async (entryId) => {
+            const ledger = ensureMemoryLedger();
+            const entry = findEntry(ledger, entryId);
+            if (!entry || entry.kind !== 'fact' || entry.meta.folded) return false;
+            if (entry.meta.manual) {
+                entry.meta.manual = false;
+            } else {
+                entry.meta.folded = true;
+                appendEntry(ledger, makeFactEntry({
+                    id: generateUUID(),
+                    factKind: entry.meta.factKind,
+                    factKey: entry.meta.factKey,
+                    text: entry.text,
+                    status: entry.meta.factStatus,
+                    deadline: entry.meta.factDeadline,
+                    covers: [],
+                    manual: true,
+                    at: Date.now()
+                }));
+            }
+            await persistMemoryLedger(ledger);
+            return true;
+        };
+
+        const toggleMemoryPlotStatus = async (entryId) => {
+            const ledger = ensureMemoryLedger();
+            const entry = findEntry(ledger, entryId);
+            if (!entry || entry.kind !== 'fact' || entry.meta.factKind !== FACT_KIND_PLOT) return false;
+            return saveMemoryFact({
+                entryId,
+                factKind: FACT_KIND_PLOT,
+                factKey: entry.meta.factKey,
+                text: entry.text,
+                status: entry.meta.factStatus === 'closed' ? 'open' : 'closed',
+                deadline: entry.meta.factDeadline
+            });
         };
 
         // v6 L3 §8.1: tool_memory reads the ledger, not embedding shards.
@@ -7655,6 +7877,9 @@ const __app = createApp({
             await loadMemorySummaries(characterId);
             await loadMemoryProfile(characterId);
             await loadMemoryLedger(characterId);
+            // The ledger is the read priority: refresh the panel projection
+            // from it (the stored memory_summaries key is a rollback copy).
+            if (memoryLedger.value) applyMemoryLedgerProjection(memoryLedger.value);
 
             _classicMemoriesLoaded = false;
             try {
@@ -7958,6 +8183,8 @@ const __app = createApp({
                 chatHistory.value = Array.isArray(savedChat) && savedChat.length
                     ? prepareLoadedChatHistoryForDisplay(savedChat)
                     : createInitialChatHistory(char);
+                // Project the target branch ledger against the new chat.
+                if (memoryLedger.value) applyMemoryLedgerProjection(memoryLedger.value);
                 classicMemories.value = prepareClassicMemoriesForRuntime(savedClassicMemories);
                 _classicMemoriesLoaded = true;
                 loadGlobalUiTemplateRuntimeForCharacter(char);
@@ -9406,11 +9633,50 @@ const __app = createApp({
                 if (!ledger || !Array.isArray(ledger.entries) || ledger.entries.length === 0) return [];
                 return buildMemoryView(ledger, buildLiveTurnIndex()).toc;
             }),
+            // v6 L4: info card and pins are ledger projections, not separate
+            // stores. Freshness is annotated at render time from the live
+            // covers projection (§5.4).
+            memoryCard: computed(() => {
+                const ledger = memoryLedger.value;
+                if (!ledger || !Array.isArray(ledger.entries) || ledger.entries.length === 0) {
+                    return { characters: [], openPlots: [] };
+                }
+                const view = buildMemoryView(ledger, buildLiveTurnIndex());
+                const currentTurn = buildConversationTurnSnapshot(chatHistory.value, { includeSystem: false }).turns.length;
+                const staleAfter = Number(memorySettings.profileStaleAfter) || 40;
+                const lib = profileLib();
+                const annotate = item => ({
+                    ...item,
+                    stale: lib ? lib.isProfileStale(item, currentTurn, staleAfter) : false
+                });
+                return {
+                    characters: view.card.characters.map(annotate),
+                    openPlots: view.card.openPlots.map(annotate)
+                };
+            }),
+            memoryPins: computed(() => {
+                const entries = Array.isArray(memoryLedger.value?.entries) ? memoryLedger.value.entries : [];
+                return entries
+                    .filter(entry => entry.kind === 'pin' && !entry.meta.folded)
+                    .sort((a, b) => (a.meta.at || 0) - (b.meta.at || 0))
+                    .map(entry => {
+                        const text = String(entry.text || '');
+                        return {
+                            entryId: entry.id,
+                            text,
+                            enabled: entry.meta.enabled !== false,
+                            at: Number(entry.meta.at) || 0,
+                            tokens: estimateTokens(text)
+                        };
+                    });
+            }),
             memoryStats: computed(() => {
                 const ledger = memoryLedger.value;
                 const entries = Array.isArray(ledger?.entries) ? ledger.entries : [];
                 const digests = entries.filter(entry => entry.kind === 'digest');
                 const live = digests.filter(entry => !entry.meta.stale);
+                const facts = entries.filter(entry => entry.kind === 'fact' && !entry.meta.folded);
+                const pins = entries.filter(entry => entry.kind === 'pin' && !entry.meta.folded);
                 const turnIndex = buildLiveTurnIndex();
                 const coveredTurns = new Set();
                 live.forEach(entry => projectEntryTurns(entry, turnIndex).forEach(turn => coveredTurns.add(turn)));
@@ -9419,24 +9685,49 @@ const __app = createApp({
                     stale: digests.length - live.length,
                     coveredTurns: coveredTurns.size,
                     classic: classicMemories.value.length,
-                    activeTotal: live.length
+                    activeTotal: live.length,
+                    facts: facts.filter(entry => !entry.meta.stale).length,
+                    staleFacts: facts.filter(entry => entry.meta.stale).length,
+                    lockedFacts: facts.filter(entry => entry.meta.manual && !entry.meta.stale).length,
+                    pins: pins.length,
+                    pinsEnabled: pins.filter(entry => entry.meta.enabled !== false).length,
+                    folded: entries.filter(entry => entry.meta.folded).length
                 };
             }),
+            // Manual memory + info-card CRUD (v6 L4 / v5 M2 UX).
+            memoryPinsLimit: PIN_ENABLED_LIMIT,
+            memoryPinTextLimit: PIN_TEXT_LIMIT,
+            addMemoryPin, updateMemoryPin, deleteMemoryPin, toggleMemoryPinEnabled,
+            saveMemoryFact, deleteMemoryFact, toggleMemoryFactLock, toggleMemoryPlotStatus,
             clearAllMemories: () => {
-                confirmAction('确定要清空并重建记忆吗？原文聊天记录会保留，摘要、关系与索引将从原文重建。此操作无法撤销。', async () => {
+                confirmAction('确定要清空并重建记忆吗？原文聊天记录会保留，摘要与信息卡将从原文重建；手动记忆属于用户内容，不会被删除。此操作无法撤销。', async () => {
                     // 滚动摘要（新引擎）：先中止进行中的摘要链，再清空派生摘要层，原文保留可重建
                     abortRollingSummary();
+                    // v6 §13: clear-rebuild deletes digest+fact, never pins.
+                    const preservedPins = Array.isArray(memoryLedger.value?.entries)
+                        ? memoryLedger.value.entries.filter(entry => entry.kind === 'pin' && !entry.meta.folded)
+                        : [];
                     memorySummaries.value = null;
                     memoryProfile.value = null;
-                    memoryLedger.value = null;
                     clearSummaryProgress();
+                    const nextLedger = preservedPins.length > 0
+                        ? { ...createEmptyLedger(), entries: preservedPins }
+                        : null;
+                    memoryLedger.value = nextLedger;
                     if (currentCharacter.value?.uuid) {
                         const scopeId = getCurrentChatStorageScopeId();
                         await deleteScopedStoredValue('memory_summaries', scopeId);
                         await deleteScopedStoredValue('memory_profile', scopeId);
-                        await deleteScopedStoredValue('memory_ledger', scopeId);
+                        if (nextLedger) {
+                            await saveMemoryLedgerNow(scopeId, nextLedger);
+                            applyMemoryLedgerProjection(nextLedger);
+                        } else {
+                            await deleteScopedStoredValue('memory_ledger', scopeId);
+                        }
                     }
-                    showToast('记忆已清空，将从原文重建', 'success');
+                    showToast(preservedPins.length > 0
+                        ? '记忆已清空，将从原文重建；手动记忆已保留'
+                        : '记忆已清空，将从原文重建', 'success');
                     // 清空并重建：原文仍在，滚动摘要从账本空洞自动重建。
                     if (currentCharacter.value?.uuid && memorySettings.enabled) {
                         nextTick(() => startAutomaticMemoryPatrol());
@@ -9446,7 +9737,7 @@ const __app = createApp({
             exportMemories: async () => {
                 const ledger = memoryLedger.value;
                 const hasLedger = Boolean(ledger && Array.isArray(ledger.entries) && ledger.entries.length > 0);
-                if (!hasLedger && !memorySummaries.value) { showToast('当前没有记忆可导出', 'info'); return; }
+                if (!hasLedger && !memorySummaries.value && !memoryProfile.value) { showToast('当前没有记忆可导出', 'info'); return; }
                 const exportData = {
                     type: 'rp-hub-memory-ledger-v1',
                     schemaVersion: 1,

@@ -15,7 +15,7 @@
                     </label>
                         <button @click="clearAllMemories()"
                             class="inline-flex min-h-[44px] items-center gap-1 px-3 py-2 bg-white text-red-600 rounded-xl border border-gray-200 shadow-sm active:scale-95 transition-all text-xs font-bold"
-                            title="清空并重建记忆（原文保留，摘要与关系从聊天记录重建）">
+                            title="清空并重建记忆（原文保留，摘要与信息卡从聊天记录重建；手动记忆保留）">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor"><use href="#icon-delete"></use></svg>
                             清空重建
                         </button>
@@ -85,7 +85,7 @@
                         </div>
                         <div v-if="memorySettings.enabled" class="mb-3 animate-fade-in">
                             <div class="rounded-xl border border-primary-100 bg-primary-50/60 px-3 py-2.5 text-xs leading-relaxed text-primary-800">
-                                滚动记忆引擎：原文是唯一真相源，窗口内直接读取原文；窗口外由滚动摘要（长期 + 短期）+ 固定信息卡（角色状态 / 有向关系 / 未决伏笔）覆盖，旧对话可经记忆目录按需取回。
+                                滚动记忆引擎：原文是唯一真相源，窗口内直接读取原文；窗口外由滚动摘要（长期 + 短期）+ 信息卡（角色状态 / 未决伏笔）+ 手动记忆覆盖，旧对话可经记忆目录按需取回。
                             </div>
                         </div>
                         <!-- Expandable Settings -->
@@ -167,6 +167,31 @@
                                 <div class="relative bg-gray-50/60 p-3 rounded-xl border border-gray-100 mt-2">
                                     <div class="flex justify-between items-center mb-2">
                                         <div class="relative flex items-center">
+                                            <label class="text-xs font-medium text-gray-500">信息卡过期标注</label>
+                                            <button type="button"
+                                                @click.stop="settingsHelpTopic = settingsHelpTopic === 'profileStale' ? '' : 'profileStale'"
+                                                class="settings-help-trigger"
+                                                :class="{ 'is-open': settingsHelpTopic === 'profileStale' }"
+                                                :aria-expanded="settingsHelpTopic === 'profileStale'"
+                                                aria-label="查看信息卡过期标注说明">
+                                                <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                        d="M9.1 9a3 3 0 115.8 1.1c-.6 1.1-1.9 1.3-2.5 2.2-.3.4-.4.8-.4 1.2M12 17h.01"></path>
+                                                </svg>
+                                            </button>
+                                            <div v-if="settingsHelpTopic === 'profileStale'" class="settings-help-popover is-above">
+                                                <span class="settings-help-popover-content">信息卡条目引用的原文轮次超过这个间隔后，会在注入与面板中标注「未再出现」（10–100 轮）。标注只提示可能过期，不会删除条目。</span>
+                                            </div>
+                                        </div>
+                                        <span
+                                            class="text-xs font-mono text-primary-600 bg-primary-50 px-1.5 py-0.5 rounded border border-primary-100">{{ memorySettings.profileStaleAfter }} 轮</span>
+                                    </div>
+                                    <input type="range" v-model.number="memorySettings.profileStaleAfter" min="10" max="100" step="5"
+                                        class="w-full touch-range cursor-pointer">
+                                </div>
+                                <div class="relative bg-gray-50/60 p-3 rounded-xl border border-gray-100 mt-2">
+                                    <div class="flex justify-between items-center mb-2">
+                                        <div class="relative flex items-center">
                                             <label class="text-xs font-medium text-gray-500">上下文 Token 预算</label>
                                             <button type="button"
                                                 @click.stop="settingsHelpTopic = settingsHelpTopic === 'contextBudget' ? '' : 'contextBudget'"
@@ -198,9 +223,9 @@
                     </div>
                     </div>
 
-                <!-- Memory Ledger View (v6 L3): the vector search UI was
-                     removed with the embedding stack; retrieval is the TOC +
-                     tool_memory, and per-turn lexical recall is automatic. -->
+                <!-- Memory Ledger View (v6 L4): directory / info-card tabs.
+                     Retrieval stays the TOC + tool_memory; the card tab is the
+                     v5 M2 read/edit/lock UX on top of fact entries. -->
                 <div v-if="memorySettings.enabled"
                     class="bg-white/70 backdrop-blur-sm p-1 rounded-2xl border border-gray-200 shadow-sm mb-4 overflow-hidden">
                     <div class="w-full flex justify-between items-center px-4 py-3 rounded-xl transition-all font-bold text-gray-700 bg-white">
@@ -223,7 +248,7 @@
                     <div class="px-4 pb-4 pt-3 border-t border-gray-100 space-y-4">
                         <div class="grid grid-cols-3 gap-2">
                             <div class="rounded-xl bg-gray-50 border border-gray-100 px-3 py-2">
-                                <div class="text-[10px] font-bold text-gray-400 mb-1">有效条目</div>
+                                <div class="text-[10px] font-bold text-gray-400 mb-1">摘要条目</div>
                                 <div class="text-lg font-black text-gray-800">{{ memoryStats.digests }}</div>
                             </div>
                             <div class="rounded-xl bg-gray-50 border border-gray-100 px-3 py-2">
@@ -234,83 +259,282 @@
                                 <div class="text-[10px] font-bold text-gray-400 mb-1">失效条目</div>
                                 <div class="text-lg font-black text-gray-800">{{ memoryStats.stale }}</div>
                             </div>
-                        </div>
-
-                        <div class="space-y-2">
-                            <div class="flex items-center justify-between gap-3 text-[11px] font-bold text-gray-500">
-                                <span>记忆目录</span>
-                                <span class="font-mono text-gray-400">{{ memoryTocEntries.length }} 条 · 模型可经 tool_memory 按区间取全文</span>
+                            <div class="rounded-xl bg-gray-50 border border-gray-100 px-3 py-2">
+                                <div class="text-[10px] font-bold text-gray-400 mb-1">信息卡</div>
+                                <div class="text-lg font-black text-gray-800">{{ memoryStats.facts }}</div>
                             </div>
-                            <div v-if="memoryTocEntries.length === 0" class="py-6 text-center text-sm text-gray-400">
-                                还没有账本条目，聊够 {{ memorySettings.keepFloors }} 轮后自动生成
+                            <div class="rounded-xl bg-gray-50 border border-gray-100 px-3 py-2">
+                                <div class="text-[10px] font-bold text-gray-400 mb-1">手动记忆</div>
+                                <div class="text-lg font-black text-gray-800">{{ memoryStats.pins }}</div>
                             </div>
-                            <div v-else class="space-y-1.5 max-h-80 overflow-y-auto pr-1">
-                                <div v-for="item in memoryTocEntries" :key="item.entryId"
-                                    class="rounded-xl border border-gray-100 bg-white px-3 py-2 shadow-sm">
-                                    <div class="flex items-center gap-2 flex-wrap mb-1">
-                                        <span class="text-[10px] font-mono text-primary-700 bg-primary-50 border border-primary-100 rounded-md px-2 py-0.5">{{ item.label }}</span>
-                                        <span class="text-[10px] font-mono text-gray-400">{{ item.tokens }} tok</span>
-                                    </div>
-                                    <p class="text-xs text-gray-700 leading-relaxed whitespace-pre-line">{{ item.summary }}</p>
-                                </div>
+                            <div class="rounded-xl bg-gray-50 border border-gray-100 px-3 py-2">
+                                <div class="text-[10px] font-bold text-gray-400 mb-1">折叠历史</div>
+                                <div class="text-lg font-black text-gray-800">{{ memoryStats.folded }}</div>
                             </div>
                         </div>
 
-                        <!-- Folded summaries (long/short + batch projection) -->
-                        <div class="space-y-3">
-                            <div v-if="!memorySummaries || (!memorySummaries.long && !memorySummaries.short)"
-                                class="py-6 text-center text-sm text-gray-400">
-                                还没有摘要，聊够 {{ memorySettings.keepFloors }} 轮后自动生成
+                        <div class="flex items-center justify-between gap-3">
+                            <div class="flex items-center gap-1 rounded-xl bg-gray-100 p-1">
+                                <button type="button" @click="memoryLedgerTab = 'toc'"
+                                    :class="['px-3 py-1.5 text-xs font-bold rounded-lg transition-all', memoryLedgerTab === 'toc' ? 'bg-white text-primary-700 shadow-sm' : 'text-gray-500']">
+                                    记忆目录
+                                </button>
+                                <button type="button" @click="memoryLedgerTab = 'card'"
+                                    :class="['px-3 py-1.5 text-xs font-bold rounded-lg transition-all', memoryLedgerTab === 'card' ? 'bg-white text-primary-700 shadow-sm' : 'text-gray-500']">
+                                    信息卡
+                                </button>
                             </div>
-                            <template v-else>
-                                <div v-if="memorySummaries.long" class="rounded-xl border border-gray-100 bg-white px-3 py-2.5">
-                                    <div class="text-[10px] font-bold text-gray-400 mb-1">长期摘要</div>
-                                    <p class="text-xs text-gray-700 whitespace-pre-line">{{ memorySummaries.long }}</p>
+                            <span class="text-[10px] font-mono text-gray-400">
+                                {{ memoryLedgerTab === 'toc' ? memoryTocEntries.length + ' 条 · tool_memory 可取全文' : memoryStats.lockedFacts + ' 条已锁定' }}
+                            </span>
+                        </div>
+
+                        <!-- Directory tab -->
+                        <div v-if="memoryLedgerTab === 'toc'" class="space-y-4">
+                            <div class="space-y-2">
+                                <div v-if="memoryTocEntries.length === 0" class="py-6 text-center text-sm text-gray-400">
+                                    还没有账本条目，聊够 {{ memorySettings.keepFloors }} 轮后自动生成
                                 </div>
-                                <div v-if="memorySummaries.short" class="rounded-xl border border-gray-100 bg-white px-3 py-2.5">
-                                    <div class="text-[10px] font-bold text-gray-400 mb-1">短期摘要</div>
-                                    <p class="text-xs text-gray-700 whitespace-pre-line">{{ memorySummaries.short }}</p>
-                                </div>
-                                <div v-if="memorySummaries.batches.length > 0"
-                                    class="rounded-xl border border-gray-100 bg-white px-3 py-2.5">
-                                    <div class="text-[10px] font-bold text-gray-400 mb-1">总结批次</div>
-                                    <div class="flex flex-wrap gap-1.5">
-                                        <span v-for="(b, idx) in memorySummaries.batches" :key="idx"
-                                            :class="['text-[10px] px-2 py-1 rounded-lg border', b.status === 'done' ? 'bg-gray-50 border-gray-200 text-gray-600' : b.status === 'failed' ? 'bg-gray-50 border-gray-200 text-gray-500' : 'bg-gray-50 border-gray-100 text-gray-500']">
-                                            第 {{ b.fromTurn }}–{{ b.toTurn }} 轮{{ b.status === 'done' ? '·已总结' : b.status === 'failed' ? '·失败' : '' }}
-                                        </span>
+                                <div v-else class="space-y-1.5 max-h-80 overflow-y-auto pr-1">
+                                    <div v-for="item in memoryTocEntries" :key="item.entryId"
+                                        class="rounded-xl border border-gray-100 bg-white px-3 py-2 shadow-sm">
+                                        <div class="flex items-center gap-2 flex-wrap mb-1">
+                                            <span class="text-[10px] font-mono text-primary-700 bg-primary-50 border border-primary-100 rounded-md px-2 py-0.5">{{ item.label }}</span>
+                                            <span class="text-[10px] font-mono text-gray-400">{{ item.tokens }} tok</span>
+                                        </div>
+                                        <p class="text-xs text-gray-700 leading-relaxed whitespace-pre-line">{{ item.summary }}</p>
                                     </div>
                                 </div>
-                                <!-- Story timeline: summary batches + open plot lines +
-                                     character profiles — a vertical look back at the story. -->
-                                <div v-if="(memorySummaries.batches || []).some(b => b.status === 'done')"
-                                    class="rounded-xl border border-gray-100 bg-white px-3 py-2.5">
-                                    <div class="text-[10px] font-bold text-gray-400 mb-2">剧情时间线</div>
-                                    <ol class="relative border-l-2 border-primary-100 ml-2 space-y-3">
-                                        <li v-for="(b, idx) in [...memorySummaries.batches].filter(b => b.status === 'done').sort((a, b) => (a.toTurn || 0) - (b.toTurn || 0))"
-                                            :key="'tl-batch-' + idx" class="ml-4 relative">
-                                            <span class="absolute -left-[21px] top-1 w-3 h-3 rounded-full bg-primary-400 border-2 border-white shadow-sm"></span>
-                                            <p class="text-xs font-bold text-gray-700">第 {{ b.fromTurn }}–{{ b.toTurn }} 轮
-                                                <span class="text-[10px] text-gray-400 font-normal">章节总结完成{{ b.at ? ' · ' + new Date(b.at).toLocaleDateString() : '' }}</span>
-                                            </p>
-                                        </li>
-                                        <li v-for="(plot, idx) in (memoryProfile?.openPlots || []).filter(p => p.status !== 'closed')"
-                                            :key="'tl-plot-' + idx" class="ml-4 relative">
-                                            <span class="absolute -left-[21px] top-1 w-3 h-3 rounded-full bg-amber-400 border-2 border-white shadow-sm"></span>
-                                            <p class="text-xs font-bold text-amber-600">进行中的剧情线
-                                                <span class="text-[10px] text-gray-400 font-normal">{{ plot.turn ? '· 至第 ' + plot.turn + ' 轮' : '' }}</span>
-                                            </p>
-                                            <p class="text-xs text-gray-600 leading-relaxed mt-0.5">{{ plot.summary || plot.title || '' }}</p>
-                                        </li>
-                                        <li v-for="(character, idx) in (memoryProfile?.characters || [])"
-                                            :key="'tl-char-' + idx" class="ml-4 relative">
-                                            <span class="absolute -left-[21px] top-1 w-3 h-3 rounded-full bg-indigo-400 border-2 border-white shadow-sm"></span>
-                                            <p class="text-xs font-bold text-indigo-500">人物档案 · {{ character.name || '未命名' }}</p>
-                                            <p class="text-xs text-gray-600 leading-relaxed mt-0.5">{{ character.description || character.summary || '' }}</p>
-                                        </li>
-                                    </ol>
+                            </div>
+
+                            <!-- Folded summaries (long/short + batch projection) -->
+                            <div class="space-y-3">
+                                <div v-if="!memorySummaries || (!memorySummaries.long && !memorySummaries.short)"
+                                    class="py-6 text-center text-sm text-gray-400">
+                                    还没有摘要，聊够 {{ memorySettings.keepFloors }} 轮后自动生成
                                 </div>
-                            </template>
+                                <template v-else>
+                                    <div v-if="memorySummaries.long" class="rounded-xl border border-gray-100 bg-white px-3 py-2.5">
+                                        <div class="text-[10px] font-bold text-gray-400 mb-1">长期摘要</div>
+                                        <p class="text-xs text-gray-700 whitespace-pre-line">{{ memorySummaries.long }}</p>
+                                    </div>
+                                    <div v-if="memorySummaries.short" class="rounded-xl border border-gray-100 bg-white px-3 py-2.5">
+                                        <div class="text-[10px] font-bold text-gray-400 mb-1">短期摘要</div>
+                                        <p class="text-xs text-gray-700 whitespace-pre-line">{{ memorySummaries.short }}</p>
+                                    </div>
+                                    <div v-if="memorySummaries.batches.length > 0"
+                                        class="rounded-xl border border-gray-100 bg-white px-3 py-2.5">
+                                        <div class="text-[10px] font-bold text-gray-400 mb-1">总结批次</div>
+                                        <div class="flex flex-wrap gap-1.5">
+                                            <span v-for="(b, idx) in memorySummaries.batches" :key="idx"
+                                                :class="['text-[10px] px-2 py-1 rounded-lg border', b.status === 'done' ? 'bg-gray-50 border-gray-200 text-gray-600' : b.status === 'failed' ? 'bg-gray-50 border-gray-200 text-gray-500' : 'bg-gray-50 border-gray-100 text-gray-500']">
+                                                第 {{ b.fromTurn }}–{{ b.toTurn }} 轮{{ b.status === 'done' ? '·已总结' : b.status === 'failed' ? '·失败' : '' }}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <!-- Story timeline: summary batches + open plot lines +
+                                         character profiles — a vertical look back at the story. -->
+                                    <div v-if="(memorySummaries.batches || []).some(b => b.status === 'done')"
+                                        class="rounded-xl border border-gray-100 bg-white px-3 py-2.5">
+                                        <div class="text-[10px] font-bold text-gray-400 mb-2">剧情时间线</div>
+                                        <ol class="relative border-l-2 border-primary-100 ml-2 space-y-3">
+                                            <li v-for="(b, idx) in [...memorySummaries.batches].filter(b => b.status === 'done').sort((a, b) => (a.toTurn || 0) - (b.toTurn || 0))"
+                                                :key="'tl-batch-' + idx" class="ml-4 relative">
+                                                <span class="absolute -left-[21px] top-1 w-3 h-3 rounded-full bg-primary-400 border-2 border-white shadow-sm"></span>
+                                                <p class="text-xs font-bold text-gray-700">第 {{ b.fromTurn }}–{{ b.toTurn }} 轮
+                                                    <span class="text-[10px] text-gray-400 font-normal">章节总结完成{{ b.at ? ' · ' + new Date(b.at).toLocaleDateString() : '' }}</span>
+                                                </p>
+                                            </li>
+                                            <li v-for="(plot, idx) in (memoryCard.openPlots || []).filter(p => p.status !== 'closed')"
+                                                :key="'tl-plot-' + idx" class="ml-4 relative">
+                                                <span class="absolute -left-[21px] top-1 w-3 h-3 rounded-full bg-amber-400 border-2 border-white shadow-sm"></span>
+                                                <p class="text-xs font-bold text-amber-600">进行中的剧情线
+                                                    <span class="text-[10px] text-gray-400 font-normal">{{ plot.lastSeenTurn ? '· 至第 ' + plot.lastSeenTurn + ' 轮' : '' }}</span>
+                                                </p>
+                                                <p class="text-xs text-gray-600 leading-relaxed mt-0.5">{{ plot.summary }}</p>
+                                            </li>
+                                            <li v-for="(character, idx) in (memoryCard.characters || [])"
+                                                :key="'tl-char-' + idx" class="ml-4 relative">
+                                                <span class="absolute -left-[21px] top-1 w-3 h-3 rounded-full bg-indigo-400 border-2 border-white shadow-sm"></span>
+                                                <p class="text-xs font-bold text-indigo-500">人物档案 · {{ character.name || '未命名' }}</p>
+                                                <p class="text-xs text-gray-600 leading-relaxed mt-0.5">{{ character.status }}</p>
+                                            </li>
+                                        </ol>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+
+                        <!-- Info-card tab (v5 M2 UX on fact entries) -->
+                        <div v-else class="space-y-4">
+                            <div class="space-y-2">
+                                <div class="flex items-center justify-between gap-2">
+                                    <span class="text-[11px] font-bold text-gray-500">角色动态状态</span>
+                                    <button type="button" @click="startAddFact('character')"
+                                        class="text-[10px] font-bold px-2 py-1 rounded-lg border border-gray-200 bg-white text-primary-700 active:scale-95 transition-all">
+                                        ＋ 添加角色
+                                    </button>
+                                </div>
+                                <div v-if="!memoryCard.characters.length" class="py-4 text-center text-sm text-gray-400">
+                                    暂无角色状态；聊出窗口后由记忆模型自动维护，也可手动添加
+                                </div>
+                                <div v-for="character in memoryCard.characters" :key="character.entryId"
+                                    class="rounded-xl border border-gray-100 bg-white px-3 py-2.5 shadow-sm">
+                                    <div class="flex items-start justify-between gap-2">
+                                        <div class="min-w-0">
+                                            <div class="flex items-center gap-1.5 flex-wrap">
+                                                <span class="text-xs font-bold text-gray-700">{{ character.name }}</span>
+                                                <span v-if="character.manual" class="text-[10px] px-1.5 py-0.5 rounded-md border border-gray-200 bg-gray-50 text-gray-500">已锁定</span>
+                                                <span v-if="character.stale" class="text-[10px] px-1.5 py-0.5 rounded-md border border-gray-200 bg-gray-50 text-amber-600">第 {{ character.lastSeenTurn }} 轮后未再出现</span>
+                                            </div>
+                                            <p class="text-xs text-gray-600 mt-1 whitespace-pre-line">{{ character.status }}</p>
+                                        </div>
+                                        <div class="flex flex-wrap items-center justify-end gap-1 flex-shrink-0">
+                                            <button type="button" @click="startEditFact(character, 'character')"
+                                                class="text-[10px] font-bold px-2 py-1 rounded-lg border border-gray-200 bg-white text-gray-600 active:scale-95 transition-all">编辑</button>
+                                            <button type="button" @click="toggleFactLock(character)"
+                                                class="text-[10px] font-bold px-2 py-1 rounded-lg border border-gray-200 bg-white text-gray-600 active:scale-95 transition-all">{{ character.manual ? '解锁' : '锁定' }}</button>
+                                            <button type="button" @click="removeFact(character)"
+                                                class="text-[10px] font-bold px-2 py-1 rounded-lg border border-gray-200 bg-white text-gray-500 active:scale-95 transition-all">删除</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="space-y-2">
+                                <div class="flex items-center justify-between gap-2">
+                                    <span class="text-[11px] font-bold text-gray-500">未决伏笔</span>
+                                    <button type="button" @click="startAddFact('plot')"
+                                        class="text-[10px] font-bold px-2 py-1 rounded-lg border border-gray-200 bg-white text-primary-700 active:scale-95 transition-all">
+                                        ＋ 添加伏笔
+                                    </button>
+                                </div>
+                                <div v-if="!memoryCard.openPlots.length" class="py-4 text-center text-sm text-gray-400">
+                                    暂无未决伏笔
+                                </div>
+                                <div v-for="plot in memoryCard.openPlots" :key="plot.entryId"
+                                    class="rounded-xl border border-gray-100 bg-white px-3 py-2.5 shadow-sm">
+                                    <div class="flex items-start justify-between gap-2">
+                                        <div class="min-w-0">
+                                            <div class="flex items-center gap-1.5 flex-wrap">
+                                                <span :class="['text-xs font-bold', plot.status === 'closed' ? 'text-gray-400 line-through' : 'text-gray-700']">{{ plot.summary }}</span>
+                                                <span v-if="plot.deadline" class="text-[10px] px-1.5 py-0.5 rounded-md border border-gray-200 bg-gray-50 text-gray-500">{{ plot.deadline }}</span>
+                                                <span v-if="plot.status === 'closed'" class="text-[10px] px-1.5 py-0.5 rounded-md border border-gray-200 bg-gray-50 text-gray-500">已关闭</span>
+                                                <span v-if="plot.manual" class="text-[10px] px-1.5 py-0.5 rounded-md border border-gray-200 bg-gray-50 text-gray-500">已锁定</span>
+                                                <span v-if="plot.stale" class="text-[10px] px-1.5 py-0.5 rounded-md border border-gray-200 bg-gray-50 text-amber-600">第 {{ plot.lastSeenTurn }} 轮后未再出现</span>
+                                            </div>
+                                        </div>
+                                        <div class="flex flex-wrap items-center justify-end gap-1 flex-shrink-0">
+                                            <button type="button" @click="togglePlotStatus(plot)"
+                                                class="text-[10px] font-bold px-2 py-1 rounded-lg border border-gray-200 bg-white text-gray-600 active:scale-95 transition-all">{{ plot.status === 'closed' ? '重开' : '关闭' }}</button>
+                                            <button type="button" @click="startEditFact(plot, 'plot')"
+                                                class="text-[10px] font-bold px-2 py-1 rounded-lg border border-gray-200 bg-white text-gray-600 active:scale-95 transition-all">编辑</button>
+                                            <button type="button" @click="toggleFactLock(plot)"
+                                                class="text-[10px] font-bold px-2 py-1 rounded-lg border border-gray-200 bg-white text-gray-600 active:scale-95 transition-all">{{ plot.manual ? '解锁' : '锁定' }}</button>
+                                            <button type="button" @click="removeFact(plot)"
+                                                class="text-[10px] font-bold px-2 py-1 rounded-lg border border-gray-200 bg-white text-gray-500 active:scale-95 transition-all">删除</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div v-if="factDraft.open" class="rounded-xl border border-gray-200 bg-gray-50/60 px-3 py-3 space-y-2">
+                                <div class="text-[11px] font-bold text-primary-700">
+                                    {{ factDraft.entryId ? '编辑' : '新增' }}{{ factDraft.factKind === 'plot' ? '伏笔' : '角色状态' }}
+                                </div>
+                                <template v-if="factDraft.factKind === 'plot'">
+                                    <label class="block text-[10px] text-gray-500">伏笔内容</label>
+                                    <textarea v-model="factDraft.factKey" rows="2"
+                                        class="w-full px-3 py-2 text-xs bg-white border border-gray-200 rounded-xl focus:border-primary-300 focus:outline-none"></textarea>
+                                    <div class="grid grid-cols-2 gap-2">
+                                        <div>
+                                            <label class="block text-[10px] text-gray-500">截止表达（可空）</label>
+                                            <input v-model="factDraft.deadline" type="text"
+                                                class="w-full mt-1 px-3 py-2 text-xs bg-white border border-gray-200 rounded-xl focus:border-primary-300 focus:outline-none">
+                                        </div>
+                                        <div>
+                                            <label class="block text-[10px] text-gray-500">状态</label>
+                                            <select v-model="factDraft.status"
+                                                class="w-full mt-1 px-3 py-2 text-xs bg-white border border-gray-200 rounded-xl focus:border-primary-300 focus:outline-none">
+                                                <option value="open">进行中</option>
+                                                <option value="closed">已关闭</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </template>
+                                <template v-else>
+                                    <label class="block text-[10px] text-gray-500">角色名称</label>
+                                    <input v-model="factDraft.factKey" type="text"
+                                        class="w-full px-3 py-2 text-xs bg-white border border-gray-200 rounded-xl focus:border-primary-300 focus:outline-none">
+                                    <label class="block text-[10px] text-gray-500">当前动态状态</label>
+                                    <textarea v-model="factDraft.text" rows="2"
+                                        class="w-full px-3 py-2 text-xs bg-white border border-gray-200 rounded-xl focus:border-primary-300 focus:outline-none"></textarea>
+                                </template>
+                                <div class="flex items-center justify-end gap-2">
+                                    <button type="button" @click="cancelFactDraft"
+                                        class="text-[10px] font-bold px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-gray-600 active:scale-95 transition-all">取消</button>
+                                    <button type="button" @click="submitFact"
+                                        class="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-primary-600 text-white active:scale-95 transition-all">保存并锁定</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Manual memory (v6 L4 / v5 M2): user-authored pins. -->
+                <div v-if="memorySettings.enabled"
+                    class="bg-white/70 backdrop-blur-sm p-1 rounded-2xl border border-gray-200 shadow-sm mb-4 overflow-hidden">
+                    <div class="w-full flex justify-between items-center px-4 py-3 rounded-xl transition-all font-bold text-gray-700 bg-white">
+                        <span class="flex items-center min-w-0">
+                            <div class="p-1.5 rounded-lg mr-3 bg-gray-100 text-gray-500 transition-colors">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"></path>
+                                </svg>
+                            </div>
+                            <span class="truncate">手动记忆</span>
+                        </span>
+                        <div class="text-xs font-mono text-gray-600 bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-1">
+                            {{ memoryStats.pinsEnabled }} / {{ memoryPinsLimit }} 启用
+                        </div>
+                    </div>
+                    <div class="px-4 pb-4 pt-3 border-t border-gray-100 space-y-3">
+                        <div class="rounded-xl border border-gray-100 bg-gray-50/60 px-3 py-2 text-[11px] text-gray-500 leading-relaxed">
+                            手动记忆由你手写、置顶注入，摘要链永不改写；「清空重建」会保留它们。
+                        </div>
+                        <div v-if="!memoryPins.length" class="py-4 text-center text-sm text-gray-400">
+                            还没有手动记忆，写下必须让角色记住的设定
+                        </div>
+                        <div v-for="pin in memoryPins" :key="pin.entryId"
+                            class="rounded-xl border border-gray-100 bg-white px-3 py-2.5 shadow-sm">
+                            <div class="flex items-start justify-between gap-2">
+                                <p :class="['text-xs leading-relaxed whitespace-pre-line min-w-0', pin.enabled ? 'text-gray-700' : 'text-gray-400 line-through']">{{ pin.text }}</p>
+                                <div class="flex items-center gap-1.5 flex-shrink-0">
+                                    <label class="relative inline-flex items-center cursor-pointer">
+                                        <input type="checkbox" :checked="pin.enabled" @change="togglePin(pin)" class="settings-toggle-input sr-only">
+                                        <div class="settings-toggle settings-toggle--compact"></div>
+                                    </label>
+                                    <button type="button" @click="startPinEdit(pin)"
+                                        class="text-[10px] font-bold px-2 py-1 rounded-lg border border-gray-200 bg-white text-gray-600 active:scale-95 transition-all">编辑</button>
+                                    <button type="button" @click="removePin(pin)"
+                                        class="text-[10px] font-bold px-2 py-1 rounded-lg border border-gray-200 bg-white text-gray-500 active:scale-95 transition-all">删除</button>
+                                </div>
+                            </div>
+                            <div class="text-[10px] font-mono text-gray-400 mt-1">{{ pin.tokens }} tok</div>
+                        </div>
+                        <div class="rounded-xl border border-gray-100 bg-gray-50/60 px-3 py-2.5 space-y-2">
+                            <textarea v-model="pinDraft.text" rows="2" :maxlength="memoryPinTextLimit"
+                                placeholder="写一条必须记住的设定…"
+                                class="w-full px-3 py-2 text-xs bg-white border border-gray-200 rounded-xl focus:border-primary-300 focus:outline-none"></textarea>
+                            <div class="flex items-center justify-between gap-2">
+                                <span class="text-[10px] text-gray-400">{{ pinDraft.text.length }} / {{ memoryPinTextLimit }} 字 · 启用上限 {{ memoryPinsLimit }} 条</span>
+                                <div class="flex items-center gap-2">
+                                    <button v-if="pinDraft.entryId" type="button" @click="cancelPinEdit"
+                                        class="text-[10px] font-bold px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-gray-600 active:scale-95 transition-all">取消</button>
+                                    <button type="button" @click="submitPin"
+                                        class="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-primary-600 text-white active:scale-95 transition-all">{{ pinDraft.entryId ? '保存修改' : '添加' }}</button>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -321,15 +545,121 @@
 </template>
 
 <script>
-import { inject } from "vue";
+import { inject, reactive, ref } from "vue";
 import SettingsPageHeader from "../common/SettingsPageHeader.vue";
 // 2026-08-28 Phase 1.6: shared components are declared locally now that the
 // app-level global registration workaround has been removed.
 export default {
   components: { SettingsPageHeader },
   setup() {
-    const ctx = inject("appContext");
-    return ctx || {};
+    const ctx = inject("appContext") || {};
+    // v6 L4: panel-local editor state. Ledger truth stays in app.mjs; these
+    // drafts only drive the inline forms.
+    const memoryLedgerTab = ref("toc");
+    const pinDraft = reactive({ entryId: "", text: "" });
+    const factDraft = reactive({
+      open: false,
+      entryId: "",
+      factKind: "character",
+      factKey: "",
+      text: "",
+      status: "open",
+      deadline: ""
+    });
+
+    const startAddFact = (factKind) => {
+      Object.assign(factDraft, {
+        open: true,
+        entryId: "",
+        factKind,
+        factKey: "",
+        text: "",
+        status: "open",
+        deadline: ""
+      });
+    };
+
+    const startEditFact = (item, factKind) => {
+      Object.assign(factDraft, factKind === "plot" ? {
+        open: true,
+        entryId: item.entryId,
+        factKind,
+        factKey: item.summary || "",
+        text: item.summary || "",
+        status: item.status === "closed" ? "closed" : "open",
+        deadline: item.deadline || ""
+      } : {
+        open: true,
+        entryId: item.entryId,
+        factKind,
+        factKey: item.name || "",
+        text: item.status || "",
+        status: "open",
+        deadline: ""
+      });
+    };
+
+    const cancelFactDraft = () => { factDraft.open = false; };
+
+    const submitFact = async () => {
+      const payload = factDraft.factKind === "plot"
+        ? {
+            entryId: factDraft.entryId || undefined,
+            factKind: "plot",
+            factKey: factDraft.factKey,
+            text: factDraft.factKey,
+            status: factDraft.status,
+            deadline: factDraft.deadline
+          }
+        : {
+            entryId: factDraft.entryId || undefined,
+            factKind: "character",
+            factKey: factDraft.factKey,
+            text: factDraft.text
+          };
+      const saved = await ctx.saveMemoryFact?.(payload);
+      if (saved) cancelFactDraft();
+    };
+
+    const removeFact = (item) => ctx.deleteMemoryFact?.(item.entryId);
+    const toggleFactLock = (item) => ctx.toggleMemoryFactLock?.(item.entryId);
+    const togglePlotStatus = (item) => ctx.toggleMemoryPlotStatus?.(item.entryId);
+
+    const startPinEdit = (pin) => {
+      pinDraft.entryId = pin.entryId;
+      pinDraft.text = pin.text;
+    };
+    const cancelPinEdit = () => {
+      pinDraft.entryId = "";
+      pinDraft.text = "";
+    };
+    const submitPin = async () => {
+      const saved = pinDraft.entryId
+        ? await ctx.updateMemoryPin?.(pinDraft.entryId, pinDraft.text)
+        : await ctx.addMemoryPin?.(pinDraft.text);
+      if (saved) cancelPinEdit();
+    };
+    const removePin = (pin) => ctx.deleteMemoryPin?.(pin.entryId);
+    const togglePin = (pin) => ctx.toggleMemoryPinEnabled?.(pin.entryId);
+
+    return {
+      ...ctx,
+      memoryLedgerTab,
+      pinDraft,
+      factDraft,
+      startAddFact,
+      startEditFact,
+      cancelFactDraft,
+      submitFact,
+      removeFact,
+      toggleFactLock,
+      togglePlotStatus,
+      startPinEdit,
+      cancelPinEdit,
+      submitPin,
+      removePin,
+      togglePin
+    };
   }
 };
 </script>

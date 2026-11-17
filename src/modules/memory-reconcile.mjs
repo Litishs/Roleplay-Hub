@@ -2,9 +2,9 @@
 //
 // reconcile() is idempotent and convergent: local invalidation → hole
 // computation over non-stale covers → one model call per batch → append
-// one immutable digest entry per batch → persist immediately → GC. Running
-// it twice yields the same ledger, so a crash or abort can only lose the
-// in-flight batch (design doc §6).
+// one immutable digest entry plus its fact entries → persist immediately
+// → GC. Running it twice yields the same ledger, so a crash or abort can
+// only lose the in-flight batch (design doc §6 / §10).
 //
 // Single-flight (design doc §6.4): one run per scope at a time; triggers
 // that arrive during a run set a pending flag and the run repeats once at
@@ -16,8 +16,10 @@
 
 import { computePendingBatch } from './memory-summary.mjs';
 import {
+    adoptLegacyProfile,
     adoptLegacySummaries,
     appendEntry,
+    appendProfileFacts,
     createEmptyLedger,
     invalidateEntries,
     makeDigestEntry,
@@ -86,8 +88,11 @@ export function createMemoryReconciler(deps) {
         if (current !== ledger) deps.setLedger(ledger);
         let dirty = false;
 
-        // 0. Legacy adoption: only for a ledger that has never been written.
-        if (ledger.entries.length === 0 && typeof deps.loadLegacySummaries === 'function') {
+        // 0. Legacy adoption: only when no digest coverage exists yet. Pins and
+        // facts may already be in the ledger (L4) without implying that the
+        // v4 summary layer was adopted.
+        const hasDigestEntries = ledger.entries.some(entry => entry.kind === 'digest');
+        if (!hasDigestEntries && typeof deps.loadLegacySummaries === 'function') {
             const adopted = adoptLegacySummaries({
                 summaries: deps.loadLegacySummaries(),
                 turnCovers: live.turnCovers,
@@ -97,6 +102,26 @@ export function createMemoryReconciler(deps) {
             if (adopted.length > 0) {
                 adopted.forEach(entry => appendEntry(ledger, entry));
                 dirty = true;
+            }
+        }
+        // v4 info card -> fact entries. Guarded by a ledger flag, not by
+        // "no fact entries": otherwise a GC pass could resurrect a profile
+        // the user deleted (design doc §11).
+        if (!ledger.profileAdopted && typeof deps.loadLegacyProfile === 'function') {
+            const legacyProfile = deps.loadLegacyProfile();
+            const hasLegacyRows = Boolean(legacyProfile && (
+                (Array.isArray(legacyProfile.characters) && legacyProfile.characters.length > 0)
+                || (Array.isArray(legacyProfile.openPlots) && legacyProfile.openPlots.length > 0)
+            ));
+            if (hasLegacyRows) {
+                const adoptedFacts = adoptLegacyProfile({
+                    profile: legacyProfile,
+                    makeId: deps.makeId,
+                    now: now()
+                });
+                adoptedFacts.forEach(entry => appendEntry(ledger, entry));
+                ledger.profileAdopted = true;
+                if (adoptedFacts.length > 0) dirty = true;
             }
         }
 
@@ -167,18 +192,18 @@ export function createMemoryReconciler(deps) {
                 console.error('Memory reconcile: duplicate entry id, batch not appended');
                 break;
             }
+            // L4: the batch's profile delta becomes immutable fact entries in
+            // the same write as the digest. One save = digest and card can
+            // never disagree after a crash (design doc §6.1 / §10).
+            appendProfileFacts(ledger, parsed.profile, {
+                covers,
+                at: now(),
+                model: String(settings.classicModel || ''),
+                makeId: deps.makeId
+            });
             deps.setLedger(ledger);
             deps.applyProjection?.(ledger, live);
             await deps.saveLedgerNow(scopeId, ledger);
-            if (parsed.profile && deps.getScopeId() === scopeId) {
-                try {
-                    await deps.applyProfileDelta?.(parsed.profile, batch);
-                } catch (error) {
-                    // The digest entry is already persisted; a profile-save
-                    // failure must not turn a completed batch into a failure.
-                    console.error('Memory profile delta failed:', error);
-                }
-            }
             processed += 1;
         }
         if (processed > 0 && firstBatch && lastBatch) {
