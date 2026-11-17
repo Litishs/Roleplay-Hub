@@ -61,7 +61,6 @@ export function useCardOperations(deps) {
         waitForConversationIdle,
         // memory pipeline
         loadCharacterMemories,
-        abortVectorBatchExtraction,
         abortClassicBatchExtraction,
         abortRollingSummary,
         // ui-template runtime
@@ -288,7 +287,6 @@ export function useCardOperations(deps) {
             const previousCharacterIndex = currentCharacterIndex.value;
             const previousCharacter = currentCharacter.value;
             if (previousCharacterIndex !== index) {
-                abortVectorBatchExtraction();
                 abortClassicBatchExtraction();
                 abortRollingSummary();
             }

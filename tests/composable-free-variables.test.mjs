@@ -119,7 +119,6 @@ const composableFiles = [
     'src/composables/useActiveToolPipeline.mjs',
     'src/composables/useDataLoader.mjs',
     'src/composables/useSpecialRules.mjs',
-    'src/composables/useVectorMemoryPatrol.mjs',
     'src/composables/useRollingSummary.mjs',
     'src/composables/useRegexPipeline.mjs',
     'src/composables/useStoryBranching.mjs'

@@ -50,20 +50,14 @@ test('the installed Capacitor Android is at or above the advisory fix', async ()
         `the lockfile pins @capacitor/android ${installed}, below the 7.6.9 fix for CVE-2026-103922`);
 });
 
-test('@huggingface/transformers is a build-time dependency, not a runtime one', async () => {
+test('the removed embedding runtime leaves no build-time dependency behind', async () => {
     const pkg = JSON.parse(await read('../package.json'));
-    assert.ok(!pkg.dependencies['@huggingface/transformers'],
-        '@huggingface/transformers only feeds assets/vendor; in dependencies it drags its ' +
-        'Node-only sharp/onnxruntime-node tree into the production audit scope');
-    assert.ok(pkg.devDependencies['@huggingface/transformers'],
-        '@huggingface/transformers must stay in devDependencies — npm run build:web copies its dist files into assets/vendor');
-});
-
-test('the vendored embedding runtime is still copied out of node_modules at build time', async () => {
-    const script = await read('../scripts/prepare-local-embedding.mjs');
-    assert.match(script, /node_modules\/@huggingface\/transformers/,
-        'prepare-local-embedding.mjs must keep sourcing the transformers dist files from node_modules — ' +
-        'that build-time-only use is what justifies the devDependencies placement');
+    // v6 L3 removed the on-device embedding stack: no runtime, dev or
+    // lockfile trace of @huggingface/transformers may remain.
+    assert.ok(!pkg.dependencies['@huggingface/transformers']);
+    assert.ok(!pkg.devDependencies['@huggingface/transformers']);
+    const lock = JSON.parse(await read('../package-lock.json'));
+    assert.ok(!Object.keys(lock.packages || {}).some(key => key.includes('@huggingface/transformers')));
 });
 
 test('the dependency audit workflow scans production dependencies only', async () => {

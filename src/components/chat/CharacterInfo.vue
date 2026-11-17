@@ -46,12 +46,6 @@
                                     <span class="inline-flex items-baseline gap-1">
                                         <span class="text-[13px] font-bold leading-none text-gray-700 desc-panel-stat-number">{{ Number(conversationBodyLength || 0).toLocaleString() }}</span>
                                         <span class="desc-panel-stat-unit">字</span>
-                                        <span v-if="memorySettings.enabled && memorySettings.mode === 'classic'"
-                                            class="inline-flex items-baseline gap-1" title="按当前总结记忆与保留楼层预测">
-                                            <span class="text-gray-700" aria-hidden="true">→</span>
-                                            <span class="text-[13px] font-bold leading-none text-gray-700 desc-panel-stat-number">{{ Number(summaryCompressedBodyLength || 0).toLocaleString() }}</span>
-                                            <span class="desc-panel-stat-unit">字</span>
-                                        </span>
                                     </span>
                                 </div>
                             </div>

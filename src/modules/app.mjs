@@ -14,7 +14,6 @@ marked.use({
 });
 
 
-import { select as recallFallbackSelect } from './memory-recall-fallback.mjs';
 import engine from './ui-template-engine.mjs';
 import { UiTemplateFrame } from './ui-template-frame.mjs';
 import { RPHubCardUtils } from './card-utils.mjs';
@@ -38,16 +37,15 @@ import { DEFAULT_PRESET_DEFINITIONS, DEFAULT_PRESET_DEFINITIONS_VERSION } from '
 import { buildCotPresetContent } from './cot-builder.mjs';
 import { RPHStorage } from './storage-repository.mjs';
 import { RPHRuntimePolicy } from './runtime-policy.mjs';
-import { RPHLocalEmbedding } from './local-embedding.mjs';
 import RPHTts from './tts-engine.mjs';
 import RPHCloudTts from './tts-cloud-engine.mjs';
 import RPHTtsText from './tts-text.mjs';
 import { MAIN_ID, SCOPE_SEPARATOR, createId, getScopeId, getOwnerId, isBranchScopeId, defaultBranchName, createMainBranch, normalizeBranches, collectSubtreeIds, buildBranchTree, formatWordCount } from './story-branch.mjs';
 import * as RPHMemorySummary from './memory-summary.mjs';
 import * as RPHMemoryProfile from './memory-profile.mjs';
-import { buildMemoryView } from './memory-view.mjs';
+import { buildMemoryRecall, buildMemoryView } from './memory-view.mjs';
 import { createMemoryReconciler } from './memory-reconcile.mjs';
-import { invalidateEntries, normalizeLedger, propagateStaleUpward } from './memory-ledger.mjs';
+import { invalidateEntries, normalizeLedger, propagateStaleUpward, projectEntryTurns } from './memory-ledger.mjs';
 import { canonicalMemoryText, canonicalMessageHash } from './content-hash.mjs';
 const RPHStoryBranch = { MAIN_ID, SCOPE_SEPARATOR, createId, getScopeId, getOwnerId, isBranchScopeId, defaultBranchName, createMainBranch, normalizeBranches, collectSubtreeIds, buildBranchTree, formatWordCount };
 import UiTemplatePending from '../components/common/UiTemplatePending.vue';
@@ -100,16 +98,14 @@ import { useUiTemplatePipeline } from '../composables/useUiTemplatePipeline.mjs'
 import { useActiveToolPipeline } from '../composables/useActiveToolPipeline.mjs';
 import { useDataLoader } from '../composables/useDataLoader.mjs';
 import { useSpecialRules } from '../composables/useSpecialRules.mjs';
-import { useVectorMemoryPatrol } from '../composables/useVectorMemoryPatrol.mjs';
 import { useRollingSummary } from '../composables/useRollingSummary.mjs';
 import { useRegexPipeline } from '../composables/useRegexPipeline.mjs';
 import { useStoryBranching } from '../composables/useStoryBranching.mjs';
 import { useDataIO } from '../composables/useDataIO.mjs';
 import { useBackupRestore } from '../composables/useBackupRestore.mjs';
 import { EXECUTABLE_FRAME_CHANNEL, buildExecutableHtmlDocument, buildKeywordToolSnippet, bytesToBase64, checkConnectionStatus, cleanActiveToolCallReason, cleanupActiveToolCaptureState, collapseNativeReasoning, debounce, escapeRegexText, escapeXmlAttribute, escapeXmlText, estimateTokens, formatAIResponseForConsole, formatTokenAggregate, formatTokenCount, formatLatestTokenCount, formatTokenUsageTime, getConversationTurnAtIndexFromSnapshot, getTokenUsageCategory, indentXmlText, isDatabaseClosingError, isDesktopSidebarViewport, isEditableElement, isMobileViewport, normalizePresetRole, normalizeTavilyExtractUrl, printAIRequestLogs, readUsageNumber, removeActiveToolCallRawsFromText, requestTavily, resizeChatInputElement, runWithConcurrency, stringifyErrorDetail, stringifyUiSchema, stripActiveToolCallsFromAssistant, stripCodeBlocksForToolDetection, stripUiTemplateContextInjection, throwApiError, yieldToBrowser, yieldToUi } from './utils.mjs';
-import { extractVectorQueryTerms, factPreviewText, getClassicMemoryKey, getMemoryEmptyTurnsKey, getMemoryVectorExtractedKey, getTimelineCharCount, getVectorLexicalMatch, isEmbeddingLike, mergeSmallMemoryParagraphs, normalizeKeepFloors, normalizeVectorMemoryFingerprintText, shouldSuppressStandardVectorMemoryRecall, sortVectorMemoriesByTime, splitLongMemoryParagraph, toScoredVectorMemory, trimMemoryText, yieldMemoryStorageWork } from './memory-utils.mjs';
+import { extractVectorQueryTerms, getClassicMemoryKey, getTimelineCharCount, normalizeKeepFloors, trimMemoryText } from './memory-utils.mjs';
 import { createPluginRegistry } from '../plugins/plugin-registry.mjs';
-import { createSemanticSearchPlugin } from '../plugins/builtin/semantic-search.mjs';
 
 const __app = createApp({
     components: {
@@ -136,7 +132,6 @@ const __app = createApp({
     },
     setup() {
         const cardUtils = RPHubCardUtils;
-        const memoryRecallFallback = recallFallbackSelect;
         // Memory system state lives in src/composables/useMemorySystem.mjs (Phase 2);
         // destructured at the original declaration sites below to keep names identical.
         const memorySystemState = useMemorySystem();
@@ -1462,28 +1457,15 @@ const __app = createApp({
 
         // --- Memory System State (moved to src/composables/useMemorySystem.mjs) ---
         const {
-            MEMORY_VECTOR_BATCH_SIZE,
-            MEMORY_VECTOR_SAVE_EVERY_BATCHES,
-            MEMORY_VECTOR_MAX_PARAGRAPH_LENGTH,
-            MEMORY_VECTOR_MERGE_MAX_LENGTH,
-            MEMORY_VECTOR_MIN_TOP_K,
-            MEMORY_VECTOR_MAX_TOP_K,
-            MEMORY_VECTOR_DEFAULT_TOP_K,
-            MEMORY_VECTOR_MIN_SIMILARITY,
-            MEMORY_VECTOR_MAX_SIMILARITY,
-            MEMORY_VECTOR_DEFAULT_SIMILARITY,
-            MEMORY_VECTOR_DEFAULT_DEPTH,
             CLASSIC_MEMORY_MIN_CONCURRENCY,
-            MEMORY_MODE_VECTOR,
-            VECTOR_KEEP_FLOORS_MIN,
-            VECTOR_KEEP_FLOORS_MAX,
-            VECTOR_KEEP_FLOORS_DEFAULT,
+            MEMORY_KEEP_FLOORS_MIN,
+            MEMORY_KEEP_FLOORS_MAX,
+            MEMORY_KEEP_FLOORS_DEFAULT,
             SUMMARY_BATCH_SIZE_MIN,
             SUMMARY_BATCH_SIZE_MAX,
             SUMMARY_BATCH_SIZE_DEFAULT,
             MIN_CONTEXT_FLOORS,
             LIST_PAGE_SIZE,
-            memories,
             classicMemories,
             classicMemoryPage,
             memorySummaries,
@@ -1491,14 +1473,6 @@ const __app = createApp({
             memoryLedger,
             summaryProgress,
             memorySettings,
-            isBatchExtracting,
-            batchExtractProgress,
-            sliceBuildStatus,
-            vectorMemorySearchQuery,
-            vectorMemorySearchResults,
-            vectorMemorySearchError,
-            vectorMemorySearchSortMode,
-            isVectorMemorySearching,
             memoryGraphView,
             isClassicBatchExtracting,
             classicBatchExtractProgress
@@ -1507,8 +1481,6 @@ const __app = createApp({
             _summaryInFlight,
             _summaryAbortController,
             _summaryDoneTimer,
-            _vectorMemorySearchAbort,
-            _memoriesLoaded,
             _classicMemoriesLoaded
         } = memorySystemState;
 
@@ -1523,7 +1495,6 @@ const __app = createApp({
         // shared-guard setter bridges: useStoryBranching flips the memory-load
         // guards through these (deps are passed by value, so raw reassignment
         // cannot reach the app.mjs bindings)
-        const setMemoriesLoaded = (value) => { _memoriesLoaded = value; };
         const setClassicMemoriesLoaded = (value) => { _classicMemoriesLoaded = value; };
         const setMemorySummaries = (value) => { memorySummaries.value = value; };
         const setMemoryProfile = (value) => { memoryProfile.value = value; };
@@ -1534,7 +1505,7 @@ const __app = createApp({
         let _dataLoaded = false;
 
         // --- Active Tool System State ---
-        const ACTIVE_TOOL_VECTOR_TYPE = 'vector_memory';
+        const ACTIVE_TOOL_MEMORY_TYPE = 'memory_ledger';
         const ACTIVE_TOOL_KEYWORD_TYPE = 'keyword_dialogue';
         const ACTIVE_TOOL_WEB_TYPE = 'web_search';
         const ACTIVE_TOOL_MIN_RESULT_COUNT = 5;
@@ -1580,8 +1551,8 @@ const __app = createApp({
             }
             settings.activeToolAggressivenessVersion = ACTIVE_TOOL_AGGRESSIVENESS_VERSION;
         };
-        const ACTIVE_TOOL_DEFAULT_DESCRIPTION = '当需要长期记忆、旧剧情、历史设定、过往关系、人物状态、物品来历或用户暗指内容时，单独输出 <tool_memory_add:检索内容> 或 <tool_memory_cover:检索内容>。每行一个标签，单次回复最多 5 个工具标签，不写说明或 COT；多个独立信息点拆开查，优先最关键的信息点，检索词要具体，优先人物、事件、物品、地点和时间线。没有当前上下文或检索结果支持的设定、关系、状态和事件不要编造。本轮第一次检索一律用 add；看到工具结果后，若是补充不同证据且旧结果有用就 add；若旧结果偏题、太宽、重复、方向错误、噪声过多，或更具体检索能替代旧结果，应优先用 cover 清理上下文冗余，把注意力集中在更准确的记忆上。结果足够就继续正文，不够就换更具体的问题继续查。';
-        const ACTIVE_TOOL_DEFAULT_DISPLAY_DESCRIPTION = '让角色在上下文信息不够明确时，主动检索向量记忆，适合找旧剧情、历史设定、人物关系、物品来历和用户暗指过的内容。';
+        const ACTIVE_TOOL_DEFAULT_DESCRIPTION = '当需要长期记忆、旧剧情、历史设定、过往关系、人物状态、物品来历或用户暗指内容时，单独输出 <tool_memory_add:检索内容> 或 <tool_memory_cover:检索内容>。记忆目录（<memory_toc>）每行是一个历史批次区间；检索内容可以直接写目录里的轮次区间（如 第12–23轮）、条目编号，或具体关键词。每行一个标签，单次回复最多 5 个工具标签，不写说明或 COT；多个独立信息点拆开查，优先最关键的信息点。没有当前上下文或检索结果支持的设定、关系、状态和事件不要编造。本轮第一次检索一律用 add；看到工具结果后，若是补充不同证据且旧结果有用就 add；若旧结果偏题、太宽、重复、方向错误、噪声过多，或更具体检索能替代旧结果，应优先用 cover 清理上下文冗余，把注意力集中在更准确的记忆上。结果足够就继续正文，不够就换更具体的问题继续查。';
+        const ACTIVE_TOOL_DEFAULT_DISPLAY_DESCRIPTION = '让角色在上下文信息不够明确时，按记忆目录的轮次区间、条目编号或关键词取回记忆账本条目全文，适合找旧剧情、历史设定、人物关系、物品来历和用户暗指过的内容。';
         const ACTIVE_TOOL_GREP_DEFAULT_DESCRIPTION = '当需要精准抓取当前对话历史里的原文内容时，单独输出 <tool_grep_add:关键词> 或 <tool_grep_cover:关键词>。关键词要尽量写原文可能出现的词，适合找台词、名称、物品、地点、设定词、前文原句或具体细节。多个独立信息点必须拆开，每行一个标签，单次回复最多 5 个工具标签，不写说明或 COT。本轮第一次关键词检索一律用 add；看到结果后，若旧结果有用且需要保留就 add；若旧关键词结果偏题、太宽、重复、噪声过多，或更准确关键词能替代旧结果，应优先用 cover 清理冗余原文片段，避免旧结果分散注意力。';
         const ACTIVE_TOOL_GREP_DEFAULT_DISPLAY_DESCRIPTION = '按关键词精准抓取当前对话历史里的原文片段，适合找台词、名称、物品、地点和具体前文。';
         const ACTIVE_TOOL_WEB_DEFAULT_DESCRIPTION = '当本地上下文、角色记忆、关键词检索都不足以确认作品设定、同人资料、冷门角色、现实最新信息或网页资料时，单独输出 <tool_web_add:联网搜索内容或网页链接> 或 <tool_web_cover:联网搜索内容或网页链接>。先用具体关键词搜索，再按需读取真实 URL；查询优先包含作品名、角色名、设定名、站点、语言关键词或别名。多个独立信息点必须拆开，单次回复最多 5 个工具标签。本轮第一次联网搜索或首次读取 URL 一律用 add；看到结果后，若旧结果有用且需要保留就 add；若搜索结果偏题、太宽、重复、来源噪声多，或新搜索/网页读取能替代旧结果，应优先用 cover 清理上下文冗余，避免无关网页摘要干扰判断。';
@@ -1592,9 +1563,9 @@ const __app = createApp({
         const ACTIVE_TOOL_TAVILY_EXTRACT_MAX_URLS = ACTIVE_TOOL_DEFAULT_RESULT_COUNT;
         const createDefaultActiveTool = () => ({
             id: 'tool_memory',
-            name: '向量记忆主动检索',
+            name: '记忆账本主动检索',
             enabled: false,
-            type: ACTIVE_TOOL_VECTOR_TYPE,
+            type: ACTIVE_TOOL_MEMORY_TYPE,
             callName: 'tool_memory',
             resultCount: ACTIVE_TOOL_DEFAULT_RESULT_COUNT,
             resultCountVersion: ACTIVE_TOOL_RESULT_COUNT_VERSION,
@@ -1636,47 +1607,41 @@ const __app = createApp({
             if (!memorySettings.classicModel && memorySettings.model) {
                 memorySettings.classicModel = String(memorySettings.model).trim();
             }
-            ['model', 'autoExtract', 'keepFloors', `re${'rankEnabled'}`, `re${'rankModel'}`].forEach(key => {
+            ['model', 'autoExtract', `re${'rankEnabled'}`, `re${'rankModel'}`].forEach(key => {
                 delete memorySettings[key];
             });
-            memorySettings.mode = MEMORY_MODE_VECTOR;
+            // v6 L3: the vector stack is gone. Drop its bookkeeping once so a
+            // stale settings blob cannot keep growing; the old memories_*
+            // shards themselves are removed in L6.
+            ['mode', 'vectorTopK', 'similarityThreshold', 'defaultDepth',
+                'embeddingBackend', 'embeddingModel', 'localEmbeddingModel',
+                'vectorExtractedTurns', 'emptyTurns'].forEach(key => {
+                delete memorySettings[key];
+            });
             memorySettings.classicModel = String(memorySettings.classicModel || '').trim();
             if (!Number.isFinite(Number(memorySettings.keepFloors))) {
                 memorySettings.keepFloors = Number.isFinite(Number(memorySettings.vectorKeepFloors))
                     ? Number(memorySettings.vectorKeepFloors)
-                    : VECTOR_KEEP_FLOORS_DEFAULT;
+                    : MEMORY_KEEP_FLOORS_DEFAULT;
             }
             memorySettings.keepFloors = normalizeKeepFloors(
                 memorySettings.keepFloors,
-                VECTOR_KEEP_FLOORS_MIN,
-                VECTOR_KEEP_FLOORS_MAX,
-                VECTOR_KEEP_FLOORS_DEFAULT
+                MEMORY_KEEP_FLOORS_MIN,
+                MEMORY_KEEP_FLOORS_MAX,
+                MEMORY_KEEP_FLOORS_DEFAULT
             );
+            delete memorySettings.vectorKeepFloors;
             memorySettings.summaryBatchSize = normalizeKeepFloors(
                 memorySettings.summaryBatchSize,
                 SUMMARY_BATCH_SIZE_MIN,
                 SUMMARY_BATCH_SIZE_MAX,
                 SUMMARY_BATCH_SIZE_DEFAULT
             );
-            const vectorTopK = Number(memorySettings.vectorTopK);
-            memorySettings.vectorTopK = Number.isFinite(vectorTopK)
-                ? Math.max(MEMORY_VECTOR_MIN_TOP_K, Math.min(MEMORY_VECTOR_MAX_TOP_K, vectorTopK))
-                : MEMORY_VECTOR_DEFAULT_TOP_K;
-            const similarityThreshold = Number(memorySettings.similarityThreshold);
-            memorySettings.similarityThreshold = Number.isFinite(similarityThreshold)
-                ? Math.max(MEMORY_VECTOR_MIN_SIMILARITY, Math.min(MEMORY_VECTOR_MAX_SIMILARITY, Math.round(similarityThreshold)))
-                : MEMORY_VECTOR_DEFAULT_SIMILARITY;
-            memorySettings.defaultDepth = MEMORY_VECTOR_DEFAULT_DEPTH;
-            memorySettings.embeddingBackend = memorySettings.embeddingBackend === 'local' ? 'local' : 'api';
             const memoryProviderId = String(memorySettings.memoryProviderId || '').trim();
             memorySettings.memoryProviderId = memoryProviderId
                 && (getApiProviderById(memoryProviderId) || isCustomApiProviderId(memoryProviderId))
                 ? memoryProviderId
                 : '';
-            const localModelOptions = (RPHLocalEmbedding?.MODELS && Object.keys(RPHLocalEmbedding.MODELS)) || ['bge-small-zh-v1.5'];
-            memorySettings.localEmbeddingModel = localModelOptions.includes(memorySettings.localEmbeddingModel)
-                ? memorySettings.localEmbeddingModel
-                : 'bge-small-zh-v1.5';
         };
 
         const normalizeActiveToolCallName = (value) => {
@@ -1724,7 +1689,7 @@ const __app = createApp({
             const normalizedCallName = defaultTool ? defaultTool.callName : callName;
             const resultCountVersion = Number(tool.resultCountVersion) || 1;
             const isDefaultTool = !!defaultTool;
-            const normalizedType = isDefaultTool ? fallback.type : (tool.type || fallback.type || ACTIVE_TOOL_VECTOR_TYPE);
+            const normalizedType = isDefaultTool ? fallback.type : (tool.type || fallback.type || ACTIVE_TOOL_MEMORY_TYPE);
             const description = isDefaultTool
                 ? fallback.description
                 : String(tool.description || fallback.description).trim();
@@ -1787,94 +1752,12 @@ const __app = createApp({
 
                 
         
-        const hasVectorEmbedding = (memory) => (
-            (isEmbeddingLike(memory?.embedding) && memory.embedding.length > 0)
-            || (typeof memory?.embeddingQ === 'string' && memory.embeddingQ.length > 0)
-            || (typeof memory?.embeddingF === 'string' && memory.embeddingF.length > 0)
-        );
-
-        const isVectorMemory = (memory) => {
-            return memory?.vectorMemory === true
-                && memory.chunkMode === 'paragraph'
-                && hasVectorEmbedding(memory);
-        };
-
-        const isEnabledVectorMemory = (memory) => {
-            return isVectorMemory(memory) && memory.enabled !== false;
-        };
-
         const markRuntimeRaw = (value) => {
             if (!value || typeof value !== 'object') return value;
             return typeof Vue?.markRaw === 'function' ? Vue.markRaw(value) : value;
         };
 
         
-        const base64ToInt8Array = (base64) => {
-            const binary = atob(String(base64 || ''));
-            const bytes = new Uint8Array(binary.length);
-            for (let i = 0; i < binary.length; i++) {
-                bytes[i] = binary.charCodeAt(i);
-            }
-            return new Int8Array(bytes.buffer);
-        };
-
-        const base64ToFloat32Array = (base64) => {
-            const binary = atob(String(base64 || ''));
-            const bytes = new Uint8Array(binary.length);
-            for (let i = 0; i < binary.length; i++) {
-                bytes[i] = binary.charCodeAt(i);
-            }
-            return new Float32Array(bytes.buffer);
-        };
-
-        // 新格式：float32 直接存储（base64），不量化；旧数据保持 embeddingQ(int8) 不动
-        const packFloat32EmbeddingForStorage = (embedding) => {
-            if (!isEmbeddingLike(embedding) || embedding.length === 0) return null;
-            const float32 = Float32Array.from(embedding, value => Number(value) || 0);
-            return {
-                embeddingF: bytesToBase64(new Uint8Array(float32.buffer)),
-                embeddingDims: float32.length,
-                embeddingEncoding: 'float32:v1'
-            };
-        };
-
-        const prepareMemoryForRuntime = (memory) => {
-            if (!memory || typeof memory !== 'object') return memory;
-            if (Object.prototype.hasOwnProperty.call(memory, 'depth')) {
-                delete memory.depth;
-            }
-            if (typeof memory.embeddingF === 'string' && memory.embeddingF.length > 0) {
-                try {
-                    memory.embedding = markRuntimeRaw(base64ToFloat32Array(memory.embeddingF));
-                } catch (e) {
-                    memory.embedding = [];
-                }
-            } else if (typeof memory.embeddingQ === 'string' && memory.embeddingQ.length > 0) {
-                try {
-                    memory.embedding = markRuntimeRaw(base64ToInt8Array(memory.embeddingQ));
-                } catch (e) {
-                    memory.embedding = [];
-                }
-            } else if (isEmbeddingLike(memory.embedding)) {
-                // 新格式：内存中保留浮点数组（落盘时统一打包为 embeddingF）
-                memory.embedding = markRuntimeRaw(
-                    memory.embedding instanceof Float32Array
-                        ? memory.embedding
-                        : Float32Array.from(memory.embedding, value => Number(value) || 0)
-                );
-            }
-            if (isEmbeddingLike(memory.embedding)) {
-                memory.embedding = markRuntimeRaw(memory.embedding);
-            }
-            return markRuntimeRaw(memory);
-        };
-
-        const prepareMemoriesForRuntime = (items) => {
-            return Array.isArray(items)
-                ? items.filter(isVectorMemory).map(prepareMemoryForRuntime)
-                : [];
-        };
-
         const prepareClassicMemoriesForRuntime = (items) => {
             if (!Array.isArray(items)) return [];
             return items
@@ -1886,41 +1769,6 @@ const __app = createApp({
                     sourceUserIds: Array.isArray(memory.sourceUserIds) ? memory.sourceUserIds.filter(Boolean) : [],
                     sourceAssistantIds: Array.isArray(memory.sourceAssistantIds) ? memory.sourceAssistantIds.filter(Boolean) : []
                 }));
-        };
-
-        const compactMemoryForStorage = (memory) => {
-            if (!memory || typeof memory !== 'object') return memory;
-            const {
-                embedding,
-                vectorRawScore,
-                vectorScore,
-                vectorLexicalHits,
-                vectorLexicalTerms,
-                vectorSearchScore,
-                depth,
-                ...cleanMemory
-            } = unwrapForStorage(memory);
-
-            if (typeof cleanMemory.embeddingQ === 'string' && cleanMemory.embeddingQ.length > 0) {
-                return cleanMemory;
-            }
-            if (typeof cleanMemory.embeddingF === 'string' && cleanMemory.embeddingF.length > 0) {
-                return cleanMemory;
-            }
-
-            const packed = packFloat32EmbeddingForStorage(embedding);
-            return packed ? { ...cleanMemory, ...packed } : cleanMemory;
-        };
-
-        
-        const compactMemoriesForStorageAsync = async (items) => {
-            if (!Array.isArray(items)) return [];
-            const result = [];
-            for (let i = 0; i < items.length; i++) {
-                result.push(compactMemoryForStorage(items[i]));
-                if (i > 0 && i % 256 === 0) await yieldMemoryStorageWork();
-            }
-            return result;
         };
 
         const { showWorldInfoSettings } = worldInfoState;
@@ -2156,11 +2004,9 @@ const __app = createApp({
         };
 
         const initializePlugins = async () => {
-            await pluginRegistry.register(createSemanticSearchPlugin({
-                getMessages: () => chatHistory.value,
-                getScopeId: () => getCurrentChatStorageScopeId(),
-                embedTexts: (texts, signal) => RPHLocalEmbedding.embedTexts(texts, signal)
-            }));
+            // The built-in semantic-search plugin depended on the on-device
+            // embedding stack and was removed with it in v6 L3. The registry
+            // and its tool-contribution plumbing stay for future plugins.
             applyPluginToolContributions();
             schedulePluginWarmup();
         };
@@ -2518,27 +2364,11 @@ const __app = createApp({
             await setStoredValue('memory_settings', cloneForStorage(memorySettings), { clone: false });
         };
 
-        // Memory dirty flags: any mutation after a completed load marks the
-        // scope's memories dirty until the next successful save. The
-        // background flush (flushAllPendingWrites) persists dirty memories
-        // only, so backgrounding the app never rewrites large memory blobs
-        // that have not changed.
-        let _memoriesDirty = false;
+        // Classic-memory dirty flag: any mutation after a completed load marks
+        // the scope dirty until the next successful save. The background flush
+        // persists dirty blobs only, so backgrounding never rewrites data that
+        // has not changed (v6 L3 removed the vector memories queue).
         let _classicMemoriesDirty = false;
-
-        const saveMemoriesNow = async () => {
-            if (!_memoriesLoaded || !currentCharacter.value?.uuid) return;
-            if (!db) await initDB();
-            // Clear the flag before awaiting so mutations landing mid-save
-            // re-mark it; a failed save re-marks it so the next flush retries.
-            _memoriesDirty = false;
-            try {
-                await setScopedStoredValue('memories', getCurrentChatStorageScopeId(), await compactMemoriesForStorageAsync(memories.value), { clone: false });
-            } catch (error) {
-                _memoriesDirty = true;
-                throw error;
-            }
-        };
 
         const saveClassicMemoriesNow = async () => {
             if (!_classicMemoriesLoaded || !currentCharacter.value?.uuid) return;
@@ -2569,8 +2399,7 @@ const __app = createApp({
             )));
         };
 
-        const saveData = async (options = {}) => {
-            const { saveMemories = true } = options;
+        const saveData = async () => {
             // Startup dialogs and asynchronous plugins can trigger saves before
             // loadData runs. Never persist the default state during that window.
             if (!_dataLoaded) return;
@@ -2619,10 +2448,7 @@ const __app = createApp({
 
                 // Save Memory State
                 await saveMemorySettingsNow();
-                if (saveMemories) {
-                    await saveMemoriesNow();
-                    await saveClassicMemoriesNow();
-                }
+                await saveClassicMemoriesNow();
             } catch (e) {
                 console.error('Save failed:', e);
                 if (e.name === 'QuotaExceededError') {
@@ -2635,7 +2461,6 @@ const __app = createApp({
             try {
                 if (!db) await initDB();
                 await saveChatHistoryNow();
-                await saveMemoriesNow();
                 await saveClassicMemoriesNow();
                 if (saveTemplateRuntime) {
                     await setStoredValue('characters', characters.value);
@@ -2668,13 +2493,9 @@ const __app = createApp({
             }, 500);
         }, { deep: true });
 
-        // Memory dirty tracking. Sync flush + the *_loaded guards exclude the
-        // load-time assignments in loadCharacterMemories (the guards flip
-        // after assignment); every later mutation marks the scope dirty until
-        // the next successful saveMemoriesNow/saveClassicMemoriesNow.
-        watch(memories, () => {
-            if (_memoriesLoaded) _memoriesDirty = true;
-        }, { deep: true, flush: 'sync' });
+        // Classic-memory dirty tracking. Sync flush + the *_loaded guard exclude
+        // load-time assignments (the guard flips after assignment); every later
+        // mutation marks the scope dirty until the next successful save.
         watch(classicMemories, () => {
             if (_classicMemoriesLoaded) _classicMemoriesDirty = true;
         }, { deep: true, flush: 'sync' });
@@ -2949,12 +2770,6 @@ const __app = createApp({
                 }
                 tasks.push(flushPendingChatHistorySave()
                     .catch(error => console.error('Background chat save failed:', error)));
-                // Scoped memories — only when a mutation marked them dirty,
-                // so backgrounding does not rewrite unchanged memory blobs.
-                if (_memoriesDirty) {
-                    tasks.push(saveMemoriesNow()
-                        .catch(error => console.error('Background memories flush failed:', error)));
-                }
                 if (_classicMemoriesDirty) {
                     tasks.push(saveClassicMemoriesNow()
                         .catch(error => console.error('Background classic memories flush failed:', error)));
@@ -3745,7 +3560,7 @@ const __app = createApp({
         };
 
         watch(() => chatHistory.value.length, () => scheduleChatStatsRecompute(0));
-        watch(() => [classicMemories.value.length, memorySettings.enabled, memorySettings.mode, memorySettings.summaryKeepFloors], () => scheduleChatStatsRecompute(50));
+        watch(() => [classicMemories.value.length, memorySettings.enabled], () => scheduleChatStatsRecompute(50));
 
         const modelTags = computed(() => {
             const counts = { all: allProviderModels.value.length, other: 0 };
@@ -3815,7 +3630,7 @@ const __app = createApp({
                 }
             }
 
-            const searchQuery = modelSelectionTarget.value === 'memoryEmbeddingModel' ? 'embedding' : modelSearchQuery.value;
+            const searchQuery = modelSearchQuery.value;
             if (searchQuery) {
                 const query = searchQuery.toLowerCase();
                 result = result.filter(m => m.id.toLowerCase().includes(query));
@@ -4023,12 +3838,6 @@ const __app = createApp({
 
         const openModelSelector = (target) => {
             modelSelectionTarget.value = target;
-            if (target === 'memoryEmbeddingModel') {
-                modelSearchQuery.value = 'embedding';
-                activeModelTag.value = 'all';
-            } else if (modelSearchQuery.value === 'embedding') {
-                modelSearchQuery.value = '';
-            }
             showModelSelector.value = true;
             activeProviderTag.value = 'all';
             fetchAllConfiguredProviderModels();
@@ -4036,12 +3845,6 @@ const __app = createApp({
 
         const selectModel = (modelId, providerId = '') => {
             const selectedProviderId = String(providerId || '').trim() || getChatProvider().providerId;
-            if (modelSelectionTarget.value === 'memoryEmbeddingModel') {
-                memorySettings.embeddingModel = modelId;
-                if (selectedProviderId) memorySettings.memoryProviderId = selectedProviderId;
-                showModelSelector.value = false;
-                return;
-            }
             if (modelSelectionTarget.value === 'memoryClassicModel') {
                 memorySettings.classicModel = modelId;
                 if (selectedProviderId) memorySettings.memoryProviderId = selectedProviderId;
@@ -4747,7 +4550,6 @@ const __app = createApp({
         const clearChat = () => {
             confirmAction('确定要清空聊天记录吗？记忆也将一并清空，此操作无法撤销。', () => {
                 abortUiTemplateUpdate();
-                abortVectorBatchExtraction();
                 abortClassicBatchExtraction();
                 clearPendingChatImages();
                 resetChatRenderWindow();
@@ -4761,8 +4563,19 @@ const __app = createApp({
                         storageStatus: 'final'
                     });
                 }
-                memories.value = [];
                 classicMemories.value = [];
+                // v6: the ledger is the derived store; clearing the chat drops
+                // it (the legacy memories_* shards are retired in L6).
+                memorySummaries.value = null;
+                memoryProfile.value = null;
+                memoryLedger.value = null;
+                clearSummaryProgress();
+                if (currentCharacter.value?.uuid) {
+                    const scopeId = getCurrentChatStorageScopeId();
+                    deleteScopedStoredValue('memory_summaries', scopeId).catch(() => { });
+                    deleteScopedStoredValue('memory_profile', scopeId).catch(() => { });
+                    deleteScopedStoredValue('memory_ledger', scopeId).catch(() => { });
+                }
                 resetUiTemplateRuntimeState();
                 scheduleChatStatsRecompute(0);
                 saveData();
@@ -4913,24 +4726,6 @@ const __app = createApp({
 
 
 
-        const filterMemoriesAsync = async (keepMemory) => {
-            const source = Array.isArray(memories.value) ? memories.value : [];
-            const kept = [];
-            let removed = 0;
-
-            for (let i = 0; i < source.length; i++) {
-                if (keepMemory(source[i], i)) {
-                    kept.push(source[i]);
-                } else {
-                    removed++;
-                }
-                if (i > 0 && i % 512 === 0) await yieldToUi();
-            }
-
-            memories.value = kept;
-            return removed;
-        };
-
         const filterClassicMemoriesAsync = async (keepMemory) => {
             const source = Array.isArray(classicMemories.value) ? classicMemories.value : [];
             const kept = [];
@@ -4944,27 +4739,17 @@ const __app = createApp({
             return removed;
         };
 
+        // Legacy classic summaries are still pruned per turn until L6; the
+        // ledger side is invalidated content-addressably (hash mismatch).
         const removeMemoriesForConversationTurn = async (snapshot, turn) => {
             if (!Number.isFinite(turn) || turn <= 0) return 0;
             const turnInfo = snapshot?.turns?.find(item => item.turn === turn);
             const assistantIds = new Set(getClassicTurnSourceIds(turnInfo, 'assistant'));
-            const vectorRemoved = await filterMemoriesAsync(memory => Number(memory.turn) !== turn);
-            const classicRemoved = await filterClassicMemoriesAsync(memory => {
+            return filterClassicMemoriesAsync(memory => {
                 const memoryIds = memory.sourceAssistantIds || [];
                 const matchesSource = memoryIds.some(id => assistantIds.has(id));
                 return !matchesSource && Number(memory.turn) !== turn;
             });
-            // 该轮记忆被移除后，重置向量已提取标记，让后续巡逻重新提取该轮
-            if (currentCharacter.value?.uuid) {
-                if (!memorySettings.vectorExtractedTurns) memorySettings.vectorExtractedTurns = {};
-                const key = getMemoryVectorExtractedKey(getCurrentChatStorageScopeId());
-                const current = Number(memorySettings.vectorExtractedTurns[key]) || 0;
-                if (current > 0) {
-                    memorySettings.vectorExtractedTurns[key] = Math.min(current, Math.max(0, turn - 1));
-                    saveMemorySettingsNow();
-                }
-            }
-            return vectorRemoved + classicRemoved;
         };
 
         const removeClassicMemoriesFromTurn = async (snapshot, firstRemovedTurn) => {
@@ -4986,7 +4771,6 @@ const __app = createApp({
             confirmAction('确定要删除这条消息吗？该楼层的关联记忆也将一并删除。', async () => {
                 const msg = chatHistory.value[index];
                 abortUiTemplateUpdate();
-                abortVectorBatchExtraction();
                 abortClassicBatchExtraction();
                 const snapshot = buildConversationTurnSnapshot();
                 const affectedTurn = snapshot.turns.find(turnInfo =>
@@ -5010,7 +4794,7 @@ const __app = createApp({
                 scheduleChatStatsRecompute(0);
                 await saveConversationMutationNow({ saveTemplateRuntime: uiCleanup.logs > 0 || uiCleanup.blocks > 0 });
                 const extras = [];
-                if (removed > 0) extras.push(`${removed} 个关联分片`);
+                if (removed > 0) extras.push(`${removed} 条经典摘要`);
                 if (uiCleanup.logs > 0 || uiCleanup.blocks > 0) extras.push('变量模板');
                 showToast(extras.length ? `消息已删除，清除了 ${extras.join('、')}` : '消息已删除', 'success');
             });
@@ -5211,14 +4995,14 @@ const __app = createApp({
                 startRegenerationStatus();
                 // 如果是用户消息，直接基于当前上下文生成（重试/继续）
                 abortUiTemplateUpdate();
-                abortVectorBatchExtraction();
                 abortClassicBatchExtraction();
-                // 只删除最新一轮的记忆，保留之前的
+                // Ledger memory is content-addressed: the regenerated reply
+                // invalidates only entries that covered it. Classic summaries
+                // are still pruned per turn until L6.
                 const snapshot = buildConversationTurnSnapshot();
                 const currentTurn = snapshot.turns.length;
-                await filterMemoriesAsync(m => (m.turn || 0) < currentTurn);
                 await removeClassicMemoriesFromTurn(snapshot, currentTurn);
-                await Promise.all([saveMemoriesNow(), saveClassicMemoriesNow()]);
+                await saveClassicMemoriesNow();
                 await generateResponse(startTime, { reuseGeneratingState: true });
             } else {
                 // AI message branch: swipe-style regeneration — the existing reply is kept as a
@@ -5228,7 +5012,6 @@ const __app = createApp({
                 if (index !== chatHistory.value.length - 1) return;
                 startRegenerationStatus();
                 abortUiTemplateUpdate();
-                abortVectorBatchExtraction();
                 abortClassicBatchExtraction();
                 // Error bubbles are transient diagnostics, never content (device regression
                 // 2026-09-23): retrying one must REPLACE it with the fresh reply instead of
@@ -5275,7 +5058,6 @@ const __app = createApp({
                     message: JSON.parse(JSON.stringify(unwrapForStorage(msg))),
                     baselineLength: index
                 };
-                await filterMemoriesAsync(m => (m.turn || 0) < turnAtIndex);
                 await removeClassicMemoriesFromTurn(snapshot, turnAtIndex);
                 const uiCleanup = pruneUiTemplateChangesFromTurn(uiTurnAtIndex);
                 // Remove timing record for the message being regenerated (the candidate's own
@@ -5297,10 +5079,13 @@ const __app = createApp({
 
         
         const getEnabledActiveTools = () => normalizeActiveTools()
-            .filter(tool => tool.enabled !== false && tool.callName)
-            .filter(tool => memorySettings.mode === MEMORY_MODE_VECTOR || !isVectorActiveTool(tool));
+            .filter(tool => tool.enabled !== false && tool.callName);
 
-        const isVectorActiveTool = (tool) => tool?.type === ACTIVE_TOOL_VECTOR_TYPE
+        // 'vector_memory' is the persisted type of tool settings written before
+        // L3; default tools are re-normalized to memory_ledger, custom ones
+        // keep the legacy string, so both are accepted here.
+        const isMemoryActiveTool = (tool) => tool?.type === ACTIVE_TOOL_MEMORY_TYPE
+            || tool?.type === 'vector_memory'
             || normalizeActiveToolBaseCallName(tool?.callName) === 'tool_memory';
 
         const isKeywordActiveTool = (tool) => tool?.type === ACTIVE_TOOL_KEYWORD_TYPE
@@ -5387,14 +5172,14 @@ const __app = createApp({
                 const webTool = isWebActiveTool(tool);
                 const pluginTool = isPluginActiveTool(tool);
                 const callPlaceholder = webTool ? '联网搜索内容或网页链接' : (keywordTool ? '关键词' : (pluginTool ? '自然语言问题' : '检索内容'));
-                const returnLabel = webTool ? `${count}条联网搜索结果，或网页正文` : (keywordTool ? `${count}条对话片段` : (pluginTool ? `${count}条语义匹配的对话片段` : `${count}条向量记忆`));
+                const returnLabel = webTool ? `${count}条联网搜索结果，或网页正文` : (keywordTool ? `${count}条对话片段` : (pluginTool ? `${count}条语义匹配的对话片段` : `${count}条记忆账本条目`));
                 const descriptionFallback = webTool
                     ? '通过 Tavily 联网搜索外部网页资料，返回带来源链接的搜索结果；当调用内容是网页链接时，读取该网页正文。'
                     : keywordTool
                     ? '按关键词精确匹配当前对话历史，抓取包含关键词的原文片段。'
                     : pluginTool
                     ? '按语义相似度在当前对话历史里检索相关原文片段。'
-                    : '按调用内容检索长期向量记忆。';
+                    : '按轮次区间、条目编号或关键词取回记忆账本条目全文。';
                 const toolRules = webTool ? [
                     `用途：查外部网页、最新信息、冷门资料或本地资料无法确认的内容。`,
                     `搜索：<${addCallName}:具体搜索词> 返回标题、链接和摘要；读取网页：<${addCallName}:https://...> 返回正文。不要编造链接，也不要自动读取全部链接。`
@@ -5431,139 +5216,13 @@ const __app = createApp({
         // moved to src/composables/useMessageSender.mjs (Phase 2.2); wired below once
         // every dep in its deps object is defined.
         // --- Memory Extraction ---
-        let _batchExtractAbort = null;
+        // Classic summaries are legacy read-only data (removal is L6); the
+        // vector extraction patrol was removed with the embedding stack in
+        // v6 L3. Derived memory writes now go through the ledger reconciler.
         let _classicBatchExtractAbort = null;
         let _classicExtractionEpoch = 0;
-        let _vectorBatchRescanRequested = false;
-
-        // shared-guard accessors: useVectorMemoryPatrol reads/writes the run
-        // AbortController and the rescan flag through these (deps are passed by
-        // value, so raw reassignment cannot reach the app.mjs bindings)
-        const getBatchExtractAbort = () => _batchExtractAbort;
-        const setBatchExtractAbort = (value) => { _batchExtractAbort = value; };
-        const getVectorBatchRescanRequested = () => _vectorBatchRescanRequested;
-        const setVectorBatchRescanRequested = (value) => { _vectorBatchRescanRequested = value; };
         let _classicBatchRescanRequested = false;
         const _classicSummaryInFlightKeys = new Set();
-
-        const abortVectorBatchExtraction = () => {
-            if (_batchExtractAbort) {
-                _batchExtractAbort.abort();
-                _batchExtractAbort = null;
-            }
-            _vectorBatchRescanRequested = false;
-            isBatchExtracting.value = false;
-        };
-
-        const getMemoryEmbeddingModel = () => (memorySettings.embeddingModel || '').trim();
-
-        // --- Local embedding backend (方案 C1) ---
-        const localEmbeddingStatus = ref({ status: 'idle', error: '', progress: 0, modelId: '', ready: false });
-        let localEmbeddingStatusTimer = null;
-        const refreshLocalEmbeddingStatus = () => {
-            const info = RPHLocalEmbedding?.getStatus?.() || { status: 'idle', error: '', progress: 0, modelId: '' };
-            localEmbeddingStatus.value = { ...info, ready: info.status === 'ready' };
-            clearTimeout(localEmbeddingStatusTimer);
-            if (info.status === 'loading' || info.status === 'idle') {
-                localEmbeddingStatusTimer = setTimeout(refreshLocalEmbeddingStatus, 500);
-            }
-        };
-        const preloadLocalEmbedding = async () => {
-            const embedder = RPHLocalEmbedding;
-            if (!embedder) { showToast('本地嵌入模块不可用', 'error'); return; }
-            refreshLocalEmbeddingStatus();
-            try {
-                await embedder.ensureReady(memorySettings.localEmbeddingModel);
-                refreshLocalEmbeddingStatus();
-                showToast('本地嵌入模型已就绪', 'success');
-            } catch (error) {
-                refreshLocalEmbeddingStatus();
-                console.warn('[Memory] local embedding preload failed:', error);
-                showToast('本地嵌入模型加载失败: ' + String(error?.message || error), 'error');
-            }
-        };
-
-        // v4：本地模型默认自动加载（静默，不弹确认/成功提示），手动按钮保留作重试入口
-        const ensureLocalEmbeddingReady = () => {
-            const embedder = RPHLocalEmbedding;
-            if (!embedder || memorySettings.embeddingBackend !== 'local' || !memorySettings.enabled) return;
-            const info = embedder.getStatus?.() || {};
-            if (info.status === 'ready' || info.status === 'loading') return;
-            refreshLocalEmbeddingStatus();
-            embedder.ensureReady(memorySettings.localEmbeddingModel)
-                .then(refreshLocalEmbeddingStatus)
-                .catch(error => {
-                    console.warn('[Memory] local embedding autoload failed:', error);
-                    refreshLocalEmbeddingStatus();
-                });
-        };
-
-        const localEmbeddingModelOptions = computed(() => {
-            const models = RPHLocalEmbedding?.MODELS || {};
-            return Object.keys(models)
-                .filter(id => models[id]?.bundled === true)
-                .map(id => ({ value: id, label: models[id].label || id }));
-        });
-        const localEmbeddingStatusLabel = computed(() => {
-            const info = localEmbeddingStatus.value;
-            if (info.status === 'ready') return '本地模型已就绪';
-            if (info.status === 'loading') return '模型加载中 ' + Math.round(Number(info.progress) || 0) + '%';
-            if (info.status === 'error') return '加载失败: ' + String(info.error || '未知错误').slice(0, 40);
-            if (info.status === 'unavailable') return '本地嵌入不可用';
-            return '未加载(将自动加载)';
-        });
-        const migrateClassicMemoriesToVectors = async () => {
-            if (!currentCharacter.value?.uuid) { showToast('请先选择一个角色', 'info'); return 0; }
-            if (!memorySettings.enabled) { showToast('请先开启记忆系统', 'info'); return 0; }
-            const candidates = classicMemories.value.filter(memory => memory && String(memory.summary || '').trim());
-            if (candidates.length === 0) { showToast('没有可迁移的总结记忆', 'info'); return 0; }
-            const existingIds = new Set(memories.value.filter(isVectorMemory).map(memory => memory.vectorChunkId).filter(Boolean));
-            const pending = candidates.filter(memory => !existingIds.has(`classic:${memory.turn}`));
-            if (pending.length === 0) { showToast('总结记忆已全部转为向量', 'success'); return 0; }
-
-            let added = 0;
-            try {
-                for (let index = 0; index < pending.length; index++) {
-                    const memory = pending[index];
-                    const chunkId = `classic:${memory.turn}`;
-                    if (memories.value.some(item => item.vectorChunkId === chunkId)) continue;
-                    const vectors = await requestMemoryEmbeddings([memory.summary], null);
-                    memories.value.push(prepareMemoryForRuntime(markRuntimeRaw({
-                        id: generateUUID(),
-                        timestamp: Date.now(),
-                        turn: memory.turn,
-                        summary: trimMemoryText(memory.summary, 900),
-                        enabled: true,
-                        vectorMemory: true,
-                        chunkMode: 'paragraph',
-                        vectorChunkId: chunkId,
-                        sourceRole: 'assistant',
-                        sourceName: currentCharacter.value?.name || '',
-                        paragraph: memory.summary,
-                        contentFingerprint: getVectorMemoryContentFingerprint(memory.summary),
-                        embeddingModel: getMemoryEmbeddingModel(),
-                        embedding: vectors[0],
-                        sourceText: memory.summary,
-                        migratedFromClassic: true,
-                        migratedAt: Date.now()
-                    })));
-                    added++;
-                    if (added % 5 === 0) {
-                        await saveMemoriesNow();
-                        await yieldToBrowser();
-                    }
-                }
-                if (added > 0) await saveMemoriesNow();
-                showToast(`已迁移 ${added} 条总结记忆为向量`, 'success');
-                return added;
-            } catch (error) {
-                if (error?.name !== 'AbortError') {
-                    console.warn('[Memory] classic->vector migration failed:', error);
-                    showToast('迁移失败: ' + String(error?.message || error), 'error');
-                }
-                return added;
-            }
-        };
 
         // --- TTS 语音朗读（系统语音 + 云端 API 引擎） ---
         const ttsStatus = ref({ available: false, engineLabel: '', state: 'idle', error: '', checked: false });
@@ -6098,372 +5757,6 @@ const __app = createApp({
         const extractMemoryFromChat = () => startAutomaticMemoryPatrol();
 
         
-        const splitMemoryParagraphs = (text) => {
-            const cleanText = String(text || '')
-                .replace(/\r\n/g, '\n')
-                .replace(/\n{3,}/g, '\n\n')
-                .trim();
-            if (!cleanText) return [];
-
-            const rawParagraphs = cleanText
-                .split(/\n\s*\n/g)
-                .map(p => p.trim())
-                .filter(Boolean);
-
-            return rawParagraphs.flatMap(paragraph => splitLongMemoryParagraph(paragraph, MEMORY_VECTOR_MAX_PARAGRAPH_LENGTH));
-        };
-
-        
-        const getMemoryTurnForChunk = (chunkEndIdx) => getConversationTurnAtIndex(chunkEndIdx);
-
-        const buildVectorMemoryFragments = (messagesArray, chunkEndIdx, turnOverride = null) => {
-            const turn = turnOverride || getMemoryTurnForChunk(chunkEndIdx);
-            const userBlocks = [];
-            const roleBlocks = [];
-
-            messagesArray.forEach((message, messageIndex) => {
-                if (message.role !== 'user' && message.role !== 'assistant') return;
-                const speaker = message.role === 'user' ? user.name : (message.name || currentCharacter.value?.name || 'AI');
-                const sourceLabel = message.role === 'user' ? '用户' : '角色卡';
-                const paragraphs = splitMemoryParagraphs(getCleanMemoryMessageText(message))
-                    .flatMap(paragraph => splitLongMemoryParagraph(paragraph, MEMORY_VECTOR_MERGE_MAX_LENGTH));
-                const paragraphGroups = mergeSmallMemoryParagraphs(paragraphs, MEMORY_VECTOR_MERGE_MAX_LENGTH);
-                paragraphGroups.forEach((group) => {
-                    const block = {
-                        messageIndex,
-                        idPart: `${messageIndex}:${message.role}:${group.start}-${group.end}`,
-                        paragraphIndex: group.start,
-                        paragraphEndIndex: group.end,
-                        speaker,
-                        role: message.role,
-                        text: group.text
-                    };
-                    if (message.role === 'user') {
-                        userBlocks.push(block);
-                    } else {
-                        roleBlocks.push({
-                            ...block,
-                            text: `${sourceLabel}：${group.text}`
-                        });
-                    }
-                });
-            });
-
-            const userText = userBlocks.map(block => block.text).filter(Boolean).join('\n\n');
-            const userLine = userText ? `用户：${userText}` : '';
-            const userIdPart = userBlocks.map(block => block.idPart).join('+');
-
-            const sourceBlocks = roleBlocks.length > 0
-                ? roleBlocks
-                : userBlocks.map(block => ({
-                    ...block,
-                    text: `用户：${block.text}`
-                }));
-
-            const fragments = sourceBlocks.map((block, index) => {
-                const includeUser = roleBlocks.length > 0 && userLine;
-                const paragraph = [includeUser ? userLine : '', block.text].filter(Boolean).join('\n');
-                const roles = includeUser ? ['user', block.role] : [block.role];
-                const idParts = [includeUser ? userIdPart : '', block.idPart].filter(Boolean).join('+');
-                return {
-                    turn,
-                    sequence: index + 1,
-                    messageIndex: block.messageIndex,
-                    paragraphIndex: block.paragraphIndex,
-                    paragraphEndIndex: block.paragraphEndIndex,
-                    speaker: includeUser ? [user.name, block.speaker].filter(Boolean).join(' + ') : block.speaker,
-                    role: roles.length === 1 ? roles[0] : 'mixed',
-                    paragraph,
-                    sourceText: [`第 ${turn || '?'} 轮`, paragraph].filter(Boolean).join('\n'),
-                    vectorChunkId: `${turn || 0}:${idParts}`
-                };
-            });
-
-            return fragments;
-        };
-
-        const normalizeEmbedding = (embedding) => {
-            const rawVector = isEmbeddingLike(embedding)
-                ? embedding
-                : (isEmbeddingLike(embedding?.values) ? embedding.values : []);
-            return rawVector
-                .map(v => Number(v))
-                .filter(v => Number.isFinite(v));
-        };
-
-        const cosineSimilarity = (a, b) => {
-            if (!isEmbeddingLike(a) || !isEmbeddingLike(b) || a.length === 0 || b.length === 0) return -1;
-            const length = Math.min(a.length, b.length);
-            let dot = 0;
-            let normA = 0;
-            let normB = 0;
-            for (let i = 0; i < length; i++) {
-                const av = Number(a[i]) || 0;
-                const bv = Number(b[i]) || 0;
-                dot += av * bv;
-                normA += av * av;
-                normB += bv * bv;
-            }
-            if (normA === 0 || normB === 0) return -1;
-            return dot / (Math.sqrt(normA) * Math.sqrt(normB));
-        };
-
-        const validateEmbeddingVectors = (vectors, expectedCount) => {
-            if (vectors.length !== expectedCount || vectors.some(vector => !vector || vector.length === 0)) {
-                throw new Error('嵌入接口返回的数据不完整');
-            }
-            const firstDim = vectors[0].length;
-            if (vectors.some(vector => vector.length !== firstDim)) {
-                throw new Error('嵌入维度不一致');
-            }
-            const storedDims = new Set(memories.value.filter(isVectorMemory).map(memory => memory.embeddingDims).filter(Boolean));
-            if (storedDims.size > 0 && !storedDims.has(firstDim)) {
-                throw new Error(`向量维度与已有记忆不一致（${[...storedDims].join('/')} vs ${firstDim}），请重建向量记忆或切换模型后重新提取`);
-            }
-        };
-
-        const requestMemoryEmbeddings = async (inputs, signal) => {
-            const normalizedInputs = inputs.map(input => String(input || '').trim());
-            if (normalizedInputs.some(input => !input)) throw new Error('嵌入内容不能为空');
-
-            if (memorySettings.embeddingBackend === 'local') {
-                refreshLocalEmbeddingStatus();
-                const localEmbedder = RPHLocalEmbedding;
-                if (!localEmbedder) throw new Error('本地嵌入模块未加载');
-                const vectors = await localEmbedder.embedTexts(normalizedInputs, signal);
-                if (signal?.aborted) {
-                    const abortError = new Error('Aborted');
-                    abortError.name = 'AbortError';
-                    throw abortError;
-                }
-                validateEmbeddingVectors(vectors, normalizedInputs.length);
-                return vectors;
-            }
-
-            const model = getMemoryEmbeddingModel();
-            const memoryProvider = getMemoryProvider();
-            if (!memoryProvider.apiUrl || !memoryProvider.apiKey) throw new Error('请先配置记忆供应商的 API 地址和 Key');
-            if (!model) throw new Error('请先选择向量嵌入模型');
-
-            const response = await fetch(getMemoryApiEndpoint('embeddings'), {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${memoryProvider.apiKey}`
-                },
-                body: JSON.stringify({
-                    model,
-                    input: normalizedInputs.length === 1 ? normalizedInputs[0] : normalizedInputs
-                }),
-                signal: withTimeoutSignal(signal)
-            });
-
-            if (!response.ok) {
-                let errorPayload = null;
-                try { errorPayload = await response.json(); } catch (_) { }
-                const apiError = extractApiErrorMessage(errorPayload, response.status);
-                throw new Error(apiError || `Embedding API Error: ${response.status}`);
-            }
-
-            const data = await response.json();
-            const rows = Array.isArray(data.data) ? [...data.data] : [];
-            rows.sort((a, b) => (a.index ?? 0) - (b.index ?? 0));
-            const vectors = rows.map(row => normalizeEmbedding(row.embedding));
-
-            if (signal?.aborted) {
-                const abortError = new Error('Aborted');
-                abortError.name = 'AbortError';
-                throw abortError;
-            }
-            validateEmbeddingVectors(vectors, normalizedInputs.length);
-
-            recordApiUsage(getApiUsagePayload(data), {
-                type: 'embedding',
-                model,
-                detail: `${normalizedInputs.length} 条输入`
-            });
-            return vectors;
-        };
-
-        
-        const getVectorMemoryContentFingerprint = (text) => {
-            const normalized = normalizeVectorMemoryFingerprintText(text);
-            return normalized.length >= 80 ? normalized.slice(0, 1000) : '';
-        };
-
-        const getVectorFragmentFingerprint = (fragment) => {
-            return getVectorMemoryContentFingerprint(fragment?.paragraph || fragment?.sourceText || '');
-        };
-
-        const getStoredVectorMemoryFingerprint = (memory) => {
-            return memory?.contentFingerprint
-                || getVectorMemoryContentFingerprint(memory?.paragraph || memory?.summary || memory?.sourceText || '');
-        };
-
-        const createVectorMemoryFromFragment = (fragment, embedding) => {
-            return prepareMemoryForRuntime({
-                id: generateUUID(),
-                timestamp: Date.now(),
-                turn: fragment.turn,
-                summary: trimMemoryText(fragment.paragraph, 900),
-                enabled: true,
-                vectorMemory: true,
-                chunkMode: 'paragraph',
-                vectorChunkId: fragment.vectorChunkId,
-                sourceRole: fragment.role,
-                sourceName: fragment.speaker,
-                paragraph: fragment.paragraph,
-                paragraphIndex: fragment.paragraphIndex,
-                paragraphEndIndex: fragment.paragraphEndIndex,
-                sequence: fragment.sequence,
-                contentFingerprint: getVectorFragmentFingerprint(fragment),
-                embeddingModel: getMemoryEmbeddingModel(),
-                embedding,
-                sourceText: fragment.sourceText
-            });
-        };
-
-        const _doBatchEmbedMemoryChunks = async (chunks, signal, emptyLog, options = {}) => {
-            const { interactive = true } = options;
-            let totalAdded = 0;
-            const existingChunkIds = new Set(memories.value
-                .filter(m => m.vectorMemory === true && m.chunkMode === 'paragraph' && m.vectorChunkId)
-                .map(m => m.vectorChunkId));
-            const existingFingerprints = new Set(memories.value
-                .filter(isVectorMemory)
-                .map(getStoredVectorMemoryFingerprint)
-                .filter(Boolean));
-            const pendingFingerprints = new Set();
-            const fragmentItems = [];
-
-            chunks.forEach(chunk => {
-                const allFragments = buildVectorMemoryFragments(chunk.data, chunk.endIdx, chunk.turnValue);
-                const missingFragments = allFragments
-                    .filter(fragment => {
-                        if (existingChunkIds.has(fragment.vectorChunkId)) return false;
-                        const fingerprint = getVectorFragmentFingerprint(fragment);
-                        if (fingerprint && (existingFingerprints.has(fingerprint) || pendingFingerprints.has(fingerprint))) {
-                            return false;
-                        }
-                        if (fingerprint) pendingFingerprints.add(fingerprint);
-                        return true;
-                    });
-                if (allFragments.length === 0) {
-                    if (!emptyLog.includes(chunk.turnValue)) emptyLog.push(chunk.turnValue);
-                    return;
-                }
-                missingFragments.forEach(fragment => fragmentItems.push({ chunk, fragment }));
-            });
-
-            if (fragmentItems.length === 0) {
-                batchExtractProgress.value = { current: 0, total: 0 };
-                await saveMemorySettingsNow();
-                return 0;
-            }
-
-            const totalRequests = Math.ceil(fragmentItems.length / MEMORY_VECTOR_BATCH_SIZE);
-            batchExtractProgress.value = { current: 0, total: totalRequests };
-            let batchesSinceSave = 0;
-            const flushBatchMemorySave = async () => {
-                if (batchesSinceSave <= 0) return;
-                await saveMemoriesNow();
-                await saveMemorySettingsNow();
-                batchesSinceSave = 0;
-            };
-
-            for (let i = 0; i < fragmentItems.length; i += MEMORY_VECTOR_BATCH_SIZE) {
-                if (signal?.aborted) {
-                    const abortError = new Error('Aborted');
-                    abortError.name = 'AbortError';
-                    throw abortError;
-                }
-
-                const batch = fragmentItems.slice(i, i + MEMORY_VECTOR_BATCH_SIZE);
-
-                try {
-                    const vectors = await requestMemoryEmbeddings(batch.map(item => item.fragment.sourceText), signal);
-                    const newMemories = [];
-
-                    batch.forEach((item, index) => {
-                        const fingerprint = getVectorFragmentFingerprint(item.fragment);
-                        const hasMemory = memories.value.some(m => m.vectorChunkId === item.fragment.vectorChunkId)
-                            || newMemories.some(m => m.vectorChunkId === item.fragment.vectorChunkId)
-                            || (fingerprint && memories.value.some(m => getStoredVectorMemoryFingerprint(m) === fingerprint))
-                            || (fingerprint && newMemories.some(m => getStoredVectorMemoryFingerprint(m) === fingerprint));
-                        if (hasMemory) return;
-
-                        newMemories.push(createVectorMemoryFromFragment(item.fragment, vectors[index]));
-                    });
-
-                    if (newMemories.length > 0) {
-                        memories.value.push(...newMemories);
-                        totalAdded += newMemories.length;
-                    }
-
-                    const touchedTurns = new Set(batch.map(item => item.chunk.turnValue));
-                    touchedTurns.forEach(turnValue => {
-                        const added = newMemories.some(m => (m.turn || 0) === turnValue)
-                            || memories.value.some(m => m.vectorMemory === true && m.chunkMode === 'paragraph' && (m.turn || 0) === turnValue);
-                        if (added && emptyLog.includes(turnValue)) {
-                            emptyLog.splice(emptyLog.indexOf(turnValue), 1);
-                        } else if (!added && !emptyLog.includes(turnValue)) {
-                            emptyLog.push(turnValue);
-                        }
-                    });
-
-                    batchExtractProgress.value.current = Math.min(
-                        Math.floor(i / MEMORY_VECTOR_BATCH_SIZE) + 1,
-                        totalRequests
-                    );
-                    batchesSinceSave++;
-
-                    const isLastBatch = i + batch.length >= fragmentItems.length;
-                    if (isLastBatch || batchesSinceSave >= MEMORY_VECTOR_SAVE_EVERY_BATCHES) {
-                        await flushBatchMemorySave();
-                    }
-                } catch (err) {
-                    if (err.name === 'AbortError') {
-                        await flushBatchMemorySave();
-                        throw err;
-                    }
-
-                    if (!interactive) {
-                        await flushBatchMemorySave();
-                        throw err;
-                    }
-
-                    const retry = await showVueConfirmModal(
-                        '向量补录遇到错误',
-                        `第 ${i + 1}-${Math.min(i + batch.length, fragmentItems.length)} 个段落补录遇到错误：\n${err.message}\n\n是否立即重试？`,
-                        { confirmLabel: '立即重试', cancelLabel: '取消' }
-                    );
-                    if (retry) {
-                        i -= MEMORY_VECTOR_BATCH_SIZE;
-                        continue;
-                    }
-
-                    const abortErr = new Error('用户取消了重试并中止了向量补录');
-                    abortErr.name = 'AbortError';
-                    await flushBatchMemorySave();
-                    throw abortErr;
-                }
-            }
-
-            await flushBatchMemorySave();
-
-            return totalAdded;
-        };
-
-        const getVectorMemoryTopK = () => Math.max(
-            MEMORY_VECTOR_MIN_TOP_K,
-            Math.min(MEMORY_VECTOR_MAX_TOP_K, Number(memorySettings.vectorTopK) || MEMORY_VECTOR_DEFAULT_TOP_K)
-        );
-
-        const passesMemorySimilarityThreshold = (score) => {
-            const threshold = Number(memorySettings.similarityThreshold) || MEMORY_VECTOR_DEFAULT_SIMILARITY;
-            return score >= threshold / 100;
-        };
-
         const getRecentUserMemoryQueries = (limit = 3) => {
             return getPostprocessedChatMessages(chatHistory.value, { includeSystem: false })
                 .filter(message => message.role === 'user')
@@ -6477,128 +5770,18 @@ const __app = createApp({
             return queries[0] || '';
         };
 
-        const buildVectorMemoryQueryText = () => {
-            const recentUserQueries = getRecentUserMemoryQueries(1);
-            if (recentUserQueries.length === 0) return '';
-
-            const latestUserQuery = recentUserQueries[recentUserQueries.length - 1];
-            const previousUserQueries = recentUserQueries.slice(0, -1);
-
-            return [
-                `当前问题：用户：${latestUserQuery}`,
-                ...[...previousUserQueries].reverse().map((query, index) => {
-                    const distance = index + 1;
-                    const label = distance === 1 ? '上一轮用户输入' : `前${distance}轮用户输入`;
-                    return `${label}：用户：${query}`;
-                })
-            ].filter(Boolean).join('\n\n');
-        };
-
-        
-        
-        
-        const getVectorMemoryText = (memory) => {
-            return String(memory?.paragraph || memory?.summary || memory?.sourceText || '').trim();
-        };
-
-        const getVectorMemoryFingerprint = (memory) => {
-            const normalized = getVectorMemoryText(memory)
-                .replace(/\s+/g, '')
-                .replace(/[，。、“”‘’：；！？,.!?;:"'`~]/g, '');
-
-            if (normalized.length >= 80) {
-                return normalized.slice(0, 1000);
-            }
-
-            return `${memory?.turn || ''}:${memory?.sequence || ''}:${normalized}`;
-        };
-
-        const buildFullTurnMemoryText = (turnInfo) => {
-            const messagesArray = Array.isArray(turnInfo?.messages) ? turnInfo.messages : [];
-            return buildMemoryChunkText(messagesArray, Number.MAX_SAFE_INTEGER);
-        };
-
-        const buildMergedVectorMemoryFallbackText = (items) => {
-            const orderedItems = sortVectorMemoriesByTime(items);
-            let userBlock = '';
-            const roleBlocks = [];
-
-            orderedItems.forEach(memory => {
-                const text = getVectorMemoryText(memory);
-                if (!text) return;
-
-                const roleMarker = '\n角色卡：';
-                const roleIndex = text.indexOf(roleMarker);
-                if (roleIndex >= 0) {
-                    if (!userBlock) userBlock = text.slice(0, roleIndex).trim();
-                    const roleText = text.slice(roleIndex + roleMarker.length).trim();
-                    if (roleText) roleBlocks.push(roleText);
-                    return;
-                }
-
-                if (!roleBlocks.includes(text)) roleBlocks.push(text);
-            });
-
-            const roleBlock = roleBlocks.filter(Boolean).join('\n\n').trim();
-            return [
-                userBlock,
-                roleBlock ? `角色卡：${roleBlock}` : ''
-            ].filter(Boolean).join('\n\n').trim();
-        };
-
-        const mergeRepeatedTurnVectorMemories = (items) => {
-            const orderedItems = sortVectorMemoriesByTime(items);
-            const memoriesByTurn = new Map();
-
-            orderedItems.forEach(memory => {
-                const turn = Number(memory?.turn) || 0;
-                if (turn <= 0) return;
-                if (!memoriesByTurn.has(turn)) memoriesByTurn.set(turn, []);
-                memoriesByTurn.get(turn).push(memory);
-            });
-
-            const repeatedTurns = new Set(
-                [...memoriesByTurn.entries()]
-                    .filter(([, turnMemories]) => turnMemories.length >= 2)
-                    .map(([turn]) => turn)
-            );
-            if (repeatedTurns.size === 0) return orderedItems;
-
-            const snapshot = buildConversationTurnSnapshot(chatHistory.value, { includeSystem: false });
-            const turnsByNumber = new Map((snapshot.turns || []).map(turnInfo => [Number(turnInfo.turn) || 0, turnInfo]));
-            const mergedTurns = new Set();
-            const result = [];
-
-            orderedItems.forEach(memory => {
-                const turn = Number(memory?.turn) || 0;
-                if (!repeatedTurns.has(turn)) {
-                    result.push(memory);
-                    return;
-                }
-
-                if (mergedTurns.has(turn)) return;
-                mergedTurns.add(turn);
-
-                const turnMemories = memoriesByTurn.get(turn) || [memory];
-                const fullTurnText = buildFullTurnMemoryText(turnsByNumber.get(turn))
-                    || buildMergedVectorMemoryFallbackText(turnMemories);
-                if (!fullTurnText) return;
-
-                const bestMemory = [...turnMemories].sort((a, b) => (b.vectorScore || 0) - (a.vectorScore || 0))[0] || memory;
-                const sequenceValues = turnMemories
-                    .map(item => Number(item.sequence) || 0)
-                    .filter(sequence => sequence > 0);
-                result.push({
-                    ...bestMemory,
-                    paragraph: fullTurnText,
-                    summary: fullTurnText,
-                    sourceText: fullTurnText,
-                    sequence: sequenceValues.length ? Math.min(...sequenceValues) : bestMemory.sequence,
-                    vectorMergedTurn: true
-                });
-            });
-
-            return result;
+        // v6 L3 §8.2 query enhancement: latest user input plus the head of the
+        // previous assistant reply, so references like "他上次说的那件事"
+        // have something to match against. Thinking blocks are already
+        // stripped by parseCot inside getCleanMemoryMessageText.
+        const buildMemoryRecallQueryText = () => {
+            const latestUserQuery = getLatestUserMemoryQuery();
+            const messages = getPostprocessedChatMessages(chatHistory.value, { includeSystem: false });
+            const lastAssistant = [...messages].reverse().find(message => message.role === 'assistant');
+            const previousReply = lastAssistant
+                ? trimMemoryText(getCleanMemoryMessageText(lastAssistant), 200)
+                : '';
+            return [latestUserQuery, previousReply].filter(Boolean).join('\n');
         };
 
         const getRetainedRecentMemoryTurns = (messages) => {
@@ -6621,221 +5804,11 @@ const __app = createApp({
             return retainedTurns;
         };
 
-        const getCurrentRetainedVectorMemoryTurns = () => getRetainedRecentMemoryTurns(
+        const getCurrentRetainedMemoryTurns = () => getRetainedRecentMemoryTurns(
             getPostprocessedChatMessages(chatHistory.value, { includeSystem: false })
         );
 
         
-        const scoreVectorMemories = async (vectorMemories, queryVector, queryTerms, signal) => {
-            const scoredMemories = [];
-            for (let i = 0; i < vectorMemories.length; i++) {
-                if (signal?.aborted) return [];
-                const memory = vectorMemories[i];
-                const rawScore = cosineSimilarity(queryVector, memory.embedding);
-                if (Number.isFinite(rawScore) && rawScore > -1 && passesMemorySimilarityThreshold(rawScore)) {
-                    const lexical = getVectorLexicalMatch(memory, queryTerms);
-                    scoredMemories.push({
-                        memory,
-                        vectorRawScore: rawScore,
-                        vectorLexicalHits: lexical.hits,
-                        vectorLexicalTerms: lexical.matched,
-                        vectorScore: rawScore + lexical.boost
-                    });
-                }
-                if (i > 0 && i % 512 === 0) await yieldToBrowser();
-            }
-            return scoredMemories.sort((a, b) => {
-                const scoreDiff = b.vectorScore - a.vectorScore;
-                if (Math.abs(scoreDiff) > 0.0001) return scoreDiff;
-                return (b.memory.turn || 0) - (a.memory.turn || 0);
-            });
-        };
-
-        
-        const getContextVectorMemories = (options = {}) => {
-            const excludedTurns = options.excludedTurns instanceof Set
-                ? options.excludedTurns
-                : new Set(Array.isArray(options.excludedTurns) ? options.excludedTurns : []);
-            return memories.value
-                .filter(isEnabledVectorMemory)
-                .filter(memory => {
-                    const turn = Number(memory.turn) || 0;
-                    return turn <= 0 || !excludedTurns.has(turn);
-                });
-        };
-
-        const selectUniqueVectorMemories = (scoredMemories, topK) => {
-            const selected = [];
-            const seen = new Set();
-            for (const scored of scoredMemories) {
-                const memory = scored.memory ? toScoredVectorMemory(scored) : scored;
-                const fingerprint = getVectorMemoryFingerprint(memory);
-                if (!fingerprint || seen.has(fingerprint)) continue;
-                seen.add(fingerprint);
-                selected.push(memory);
-                if (selected.length >= topK) break;
-            }
-            return selected;
-        };
-
-        // 嵌入服务不可用时仍使用已有分片：关键词命中优先，其次按最近轮次补足。
-        const selectVectorMemoriesLexicalFallback = (options = {}) => {
-            const vectorMemories = getContextVectorMemories(options);
-            const queryTerms = extractVectorQueryTerms(getLatestUserMemoryQuery());
-            return memoryRecallFallback(vectorMemories, {
-                queryTerms,
-                topK: getVectorMemoryTopK(),
-                getFingerprint: getVectorMemoryFingerprint
-            });
-        };
-
-        const selectVectorMemoriesForContext = async (signal, options = {}) => {
-            const vectorMemories = getContextVectorMemories(options);
-
-            if (vectorMemories.length === 0) return [];
-
-            const topK = getVectorMemoryTopK();
-            const queryText = buildVectorMemoryQueryText();
-            const queryTerms = extractVectorQueryTerms(getLatestUserMemoryQuery());
-            if (!queryText) return [];
-
-            const [queryVector] = await requestMemoryEmbeddings([queryText], signal);
-            if (signal?.aborted) throw signal.reason || createAbortReason();
-            if (!isEmbeddingLike(queryVector)) throw new Error('向量召回没有返回有效查询向量');
-            const scoredMemories = await scoreVectorMemories(vectorMemories, queryVector, queryTerms, signal);
-            return selectUniqueVectorMemories(scoredMemories, topK);
-        };
-
-        const selectVectorMemoriesForChatContext = async (options = {}, generationSignal = null, diagnostic = null) => {
-            const recallBackendKey = memorySettings.embeddingBackend === 'local'
-                ? `local:${memorySettings.localEmbeddingModel || 'default'}`
-                : `api:${memorySettings.memoryProviderId || getChatProvider().providerId}:${getMemoryEmbeddingModel()}`;
-            if ((memoryRecallRetryAfter.get(recallBackendKey) || 0) > Date.now()) {
-                diagnostic?.stage('memory_recall_circuit_fallback');
-                return selectVectorMemoriesLexicalFallback(options);
-            }
-            const recallController = new AbortController();
-            const forwardGenerationAbort = () => {
-                const message = generationSignal?.reason?.message || 'Generation cancelled by user';
-                abortSafely(recallController, message);
-            };
-
-            if (generationSignal?.aborted) {
-                forwardGenerationAbort();
-            } else {
-                generationSignal?.addEventListener('abort', forwardGenerationAbort, { once: true });
-            }
-
-            try {
-                const selected = await raceWithTimeout(
-                    selectVectorMemoriesForContext(recallController.signal, options),
-                    MEMORY_CONTEXT_RECALL_TIMEOUT_MS,
-                    () => abortSafely(recallController, 'Memory recall timed out'),
-                    'Memory recall timed out',
-                    recallController.signal
-                );
-                memoryRecallRetryAfter.delete(recallBackendKey);
-                return selected;
-            } catch (error) {
-                if (generationSignal?.aborted) return [];
-                memoryRecallRetryAfter.set(recallBackendKey, Date.now() + MEMORY_CONTEXT_RECALL_RETRY_DELAY_MS);
-                diagnostic?.stage('memory_recall_lexical_fallback');
-                console.warn('[Memory] vector recall failed, using lexical fallback:', error?.message || error);
-                return selectVectorMemoriesLexicalFallback(options);
-            } finally {
-                generationSignal?.removeEventListener('abort', forwardGenerationAbort);
-            }
-        };
-
-        const searchVectorMemories = async () => {
-            const query = trimMemoryText(stripVectorMemoryCode(vectorMemorySearchQuery.value), 800);
-            vectorMemorySearchError.value = '';
-            vectorMemorySearchResults.value = [];
-
-            if (!query) {
-                vectorMemorySearchError.value = '先输入一句想查的内容';
-                return;
-            }
-
-            const excludedTurns = getCurrentRetainedVectorMemoryTurns();
-            const vectorMemories = memories.value
-                .filter(m => m.vectorMemory === true && m.enabled !== false)
-                .filter(m => isEmbeddingLike(m.embedding) && m.embedding.length > 0)
-                .filter(memory => {
-                    const turn = Number(memory.turn) || 0;
-                    return turn <= 0 || !excludedTurns.has(turn);
-                });
-            if (vectorMemories.length === 0) {
-                vectorMemorySearchError.value = '还没有可检索的向量分片';
-                return;
-            }
-
-            if (_vectorMemorySearchAbort) {
-                _vectorMemorySearchAbort.abort();
-            }
-            const searchAbort = new AbortController();
-            _vectorMemorySearchAbort = searchAbort;
-            isVectorMemorySearching.value = true;
-
-            try {
-                const [queryVector] = await requestMemoryEmbeddings([`用户：${query}`], searchAbort.signal);
-                const scoredMemories = [];
-                for (let i = 0; i < vectorMemories.length; i++) {
-                    if (searchAbort.signal.aborted) {
-                        const abortErr = new Error('Aborted');
-                        abortErr.name = 'AbortError';
-                        throw abortErr;
-                    }
-                    const memory = vectorMemories[i];
-                    const vectorSearchScore = cosineSimilarity(queryVector, memory.embedding);
-                    if (Number.isFinite(vectorSearchScore) && vectorSearchScore > -1 && passesMemorySimilarityThreshold(vectorSearchScore)) {
-                        scoredMemories.push({ memory, vectorSearchScore });
-                    }
-                    if (i > 0 && i % 512 === 0) await yieldToBrowser();
-                }
-                vectorMemorySearchResults.value = scoredMemories
-                    .sort((a, b) => {
-                        const scoreDiff = b.vectorSearchScore - a.vectorSearchScore;
-                        if (Math.abs(scoreDiff) > 0.0001) return scoreDiff;
-                        return (b.memory.turn || 0) - (a.memory.turn || 0);
-                    })
-                    .slice(0, 20)
-                    .map(item => ({
-                        ...item.memory,
-                        vectorSearchScore: item.vectorSearchScore
-                    }))
-                    .sort((a, b) => {
-                        const turnDiff = (a.turn || 0) - (b.turn || 0);
-                        if (turnDiff !== 0) return turnDiff;
-                        return (a.sequence || 0) - (b.sequence || 0);
-                    });
-
-                if (vectorMemorySearchResults.value.length === 0) {
-                    vectorMemorySearchError.value = '没有找到可展示的向量分片';
-                }
-            } catch (err) {
-                if (err.name !== 'AbortError') {
-                    vectorMemorySearchError.value = err.message || '向量检索失败';
-                }
-            } finally {
-                if (_vectorMemorySearchAbort === searchAbort) {
-                    _vectorMemorySearchAbort = null;
-                    isVectorMemorySearching.value = false;
-                }
-            }
-        };
-
-        const clearVectorMemorySearch = () => {
-            if (_vectorMemorySearchAbort) {
-                _vectorMemorySearchAbort.abort();
-                _vectorMemorySearchAbort = null;
-            }
-            vectorMemorySearchQuery.value = '';
-            vectorMemorySearchResults.value = [];
-            vectorMemorySearchError.value = '';
-            isVectorMemorySearching.value = false;
-        };
-
         const setMemoryGraphView = (view) => {
             memoryGraphView.value = view;
         };
@@ -6980,6 +5953,27 @@ const __app = createApp({
                 });
             });
             return turnIndex;
+        };
+
+        // v6 L3 §8.2: per-turn lexical auto-recall over the ledger. Pure
+        // selection lives in memory-view.mjs; this wrapper supplies the live
+        // turn projection, the retained-window exclusion and the query.
+        let _lastMemoryRecallStats = { count: 0, chars: 0 };
+        const getLastMemoryRecallStats = () => _lastMemoryRecallStats;
+        const selectMemoryLedgerRecall = () => {
+            _lastMemoryRecallStats = { count: 0, chars: 0 };
+            const ledger = memoryLedger.value;
+            if (!ledger || !Array.isArray(ledger.entries) || ledger.entries.length === 0) return [];
+            const queryText = buildMemoryRecallQueryText();
+            if (!queryText) return [];
+            const selected = buildMemoryRecall(ledger, buildLiveTurnIndex(), queryText, {
+                excludedTurns: getCurrentRetainedMemoryTurns()
+            });
+            _lastMemoryRecallStats = {
+                count: selected.length,
+                chars: selected.reduce((sum, item) => sum + String(item.text || '').length, 0)
+            };
+            return selected;
         };
 
         // Fold the ledger into the memorySummaries projection so the panel
@@ -7157,8 +6151,11 @@ const __app = createApp({
         const buildMemoryContextForPrompt = () => {
             const lib = summaryLib();
             if (!lib) return '';
+            _lastMemoryRecallStats = { count: 0, chars: 0 };
             let longText = '';
             let shortText = '';
+            let toc = [];
+            let recall = [];
             const ledger = memoryLedger.value;
             const hasLedger = Boolean(ledger && Array.isArray(ledger.entries) && ledger.entries.length > 0);
             // The legacy summaries object may legitimately be missing while
@@ -7172,6 +6169,8 @@ const __app = createApp({
                 const view = buildMemoryView(ledger, buildLiveTurnIndex());
                 longText = view.long;
                 shortText = view.short;
+                toc = view.toc;
+                recall = selectMemoryLedgerRecall();
             } else {
                 const current = getMemorySummaries();
                 longText = current.long;
@@ -7180,6 +6179,26 @@ const __app = createApp({
             const parts = [];
             if (longText) parts.push(`<long_summary>\n${longText}\n</long_summary>`);
             if (shortText) parts.push(`<short_summary>\n${shortText}\n</short_summary>`);
+            // v6 L3 §8.2: lexical auto-recall (hit count → recency) over the
+            // same visible digest entries. Budget-capped in memory-view.
+            if (recall.length > 0) {
+                const lines = recall.map(item => {
+                    const turns = item.fromTurn === item.toTurn ? `第 ${item.fromTurn} 轮` : `第 ${item.fromTurn}–${item.toTurn} 轮`;
+                    return [
+                        `  <memory_entry entry_id="${item.entryId}" turns="${turns}" level="${item.level}">`,
+                        indentXmlText(item.text, 4),
+                        '  </memory_entry>'
+                    ].join('\n');
+                });
+                parts.push(`<memory_recall>\n${lines.join('\n')}\n</memory_recall>`);
+            }
+            // v6 L3 §8.1: the TOC is always injected (Q5) so the model can
+            // name the range it needs through tool_memory; the list is
+            // already hard-capped by the view's tocBudget.
+            if (toc.length > 0) {
+                const tocLines = toc.map(item => `- [${item.label}] ${item.summary}`);
+                parts.push(`<memory_toc>\n${tocLines.join('\n')}\n</memory_toc>`);
+            }
             if (memoryProfile.value && profileLib()) {
                 const currentTurn = buildConversationTurnSnapshot(chatHistory.value, { includeSystem: false }).turns.length;
                 const profileText = profileLib().buildProfileContext(memoryProfile.value, {
@@ -7197,25 +6216,82 @@ const __app = createApp({
             ].join('\n');
         };
 
-        const searchVectorMemoriesForTool = async (query, limit, signal) => {
+        // v6 L3 §8.1: tool_memory reads the ledger, not embedding shards.
+        // Query forms: an entry id, a turn-range label copied from the
+        // <memory_toc> ("第12–23轮" / "12-23" / "第12轮"), or free keywords
+        // scored lexically (hit count first, then recency, v6 §8.2).
+        const parseMemoryToolTurnRange = (text) => {
+            const value = String(text || '');
+            const range = value.match(/第?\s*(\d+)\s*[轮]?\s*[–\-~—至到]\s*(\d+)\s*轮?/u);
+            if (range) {
+                const left = Number(range[1]);
+                const right = Number(range[2]);
+                if (left > 0 && right > 0) {
+                    return { fromTurn: Math.min(left, right), toTurn: Math.max(left, right) };
+                }
+            }
+            const single = value.match(/第\s*(\d+)\s*轮/u);
+            if (single) {
+                const turn = Number(single[1]);
+                if (turn > 0) return { fromTurn: turn, toTurn: turn };
+            }
+            return null;
+        };
+
+        const searchMemoryLedgerForTool = async (query, limit) => {
             const cleanQuery = trimMemoryText(stripVectorMemoryCode(query), 800);
             if (!cleanQuery) return [];
+            const ledger = memoryLedger.value;
+            if (!ledger || !Array.isArray(ledger.entries) || ledger.entries.length === 0) return [];
 
-            const excludedTurns = getCurrentRetainedVectorMemoryTurns();
-            const vectorMemories = memories.value
-                .filter(isEnabledVectorMemory)
-                .filter(memory => isEmbeddingLike(memory.embedding) && memory.embedding.length > 0)
-                .filter(memory => {
-                    const turn = Number(memory.turn) || 0;
-                    return turn <= 0 || !excludedTurns.has(turn);
-                });
-            if (vectorMemories.length === 0) return [];
+            const turnIndex = buildLiveTurnIndex();
+            const retainedTurns = getCurrentRetainedMemoryTurns();
+            const maxCount = Math.max(
+                ACTIVE_TOOL_MIN_RESULT_COUNT,
+                Math.min(ACTIVE_TOOL_MAX_RESULT_COUNT, Number(limit) || ACTIVE_TOOL_DEFAULT_RESULT_COUNT)
+            );
 
-            const [queryVector] = await requestMemoryEmbeddings([`工具检索：${cleanQuery}`], signal);
-            const queryTerms = extractVectorQueryTerms(cleanQuery);
-            return (await scoreVectorMemories(vectorMemories, queryVector, queryTerms, signal))
-                .slice(0, Math.max(ACTIVE_TOOL_MIN_RESULT_COUNT, Math.min(ACTIVE_TOOL_MAX_RESULT_COUNT, Number(limit) || ACTIVE_TOOL_DEFAULT_RESULT_COUNT)))
-                .map(toScoredVectorMemory);
+            const digests = ledger.entries
+                .filter(entry => entry.kind === 'digest' && !entry.meta.stale)
+                .map(entry => {
+                    const turns = projectEntryTurns(entry, turnIndex)
+                        .filter(turn => Number.isFinite(turn) && turn > 0);
+                    return {
+                        entryId: entry.id,
+                        level: Number(entry.level) || 0,
+                        turns,
+                        fromTurn: turns.length ? Math.min(...turns) : 0,
+                        toTurn: turns.length ? Math.max(...turns) : 0,
+                        text: String(entry.text || '').trim()
+                    };
+                })
+                .filter(item => item.text && item.turns.length > 0)
+                // An entry fully inside the raw window is already visible.
+                .filter(item => !item.turns.every(turn => retainedTurns.has(turn)));
+            if (digests.length === 0) return [];
+
+            const byId = digests.filter(item => cleanQuery.includes(item.entryId));
+            if (byId.length > 0) return byId.slice(0, maxCount);
+
+            const range = parseMemoryToolTurnRange(cleanQuery);
+            if (range) {
+                const overlapped = digests
+                    .filter(item => item.fromTurn <= range.toTurn && item.toTurn >= range.fromTurn)
+                    .sort((a, b) => a.fromTurn - b.fromTurn);
+                if (overlapped.length > 0) return overlapped.slice(0, maxCount);
+            }
+
+            const terms = extractVectorQueryTerms(cleanQuery);
+            if (terms.length === 0) return [];
+            return digests
+                .map(item => {
+                    const haystack = item.text.toLowerCase();
+                    const matched = terms.filter(term => haystack.includes(term.toLowerCase()));
+                    return { ...item, score: matched.length };
+                })
+                .filter(item => item.score > 0)
+                .sort((a, b) => (b.score - a.score) || (b.toTurn - a.toTurn))
+                .slice(0, maxCount);
         };
 
         const extractKeywordToolTerms = (query) => {
@@ -7626,27 +6702,26 @@ const __app = createApp({
             if (!Array.isArray(results) || results.length === 0) {
                 return [
                     `<active_tool_result name="${title}" call="${callName}" mode="${modeValue}" query="${escapeXmlAttribute(cleanQuery)}" status="empty">`,
-                    `  <description>本次向量记忆没有检索成功，没有找到可用记忆片段，也没有提供可作为答案依据的新证据。${modeDescription}本段内容已插入最后一条用户消息结尾。请先判断当前上下文是否已经明确且足够；如果仍不够明确完整，请换更具体的检索内容再次调用，不要重复完全相同的查询。</description>`,
+                    `  <description>本次记忆账本检索没有命中，没有取回可用条目，也没有提供可作为答案依据的新证据。${modeDescription}本段内容已插入最后一条用户消息结尾。请先判断当前上下文和记忆目录是否已经足够；如果仍不够，请用目录里的轮次区间（如 第12–23轮）或更具体的关键词再次调用，不要重复完全相同的查询。</description>`,
                     '</active_tool_result>'
                 ].join('\n');
             }
 
-            const formattedResults = sortVectorMemoriesByTime(results).map(memory => {
-                const turnValue = escapeXmlAttribute(memory.turn || '?');
-                const scoreValue = escapeXmlAttribute(Number.isFinite(memory.vectorScore)
-                    ? `${(memory.vectorScore * 100).toFixed(1)}%`
-                    : 'unknown');
-                const fragmentText = indentXmlText(memory.paragraph || memory.summary || memory.sourceText || '', 4);
+            const formattedResults = results.map(entry => {
+                const turns = entry.fromTurn
+                    ? (entry.fromTurn === entry.toTurn ? `第 ${entry.fromTurn} 轮` : `第 ${entry.fromTurn}–${entry.toTurn} 轮`)
+                    : '历史';
+                const entryText = indentXmlText(entry.text || '', 4);
                 return [
-                    `  <memory_fragment turn="${turnValue}" similarity="${scoreValue}">`,
-                    fragmentText,
-                    '  </memory_fragment>'
+                    `  <memory_entry entry_id="${escapeXmlAttribute(entry.entryId || '')}" turns="${escapeXmlAttribute(turns)}" level="${Number(entry.level) || 0}">`,
+                    entryText,
+                    '  </memory_entry>'
                 ].join('\n');
             }).join('\n\n');
 
             return [
                 `<active_tool_result name="${title}" call="${callName}" mode="${modeValue}" query="${escapeXmlAttribute(cleanQuery)}">`,
-                `  <description>以下是系统根据上一条正文工具调用检索到的向量记忆。${modeDescription}本段内容由系统插入最后一条用户消息结尾。请用这些结果继续回答用户，不要复述工具调用标签，也不要把这些内容当作当前现场；如果结果仍不足以明确回答，或仍有疑点，请换更具体的检索内容继续调用工具。</description>`,
+                `  <description>以下是系统按轮次区间、条目编号或关键词从记忆账本里取回的批次条目全文。${modeDescription}本段内容由系统插入最后一条用户消息结尾。请优先依据这些条目继续回答，不要把条目没有写到的内容说成事实；如果仍不足以明确回答，请换目录里的其它轮次区间或更具体的关键词继续调用工具。</description>`,
                 formattedResults,
                 '</active_tool_result>'
             ].join('\n');
@@ -7791,9 +6866,9 @@ const __app = createApp({
         const createActiveToolUi = (toolCall, initialStatus = 'queued') => ({
             id: generateUUID(),
             toolId: toolCall.tool?.id || '',
-            toolType: toolCall.tool?.type || ACTIVE_TOOL_VECTOR_TYPE,
+            toolType: toolCall.tool?.type || ACTIVE_TOOL_MEMORY_TYPE,
             toolResultCount: toolCall.tool?.resultCount || ACTIVE_TOOL_DEFAULT_RESULT_COUNT,
-            name: toolCall.tool?.name || '向量记忆主动检索',
+            name: toolCall.tool?.name || '记忆账本主动检索',
             callName: toolCall.callLabel || toolCall.tool?.callName || 'tool_memory_add',
             baseCallName: toolCall.tool?.callName || 'tool_memory',
             mode: toolCall.mode || 'add',
@@ -7821,18 +6896,18 @@ const __app = createApp({
             if (toolCall?.toolType === ACTIVE_TOOL_WEB_TYPE || baseCallName === 'tool_web') {
                 return ACTIVE_TOOL_WEB_TYPE;
             }
-            if (toolCall?.toolType === ACTIVE_TOOL_VECTOR_TYPE || baseCallName === 'tool_memory') {
-                return ACTIVE_TOOL_VECTOR_TYPE;
+            if (toolCall?.toolType === ACTIVE_TOOL_MEMORY_TYPE || baseCallName === 'tool_memory') {
+                return ACTIVE_TOOL_MEMORY_TYPE;
             }
-            return baseCallName || toolCall?.toolId || ACTIVE_TOOL_VECTOR_TYPE;
+            return baseCallName || toolCall?.toolId || ACTIVE_TOOL_MEMORY_TYPE;
         };
 
         const getToolCallDisplayName = (toolCall) => {
             const groupKey = getActiveToolUiGroupKey(toolCall);
             if (groupKey === ACTIVE_TOOL_KEYWORD_TYPE) return '关键词检索';
             if (groupKey === ACTIVE_TOOL_WEB_TYPE) return 'Tavily 联网搜索';
-            if (groupKey === ACTIVE_TOOL_VECTOR_TYPE) return '向量记忆主动检索';
-            return toolCall?.name || '向量记忆主动检索';
+            if (groupKey === ACTIVE_TOOL_MEMORY_TYPE) return '记忆账本主动检索';
+            return toolCall?.name || '记忆账本主动检索';
         };
 
         const getToolCallModeText = (toolCall) => {
@@ -7850,7 +6925,7 @@ const __app = createApp({
                 return mode === 'cover' ? '覆盖关键词检索' : '关键词检索';
             }
 
-            return mode === 'cover' ? '覆盖向量检索' : '向量检索';
+            return mode === 'cover' ? '覆盖记忆检索' : '记忆检索';
         };
 
         const TOOL_CALL_RUNNING_STATUSES = ['running', 'receiving', 'queued'];
@@ -8068,7 +7143,7 @@ const __app = createApp({
                 message._activeToolPendingUiId = toolUi.id;
             }
             toolUi.toolId = toolCall.tool?.id || toolUi.toolId || '';
-            toolUi.toolType = toolCall.tool?.type || toolUi.toolType || ACTIVE_TOOL_VECTOR_TYPE;
+            toolUi.toolType = toolCall.tool?.type || toolUi.toolType || ACTIVE_TOOL_MEMORY_TYPE;
             toolUi.name = toolCall.tool?.name || toolUi.name || '工具';
             toolUi.callName = toolCall.callLabel || toolUi.callName || 'tool_memory_add';
             toolUi.baseCallName = toolCall.tool?.callName || toolUi.baseCallName || 'tool_memory';
@@ -8221,24 +7296,15 @@ const __app = createApp({
             getPostprocessedChatMessages,
             processRegex,
             stripDisabledImageGenContext,
-            // memory recall
-            memories,
+            // memory
             memorySummaries,
             memorySettings,
-            MEMORY_MODE_VECTOR,
-            MEMORY_VECTOR_DEFAULT_DEPTH,
-            ROLE_MEMORY_VECTOR_RECALL_OPEN_TAG,
-            ROLE_MEMORY_VECTOR_RECALL_CLOSE_TAG,
             isVectorMemoryRecallContent,
             isRoleMemoryContextContent,
-            isEnabledVectorMemory,
-            getMemoryEmptyTurnsKey,
             extractMemoryFromChat,
             buildMemoryContextForPrompt,
-            selectVectorMemoriesForChatContext,
+            getLastMemoryRecallStats,
             getRetainedRecentMemoryTurns,
-            getVectorMemoryText,
-            mergeRepeatedTurnVectorMemories,
             // UI template pipeline
             updateUiTemplatesFromChat,
             stripUiTemplateContextInjection,
@@ -8249,7 +7315,6 @@ const __app = createApp({
             // active tools
             appendActiveToolReminderToLatestUserMessage,
             buildActiveToolSystemPrompt,
-            shouldSuppressStandardVectorMemoryRecall,
             buildActiveToolResultPayload,
             resetActiveToolResultContext,
             promoteActiveToolCallsFromAssistant,
@@ -8313,14 +7378,14 @@ const __app = createApp({
             attachActiveToolCallsToAssistant,
             createAbortReason,
             // tool predicates + search backends
-            isVectorActiveTool,
+            isMemoryActiveTool,
             isKeywordActiveTool,
             isWebActiveTool,
             isPluginActiveTool,
             executePluginToolSearch,
             searchDialogueByKeywordForTool,
             searchWebByTavilyForTool,
-            searchVectorMemoriesForTool,
+            searchMemoryLedgerForTool,
             // result context helpers / orchestration
             updateActiveToolResultContext,
             normalizeActiveToolResultContext,
@@ -8351,33 +7416,6 @@ const __app = createApp({
             signal?.addEventListener('abort', finish, { once: true });
         });
 
-        // Vector batch memory extraction lives in useVectorMemoryPatrol (Phase 3.0).
-        const { startVectorBatchMemoryExtraction } = useVectorMemoryPatrol({
-            // memory state
-            currentCharacter,
-            chatHistory,
-            isConversationBusy,
-            memorySettings,
-            memories,
-            isBatchExtracting,
-            sliceBuildStatus,
-            batchExtractProgress,
-            showNoMemoryNeededModal,
-            // shared guard bridges
-            getBatchExtractAbort,
-            setBatchExtractAbort,
-            getVectorBatchRescanRequested,
-            setVectorBatchRescanRequested,
-            // embedding + orchestration
-            getMemoryEmbeddingModel,
-            getCurrentChatStorageScopeId,
-            buildConversationTurnSnapshot,
-            _doBatchEmbedMemoryChunks,
-            waitForMemoryConversationIdle,
-            saveMemorySettingsNow,
-            showToast
-        });
-
         const abortClassicBatchExtraction = () => {
             _classicExtractionEpoch++;
             if (_classicBatchExtractAbort) _classicBatchExtractAbort.abort();
@@ -8386,33 +7424,22 @@ const __app = createApp({
             isClassicBatchExtracting.value = false;
         };
 
-        const startAutomaticMemoryPatrol = (mode = memorySettings.mode) => {
+        // Derived-memory writes now have exactly one writer: the ledger
+        // reconciler (v6 §6). "Patrol" keeps its historical name because the
+        // post-turn trigger is still what calls it.
+        const startAutomaticMemoryPatrol = () => {
             if (!memorySettings.enabled || !currentCharacter.value) return Promise.resolve(false);
-            // 滚动摘要（新引擎）：每轮对话后检查窗口外是否攒满一批待总结
             if (!_summaryInFlight) {
                 nextTick(() => runRollingSummaryCheck());
             }
-            // 原文归档：继续用向量分片把每轮文本落库（检索/证据层）
-            if (isBatchExtracting.value) {
-                _vectorBatchRescanRequested = true;
-                return Promise.resolve(false);
-            }
-            return _memoriesLoaded
-                ? startVectorBatchMemoryExtraction({ manual: false })
-                : Promise.resolve(false);
+            return Promise.resolve(true);
         };
 
         watch([
             () => memorySettings.enabled,
-            () => memorySettings.embeddingModel,
             () => memorySettings.classicModel
         ], ([enabled]) => {
             if (enabled && _initComplete) nextTick(() => startAutomaticMemoryPatrol());
-        });
-
-        // v4：切到本地嵌入后端时自动加载模型（默认加载，无需手动预载）
-        watch(() => memorySettings.embeddingBackend, () => {
-            if (_initComplete) ensureLocalEmbeddingReady();
         });
 
         // Character Management
@@ -8625,21 +7652,9 @@ const __app = createApp({
         };
 
         const loadCharacterMemories = async (characterId, errorContext = '') => {
-            vectorMemorySearchResults.value = [];
-            vectorMemorySearchError.value = '';
             await loadMemorySummaries(characterId);
             await loadMemoryProfile(characterId);
             await loadMemoryLedger(characterId);
-            try {
-                const savedMemories = await getScopedStoredValue('memories', characterId);
-                memories.value = savedMemories?.length
-                    ? prepareMemoriesForRuntime(savedMemories)
-                    : [];
-            } catch (error) {
-                console.error(`Error loading memories${errorContext}:`, error);
-                memories.value = [];
-            }
-            _memoriesLoaded = true;
 
             _classicMemoriesLoaded = false;
             try {
@@ -8818,12 +7833,10 @@ const __app = createApp({
                 }
             }
             abortUiTemplateUpdate();
-            abortVectorBatchExtraction();
             abortClassicBatchExtraction();
             abortRollingSummary();
             saveGlobalUiTemplateRuntimeForCharacter();
             await flushPendingChatHistorySave();
-            await saveMemoriesNow();
             await saveClassicMemoriesNow();
             await saveMemoryLedgerNow(getCurrentChatStorageScopeId(), memoryLedger.value);
             return true;
@@ -8861,7 +7874,6 @@ const __app = createApp({
             // branch / chat / memory state
             currentCharacter,
             chatHistory,
-            memories,
             classicMemories,
             memorySummaries,
             memoryProfile,
@@ -8876,7 +7888,6 @@ const __app = createApp({
             // shared guard bridges
             setApplyingCharacterScopedData,
             finishApplyingCharacterScopedData,
-            setMemoriesLoaded,
             setClassicMemoriesLoaded,
             setMemorySummaries,
             setMemoryProfile,
@@ -8910,7 +7921,6 @@ const __app = createApp({
             serializeChatMessage,
             prepareLoadedChatHistoryForDisplay,
             createInitialChatHistory,
-            prepareMemoriesForRuntime,
             prepareClassicMemoriesForRuntime,
             copyUiTemplateRuntimeForBranch,
             loadGlobalUiTemplateRuntimeForCharacter,
@@ -8935,9 +7945,8 @@ const __app = createApp({
                 }
                 if (!await flushCurrentBranchState()) return;
                 const targetScopeId = getStoryBranchScopeId(char.uuid, branchId);
-                const [savedChat, savedMemories, savedClassicMemories] = await Promise.all([
+                const [savedChat, savedClassicMemories] = await Promise.all([
                     getStoredChatHistoryWithRetry(targetScopeId),
-                    getScopedStoredValue('memories', targetScopeId),
                     getScopedStoredValue('classic_memories', targetScopeId)
                 ]);
                 await loadMemorySummaries(targetScopeId);
@@ -8949,11 +7958,7 @@ const __app = createApp({
                 chatHistory.value = Array.isArray(savedChat) && savedChat.length
                     ? prepareLoadedChatHistoryForDisplay(savedChat)
                     : createInitialChatHistory(char);
-                memories.value = Array.isArray(savedMemories) && savedMemories.length
-                    ? prepareMemoriesForRuntime(savedMemories)
-                    : [];
                 classicMemories.value = prepareClassicMemoriesForRuntime(savedClassicMemories);
-                _memoriesLoaded = true;
                 _classicMemoriesLoaded = true;
                 loadGlobalUiTemplateRuntimeForCharacter(char);
                 finishApplyingCharacterScopedData();
@@ -9056,9 +8061,6 @@ const __app = createApp({
                             deleteScopedStoredValue('memory_ledger', scopeId),
                             db.deleteFragments(scopeId)
                         ]));
-                        scopeIds.forEach(scopeId => {
-                            if (memorySettings.emptyTurns) delete memorySettings.emptyTurns[getMemoryEmptyTurnsKey(scopeId)];
-                        });
                         ensureGlobalUiTemplates().forEach(template => {
                             if (!template.runtimeByCharacter) return;
                             scopeIds.forEach(scopeId => delete template.runtimeByCharacter[scopeId]);
@@ -9337,7 +8339,6 @@ const __app = createApp({
             waitForConversationIdle,
             // memory pipeline
             loadCharacterMemories,
-            abortVectorBatchExtraction,
             abortClassicBatchExtraction,
             abortRollingSummary,
             // ui-template runtime
@@ -10095,25 +9096,6 @@ const __app = createApp({
             // Initial Status Check
             checkAllStatuses();
 
-            // v4：本地嵌入模型默认自动加载（记忆开启 + 后端为本地时）。
-            // transformers + 模型权重在主线程编译加载较重，延迟到恢复链之后再
-            // 开始，并只在浏览器空闲槽启动：刚进房用户正在滚动/打字/生成时不抢
-            // 主线程，忙碌则顺延重试。发送消息前若尚未就绪仍会按需等待。
-            const scheduleLocalEmbeddingAutoload = () => {
-                const attempt = () => {
-                    if (isConversationBusy.value) {
-                        setTimeout(attempt, 2000);
-                        return;
-                    }
-                    ensureLocalEmbeddingReady();
-                };
-                const whenIdle = (typeof window.requestIdleCallback === 'function')
-                    ? (callback) => window.requestIdleCallback(callback, { timeout: 15000 })
-                    : (callback) => setTimeout(callback, 5000);
-                whenIdle(attempt);
-            };
-            scheduleLocalEmbeddingAutoload();
-
             // --- Mobile Keyboard Adaptation (VisualViewport) ---
             if (window.visualViewport) {
                 window.visualViewport.addEventListener('resize', handleMobileViewportResize, { passive: true });
@@ -10255,16 +9237,16 @@ const __app = createApp({
         };
 
         const activeKeepFloors = computed(() => memorySettings.keepFloors);
-        const keepFloorsSliderMin = computed(() => VECTOR_KEEP_FLOORS_MIN);
-        const keepFloorsSliderMax = computed(() => VECTOR_KEEP_FLOORS_MAX);
+        const keepFloorsSliderMin = computed(() => MEMORY_KEEP_FLOORS_MIN);
+        const keepFloorsSliderMax = computed(() => MEMORY_KEEP_FLOORS_MAX);
         const keepFloorsSlider = computed({
             get: () => activeKeepFloors.value,
             set: (value) => {
                 memorySettings.keepFloors = normalizeKeepFloors(
                     value,
-                    VECTOR_KEEP_FLOORS_MIN,
-                    VECTOR_KEEP_FLOORS_MAX,
-                    VECTOR_KEEP_FLOORS_DEFAULT
+                    MEMORY_KEEP_FLOORS_MIN,
+                    MEMORY_KEEP_FLOORS_MAX,
+                    MEMORY_KEEP_FLOORS_DEFAULT
                 );
             }
         });
@@ -10370,8 +9352,6 @@ const __app = createApp({
             quotaValue, quotaLoading, quotaError,
             // Memory System Exports
             classicMemoryPage, classicMemoryPageCount, memorySettings,
-            localEmbeddingStatus, refreshLocalEmbeddingStatus, preloadLocalEmbedding, migrateClassicMemoriesToVectors,
-            localEmbeddingModelOptions, localEmbeddingStatusLabel,
             ttsStatus, ttsStatusLabel, ttsPlayingMessageId, ttsSettingsExpanded, ttsServiceOptions, ttsReadMode,
             settingsSectionsOpen, selectTtsService, refreshTtsStatus, testTtsVoice, ttsSpeakTextFor, toggleSpeakMessage, stopSpeaking,
             applyRegexStylePack, regexStylePacks: REGEX_STYLE_PACKS, ttsVoiceChoices, loadTtsVoiceChoices,
@@ -10379,31 +9359,12 @@ const __app = createApp({
             requestDiagnosticsCount, chatDiagnosticsCount, buildDiagnosticsExportEnvelope, exportRequestDiagnostics, clearRequestDiagnostics,
             diagnosticsFailureRecords, diagnosticsSeverityDotClass, diagnosticsResultLabel, formatDiagnosticsTime, copyDiagnosticsSummary,
             dismissToast, buildDiagnosticsToastAction,
-            vectorMemorySearchQuery, vectorMemorySearchResults, vectorMemorySearchError, vectorMemorySearchSortMode, isVectorMemorySearching,
-            searchVectorMemories, clearVectorMemorySearch, sliceBuildStatus, startVectorBatchMemoryExtraction,
             memoryGraphView, setMemoryGraphView,
             activeKeepFloors, keepFloorsSlider, keepFloorsSliderMin, keepFloorsSliderMax, summaryBatchSizeSlider,
             // 滑块值映射：4-10 为变量分析消息层数。
             uiTemplateAnalysisDepthSlider: computed({
                 get: () => Math.max(4, Math.min(10, Number(settings.uiTemplateAnalysisDepth) || 4)),
                 set: (val) => { settings.uiTemplateAnalysisDepth = Math.max(4, Math.min(10, Number(val) || 4)); }
-            }),
-            displayedVectorMemorySearchResults: computed(() => {
-                const result = [...vectorMemorySearchResults.value];
-                if (vectorMemorySearchSortMode.value === 'score') {
-                    return result.sort((a, b) => {
-                        const scoreDiff = (b.vectorSearchScore || 0) - (a.vectorSearchScore || 0);
-                        if (Math.abs(scoreDiff) > 0.0001) return scoreDiff;
-                        const turnDiff = (a.turn || 0) - (b.turn || 0);
-                        if (turnDiff !== 0) return turnDiff;
-                        return (a.sequence || 0) - (b.sequence || 0);
-                    });
-                }
-                return result.sort((a, b) => {
-                    const turnDiff = (a.turn || 0) - (b.turn || 0);
-                    if (turnDiff !== 0) return turnDiff;
-                    return (a.sequence || 0) - (b.sequence || 0);
-                });
             }),
             displayedClassicMemories: computed(() => {
                 const messagesById = new Map(
@@ -10440,17 +9401,25 @@ const __app = createApp({
                 const start = (classicMemoryPage.value - 1) * LIST_PAGE_SIZE;
                 return sortedMemories.slice(start, start + LIST_PAGE_SIZE);
             }),
+            memoryTocEntries: computed(() => {
+                const ledger = memoryLedger.value;
+                if (!ledger || !Array.isArray(ledger.entries) || ledger.entries.length === 0) return [];
+                return buildMemoryView(ledger, buildLiveTurnIndex()).toc;
+            }),
             memoryStats: computed(() => {
-                const vectorMemories = memories.value.filter(isVectorMemory);
-                const vector = vectorMemories.length;
-                const classic = classicMemories.value.length;
-                const vectorTurns = new Set(vectorMemories.map(memory => memory.turn).filter(Boolean)).size;
-
+                const ledger = memoryLedger.value;
+                const entries = Array.isArray(ledger?.entries) ? ledger.entries : [];
+                const digests = entries.filter(entry => entry.kind === 'digest');
+                const live = digests.filter(entry => !entry.meta.stale);
+                const turnIndex = buildLiveTurnIndex();
+                const coveredTurns = new Set();
+                live.forEach(entry => projectEntryTurns(entry, turnIndex).forEach(turn => coveredTurns.add(turn)));
                 return {
-                    vector,
-                    vectorTurns,
-                    classic,
-                    activeTotal: vector
+                    digests: live.length,
+                    stale: digests.length - live.length,
+                    coveredTurns: coveredTurns.size,
+                    classic: classicMemories.value.length,
+                    activeTotal: live.length
                 };
             }),
             clearAllMemories: () => {
@@ -10466,39 +9435,24 @@ const __app = createApp({
                         await deleteScopedStoredValue('memory_summaries', scopeId);
                         await deleteScopedStoredValue('memory_profile', scopeId);
                         await deleteScopedStoredValue('memory_ledger', scopeId);
-                        // v4：同步重置向量已提取标记与空转日志，否则自动补录认为全部已归档，分片永远为 0
-                        const extractedKey = getMemoryVectorExtractedKey(scopeId);
-                        const emptyKey = getMemoryEmptyTurnsKey(scopeId);
-                        let settingsTouched = false;
-                        if (memorySettings.vectorExtractedTurns && extractedKey in memorySettings.vectorExtractedTurns) {
-                            delete memorySettings.vectorExtractedTurns[extractedKey];
-                            settingsTouched = true;
-                        }
-                        if (memorySettings.emptyTurns && emptyKey in memorySettings.emptyTurns) {
-                            delete memorySettings.emptyTurns[emptyKey];
-                            settingsTouched = true;
-                        }
-                        if (settingsTouched) await saveMemorySettingsNow();
                     }
-                    abortVectorBatchExtraction();
-                    memories.value = [];
-                    await saveMemoriesNow();
                     showToast('记忆已清空，将从原文重建', 'success');
-                    // 清空并重建：原文仍在，重新生成向量分片索引并立即滚动总结
+                    // 清空并重建：原文仍在，滚动摘要从账本空洞自动重建。
                     if (currentCharacter.value?.uuid && memorySettings.enabled) {
                         nextTick(() => startAutomaticMemoryPatrol());
                     }
                 });
             },
             exportMemories: async () => {
-                const memoriesExport = await compactMemoriesForStorageAsync(memories.value);
-                if (memoriesExport.length === 0) { showToast('当前没有记忆可导出', 'info'); return; }
+                const ledger = memoryLedger.value;
+                const hasLedger = Boolean(ledger && Array.isArray(ledger.entries) && ledger.entries.length > 0);
+                if (!hasLedger && !memorySummaries.value) { showToast('当前没有记忆可导出', 'info'); return; }
                 const exportData = {
-                    type: 'rp-hub-vector-memories-v2',
+                    type: 'rp-hub-memory-ledger-v1',
                     schemaVersion: 1,
                     character: currentCharacter.value?.name || 'unknown',
                     exportedAt: new Date().toISOString(),
-                    memories: memoriesExport,
+                    ledger: hasLedger ? cloneForStorage(ledger) : null,
                     summaries: memorySummaries.value || null,
                     profile: memoryProfile.value || null
                 };
@@ -10516,26 +9470,14 @@ const __app = createApp({
                 }
             },
             importMemories: (event) => readJsonFileInput(event, async data => {
-                const items = Array.isArray(data) ? data : data?.memories;
-                if (!Array.isArray(items)) throw new Error('文件内容不正确');
-                const normalized = items
-                    .filter(m => m && m.vectorMemory === true && hasVectorEmbedding(m))
-                    .map(m => {
-                        const { importance, ...memoryData } = m;
-                        return {
-                            ...memoryData,
-                            id: memoryData.id || generateUUID(),
-                            timestamp: memoryData.timestamp || Date.now(),
-                            turn: memoryData.turn || 0,
-                            summary: String(memoryData.summary || memoryData.paragraph || '').trim(),
-                            vectorMemory: true,
-                            chunkMode: 'paragraph',
-                            enabled: memoryData.enabled !== false
-                        };
-                    });
-                if (normalized.length === 0) throw new Error('这不是向量记忆文件');
-                memories.value = [...memories.value, ...prepareMemoriesForRuntime(normalized)];
-                await saveMemoriesNow();
+                const savedLedger = data?.ledger;
+                const hasLedger = Boolean(savedLedger && Array.isArray(savedLedger.entries));
+                if (!hasLedger && !data?.summaries) throw new Error('这不是记忆账本文件');
+                if (hasLedger) {
+                    memoryLedger.value = normalizeLedger(savedLedger);
+                    await saveMemoryLedgerNow(getCurrentChatStorageScopeId(), memoryLedger.value);
+                    applyMemoryLedgerProjection(memoryLedger.value);
+                }
                 if (data?.summaries && typeof data.summaries === 'object') {
                     memorySummaries.value = {
                         long: String(data.summaries.long || '').trim(),
@@ -10549,7 +9491,7 @@ const __app = createApp({
                     memoryProfile.value = profileLib().normalizeProfile(data.profile);
                     await saveMemoryProfileNow();
                 }
-                showToast(`成功导入 ${normalized.length} 个分片`, 'success');
+                showToast('记忆账本已导入', 'success');
             }, error => showToast(`导入失败: ${error.message || 'JSON 格式错误'}`, 'error')),
             toggleMobileMenu, closeMobileMenu,
             fetchModels, selectModel, selectQuickModels, sendMessage, autoResizeInput, handleChatInput, handleChatCompositionStart, handleChatCompositionEnd, handleChatInputPaste, prepareChatInputSend, handleChatInputKeydown, handleChatInputFocus, handleChatInputBlur, stopGeneration, clearChat, toggleChatFullscreen,

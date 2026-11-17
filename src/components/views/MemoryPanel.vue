@@ -85,39 +85,15 @@
                         </div>
                         <div v-if="memorySettings.enabled" class="mb-3 animate-fade-in">
                             <div class="rounded-xl border border-primary-100 bg-primary-50/60 px-3 py-2.5 text-xs leading-relaxed text-primary-800">
-                                滚动记忆引擎：原文是唯一真相源，窗口内直接读取原文；窗口外由滚动摘要（长期 + 短期）+ 固定信息卡（角色状态 / 有向关系 / 未决伏笔）覆盖，旧对话可经原文检索按需召回。
+                                滚动记忆引擎：原文是唯一真相源，窗口内直接读取原文；窗口外由滚动摘要（长期 + 短期）+ 固定信息卡（角色状态 / 有向关系 / 未决伏笔）覆盖，旧对话可经记忆目录按需取回。
                             </div>
                         </div>
                         <!-- Expandable Settings -->
                         <div v-if="memorySettings.enabled"
                             class="space-y-3 pt-3 border-t border-gray-100 animate-fade-in">
                             <div class="space-y-3">
-                                <div class="p-3 rounded-xl border border-gray-100 bg-white/60">
-                                    <label class="text-xs font-medium text-gray-500 block mb-2">嵌入后端</label>
-                                    <div class="segmented-switch segmented-switch--compact w-full">
-                                        <div class="segmented-switch__indicator" :class="{ 'is-right': memorySettings.embeddingBackend !== 'api' }"></div>
-                                        <div class="segmented-switch__option" :class="{ 'is-active': memorySettings.embeddingBackend === 'api' }">
-                                            <button type="button" @click="memorySettings.embeddingBackend = 'api'" class="absolute inset-0 rounded-lg" aria-label="使用 API 嵌入"></button>
-                                            <span class="relative z-10 pointer-events-none">API</span>
-                                        </div>
-                                        <div class="segmented-switch__option" :class="{ 'is-active': memorySettings.embeddingBackend === 'local' }">
-                                            <button type="button" @click="memorySettings.embeddingBackend = 'local'" class="absolute inset-0 rounded-lg" aria-label="使用本地模型嵌入"></button>
-                                            <span class="relative z-10 pointer-events-none">本地(离线)</span>
-                                        </div>
-                                    </div>
-                                    <div v-if="memorySettings.embeddingBackend === 'local'" class="mt-3 space-y-2">
-                                        <div>
-                                            <label class="text-xs font-medium text-gray-500">本地模型</label>
-                                            <custom-select v-model="memorySettings.localEmbeddingModel" :options="localEmbeddingModelOptions" button-class="rounded-lg px-3 py-1.5 text-sm text-gray-700 focus:border-teal-400 focus:ring-teal-100" menu-class="text-sm"></custom-select>
-                                        </div>
-                                        <div class="flex items-center justify-between gap-2">
-                                            <span class="text-xs text-gray-500">{{ localEmbeddingStatusLabel }}</span>
-                                            <button type="button" @click="preloadLocalEmbedding()" class="text-xs px-2.5 py-1 rounded-lg bg-teal-50 hover:bg-teal-100 text-teal-700 font-medium border border-teal-100 transition-all active:scale-95 hit-expand [--hit-out:-10px]">预加载模型</button>
-                                        </div>
-                                    </div>
-                                </div>
                                 <div class="bg-gray-50/60 p-3 rounded-xl border border-gray-100">
-                                    <label class="text-xs font-medium text-gray-500">记忆供应商（滚动总结 / 嵌入）</label>
+                                    <label class="text-xs font-medium text-gray-500">记忆供应商（滚动总结）</label>
                                     <select v-model="memorySettings.memoryProviderId"
                                         class="w-full mt-2 px-3 py-2 text-sm bg-white/80 border border-gray-200 rounded-xl focus:border-primary-300 focus:outline-none transition-all">
                                         <option v-for="p in memoryProviderSelectOptions" :key="p.id" :value="p.id">{{ p.name }}</option>
@@ -132,80 +108,7 @@
                                     </button>
                                     <div class="text-[10px] text-gray-400 mt-1.5">滚动总结与固定信息卡刷新使用的模型；由记忆供应商提供。</div>
                                 </div>
-                                <div v-if="memorySettings.embeddingBackend === 'api'" class="bg-gray-50/60 p-3 rounded-xl border border-gray-100">
-                                    <div class="relative mb-2 flex items-center">
-                                        <label class="text-xs font-medium text-gray-500">向量嵌入模型</label>
-                                        <button type="button"
-                                            @click.stop="settingsHelpTopic = settingsHelpTopic === 'embeddingModel' ? '' : 'embeddingModel'"
-                                            class="settings-help-trigger"
-                                            :class="{ 'is-open': settingsHelpTopic === 'embeddingModel' }"
-                                            :aria-expanded="settingsHelpTopic === 'embeddingModel'"
-                                            aria-label="查看向量嵌入模型说明">
-                                            <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                                    d="M9.1 9a3 3 0 115.8 1.1c-.6 1.1-1.9 1.3-2.5 2.2-.3.4-.4.8-.4 1.2M12 17h.01"></path>
-                                            </svg>
-                                        </button>
-                                        <div v-if="settingsHelpTopic === 'embeddingModel'" class="settings-help-popover">
-                                            <span class="settings-help-popover-content">用于把对话转换成可比较的向量坐标，它不是聊天模型。</span>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="bg-gray-50/60 p-3 rounded-xl border border-gray-100">
-                                    <div class="flex justify-between items-center mb-2">
-                                        <div class="relative flex items-center">
-                                            <label class="text-xs font-medium text-gray-500">记忆召回分片数</label>
-                                            <button type="button"
-                                                @click.stop="settingsHelpTopic = settingsHelpTopic === 'vectorTopK' ? '' : 'vectorTopK'"
-                                                class="settings-help-trigger"
-                                                :class="{ 'is-open': settingsHelpTopic === 'vectorTopK' }"
-                                                :aria-expanded="settingsHelpTopic === 'vectorTopK'"
-                                                aria-label="查看记忆召回分片数说明">
-                                                <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                                        d="M9.1 9a3 3 0 115.8 1.1c-.6 1.1-1.9 1.3-2.5 2.2-.3.4-.4.8-.4 1.2M12 17h.01"></path>
-                                                </svg>
-                                            </button>
-                                            <div v-if="settingsHelpTopic === 'vectorTopK'" class="settings-help-popover">
-                                                <span class="settings-help-popover-content">限制每次最多带入多少条相关记忆。数值越大，能带回的细节越多，也更容易混入关联较弱的内容；数值越小，内容更精简，但可能遗漏有用细节。</span>
-                                            </div>
-                                        </div>
-                                        <span
-                                            class="text-xs font-mono text-primary-600 bg-primary-50 px-1.5 py-0.5 rounded border border-primary-100">{{
-                                            memorySettings.vectorTopK || 10 }} 个分片</span>
-                                    </div>
-                                    <input type="range" v-model.number="memorySettings.vectorTopK" min="10" max="20" step="1"
-                                        class="w-full touch-range cursor-pointer">
-                                </div>
-                                <div class="relative bg-gray-50/60 p-3 rounded-xl border border-gray-100">
-                                    <div class="flex justify-between items-center mb-2">
-                                        <div class="relative flex items-center">
-                                            <label class="text-xs font-medium text-gray-500">最低召回相关度</label>
-                                            <button type="button"
-                                                @click.stop="settingsHelpTopic = settingsHelpTopic === 'similarity' ? '' : 'similarity'"
-                                                class="settings-help-trigger"
-                                                :class="{ 'is-open': settingsHelpTopic === 'similarity' }"
-                                                :aria-expanded="settingsHelpTopic === 'similarity'"
-                                                aria-label="查看最低召回相关度说明">
-                                                <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                                        d="M9.1 9a3 3 0 115.8 1.1c-.6 1.1-1.9 1.3-2.5 2.2-.3.4-.4.8-.4 1.2M12 17h.01"></path>
-                                                </svg>
-                                            </button>
-                                            <div v-if="settingsHelpTopic === 'similarity'" class="settings-help-popover">
-                                                <span class="settings-help-popover-content">控制记忆分片的最低匹配程度。数值越高，不相关内容越少，但可能漏掉间接相关的记忆；数值越低，召回的记忆分片越多，同时也会增加关联较弱的结果。</span>
-                                            </div>
-                                        </div>
-                                        <span
-                                            class="text-xs font-mono text-primary-600 bg-primary-50 px-1.5 py-0.5 rounded border border-primary-100">{{
-                                            memorySettings.similarityThreshold + '%'
-                                            }}</span>
-                                    </div>
-                                    <input type="range" v-model.number="memorySettings.similarityThreshold" min="40" max="70" step="5"
-                                        class="w-full touch-range cursor-pointer">
-                                </div>
                             </div>
-
                             <!-- Context Compression Settings -->
                             <div class="pt-3 border-t border-gray-100 mt-1">
                                 <div class="relative bg-gray-50/60 p-3 rounded-xl border border-gray-100">
@@ -224,7 +127,7 @@
                                                 </svg>
                                             </button>
                                             <div v-if="settingsHelpTopic === 'keepFloors'" class="settings-help-popover is-above">
-                                                <span class="settings-help-popover-content">决定最近多少轮原文保留在上下文中（8–40 轮），更早的轮次会由滚动摘要覆盖，可经原文检索按需召回。数值越大，保留的原文越多、上下文占用也越高。</span>
+                                                <span class="settings-help-popover-content">决定最近多少轮原文保留在上下文中（8–40 轮），更早的轮次会由滚动摘要覆盖，可经记忆目录按需取回。数值越大，保留的原文越多、上下文占用也越高。</span>
                                             </div>
                                         </div>
                                         <span
@@ -277,7 +180,7 @@
                                                 </svg>
                                             </button>
                                             <div v-if="settingsHelpTopic === 'contextBudget'" class="settings-help-popover is-above">
-                                                <span class="settings-help-popover-content">给每轮注入模型的上下文设一个 token 上限（不含输出）。超预算时按顺序收缩：先减记忆分片证据，再压缩历史楼层（至少保留 6 楼现场窗口），保证对话质量优先。0 表示不限制。</span>
+                                                <span class="settings-help-popover-content">给每轮注入模型的上下文设一个 token 上限（不含输出）。超预算时按顺序收缩：先减自动召回条目，再压缩历史楼层（至少保留 6 楼现场窗口），保证对话质量优先。0 表示不限制。</span>
                                             </div>
                                         </div>
                                         <span
@@ -295,8 +198,10 @@
                     </div>
                     </div>
 
-                <!-- Vector Memory View -->
-                <div v-if="memorySettings.enabled && memorySettings.mode === 'vector'"
+                <!-- Memory Ledger View (v6 L3): the vector search UI was
+                     removed with the embedding stack; retrieval is the TOC +
+                     tool_memory, and per-turn lexical recall is automatic. -->
+                <div v-if="memorySettings.enabled"
                     class="bg-white/70 backdrop-blur-sm p-1 rounded-2xl border border-gray-200 shadow-sm mb-4 overflow-hidden">
                     <div class="w-full flex justify-between items-center px-4 py-3 rounded-xl transition-all font-bold text-gray-700 bg-white">
                         <span class="flex items-center min-w-0">
@@ -306,115 +211,55 @@
                                         d="M4 7h16M4 12h10M4 17h7"></path>
                                 </svg>
                             </div>
-                            <span class="truncate">向量记忆</span>
+                            <span class="truncate">记忆账本</span>
                         </span>
                         <div class="flex items-center gap-2 flex-shrink-0">
-                            <div class="grid grid-cols-2 gap-1 bg-gray-50 border border-gray-200 rounded-lg p-0.5">
-                                <button type="button" @click="setMemoryGraphView('list')"
-                                    :class="['px-2.5 py-1 text-xs font-bold rounded-md transition-all hit-expand [--hit-out:-10px]', memoryGraphView === 'list' ? 'bg-white text-primary-700 shadow-sm border border-primary-100' : 'text-gray-400 hover:text-gray-600']">
-                                    检索
-                                </button>
-                                <button type="button" @click="setMemoryGraphView('summary')"
-                                    :class="['px-2.5 py-1 text-xs font-bold rounded-md transition-all hit-expand [--hit-out:-10px]', memoryGraphView === 'summary' ? 'bg-white text-primary-700 shadow-sm border border-primary-100' : 'text-gray-400 hover:text-gray-600']">
-                                    摘要
-                                </button>
-                            </div>
                             <div class="text-xs font-mono text-gray-600 bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-1">
-                                {{ memoryGraphView === 'summary' ? (memorySummaries ? memorySummaries.batches.length : 0) + ' 批摘要' : memoryStats.vector + ' 个分片' }}
+                                {{ memoryStats.digests }} 条 · {{ memoryStats.coveredTurns }} 轮
                             </div>
                         </div>
                     </div>
 
                     <div class="px-4 pb-4 pt-3 border-t border-gray-100 space-y-4">
-                        <div v-show="memoryGraphView === 'list'" class="space-y-4">
-                        <div v-if="sliceBuildStatus.status !== 'idle' && memoryStats.vector === 0"
-                            :class="['rounded-xl px-3 py-2.5 text-xs font-bold border flex items-center gap-2',
-                                sliceBuildStatus.status === 'building' ? 'bg-amber-50 border-amber-200 text-amber-700'
-                                : sliceBuildStatus.status === 'error' ? 'bg-rose-50 border-rose-200 text-rose-700'
-                                : 'bg-emerald-50 border-emerald-100 text-emerald-700']">
-                            <span v-if="sliceBuildStatus.status === 'building'"
-                                class="inline-block w-3 h-3 border-2 border-amber-400 border-t-transparent rounded-full animate-spin flex-shrink-0"></span>
-                            <span class="flex-1">
-                                <template v-if="sliceBuildStatus.status === 'building'">正在生成原文分片…</template>
-                                <template v-else-if="sliceBuildStatus.status === 'error'">分片生成失败：{{ sliceBuildStatus.message }}</template>
-                                <template v-else>{{ sliceBuildStatus.message }}</template>
-                            </span>
-                            <button v-if="sliceBuildStatus.status === 'error'" type="button"
-                                @click="startVectorBatchMemoryExtraction({ manual: true })"
-                                class="flex-shrink-0 px-2 py-1 rounded-lg bg-rose-100 text-rose-700 hover:bg-rose-200 transition-colors hit-expand [--hit-out:-10px]">
-                                重试
-                            </button>
-                        </div>
-                        <div class="grid grid-cols-2 gap-2">
+                        <div class="grid grid-cols-3 gap-2">
                             <div class="rounded-xl bg-gray-50 border border-gray-100 px-3 py-2">
-                                <div class="text-[10px] font-bold text-gray-400 mb-1">总分片</div>
-                                <div class="text-lg font-black text-gray-800">{{ memoryStats.vector }}</div>
+                                <div class="text-[10px] font-bold text-gray-400 mb-1">有效条目</div>
+                                <div class="text-lg font-black text-gray-800">{{ memoryStats.digests }}</div>
                             </div>
                             <div class="rounded-xl bg-gray-50 border border-gray-100 px-3 py-2">
                                 <div class="text-[10px] font-bold text-gray-400 mb-1">覆盖轮数</div>
-                                <div class="text-lg font-black text-gray-800">{{ memoryStats.vectorTurns }}</div>
+                                <div class="text-lg font-black text-gray-800">{{ memoryStats.coveredTurns }}</div>
+                            </div>
+                            <div class="rounded-xl bg-gray-50 border border-gray-100 px-3 py-2">
+                                <div class="text-[10px] font-bold text-gray-400 mb-1">失效条目</div>
+                                <div class="text-lg font-black text-gray-800">{{ memoryStats.stale }}</div>
                             </div>
                         </div>
 
-                        <form @submit.prevent="searchVectorMemories()" class="flex flex-col sm:flex-row gap-2">
-                            <input v-model="vectorMemorySearchQuery"
-                                :disabled="isVectorMemorySearching"
-                                class="flex-1 min-w-0 px-3 py-2 text-sm bg-gray-50/60 border border-gray-200 rounded-xl focus:bg-white focus:border-primary-300 focus:ring-2 focus:ring-primary-100 outline-none transition-all"
-                                placeholder="输入需要检索的内容">
-                            <button type="submit"
-                                :disabled="isVectorMemorySearching || !vectorMemorySearchQuery.trim() || memoryStats.vector === 0"
-                                class="min-h-[42px] px-4 py-2.5 text-sm font-bold rounded-xl bg-primary-600 hover:bg-primary-700 text-white disabled:opacity-40 disabled:cursor-not-allowed active:scale-95 transition-all">
-                                {{ isVectorMemorySearching ? '检索中' : '检索记忆' }}
-                            </button>
-                            <button v-if="vectorMemorySearchQuery || vectorMemorySearchResults.length > 0 || vectorMemorySearchError"
-                                type="button" @click="clearVectorMemorySearch()"
-                                class="px-3 py-2 text-xs font-bold rounded-xl bg-white border border-gray-200 text-gray-500 hover:text-gray-700 hover:bg-gray-50 active:scale-95 transition-all">
-                                清空
-                            </button>
-                        </form>
-
-                        <div v-if="vectorMemorySearchError"
-                            class="rounded-xl border border-rose-100 bg-rose-50 px-3 py-2 text-xs font-bold text-rose-700">
-                            {{ vectorMemorySearchError }}
-                        </div>
-
-                        <div v-if="vectorMemorySearchResults.length > 0" class="space-y-2">
+                        <div class="space-y-2">
                             <div class="flex items-center justify-between gap-3 text-[11px] font-bold text-gray-500">
-                                <span class="flex items-center gap-2 flex-wrap">
-                                    <span>记忆分片 · {{ vectorMemorySearchResults.length }} / 20</span>
-                                </span>
-                                <div class="grid grid-cols-2 gap-1 bg-gray-50 border border-gray-200 rounded-lg p-0.5">
-                                    <button type="button" @click="vectorMemorySearchSortMode = 'time'"
-                                        :class="['px-2 py-1 rounded-md transition-all hit-expand [--hit-out:-10px]', vectorMemorySearchSortMode === 'time' ? 'bg-white text-primary-700 shadow-sm border border-primary-100' : 'text-gray-400 hover:text-gray-600']">
-                                        时间
-                                    </button>
-                                    <button type="button" @click="vectorMemorySearchSortMode = 'score'"
-                                        :class="['px-2 py-1 rounded-md transition-all hit-expand [--hit-out:-10px]', vectorMemorySearchSortMode === 'score' ? 'bg-white text-primary-700 shadow-sm border border-primary-100' : 'text-gray-400 hover:text-gray-600']">
-                                        相关度
-                                    </button>
-                                </div>
+                                <span>记忆目录</span>
+                                <span class="font-mono text-gray-400">{{ memoryTocEntries.length }} 条 · 模型可经 tool_memory 按区间取全文</span>
                             </div>
-                            <div class="space-y-2">
-                                <div v-for="mem in displayedVectorMemorySearchResults" :key="mem.id"
-                                    class="rounded-xl border border-gray-100 bg-white px-3 py-2.5 shadow-sm">
-                                    <div class="flex items-center gap-2 flex-wrap mb-1.5">
-                                        <span class="text-[10px] font-mono text-primary-700 bg-primary-50 border border-primary-100 rounded-md px-2 py-0.5">
-                                            第 {{ mem.turn || '?' }} 轮
-                                        </span>
-                                        <span class="text-[10px] font-mono text-gray-500 bg-gray-50 border border-gray-100 rounded-md px-2 py-0.5">
-                                            相关度 {{ (mem.vectorSearchScore * 100).toFixed(1) }}%
-                                        </span>
+                            <div v-if="memoryTocEntries.length === 0" class="py-6 text-center text-sm text-gray-400">
+                                还没有账本条目，聊够 {{ memorySettings.keepFloors }} 轮后自动生成
+                            </div>
+                            <div v-else class="space-y-1.5 max-h-80 overflow-y-auto pr-1">
+                                <div v-for="item in memoryTocEntries" :key="item.entryId"
+                                    class="rounded-xl border border-gray-100 bg-white px-3 py-2 shadow-sm">
+                                    <div class="flex items-center gap-2 flex-wrap mb-1">
+                                        <span class="text-[10px] font-mono text-primary-700 bg-primary-50 border border-primary-100 rounded-md px-2 py-0.5">{{ item.label }}</span>
+                                        <span class="text-[10px] font-mono text-gray-400">{{ item.tokens }} tok</span>
                                     </div>
-                                    <p class="text-xs text-gray-700 leading-relaxed whitespace-pre-line">{{ mem.paragraph || mem.summary }}</p>
+                                    <p class="text-xs text-gray-700 leading-relaxed whitespace-pre-line">{{ item.summary }}</p>
                                 </div>
                             </div>
-                        </div>
                         </div>
 
-                        <!-- Memory Summary Panel（滚动摘要，P2） -->
-                        <div v-show="memoryGraphView === 'summary'" class="space-y-3">
+                        <!-- Folded summaries (long/short + batch projection) -->
+                        <div class="space-y-3">
                             <div v-if="!memorySummaries || (!memorySummaries.long && !memorySummaries.short)"
-                                class="py-8 text-center text-sm text-gray-400">
+                                class="py-6 text-center text-sm text-gray-400">
                                 还没有摘要，聊够 {{ memorySettings.keepFloors }} 轮后自动生成
                             </div>
                             <template v-else>
@@ -431,12 +276,13 @@
                                     <div class="text-[10px] font-bold text-gray-400 mb-1">总结批次</div>
                                     <div class="flex flex-wrap gap-1.5">
                                         <span v-for="(b, idx) in memorySummaries.batches" :key="idx"
-                                            :class="['text-[10px] px-2 py-1 rounded-lg border', b.status === 'done' ? 'bg-emerald-50 border-emerald-100 text-emerald-700' : b.status === 'failed' ? 'bg-rose-50 border-rose-100 text-rose-700' : 'bg-gray-50 border-gray-100 text-gray-500']">
+                                            :class="['text-[10px] px-2 py-1 rounded-lg border', b.status === 'done' ? 'bg-gray-50 border-gray-200 text-gray-600' : b.status === 'failed' ? 'bg-gray-50 border-gray-200 text-gray-500' : 'bg-gray-50 border-gray-100 text-gray-500']">
                                             第 {{ b.fromTurn }}–{{ b.toTurn }} 轮{{ b.status === 'done' ? '·已总结' : b.status === 'failed' ? '·失败' : '' }}
                                         </span>
                                     </div>
                                 </div>
-                                <!-- Story timeline: summary batches + open plot lines + character profiles, a vertical look back at the story -->
+                                <!-- Story timeline: summary batches + open plot lines +
+                                     character profiles — a vertical look back at the story. -->
                                 <div v-if="(memorySummaries.batches || []).some(b => b.status === 'done')"
                                     class="rounded-xl border border-gray-100 bg-white px-3 py-2.5">
                                     <div class="text-[10px] font-bold text-gray-400 mb-2">剧情时间线</div>
@@ -466,7 +312,6 @@
                                 </div>
                             </template>
                         </div>
-
                     </div>
                 </div>
 
@@ -478,11 +323,10 @@
 <script>
 import { inject } from "vue";
 import SettingsPageHeader from "../common/SettingsPageHeader.vue";
-import { RPHubCustomSelect as CustomSelect } from "../../modules/ui-select.mjs";
 // 2026-08-28 Phase 1.6: shared components are declared locally now that the
 // app-level global registration workaround has been removed.
 export default {
-  components: { SettingsPageHeader, CustomSelect },
+  components: { SettingsPageHeader },
   setup() {
     const ctx = inject("appContext");
     return ctx || {};

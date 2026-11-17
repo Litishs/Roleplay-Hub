@@ -3,13 +3,12 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import * as memorySummary from '../src/modules/memory-summary.mjs';
 
-const [html, app, sender, messageList, memoryState, vectorPatrol, rollingSummary, reconcileModule, summaryModule] = await Promise.all([
+const [html, app, sender, messageList, memoryState, rollingSummary, reconcileModule, summaryModule] = await Promise.all([
     readFile(new URL('../src/components/views/MemoryPanel.vue', import.meta.url), 'utf8'),
     readFile(new URL('../src/modules/app.mjs', import.meta.url), 'utf8'),
     readFile(new URL('../src/composables/useMessageSender.mjs', import.meta.url), 'utf8'),
     readFile(new URL('../src/components/chat/MessageList.vue', import.meta.url), 'utf8'),
     readFile(new URL('../src/composables/useMemorySystem.mjs', import.meta.url), 'utf8'),
-    readFile(new URL('../src/composables/useVectorMemoryPatrol.mjs', import.meta.url), 'utf8'),
     readFile(new URL('../src/composables/useRollingSummary.mjs', import.meta.url), 'utf8'),
     readFile(new URL('../src/modules/memory-reconcile.mjs', import.meta.url), 'utf8'),
     readFile(new URL('../src/modules/memory-summary.mjs', import.meta.url), 'utf8')
@@ -161,7 +160,8 @@ test('滚动摘要:app.js 接入注入、触发与存储键', () => {
 });
 
 test('记忆重构:单一引擎且旧模式/事实层 UI 已移除', () => {
-    assert.ok(html.includes("setMemoryGraphView('summary')"));
+    // v6 L3: the list/summary toggle collapsed into one ledger card.
+    assert.ok(!html.includes("setMemoryGraphView('list')"));
     assert.ok(!html.includes("setMemoryGraphView('graph')"));
     assert.ok(!html.includes("setMemoryGraphView('facts')"));
     assert.ok(!html.includes("setMemoryGraphView('relations')"));
@@ -211,30 +211,15 @@ test('记忆摘要固定注入前缀且不参与楼层裁剪', () => {
     assert.ok(!app.includes('时间线摘要注入（摘要为主，P4）'));
 });
 
-test('分片生成状态可见并可重试', () => {
-    assert.ok(app.includes('sliceBuildStatus'));
-    assert.ok(html.includes('sliceBuildStatus.status'));
-    assert.ok(html.includes('startVectorBatchMemoryExtraction({ manual: true })'));
-    // 2026-08-29 (Phase 3.0): the extraction run moved to useVectorMemoryPatrol.mjs
-    assert.ok(vectorPatrol.includes("status: 'building'"));
-});
-
-test('分片标记：清空重建重置标记，自动补录对脏状态自愈（v4）', () => {
-    // 清空重建必须同步清 vectorExtractedTurns / emptyTurns，否则自动补录空转、分片永远为 0
-    // 2026-08-29 (Phase 3.0): the patrol self-healing moved to useVectorMemoryPatrol.mjs
-    assert.ok(app.includes('delete memorySettings.vectorExtractedTurns[extractedKey]') || vectorPatrol.includes('delete memorySettings.vectorExtractedTurns[extractedKey]'));
-    assert.ok(app.includes('delete memorySettings.emptyTurns[emptyKey]'));
-    // 自愈：分片为 0 但标记 > 0 → 重置标记全量重扫
-    assert.ok(vectorPatrol.includes('let lastExtracted = Number(memorySettings.vectorExtractedTurns[extractedKey]) || 0'));
-    assert.ok(vectorPatrol.includes('memories.value.length === 0'));
-});
-
-test('本地嵌入模型默认自动加载（v4）', () => {
-    assert.ok(app.includes('const ensureLocalEmbeddingReady = () => {'));
-    assert.ok(app.includes('ensureLocalEmbeddingReady();'));
-    assert.ok(app.includes("watch(() => memorySettings.embeddingBackend"));
-    assert.ok(app.includes('未加载(将自动加载)'));
-    assert.ok(!app.includes('未加载(首次使用时加载模型)'));
+test('记忆账本目录可见（v6 L3）', () => {
+    assert.ok(app.includes('memoryTocEntries'));
+    assert.ok(html.includes('memoryTocEntries'));
+    assert.ok(html.includes('记忆目录'));
+    assert.ok(html.includes('tool_memory'));
+    // The vector shard surface is gone.
+    assert.ok(!html.includes('sliceBuildStatus'));
+    assert.ok(!html.includes('vectorMemorySearchQuery'));
+    assert.ok(!app.includes('startVectorBatchMemoryExtraction'));
 });
 
 test('总结批次大小可配置', () => {

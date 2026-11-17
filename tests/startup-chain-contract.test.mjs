@@ -37,19 +37,11 @@ test('display-only network probes run after the restore chain', async () => {
     }
 });
 
-test('local embedding autoload is deferred off the startup chain and idle-scheduled', async () => {
+test('the removed embedding autoload no longer exists on the startup chain', async () => {
     const app = await read(new URL('../src/modules/app.mjs', import.meta.url));
-    const defIdx = app.indexOf('const scheduleLocalEmbeddingAutoload = () => {');
-    assert.ok(defIdx > 0, 'embedding autoload scheduler must be defined in app.mjs');
-    const callIdx = app.indexOf('scheduleLocalEmbeddingAutoload();');
-    assert.ok(callIdx > defIdx, 'embedding autoload scheduler must be invoked after its definition');
-    const scheduler = app.slice(defIdx, callIdx);
-    assert.ok(scheduler.includes('requestIdleCallback'),
-        'scheduler must prefer a browser idle slot before loading the WASM weights');
-    assert.match(scheduler, /if \(isConversationBusy\.value\)/,
-        'scheduler must defer the load while a conversation is generating');
-    assert.match(scheduler, /setTimeout\(attempt, 2000\)/,
-        'scheduler must retry after a delay while the conversation stays busy');
-    assert.ok(!scheduler.includes('setTimeout(() => { ensureLocalEmbeddingReady(); }, 3000)'),
-        'the fixed 3s embedding timer must be gone');
+    // v6 L3: the on-device embedding stack is gone, so nothing may schedule
+    // a model load (WASM weights, idle callbacks) during startup anymore.
+    assert.ok(!app.includes('scheduleLocalEmbeddingAutoload'));
+    assert.ok(!app.includes('ensureLocalEmbeddingReady'));
+    assert.ok(!app.includes('RPHLocalEmbedding'));
 });

@@ -29,47 +29,6 @@ export const factPreviewText = (fact) => {
             }
         };
 
-export const toScoredVectorMemory = (scored) => ({
-            ...scored.memory,
-            vectorRawScore: scored.vectorRawScore,
-            vectorLexicalHits: scored.vectorLexicalHits,
-            vectorLexicalTerms: scored.vectorLexicalTerms,
-            vectorScore: scored.vectorScore
-        });
-
-export const sortVectorMemoriesByTime = (items) => {
-            const orderNumber = (value, fallback) => {
-                if (value === null || value === undefined || value === '') return fallback;
-                const number = Number(value);
-                return Number.isFinite(number) ? number : fallback;
-            };
-
-            return [...items].sort((a, b) => {
-                const aTurn = orderNumber(a.turn, Number.MAX_SAFE_INTEGER);
-                const bTurn = orderNumber(b.turn, Number.MAX_SAFE_INTEGER);
-                const turnDiff = aTurn - bTurn;
-                if (turnDiff !== 0) return turnDiff;
-
-                const aSequence = orderNumber(a.sequence, 0);
-                const bSequence = orderNumber(b.sequence, 0);
-                const sequenceDiff = aSequence - bSequence;
-                if (sequenceDiff !== 0) return sequenceDiff;
-
-                return (b.vectorScore || 0) - (a.vectorScore || 0);
-            });
-        };
-
-export const getVectorLexicalMatch = (memory, queryTerms) => {
-            if (!queryTerms.length) return { hits: 0, boost: 0, matched: [] };
-            const text = String(`${memory.sourceText || ''}\n${memory.summary || ''}`).toLowerCase();
-            const matched = queryTerms.filter(term => text.includes(term.toLowerCase()));
-            return {
-                hits: matched.length,
-                boost: Math.min(0.08, matched.length * 0.015),
-                matched
-            };
-        };
-
 export const extractVectorQueryTerms = (text) => {
             const normalized = String(text || '')
                 .replace(/[^\p{Script=Han}A-Za-z0-9_]+/gu, ' ')
@@ -80,11 +39,24 @@ export const extractVectorQueryTerms = (text) => {
                 '是不是', '有没有', '为什么', '怎么样', '怎么办', '什么', '这个', '那个',
                 '还是', '还在', '还会', '了吗', '吗', '呢', '啊', '吧', '的', '了', '我', '你', '她', '他'
             ]);
-            const terms = new Set();
+            // Terms are grouped by n-gram size and capped per group. A plain
+            // "longest 20" cut dropped every 2-gram on longer CJK runs (a
+            // 16-char run alone yields 13 4-grams + 14 3-grams), so a query
+            // like "查雪夜的线索" could no longer match the distilled digest
+            // that says 雪夜 — recall silently returned nothing. Bigrams are
+            // the workhorses on distilled text; longer grams add precision.
+            const groups = new Map();
+            const addTerm = (term, size) => {
+                if (!term || stopTerms.has(term)) return;
+                if (!groups.has(size)) groups.set(size, new Set());
+                groups.get(size).add(term);
+            };
+            const PER_GROUP_LIMIT = 24;
+            const TOTAL_LIMIT = 60;
 
             normalized.split(/\s+/).filter(Boolean).forEach(part => {
                 if (/^[A-Za-z0-9_]{2,}$/.test(part)) {
-                    terms.add(part.toLowerCase());
+                    addTerm(part.toLowerCase(), 9);
                     return;
                 }
 
@@ -92,86 +64,21 @@ export const extractVectorQueryTerms = (text) => {
                 if (han.length >= 2) {
                     for (let size = Math.min(4, han.length); size >= 2; size--) {
                         for (let i = 0; i <= han.length - size; i++) {
-                            const term = han.slice(i, i + size);
-                            if (!stopTerms.has(term)) terms.add(term);
+                            addTerm(han.slice(i, i + size), size);
                         }
                     }
-                } else if (han.length === 1 && !stopTerms.has(han)) {
-                    terms.add(han);
+                } else if (han.length === 1) {
+                    addTerm(han, 1);
                 }
             });
 
-            return Array.from(terms)
-                .filter(term => term.length > 0 && !stopTerms.has(term))
-                .sort((a, b) => b.length - a.length)
-                .slice(0, 20);
-        };
-
-export const normalizeVectorMemoryFingerprintText = (text) => {
-            return String(text || '')
-                .replace(/\s+/g, '')
-                .replace(/[，。、“”‘’：；！？,.!?;:"'`~]/g, '');
-        };
-
-export const mergeSmallMemoryParagraphs = (paragraphs, maxLength) => {
-            const merged = [];
-            let current = null;
-
-            const flush = () => {
-                if (!current) return;
-                merged.push(current);
-                current = null;
-            };
-
-            paragraphs.forEach((paragraph, index) => {
-                const text = String(paragraph || '').trim();
-                if (!text) return;
-
-                const paragraphNo = index + 1;
-                if (!current) {
-                    current = { text, start: paragraphNo, end: paragraphNo };
-                    return;
-                }
-
-                const candidateText = `${current.text}\n\n${text}`;
-                if (candidateText.length <= maxLength) {
-                    current.text = candidateText;
-                    current.end = paragraphNo;
-                    return;
-                }
-
-                flush();
-                current = { text, start: paragraphNo, end: paragraphNo };
+            const ordered = [];
+            [9, 4, 3, 2, 1].forEach(size => {
+                const group = groups.get(size);
+                if (!group) return;
+                ordered.push(...Array.from(group).slice(0, PER_GROUP_LIMIT));
             });
-
-            flush();
-            return merged;
-        };
-
-export const splitLongMemoryParagraph = (paragraph, maxLength) => {
-            const text = String(paragraph || '').trim();
-            if (!text) return [];
-            if (text.length <= maxLength) return [text];
-
-            const parts = [];
-            let remaining = text;
-            while (remaining.length > maxLength) {
-                const windowText = remaining.slice(0, maxLength);
-                const breakAt = Math.max(
-                    windowText.lastIndexOf('。'),
-                    windowText.lastIndexOf('！'),
-                    windowText.lastIndexOf('？'),
-                    windowText.lastIndexOf('.'),
-                    windowText.lastIndexOf('!'),
-                    windowText.lastIndexOf('?'),
-                    windowText.lastIndexOf('\n')
-                );
-                const cutAt = breakAt > Math.floor(maxLength * 0.55) ? breakAt + 1 : maxLength;
-                parts.push(remaining.slice(0, cutAt).trim());
-                remaining = remaining.slice(cutAt).trim();
-            }
-            if (remaining) parts.push(remaining);
-            return parts.filter(Boolean);
+            return Array.from(new Set(ordered)).slice(0, TOTAL_LIMIT);
         };
 
 export const getClassicMemoryKey = (sourceAssistantIds, turn = 0) => {
@@ -183,22 +90,6 @@ export const trimMemoryText = (text, maxLength = 1800) => {
             const cleanText = String(text || '').replace(/\n{3,}/g, '\n\n').trim();
             if (cleanText.length <= maxLength) return cleanText;
             return `${cleanText.slice(0, maxLength)}...`;
-        };
-
-export const shouldSuppressStandardVectorMemoryRecall = () => false;
-
-export const yieldMemoryStorageWork = () => new Promise(resolve => setTimeout(resolve, 0));
-
-export const isEmbeddingLike = (value) => Array.isArray(value) || ArrayBuffer.isView(value);
-
-export const getMemoryVectorExtractedKey = (uuid) => {
-            const safeUuid = uuid || 'global';
-            return `${safeUuid}:vectorExtracted`;
-        };
-
-export const getMemoryEmptyTurnsKey = (uuid) => {
-            const safeUuid = uuid || 'global';
-            return `${safeUuid}:vector`;
         };
 
 export const normalizeKeepFloors = (value, min, max, fallback) => {

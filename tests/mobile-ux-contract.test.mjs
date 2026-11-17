@@ -134,7 +134,7 @@ test("all range sliders use the touch-range class with track styling in styles.c
     ["src/components/settings/AdvancedSettings.vue", 1],
     ["src/components/settings/ApiConfig.vue", 3],
     ["src/components/settings/TtsSettings.vue", 3],
-    ["src/components/views/MemoryPanel.vue", 5],
+    ["src/components/views/MemoryPanel.vue", 3],
     ["src/components/views/UiTemplatePanel.vue", 2],
     ["src/components/views/WorldInfoPanel.vue", 4],
   ];
@@ -145,7 +145,7 @@ test("all range sliders use the touch-range class with track styling in styles.c
     total += found;
     assert.strictEqual(found, count, `${file} must wire ${count} range inputs to touch-range`);
   }
-  assert.strictEqual(total, 20, "all 20 range sliders must be touch-friendly");
+  assert.strictEqual(total, 18, "all 18 range sliders must be touch-friendly");
 
   const stale = await Promise.all(expected.map(([file]) => read(file)));
   for (const source of stale) {

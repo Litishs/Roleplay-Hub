@@ -41,14 +41,14 @@ export function useActiveToolPipeline(deps) {
         attachActiveToolCallsToAssistant,
         createAbortReason,
         // tool predicates + search backends
-        isVectorActiveTool,
+        isMemoryActiveTool,
         isKeywordActiveTool,
         isWebActiveTool,
         isPluginActiveTool,
         executePluginToolSearch,
         searchDialogueByKeywordForTool,
         searchWebByTavilyForTool,
-        searchVectorMemoriesForTool,
+        searchMemoryLedgerForTool,
         // result context helpers / orchestration
         updateActiveToolResultContext,
         normalizeActiveToolResultContext,
@@ -161,7 +161,7 @@ export function useActiveToolPipeline(deps) {
                 const toolMode = toolCall?.mode || (isKeywordActiveTool(toolCall?.tool) ? 'keyword'
                     : isWebActiveTool(toolCall?.tool) ? 'web'
                     : isPluginActiveTool(toolCall?.tool) ? 'plugin'
-                    : isVectorActiveTool(toolCall?.tool) ? 'vector' : 'unknown');
+                    : isMemoryActiveTool(toolCall?.tool) ? 'memory' : 'unknown');
                 const startedAt = Date.now();
                 try {
                     if (toolAbort.signal.aborted) throw createAbortReason('Generation cancelled by user');
@@ -170,8 +170,8 @@ export function useActiveToolPipeline(deps) {
                         await saveChatHistoryNow();
                     }
 
-                    if (isVectorActiveTool(toolCall.tool) && !memorySettings.enabled) {
-                        throw new Error('记忆系统未开启，无法执行向量检索。');
+                    if (isMemoryActiveTool(toolCall.tool) && !memorySettings.enabled) {
+                        throw new Error('记忆系统未开启，无法检索记忆账本。');
                     }
 
                     const results = isKeywordActiveTool(toolCall.tool)
@@ -189,7 +189,7 @@ export function useActiveToolPipeline(deps) {
                             toolCall,
                             toolAbort.signal
                         )
-                        : await searchVectorMemoriesForTool(
+                        : await searchMemoryLedgerForTool(
                             toolCall.query,
                             toolCall.tool.resultCount,
                             toolAbort.signal

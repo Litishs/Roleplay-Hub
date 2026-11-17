@@ -27,7 +27,6 @@
 // Contract locks: tests/story-branch-contract.test.mjs, tests/composables-contract.test.mjs.
 
 import { generateUUID } from '../modules/utils.mjs';
-import { getMemoryEmptyTurnsKey } from '../modules/memory-utils.mjs';
 import { filterLedgerForBranch, normalizeLedger } from '../modules/memory-ledger.mjs';
 import { createId as rphBranchCreateId, defaultBranchName as rphBranchDefaultBranchName } from '../modules/story-branch.mjs';
 
@@ -36,7 +35,6 @@ export function useStoryBranching(deps) {
         // branch / chat / memory state
         currentCharacter,
         chatHistory,
-        memories,
         classicMemories,
         storyBranches,
         currentStoryBranch,
@@ -51,7 +49,6 @@ export function useStoryBranching(deps) {
         // shared guard bridges
         setApplyingCharacterScopedData,
         finishApplyingCharacterScopedData,
-        setMemoriesLoaded,
         setClassicMemoriesLoaded,
         setMemorySummaries,
         setMemoryProfile,
@@ -76,7 +73,6 @@ export function useStoryBranching(deps) {
         serializeChatMessage,
         prepareLoadedChatHistoryForDisplay,
         createInitialChatHistory,
-        prepareMemoriesForRuntime,
         prepareClassicMemoriesForRuntime,
         copyUiTemplateRuntimeForBranch,
         loadGlobalUiTemplateRuntimeForCharacter,
@@ -103,7 +99,6 @@ export function useStoryBranching(deps) {
             const previousState = {
                 activeId: activeStoryBranchId.value,
                 chatHistory: chatHistory.value,
-                memories: memories.value,
                 classicMemories: classicMemories.value,
                 summaries: memorySummaries.value,
                 profile: memoryProfile.value,
@@ -120,16 +115,14 @@ export function useStoryBranching(deps) {
                 const branchNumber = storyBranches.value.filter(branch => branch.id !== 'main').length + 1;
                 const branchName = api ? api.defaultBranchName(branchNumber) : `分支 ${branchNumber}`;
                 const now = Date.now();
-                const [savedChat, savedMemories, savedClassicMemories, savedSummaries, savedProfile, savedLedger] = await Promise.all([
+                const [savedChat, savedClassicMemories, savedSummaries, savedProfile, savedLedger] = await Promise.all([
                     getStoredChatHistoryWithRetry(parentScopeId),
-                    getScopedStoredValue('memories', parentScopeId),
                     getScopedStoredValue('classic_memories', parentScopeId),
                     getScopedStoredValue('memory_summaries', parentScopeId),
                     getScopedStoredValue('memory_profile', parentScopeId),
                     getScopedStoredValue('memory_ledger', parentScopeId)
                 ]);
                 let branchChat = Array.isArray(savedChat) ? savedChat : [];
-                let branchMemories = Array.isArray(savedMemories) ? savedMemories : [];
                 let branchClassicMemories = Array.isArray(savedClassicMemories) ? savedClassicMemories : [];
                 let branchSummaries = savedSummaries && typeof savedSummaries === 'object' ? { ...savedSummaries } : null;
                 let branchProfile = savedProfile && typeof savedProfile === 'object' ? { ...savedProfile } : null;
@@ -160,7 +153,6 @@ export function useStoryBranching(deps) {
                         prepareLoadedChatHistoryForDisplay(branchChat),
                         { includeSystem: false }
                     ).turns.length;
-                    branchMemories = branchMemories.filter(memory => Number(memory?.turn) <= forkTurn);
                     branchClassicMemories = branchClassicMemories.filter(memory => Number(memory?.turn) <= forkTurn);
                     // The info card is final-state text (no covers until L4), so a
                     // mid-history fork resets it; fact entries will make this a
@@ -191,7 +183,6 @@ export function useStoryBranching(deps) {
                     branchSummaries = buildMemorySummariesProjection(branchLedger, branchChat);
                 }
                 await setScopedStoredValue('chat', branchScopeId, branchChat, { clone: false });
-                await setScopedStoredValue('memories', branchScopeId, branchMemories, { clone: false });
                 await setScopedStoredValue('classic_memories', branchScopeId, branchClassicMemories, { clone: false });
                 if (branchSummaries) {
                     await setScopedStoredValue('memory_summaries', branchScopeId, cloneForStorage(branchSummaries), { clone: false });
@@ -229,12 +220,10 @@ export function useStoryBranching(deps) {
                 chatHistory.value = branchChat.length
                     ? prepareLoadedChatHistoryForDisplay(branchChat)
                     : createInitialChatHistory(char);
-                memories.value = branchMemories.length ? prepareMemoriesForRuntime(branchMemories) : [];
                 classicMemories.value = prepareClassicMemoriesForRuntime(branchClassicMemories);
                 setMemorySummaries(branchSummaries ? cloneForStorage(branchSummaries) : null);
                 setMemoryProfile(branchProfile ? cloneForStorage(branchProfile) : null);
                 setMemoryLedger(branchLedger ? cloneForStorage(branchLedger) : null);
-                setMemoriesLoaded(true);
                 setClassicMemoriesLoaded(true);
                 finishApplyingCharacterScopedData();
                 showToast(`已创建并进入“${branchName}”`, 'success');
@@ -246,21 +235,16 @@ export function useStoryBranching(deps) {
                     activeStoryBranchId.value = previousState.activeId;
                     selectedStoryBranchId.value = previousState.activeId;
                     chatHistory.value = previousState.chatHistory;
-                    memories.value = previousState.memories;
                     classicMemories.value = previousState.classicMemories;
                     setMemorySummaries(previousState.summaries);
                     setMemoryProfile(previousState.profile);
                     setMemoryLedger(previousState.ledger);
-                    if (memorySettings.emptyTurns) {
-                        delete memorySettings.emptyTurns[getMemoryEmptyTurnsKey(createdBranch.branchScopeId)];
-                    }
                     ensureGlobalUiTemplates().forEach(template => {
                         if (template.runtimeByCharacter) delete template.runtimeByCharacter[createdBranch.branchScopeId];
                     });
                     loadGlobalUiTemplateRuntimeForCharacter(char);
                     await Promise.allSettled([
                         deleteScopedStoredValue('chat', createdBranch.branchScopeId),
-                        deleteScopedStoredValue('memories', createdBranch.branchScopeId),
                         deleteScopedStoredValue('classic_memories', createdBranch.branchScopeId),
                         deleteScopedStoredValue('memory_summaries', createdBranch.branchScopeId),
                         deleteScopedStoredValue('memory_profile', createdBranch.branchScopeId),

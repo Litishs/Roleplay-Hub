@@ -33,7 +33,6 @@ const dataLoaderSource = (await readFile(new URL('../src/composables/useDataLoad
 const pipelineSource = (await readFile(new URL('../src/composables/useUiTemplatePipeline.mjs', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
 const activeToolPipelineSource = (await readFile(new URL('../src/composables/useActiveToolPipeline.mjs', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
 const specialRulesSource = (await readFile(new URL('../src/composables/useSpecialRules.mjs', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
-const vectorPatrolSource = (await readFile(new URL('../src/composables/useVectorMemoryPatrol.mjs', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
 const rollingSummarySource = (await readFile(new URL('../src/composables/useRollingSummary.mjs', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
 const regexPipelineSource = (await readFile(new URL('../src/composables/useRegexPipeline.mjs', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
 const branchingSource = (await readFile(new URL('../src/composables/useStoryBranching.mjs', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
@@ -88,32 +87,28 @@ test('useMemorySystem returns live reactive state (runtime)', async () => {
     const state = useMemorySystem();
     // a second call must return an independent instance (no module-level shared state)
     const other = useMemorySystem();
-    assert.notEqual(state.memories, other.memories, 'independent instances per call');
+    assert.notEqual(state.classicMemories, other.classicMemories, 'independent instances per call');
+    assert.notEqual(state.memoryLedger, other.memoryLedger, 'independent instances per call');
 
-    assert.ok(isRef(state.memories) && Array.isArray(state.memories.value));
+    assert.ok(isRef(state.classicMemories) && Array.isArray(state.classicMemories.value));
     assert.ok(isReactive(state.memorySettings), 'memorySettings is reactive');
     assert.equal(state.memorySettings.enabled, false);
-    assert.equal(state.memorySettings.mode, 'vector');
-    assert.equal(state.memorySettings.embeddingBackend, 'api');
     assert.equal(state.memorySettings.keepFloors, 16);
     assert.equal(state.memorySettings.summaryBatchSize, 12);
-    assert.equal(state.memorySettings.vectorTopK, 10);
-    assert.equal(state.memorySettings.similarityThreshold, 50);
-    assert.equal(state.memorySettings.defaultDepth, 1);
-    assert.equal(state.memorySettings.localEmbeddingModel, 'bge-small-zh-v1.5');
+    // v6 L3: the vector/embedding knobs are gone from the settings shape.
+    for (const dead of ['mode', 'embeddingBackend', 'embeddingModel', 'localEmbeddingModel',
+        'vectorTopK', 'similarityThreshold', 'defaultDepth', 'vectorExtractedTurns', 'emptyTurns']) {
+        assert.ok(!(dead in state.memorySettings), `${dead} must stay removed`);
+    }
 
     for (const key of [
         'classicMemories', 'classicMemoryPage', 'memorySummaries', 'memoryProfile', 'memoryLedger',
-        'summaryProgress', 'sliceBuildStatus', 'memoryGraphView', 'showNoMemoryNeededModal',
-        'showMemorySettings',
-        'MEMORY_VECTOR_BATCH_SIZE', 'LIST_PAGE_SIZE', 'MEMORY_MODE_VECTOR',
-        'MIN_CONTEXT_FLOORS', 'SUMMARY_BATCH_SIZE_DEFAULT'
+        'summaryProgress', 'memoryGraphView', 'showNoMemoryNeededModal', 'showMemorySettings',
+        'LIST_PAGE_SIZE', 'MIN_CONTEXT_FLOORS', 'SUMMARY_BATCH_SIZE_DEFAULT'
     ]) {
         assert.ok(key in state, `exposes ${key}`);
     }
-    assert.equal(state.MEMORY_VECTOR_BATCH_SIZE, 16);
     assert.equal(state.LIST_PAGE_SIZE, 10);
-    assert.equal(state.MEMORY_MODE_VECTOR, 'vector');
     // fact layer removed (2026-09-06 audit): the composable must not expose it
     for (const dead of ['memoryFacts', 'isFactExtracting', 'isFactMaintaining', 'factExtractProgress',
         'factMaintenancePreview', 'factBaselineStatus', 'factShowRecycleBin']) {
@@ -807,8 +802,9 @@ test('every showVueConfirmModal call site declares its own button labels', () =>
     // fact layer.  2026-09-26: the startup crash notice (diagnostics 4-layer
     // plan L3-3) adds a labelled site; the classic-batch retry prompt was
     // removed with the dead startClassicBatchMemoryExtraction. Remaining
-    // sites: restore-backup + vector patrol retry + crash notice.
-    assert.equal(callCount, 3, 'exactly three confirm call sites (restore + vector patrol retry + crash notice)');
+    // sites: restore-backup + crash notice (the vector patrol retry prompt
+    // was removed with the embedding stack in v6 L3).
+    assert.equal(callCount, 2, 'exactly two confirm call sites (restore + crash notice)');
     assert.equal(confirmCount, callCount, 'every call site must pass confirmLabel');
     assert.equal(cancelCount, callCount, 'every call site must pass cancelLabel');
     assert.ok(!combined.includes('取消中断'), 'mistranslated Cancel label must not reappear');
@@ -1092,90 +1088,6 @@ test('app.mjs wires useSpecialRules at the original declaration site', () => {
     assert.ok(app.includes('enforceSpecialRules,'), 'ctx export kept');
 });
 
-// --- useVectorMemoryPatrol (Phase 3.0): vector batch memory extraction ---
-
-test('useVectorMemoryPatrol composable owns the vector extraction run', () => {
-    assert.ok(vectorPatrolSource.includes("import { RPHLocalEmbedding } from '../modules/local-embedding.mjs';"), 'imports local embedding');
-    assert.ok(vectorPatrolSource.includes("import { getMemoryEmptyTurnsKey, getMemoryVectorExtractedKey } from '../modules/memory-utils.mjs';"), 'imports memory key helpers');
-    assert.ok(vectorPatrolSource.includes('export function useVectorMemoryPatrol(deps)'), 'deps-injecting factory export');
-    assert.ok(vectorPatrolSource.includes('const startVectorBatchMemoryExtraction = async (options = {}) => {'), 'owns startVectorBatchMemoryExtraction');
-    // shared guards reached through accessors, never rebound locally
-    assert.ok(vectorPatrolSource.includes('setBatchExtractAbort(batchController);'), 'stores run controller through bridge');
-    assert.ok(vectorPatrolSource.includes('while (getBatchExtractAbort() === batchController && !batchController.signal.aborted) {'), 'run loop guarded through bridge');
-    assert.ok(vectorPatrolSource.includes('setBatchExtractAbort(null);'), 'clears controller through bridge');
-    assert.ok(vectorPatrolSource.includes('getVectorBatchRescanRequested() ||'), 'rescan flag read through bridge');
-    assert.ok(!/_(batchExtractAbort|vectorBatchRescanRequested)/.test(vectorPatrolSource.replace(/^\/\/.*$/gm, '')), 'no direct guard access in code');
-    // v4 self-healing marker stays
-    assert.ok(vectorPatrolSource.includes('delete memorySettings.vectorExtractedTurns[extractedKey];'), 'self-healing rescan kept');
-    assert.ok(vectorPatrolSource.includes('return { startVectorBatchMemoryExtraction };'));
-});
-
-test('app.mjs wires useVectorMemoryPatrol with guard accessors', () => {
-    assert.ok(app.includes("import { useVectorMemoryPatrol } from '../composables/useVectorMemoryPatrol.mjs';"), 'import');
-    assert.equal(app.split('useVectorMemoryPatrol(').length - 1, 1, 'exactly one composable call per setup()');
-    assert.ok(app.includes('const { startVectorBatchMemoryExtraction } = useVectorMemoryPatrol({'), 'destructures at the wiring site');
-    assert.ok(!app.includes('const startVectorBatchMemoryExtraction = async'), 'moved out of app.mjs');
-    // the shared guard bindings stay in app.mjs for abortVectorBatchExtraction / manual rescan
-    assert.ok(app.includes('let _batchExtractAbort = null;'));
-    assert.ok(app.includes('const getBatchExtractAbort = () => _batchExtractAbort;'), 'getter accessor defined');
-    assert.ok(app.includes('const setVectorBatchRescanRequested = (value) => { _vectorBatchRescanRequested = value; };'), 'setter accessor defined');
-    assert.ok(app.includes('_vectorBatchRescanRequested = true;'), 'manual rescan request site kept');
-    assert.ok(app.includes('startVectorBatchMemoryExtraction,'), 'ctx export kept');
-});
-
-// --- useRollingSummary (Phase 3.0): rolling memory summary chain ---
-
-test('useRollingSummary composable is the reconcile trigger adapter (v6 L1)', () => {
-    assert.ok(rollingSummarySource.includes('export function useRollingSummary(deps)'), 'deps-injecting factory export');
-    assert.ok(rollingSummarySource.includes('const runRollingSummaryCheck = async (options = {}) => {'), 'owns runRollingSummaryCheck');
-    // The chain moved to memory-reconcile.mjs (single writer); the
-    // composable only forwards the trigger and keeps the force toast.
-    assert.ok(rollingSummarySource.includes('reconcileMemory({ force: options.force === true })'), 'delegates to the single writer');
-    assert.ok(rollingSummarySource.includes('暂无需要总结的内容'), 'force-with-nothing-to-do toast kept');
-    assert.ok(!/_(summaryInFlight|summaryAbortController)/.test(rollingSummarySource.replace(/^\/\/.*$/gm, '')), 'no direct guard access in code');
-    assert.ok(!rollingSummarySource.includes('fetch('), 'no network in the adapter');
-    assert.ok(rollingSummarySource.includes('return { runRollingSummaryCheck };'));
-});
-
-test('app.mjs wires useRollingSummary with the ledger reconciler', () => {
-    assert.ok(app.includes("import { useRollingSummary } from '../composables/useRollingSummary.mjs';"), 'import');
-    assert.equal(app.split('useRollingSummary(').length - 1, 1, 'exactly one composable call per setup()');
-    assert.ok(app.includes('const { runRollingSummaryCheck } = useRollingSummary({'), 'destructures at the wiring site');
-    assert.ok(app.includes('reconcileMemory: memoryReconciler.reconcile'), 'reconciler injected');
-    assert.ok(app.includes('const memoryReconciler = createMemoryReconciler({'), 'single reconciler instance');
-    assert.ok(!app.includes('const runRollingSummaryCheck = async'), 'moved out of app.mjs');
-    // the shared guard bindings stay in app.mjs for abortRollingSummary / memory patrol
-    assert.ok(app.includes('const getSummaryInFlight = () => _summaryInFlight;'), 'getter accessor defined');
-    assert.ok(app.includes('if (!_summaryInFlight) {'), 'memory patrol still reads the flag');
-    assert.ok(app.includes('runRollingSummaryCheck,'), 'ctx export kept');
-});
-
-// --- useRegexPipeline (Phase 3.0): regex script processing ---
-
-test('useRegexPipeline composable owns processRegex', () => {
-    assert.ok(regexPipelineSource.includes("import { RPHubCardUtils } from '../modules/card-utils.mjs';"), 'imports card utils');
-    assert.ok(regexPipelineSource.includes('export function useRegexPipeline(deps)'), 'deps-injecting factory export');
-    assert.ok(regexPipelineSource.includes('const processRegex = (text, options = {}) => {'), 'owns processRegex');
-    // behavior markers stay intact
-    assert.ok(regexPipelineSource.includes("=== 'NAI画图正则'"), 'NAI regex ordering kept');
-    assert.ok(regexPipelineSource.includes('transformUnprotectedText'), 'HTML/code protection kept');
-    assert.ok(regexPipelineSource.includes("script.name !== 'Auto Replace {{user}}'"), 'protection exemption kept');
-    assert.ok(regexPipelineSource.includes('if (isDisplay && script.promptOnly) return;'), 'mode filter kept');
-    assert.ok(regexPipelineSource.includes('return { processRegex, containsCatastrophicQuantifier };'));
-    // 2026-09-28: ReDoS guard — nested-quantifier patterns are intercepted before compiling
-    assert.ok(regexPipelineSource.includes('containsCatastrophicQuantifier(regexPattern)'), 'ReDoS guard runs before compiling');
-    assert.ok(!regexPipelineSource.includes('showToast('), 'no toast side effects');
-});
-
-test('app.mjs wires useRegexPipeline at the original declaration site', () => {
-    assert.ok(app.includes("import { useRegexPipeline } from '../composables/useRegexPipeline.mjs';"), 'import');
-    assert.equal(app.split('useRegexPipeline(').length - 1, 1, 'exactly one composable call per setup()');
-    assert.ok(app.includes('const { processRegex } = useRegexPipeline({ regexScripts });'), 'single-dep wiring');
-    assert.ok(!app.includes('const processRegex = (text, options = {}) => {'), 'moved out of app.mjs');
-    // consumers keep receiving it through the deps objects
-    assert.ok(app.includes('processRegex,'));
-});
-
 // --- useStoryBranching (Phase 3.0): story branch creation ---
 
 test('app.mjs activates the executable-iframe lifecycle limiter (active iframes ≤ 3)', () => {
@@ -1192,16 +1104,15 @@ test('app.mjs wires useStoryBranching after its last dep', () => {
     assert.ok(!app.includes('const createStoryBranch = async'), 'moved out of app.mjs');
     // ctx export kept
     assert.ok(app.includes('openStoryBranchModal, createStoryBranch, switchStoryBranch,'));
-    // guard setter bridges defined in app.mjs
-    assert.ok(app.includes('const setMemoriesLoaded = (value) => { _memoriesLoaded = value; };'), 'memory guard setters');
+    // v6 L3: the legacy memories_* load guard was removed with the vector stack.
+    assert.ok(!app.includes('setMemoriesLoaded'), 'vector memories guard setter removed');
     // fact-layer guard setters removed with the fact layer (2026-09-06 audit)
     assert.ok(!app.includes('setFactFragmentsLoaded'), 'fact guard setters removed');
 });
 
 test('Phase 3.0 device-caught dep regressions stay locked', () => {
-    // _doBatchEmbedMemoryChunks: renamed dep broke the patrol call site (device logcat)
-    assert.ok(vectorPatrolSource.includes('        _doBatchEmbedMemoryChunks,'), 'patrol destructures _doBatchEmbedMemoryChunks');
-    assert.ok(app.includes('            _doBatchEmbedMemoryChunks,'), 'app.mjs passes it as a dep');
+    // v6 L3: the vector patrol and its embed-batch dep are gone.
+    assert.ok(!app.includes('_doBatchEmbedMemoryChunks'), 'embedding batch helper removed');
     // updateActiveToolResultContext: missing dep broke tool result bookkeeping
     assert.ok(activeToolPipelineSource.includes('        updateActiveToolResultContext,'), 'tool pipeline destructures updateActiveToolResultContext');
     // cloneForStorage: missing dep broke branch seeding (device logcat);

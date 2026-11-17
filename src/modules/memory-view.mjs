@@ -14,12 +14,22 @@
 // Contract locks: tests/memory-view-contract.test.mjs.
 
 import { estimateTokens } from './utils.mjs';
+import { extractVectorQueryTerms } from './memory-utils.mjs';
 
 export const VIEW_DEFAULTS = Object.freeze({
     longBudget: 12000,
     shortBudget: 12000,
     tocBudget: 4000,
     shortDigestCount: 4
+});
+
+// Lexical auto-recall (v6 L3 §8.2): the query is the latest user input plus
+// the head of the previous assistant reply. Ranking is deliberately the v4
+// fallback idea — hit count first, then recency — applied to distilled
+// digest text instead of raw fragments.
+export const RECALL_DEFAULTS = Object.freeze({
+    recallLimit: 3,
+    recallBudget: 1400
 });
 
 const truncateToBudget = (text, budget) => {
@@ -132,4 +142,62 @@ export const buildMemoryView = (ledger, liveTurnIndex, settings = {}) => {
             toc: tocTokens
         }
     };
+};
+
+// buildMemoryRecall — pure lexical selection over visible digest entries.
+// settings.excludedTurns: turns still inside the raw-context window; an
+// entry whose every covered turn is retained adds nothing to the prompt.
+export const buildMemoryRecall = (ledger, liveTurnIndex, queryText, settings = {}) => {
+    const config = { ...RECALL_DEFAULTS, ...(settings && typeof settings === 'object' ? settings : {}) };
+    const turnIndex = liveTurnIndex instanceof Map ? liveTurnIndex : new Map();
+    const excludedTurns = config.excludedTurns instanceof Set ? config.excludedTurns : new Set();
+    const terms = extractVectorQueryTerms(queryText);
+    if (terms.length === 0) return [];
+
+    const lowerTerms = terms.map(term => term.toLowerCase());
+    const entries = Array.isArray(ledger?.entries) ? ledger.entries : [];
+    const scored = [];
+    for (const entry of entries) {
+        if (entry.kind !== 'digest' || entry.meta.stale || entry.covers.length === 0) continue;
+        const turns = [];
+        let visible = true;
+        for (const cover of entry.covers) {
+            if (!turnIndex.has(cover.id)) { visible = false; break; }
+            turns.push(turnIndex.get(cover.id));
+        }
+        if (!visible || turns.length === 0) continue;
+        if (turns.every(turn => excludedTurns.has(turn))) continue;
+        const text = String(entry.text || '').trim();
+        if (!text) continue;
+        const haystack = text.toLowerCase();
+        const hits = lowerTerms.filter(term => haystack.includes(term)).length;
+        if (hits === 0) continue;
+        scored.push({
+            entry,
+            text,
+            hits,
+            fromTurn: Math.min(...turns),
+            toTurn: Math.max(...turns)
+        });
+    }
+
+    scored.sort((a, b) => (b.hits - a.hits) || (b.toTurn - a.toTurn));
+    const limit = Math.max(1, Math.floor(config.recallLimit));
+    const picked = [];
+    let usedTokens = 0;
+    for (const item of scored) {
+        if (picked.length >= limit) break;
+        const tokens = estimateTokens(item.text);
+        if (picked.length > 0 && usedTokens + tokens > config.recallBudget) continue;
+        usedTokens += tokens;
+        picked.push({
+            entryId: item.entry.id,
+            level: Number(item.entry.level) || 0,
+            fromTurn: item.fromTurn,
+            toTurn: item.toTurn,
+            text: item.text,
+            score: item.hits
+        });
+    }
+    return picked;
 };

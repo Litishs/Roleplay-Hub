@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { stripSourceMapComment } from "../scripts/lib/strip-source-map.mjs";
 
-// 2026-11-12: vendored bundles (marked / dompurify / transformers) carry a
+// 2026-11-12: vendored bundles (marked / dompurify) carry a
 // trailing `sourceMappingURL` comment while their .map files are never copied.
 // Vite's dev server honoured the comment, failed the read and printed
 // "Failed to load source map ... ENOENT" on every page load, which buried real
@@ -22,15 +22,10 @@ test("stripSourceMapComment removes only the trailing map reference", () => {
     assert.equal(stripSourceMapComment(inline), inline);
 });
 
-test("both vendor copy scripts strip the reference while copying", async () => {
-    const [vendor, embedding] = await Promise.all([
-        read("../scripts/prepare-vendor.mjs"),
-        read("../scripts/prepare-local-embedding.mjs")
-    ]);
-    for (const source of [vendor, embedding]) {
-        assert.match(source, /import \{ copyWithoutSourceMap \} from '\.\/lib\/strip-source-map\.mjs';/,
-            "scripts must use the shared copy helper");
-        assert.match(source, /await copyWithoutSourceMap\(/, "the copy loop must go through the helper");
-        assert.doesNotMatch(source, /await copyFile\(/, "no raw copyFile may bypass the stripper");
-    }
+test("the vendor copy script strips the reference while copying", async () => {
+    const source = await read("../scripts/prepare-vendor.mjs");
+    assert.match(source, /import \{ copyWithoutSourceMap \} from '\.\/lib\/strip-source-map\.mjs';/,
+        "the script must use the shared copy helper");
+    assert.match(source, /await copyWithoutSourceMap\(/, "the copy loop must go through the helper");
+    assert.doesNotMatch(source, /await copyFile\(/, "no raw copyFile may bypass the stripper");
 });

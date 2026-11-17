@@ -96,7 +96,9 @@ test('useStoryBranching owns createStoryBranch with rollback and guards', () => 
     assert.ok(branching.includes('storyBranches.value = storyBranches.value.filter(branch => branch.id !== createdBranch.branchId);'), 'rollback kept');
     // guards reached through setter bridges, never rebound locally
     assert.ok(branching.includes('setApplyingCharacterScopedData(true);'), 'apply guard set through bridge');
-    assert.ok(branching.includes('setMemoriesLoaded(true);'), 'memories guard set through bridge');
+    // v6 L3: memories_* is no longer copied or guarded (ledger covers ⊆ survivors).
+    assert.ok(!branching.includes('setMemoriesLoaded'), 'vector memories guard removed');
+    assert.ok(!branching.includes("getScopedStoredValue('memories'"), 'vector memories not copied to branches');
     // fact-layer guard resets removed with the fact layer (2026-09-06 audit)
     assert.ok(!branching.includes('setFactLoadedCharacterId') && !branching.includes('memoryFacts'), 'fact reset removed');
     assert.ok(branching.includes('getDb() ? getDb().deleteFragments(createdBranch.branchScopeId) : Promise.resolve(),'), 'db reached through accessor');
