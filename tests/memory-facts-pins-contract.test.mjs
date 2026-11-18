@@ -102,3 +102,49 @@ test('v6 L4: profileStaleAfter is a bounded, persisted setting', () => {
     assert.ok(panel.includes('v-model.number="memorySettings.profileStaleAfter"'));
     assert.ok(panel.includes('信息卡过期标注'));
 });
+// --- v6 L5: hierarchical compaction UI + real budgets ----------------------
+
+test('v6 L5: compaction is a persisted switch with a bounded fanout slider', () => {
+    assert.ok(memoryState.includes('compactionEnabled: true'));
+    assert.ok(memoryState.includes('compactionFanout: 5'));
+    assert.ok(app.includes('memorySettings.compactionEnabled = memorySettings.compactionEnabled !== false'));
+    assert.ok(app.includes('memorySettings.compactionFanout = Math.max(COMPACT_FANOUT_MIN'));
+    // Slider bounds come from the ledger module (single source of truth).
+    assert.ok(app.includes('compactFanoutMin: COMPACT_FANOUT_MIN'));
+    assert.ok(app.includes('compactFanoutMax: COMPACT_FANOUT_MAX'));
+    assert.ok(panel.includes('v-model="memorySettings.compactionEnabled"'));
+    assert.ok(panel.includes('v-model.number="memorySettings.compactionFanout"'));
+    assert.ok(panel.includes(':min="compactFanoutMin"'));
+    assert.ok(panel.includes(':max="compactFanoutMax"'));
+    assert.ok(panel.includes('层级压实'));
+    assert.ok(panel.includes('压实阈值'));
+});
+
+test('v6 L5: manual compaction button and manual trigger are wired', () => {
+    assert.ok(panel.includes('手动压实'));
+    assert.ok(panel.includes('compactMemoryNow()'));
+    assert.ok(app.includes('const compactMemoryNow = async () => {'));
+    assert.ok(app.includes('memoryReconciler.reconcile({ compact: true })'));
+    assert.ok(app.includes('requestCompaction: requestMemoryCompaction'));
+    assert.ok(app.includes('buildCompactionMessages'));
+    assert.ok(app.includes('已压实 ${result.folded} 组记忆'));
+    // Manual compaction overrides the automatic switch for one sweep.
+    assert.ok(reconcileModule.includes('if (!force && settings.compactionEnabled === false) return 0;'));
+    assert.ok(reconcileModule.includes('selectCompactionGroup(ledger, live.liveTurnIndex'));
+    assert.ok(reconcileModule.includes('applyCompaction(ledger, {'));
+    assert.ok(reconcileModule.includes('MAX_COMPACTIONS_PER_RUN'));
+});
+
+test('v6 L5: health panel shows the injection budget block and fold sources', () => {
+    assert.ok(panel.includes('注入预算（实际 / 上限）'));
+    assert.ok(panel.includes('memoryBudgetRows'));
+    assert.ok(panel.includes('row.used }} / {{ row.budget }}'));
+    assert.ok(panel.includes('折叠来源'));
+    assert.ok(panel.includes('getMemoryEntryBase'));
+    assert.ok(app.includes('memoryBudgetStats: computed'));
+    assert.ok(app.includes('tocBudget: Infinity'), 'panel directory is not capped by the injection budget');
+    assert.ok(app.includes('long: { used: view.tokens.long, budget: view.budgets.long }'));
+    assert.ok(app.includes('const getMemoryEntryBase = (entryId) => {'));
+    // Folded digests never reach tool retrieval either.
+    assert.ok(app.includes('!entry.meta.stale && !entry.meta.folded'));
+});

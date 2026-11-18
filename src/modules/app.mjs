@@ -43,9 +43,12 @@ import RPHTtsText from './tts-text.mjs';
 import { MAIN_ID, SCOPE_SEPARATOR, createId, getScopeId, getOwnerId, isBranchScopeId, defaultBranchName, createMainBranch, normalizeBranches, collectSubtreeIds, buildBranchTree, formatWordCount } from './story-branch.mjs';
 import * as RPHMemorySummary from './memory-summary.mjs';
 import * as RPHMemoryProfile from './memory-profile.mjs';
-import { buildMemoryRecall, buildMemoryView } from './memory-view.mjs';
+import { VIEW_DEFAULTS, buildMemoryRecall, buildMemoryView } from './memory-view.mjs';
 import { createMemoryReconciler } from './memory-reconcile.mjs';
 import {
+    COMPACT_FANOUT,
+    COMPACT_FANOUT_MAX,
+    COMPACT_FANOUT_MIN,
     FACT_KIND_CHARACTER,
     FACT_KIND_PLOT,
     PIN_ENABLED_LIMIT,
@@ -1660,6 +1663,11 @@ const __app = createApp({
             // "the model last mentioned it" (v6 §5.4).
             memorySettings.profileStaleAfter = Math.max(10, Math.min(100,
                 Math.floor(Number(memorySettings.profileStaleAfter) || 40)));
+            // v6 L5: compaction defaults on; the fanout stays inside the
+            // designed 4–8 band so one fold call always sees a bounded group.
+            memorySettings.compactionEnabled = memorySettings.compactionEnabled !== false;
+            memorySettings.compactionFanout = Math.max(COMPACT_FANOUT_MIN, Math.min(COMPACT_FANOUT_MAX,
+                Math.floor(Number(memorySettings.compactionFanout) || COMPACT_FANOUT)));
             const memoryProviderId = String(memorySettings.memoryProviderId || '').trim();
             memorySettings.memoryProviderId = memoryProviderId
                 && (getApiProviderById(memoryProviderId) || isCustomApiProviderId(memoryProviderId))
@@ -6074,22 +6082,13 @@ const __app = createApp({
         // inputs are this batch's canonical text plus a one-line context —
         // never the cumulative long/short text, so a failed or rewritten
         // batch cannot contaminate later batches (v6 §6.3 / §9.2).
-        const requestRollingSummary = async (batch, signal, context) => {
-            const lib = summaryLib();
-            if (!lib) throw new Error('滚动摘要模块未加载');
+        // One memory-provider chat call shared by batch digests and compaction
+        // folds: same provider, model, timeout and error mapping.
+        const callMemoryModel = async (messages, signal, temperature) => {
             const model = String(memorySettings.classicModel || '').trim();
             const memoryProvider = getMemoryProvider();
             if (!memoryProvider.apiUrl || !memoryProvider.apiKey) throw new Error('请先配置记忆供应商的 API 地址和 Key');
             if (!model) throw new Error('请先选择记忆模型');
-            const profileText = getMemoryProfileText(batch.toTurn);
-            const messages = lib.buildDigestMessages({
-                contextLine: context?.contextLine || '',
-                profileText,
-                batch,
-                turns: context?.turns || [],
-                characterName: currentCharacter.value?.name || '角色',
-                userRoleName: user.name || '用户'
-            });
             const response = await fetch(getMemoryApiEndpoint('chat/completions'), {
                 method: 'POST',
                 headers: {
@@ -6098,7 +6097,7 @@ const __app = createApp({
                 },
                 body: JSON.stringify({
                     model,
-                    temperature: 0.2,
+                    temperature,
                     stream: false,
                     messages
                 }),
@@ -6110,9 +6109,43 @@ const __app = createApp({
                 try { payload = JSON.parse(rawText); } catch (_) { }
                 throw new Error(extractApiErrorMessage(payload, response.status) || `API Error: ${response.status}`);
             }
-            const content = getClassicSummaryResponseContent(rawText);
+            return getClassicSummaryResponseContent(rawText);
+        };
+
+        const requestRollingSummary = async (batch, signal, context) => {
+            const lib = summaryLib();
+            if (!lib) throw new Error('滚动摘要模块未加载');
+            const profileText = getMemoryProfileText(batch.toTurn);
+            const messages = lib.buildDigestMessages({
+                contextLine: context?.contextLine || '',
+                profileText,
+                batch,
+                turns: context?.turns || [],
+                characterName: currentCharacter.value?.name || '角色',
+                userRoleName: user.name || '用户'
+            });
+            const content = await callMemoryModel(messages, signal, 0.2);
             const parsed = lib.parseDigestJson(content);
             if (!parsed.digest) throw new Error('记忆模型没有返回有效摘要');
+            return parsed;
+        };
+
+        // v6 L5 (design doc §9.2): fold a bounded group of batch digests into
+        // one coherent level+1 long-term note. Slightly warmer than the batch
+        // call because this is the granularity whose whole point is narrative
+        // voice; input size stays constant regardless of history length.
+        const requestMemoryCompaction = async (group, signal) => {
+            const lib = summaryLib();
+            if (!lib) throw new Error('滚动摘要模块未加载');
+            const messages = lib.buildCompactionMessages({
+                entries: Array.isArray(group?.entries) ? group.entries : [],
+                level: Number(group?.level) || 1,
+                characterName: currentCharacter.value?.name || '角色',
+                userRoleName: user.name || '用户'
+            });
+            const content = await callMemoryModel(messages, signal, 0.3);
+            const parsed = lib.parseDigestJson(content);
+            if (!parsed.digest) throw new Error('记忆模型没有返回有效压实摘要');
             return parsed;
         };
 
@@ -6132,6 +6165,7 @@ const __app = createApp({
             saveLedgerNow: persistMemoryLedgerAndProjection,
             buildLiveSnapshot: () => buildMemoryLiveSnapshot(),
             requestBatchDigest: requestRollingSummary,
+            requestCompaction: requestMemoryCompaction,
             applyProjection: (ledger, live) => { applyMemoryLedgerProjection(ledger, live); },
             setProgress: setSummaryProgress,
             clearProgress: clearSummaryProgress,
@@ -6163,6 +6197,52 @@ const __app = createApp({
             const batch = { fromTurn: progress.fromTurn, toTurn: progress.toTurn };
             setSummaryProgress({ ...batch, status: 'running' }, false);
             runRollingSummaryCheck();
+        };
+
+        // v6 L5 §13: manual compaction. An explicit user action, so it also
+        // runs when the automatic switch is off (one sweep; the switch only
+        // governs what reconcile does on its own).
+        const compactMemoryNow = async () => {
+            if (!memorySettings.enabled) {
+                showToast('请先开启记忆引擎');
+                return { processed: 0, folded: 0, reason: 'disabled' };
+            }
+            const result = await memoryReconciler.reconcile({ compact: true });
+            if (result.reason === 'busy') {
+                showToast('记忆整理正在进行中，请稍后再试');
+            } else if (result.folded > 0) {
+                showToast(`已压实 ${result.folded} 组记忆`);
+            } else if (result.reason === 'failed') {
+                showToast('压实失败，请检查记忆供应商配置');
+            } else if (result.reason !== 'aborted') {
+                showToast('暂无可压实的记忆条目（需至少 ' + COMPACT_FANOUT_MIN + ' 条同层摘要）');
+            }
+            return result;
+        };
+
+        // v6 L5 §13: folded sources stay in the ledger for traceability; the
+        // panel expands the base[] chain on demand. Missing ids (GC cap) are
+        // simply skipped — the fold parent still carries the merged text.
+        const getMemoryEntryBase = (entryId) => {
+            const ledger = memoryLedger.value;
+            const entry = ledger && findEntry(ledger, entryId);
+            if (!entry || !Array.isArray(entry.base) || entry.base.length === 0) return [];
+            const turnIndex = buildLiveTurnIndex();
+            return entry.base
+                .map(id => findEntry(ledger, id))
+                .filter(Boolean)
+                .map(item => {
+                    const turns = projectEntryTurns(item, turnIndex);
+                    return {
+                        entryId: item.id,
+                        level: Number(item.level) || 0,
+                        stale: item.meta.stale === true,
+                        folded: item.meta.folded === true,
+                        text: String(item.text || '').trim(),
+                        fromTurn: turns.length ? Math.min(...turns) : 0,
+                        toTurn: turns.length ? Math.max(...turns) : 0
+                    };
+                });
         };
 
         const buildMemoryContextForPrompt = () => {
@@ -6474,7 +6554,9 @@ const __app = createApp({
             );
 
             const digests = ledger.entries
-                .filter(entry => entry.kind === 'digest' && !entry.meta.stale)
+                // L5: a folded entry is already represented by its level+1
+                // parent in the TOC; returning both would duplicate the span.
+                .filter(entry => entry.kind === 'digest' && !entry.meta.stale && !entry.meta.folded)
                 .map(entry => {
                     const turns = projectEntryTurns(entry, turnIndex)
                         .filter(turn => Number.isFinite(turn) && turn > 0);
@@ -9631,7 +9713,10 @@ const __app = createApp({
             memoryTocEntries: computed(() => {
                 const ledger = memoryLedger.value;
                 if (!ledger || !Array.isArray(ledger.entries) || ledger.entries.length === 0) return [];
-                return buildMemoryView(ledger, buildLiveTurnIndex()).toc;
+                // Panel directory shows every active entry; only the injected
+                // <memory_toc> is hard-capped by tocBudget (the budget block
+                // above reports that capped number).
+                return buildMemoryView(ledger, buildLiveTurnIndex(), { tocBudget: Infinity }).toc;
             }),
             // v6 L4: info card and pins are ledger projections, not separate
             // stores. Freshness is annotated at render time from the live
@@ -9674,7 +9759,9 @@ const __app = createApp({
                 const ledger = memoryLedger.value;
                 const entries = Array.isArray(ledger?.entries) ? ledger.entries : [];
                 const digests = entries.filter(entry => entry.kind === 'digest');
-                const live = digests.filter(entry => !entry.meta.stale);
+                // Active digests: folded ones live on as traceability rows,
+                // not as injected entries (L5).
+                const live = digests.filter(entry => !entry.meta.stale && !entry.meta.folded);
                 const facts = entries.filter(entry => entry.kind === 'fact' && !entry.meta.folded);
                 const pins = entries.filter(entry => entry.kind === 'pin' && !entry.meta.folded);
                 const turnIndex = buildLiveTurnIndex();
@@ -9682,7 +9769,8 @@ const __app = createApp({
                 live.forEach(entry => projectEntryTurns(entry, turnIndex).forEach(turn => coveredTurns.add(turn)));
                 return {
                     digests: live.length,
-                    stale: digests.length - live.length,
+                    stale: digests.filter(entry => entry.meta.stale).length,
+                    foldedDigests: digests.filter(entry => entry.meta.folded).length,
                     coveredTurns: coveredTurns.size,
                     classic: classicMemories.value.length,
                     activeTotal: live.length,
@@ -9694,6 +9782,30 @@ const __app = createApp({
                     folded: entries.filter(entry => entry.meta.folded).length
                 };
             }),
+            // v6 L5 §13 budget block: actual injected tokens vs the hard
+            // caps. The view already truncates to these budgets, so this is
+            // the visible proof of the injection upper bound (§5.2).
+            memoryBudgetStats: computed(() => {
+                const ledger = memoryLedger.value;
+                const empty = {
+                    long: { used: 0, budget: VIEW_DEFAULTS.longBudget },
+                    short: { used: 0, budget: VIEW_DEFAULTS.shortBudget },
+                    toc: { used: 0, budget: VIEW_DEFAULTS.tocBudget },
+                    card: { used: 0, budget: VIEW_DEFAULTS.cardBudget }
+                };
+                if (!ledger || !Array.isArray(ledger.entries) || ledger.entries.length === 0) return empty;
+                const view = buildMemoryView(ledger, buildLiveTurnIndex());
+                return {
+                    long: { used: view.tokens.long, budget: view.budgets.long },
+                    short: { used: view.tokens.short, budget: view.budgets.short },
+                    toc: { used: view.tokens.toc, budget: view.budgets.toc },
+                    card: { used: view.tokens.card, budget: view.budgets.card }
+                };
+            }),
+            compactFanoutMin: COMPACT_FANOUT_MIN,
+            compactFanoutMax: COMPACT_FANOUT_MAX,
+            compactMemoryNow,
+            getMemoryEntryBase,
             // Manual memory + info-card CRUD (v6 L4 / v5 M2 UX).
             memoryPinsLimit: PIN_ENABLED_LIMIT,
             memoryPinTextLimit: PIN_TEXT_LIMIT,

@@ -408,7 +408,116 @@ export const projectCoveredRanges = (ledger, liveTurnIndex) => {
 // projected into the same shape so computePendingBatch is reused as-is.
 export const rangesToDoneBatches = (ranges) => ranges.map(range => ({ ...range, status: 'done' }));
 
+// --- Compaction (design doc §9.1) ------------------------------------------
+
+// LSM-style fanout: when a level holds more than COMPACT_FANOUT visible
+// entries, the oldest group is folded into one level+1 entry. The threshold
+// is user-tunable (4–8) and clamped by the settings normalizer.
+export const COMPACT_FANOUT = 5;
+export const COMPACT_FANOUT_MIN = 4;
+export const COMPACT_FANOUT_MAX = 8;
+
+// Fold-eligible digests: active entries that carry text and still own live
+// coverage. Text-less legacy coverage markers contribute nothing to a fold;
+// covers:[] legacy text must never become stale-able by being merged into a
+// parent (it is the only surviving record, design doc §11).
+const isFoldable = (entry) => entry.kind === 'digest'
+    && !entry.meta.stale
+    && !entry.meta.folded
+    && entry.covers.length > 0
+    && String(entry.text || '').trim().length > 0;
+
+// Selection is deterministic: lowest over-full level first, oldest group
+// first, so repeated triggers converge on the same shape. liveTurnIndex
+// orders the group by story position — append order is not story order once
+// stale ranges have been rewritten (design doc §5.3).
+export const selectCompactionGroup = (ledger, liveTurnIndex, { fanout = COMPACT_FANOUT } = {}) => {
+    const threshold = Math.max(2, Math.floor(Number(fanout) || COMPACT_FANOUT));
+    const byLevel = new Map();
+    for (const entry of ledger.entries) {
+        if (!isFoldable(entry)) continue;
+        const level = asCount(entry.level);
+        if (!byLevel.has(level)) byLevel.set(level, []);
+        byLevel.get(level).push(entry);
+    }
+    const levels = Array.from(byLevel.keys()).sort((a, b) => a - b);
+    for (const level of levels) {
+        const candidates = byLevel.get(level);
+        if (candidates.length <= threshold) continue;
+        const sorted = [...candidates].sort((a, b) => {
+            const turnsA = projectEntryTurns(a, liveTurnIndex);
+            const turnsB = projectEntryTurns(b, liveTurnIndex);
+            const startA = turnsA.length ? Math.min(...turnsA) : Infinity;
+            const startB = turnsB.length ? Math.min(...turnsB) : Infinity;
+            return (startA - startB) || (a.meta.at - b.meta.at);
+        });
+        return { level, entries: sorted.slice(0, threshold) };
+    }
+    return null;
+};
+
+// Appends the level+1 fold entry and marks its sources folded in the same
+// synchronous step (one save follows). The parent is written first: a crash
+// between the model call and persistence leaves the ledger flat, never a
+// fold whose sources disappeared (design doc §6.1 step 4).
+export const applyCompaction = (ledger, { entries, text, id, model = '', at = Date.now() }) => {
+    const sources = Array.isArray(entries) ? entries.filter(Boolean) : [];
+    const body = String(text || '').trim();
+    if (sources.length === 0 || !body) return null;
+    if (findEntry(ledger, id)) return null;
+    const covers = [];
+    const seen = new Set();
+    const base = [];
+    let level = 0;
+    for (const entry of sources) {
+        base.push(entry.id);
+        level = Math.max(level, asCount(entry.level));
+        for (const cover of entry.covers) {
+            if (seen.has(cover.id)) continue;
+            seen.add(cover.id);
+            covers.push({ ...cover });
+        }
+    }
+    const parent = appendEntry(ledger, makeDigestEntry({
+        id,
+        covers,
+        text: body,
+        level: level + 1,
+        base,
+        model,
+        at
+    }));
+    if (!parent) return null;
+    for (const entry of sources) entry.meta.folded = true;
+    return parent;
+};
+
 // --- GC --------------------------------------------------------------------
+
+// Invariant: folded means "a live parent lists me in base[]". When that
+// parent turns stale (edit/delete) or is pruned, its children would stay
+// hidden with nothing representing them, so they are unfolded — the ledger
+// falls back to a flat shape for that range and the next pass re-compacts it
+// (design doc §9.1 rollback boundary). Fact folds are excluded: they are
+// superseded by a newer row of the same key, not by a base[] parent.
+export const releaseOrphanedFolds = (ledger) => {
+    // Multi-level chains matter: a folded parent still represents its
+    // children — the content lives on in the grandparent. Only a *stale*
+    // parent (or a pruned one) breaks the guarantee.
+    const liveParents = new Set();
+    for (const entry of ledger.entries) {
+        if (entry.meta.stale || entry.base.length === 0) continue;
+        for (const baseId of entry.base) liveParents.add(baseId);
+    }
+    let changed = 0;
+    for (const entry of ledger.entries) {
+        if (entry.kind !== 'digest' || !entry.meta.folded) continue;
+        if (liveParents.has(entry.id)) continue;
+        entry.meta.folded = false;
+        changed += 1;
+    }
+    return changed;
+};
 
 // A stale entry whose hole was rewritten is pure redundancy: delete it.
 // Entries whose covers are entirely gone keep their text — there is
@@ -501,11 +610,16 @@ export const adoptLegacySummaries = ({ summaries, turnCovers, makeId, now = Date
 // produced from post-fork floors cannot leak into the child ledger.
 export const filterLedgerForBranch = (ledger, survivorIds) => {
     const survivors = survivorIds instanceof Set ? survivorIds : new Set(survivorIds || []);
-    return {
+    const child = {
         ...ledger,
         updatedAt: Date.now(),
         entries: ledger.entries
             .filter(entry => entry.covers.length === 0 || entry.covers.every(cover => survivors.has(cover.id)))
             .map(entry => ({ ...entry, covers: entry.covers.map(cover => ({ ...cover })), meta: { ...entry.meta } }))
     };
+    // A fold parent whose span crosses the fork point is filtered away while
+    // some children survive; release them so the child branch never hides
+    // content behind a parent that only exists in the old branch (§9.1).
+    releaseOrphanedFolds(child);
+    return child;
 };

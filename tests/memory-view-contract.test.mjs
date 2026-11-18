@@ -32,7 +32,7 @@ test('memory view: module is pure (no I/O, no Vue, no globals)', () => {
     assert.ok(!viewSource.includes('setTimeout'));
 });
 
-test('memory view: long folds all digests, short takes the newest window', () => {
+test('memory view: long takes the older layers, short the newest level-0 window (no overlap)', () => {
     const ledger = {
         entries: [
             digest('e1', '甲段', [{ id: 'u1', h: 'h' }]),
@@ -42,11 +42,13 @@ test('memory view: long folds all digests, short takes the newest window', () =>
         ]
     };
     const view = buildMemoryView(ledger, turnIndexFor([['u1', 1], ['u2', 2], ['u3', 3], ['u4', 4]]), { shortDigestCount: 2 });
-    assert.equal(view.long, '甲段\n\n乙段\n\n丙段\n\n丁段', 'story order old -> new');
-    assert.equal(view.short, '丙段\n\n丁段');
+    assert.equal(view.long, '甲段\n\n乙段', 'long holds everything outside the short window');
+    assert.equal(view.short, '丙段\n\n丁段', 'short keeps the newest level-0 batches');
+    assert.ok(!view.long.includes('丙段'), 'no text is injected twice (L5 dedup)');
     assert.deepEqual(view.batches.map(b => [b.fromTurn, b.toTurn, b.status]), [[1, 1, 'done'], [2, 2, 'done'], [3, 3, 'done'], [4, 4, 'done']]);
     assert.deepEqual(view.toc.map(item => item.label), ['第 1 轮', '第 2 轮', '第 3 轮', '第 4 轮']);
     assert.equal(view.toc[0].entryId, 'e1');
+    assert.deepEqual(view.toc.map(item => item.level), [0, 0, 0, 0], 'toc rows expose the fold level');
 });
 
 test('memory view: stale / vanished / text-less entries never reach the prompt', () => {
@@ -59,22 +61,77 @@ test('memory view: stale / vanished / text-less entries never reach the prompt',
         ]
     };
     const view = buildMemoryView(ledger, turnIndexFor([['u1', 1], ['u2', 2], ['u3', 3]]));
-    assert.equal(view.long, '保留');
+    assert.equal(view.long, '', 'a lone digest belongs to the short block');
     assert.equal(view.short, '保留');
     assert.deepEqual(view.batches.map(b => b.fromTurn), [1], 'coverage-only legacy rows stay out of the panel projection');
 });
 
 test('memory view: budgets hard-truncate long/short/toc', () => {
     const longText = '甲'.repeat(200);
-    const ledger = { entries: [digest('e1', longText, [{ id: 'u1', h: 'h' }])] };
-    const view = buildMemoryView(ledger, turnIndexFor([['u1', 1]]), { longBudget: 10, shortBudget: 10, tocBudget: 1 });
+    const ledger = {
+        entries: [
+            digest('e1', longText, [{ id: 'u1', h: 'h' }]),
+            digest('e2', longText, [{ id: 'u2', h: 'h' }])
+        ]
+    };
+    const view = buildMemoryView(ledger, turnIndexFor([['u1', 1], ['u2', 2]]), {
+        longBudget: 10, shortBudget: 10, tocBudget: 1, cardBudget: 10, shortDigestCount: 1
+    });
     // Truncation is enforced against the same token estimate the prompt
     // budget uses, so CJK text cannot overshoot a fixed char cap.
     assert.ok(estimateTokens(view.long) <= 10, 'long truncated to the token budget');
     assert.ok(view.long.endsWith('…'));
     assert.ok(estimateTokens(view.short) <= 10);
+    assert.ok(view.short.endsWith('…'));
     assert.deepEqual(view.toc, [], 'toc rows beyond the budget are dropped');
-    assert.equal(VIEW_DEFAULTS.longBudget > 0, true);
+});
+
+test('memory view: tightened L5 defaults are the contract (§17 Q7)', () => {
+    assert.equal(VIEW_DEFAULTS.longBudget, 600);
+    assert.equal(VIEW_DEFAULTS.shortBudget, 1000);
+    assert.equal(VIEW_DEFAULTS.tocBudget, 300);
+    assert.equal(VIEW_DEFAULTS.cardBudget, 800);
+    // The export line proves the hard caps travel with the view.
+    const view = buildMemoryView(null, null);
+    assert.deepEqual(view.budgets, {
+        long: 600, short: 1000, toc: 300, card: 800
+    });
+});
+
+test('memory view: folded digests never reach injection, their parent does', () => {
+    const ledger = {
+        entries: [
+            digest('old-1', '旧一', [{ id: 'u1', h: 'h' }], { folded: true }),
+            digest('old-2', '旧二', [{ id: 'u2', h: 'h' }], { folded: true }),
+            {
+                id: 'fold-1', kind: 'digest', level: 1, covers: [{ id: 'u1', h: 'h' }, { id: 'u2', h: 'h' }],
+                base: ['old-1', 'old-2'], text: '折叠后的长期要点',
+                meta: { at: 3, model: '', tokens: 0, stale: false, folded: false, legacy: false }
+            },
+            digest('fresh', '新一批', [{ id: 'u3', h: 'h' }])
+        ]
+    };
+    const turnIndex = turnIndexFor([['u1', 1], ['u2', 2], ['u3', 3]]);
+    const view = buildMemoryView(ledger, turnIndex);
+    assert.equal(view.long, '折叠后的长期要点', 'the fold parent is the long layer');
+    assert.equal(view.short, '新一批', 'recent level-0 stays in the short window');
+    assert.deepEqual(view.toc.map(item => item.entryId), ['fold-1', 'fresh']);
+    assert.deepEqual(view.toc.map(item => item.level), [1, 0]);
+});
+
+test('memory view: cardBudget drops overflow rows, locked and fresher rows win', () => {
+    const ledger = {
+        entries: [
+            fact('c1', 'character', '甲', '甲乙丙丁戊己庚辛壬癸', [{ id: 'u1', h: 'h' }], { at: 1, lastSeenTurn: 1 }),
+            fact('c2', 'character', '乙', '状态', [{ id: 'u2', h: 'h' }], { at: 2 }),
+            fact('c3', 'character', '丙', '锁定状态', [], { at: 0, manual: true })
+        ]
+    };
+    const view = buildMemoryView(ledger, turnIndexFor([['u1', 1], ['u2', 2]]), { cardBudget: 10 });
+    // Locked row first, then the freshest auto row; the older bulky row is
+    // dropped whole once the cap is reached.
+    assert.deepEqual(view.card.characters.map(row => row.name), ['丙', '乙']);
+    assert.ok(view.tokens.card <= 10);
 });
 
 test('memory view: turn labels re-project from live data (no persisted skew)', () => {
@@ -107,7 +164,7 @@ test('memory view: empty ledger folds to an empty view', () => {
     assert.deepEqual(view.toc, []);
     assert.deepEqual(view.batches, []);
     assert.deepEqual(view.pins, []);
-    assert.deepEqual(view.tokens, { long: 0, short: 0, toc: 0 });
+    assert.deepEqual(view.tokens, { long: 0, short: 0, toc: 0, card: 0 });
 });
 // --- v6 L4: fact card projection + pin gating -----------------------------
 

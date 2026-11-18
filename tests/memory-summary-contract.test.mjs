@@ -194,7 +194,7 @@ test('滚动摘要:链内使用快照且切换角色/分支/清空重建时中�
     // switches discard pending work (§6.4).
     assert.ok(app.includes('const abortRollingSummary = () => {'));
     assert.ok(app.includes('_summaryAbortController'));
-    assert.ok(reconcileModule.includes('if (deps.getScopeId() !== scopeId) return { processed, reason: \'aborted\' };'));
+    assert.ok(reconcileModule.includes('if (deps.getScopeId() !== scopeId) return { processed, folded: 0, reason: \'aborted\' };'));
     assert.ok(reconcileModule.includes('if (signal?.aborted)'));
     assert.ok(reconcileModule.includes("error?.name === 'AbortError'"));
     assert.ok(reconcileModule.includes('state.pending = null;'));
@@ -262,6 +262,34 @@ test('v6 批次提示词：独立批次 + 一行上下文，不再重写旧 long
     assert.ok(joined.includes('第四轮AI'));
     assert.ok(!joined.includes('不应出现'));
     assert.ok(joined.includes('旧信息卡'));
+});
+
+test('v6 L5 压实提示词：有界批次组、叙事重写、JSON 输出', () => {
+    const messages = memorySummary.buildCompactionMessages({
+        entries: [
+            { fromTurn: 1, toTurn: 8, text: '第一批要点' },
+            { fromTurn: 9, toTurn: 16, text: '第二批要点' },
+            { fromTurn: 17, toTurn: 24, text: '  ' }
+        ],
+        level: 2,
+        characterName: '林夕瑶',
+        userRoleName: '我'
+    });
+    const system = messages[0].content;
+    const joined = messages.map(m => m.content).join('\n');
+    assert.ok(system.includes('长期记忆压实器'));
+    assert.ok(system.includes('连贯、有叙事声音的长期要点'));
+    assert.ok(system.includes('不要逐条罗列'));
+    assert.ok(system.includes('{"digest"'));
+    assert.ok(system.includes('禁止虚构摘要中不存在的历法、年号或日期'));
+    assert.ok(joined.includes('【第 1–8 轮·批次摘要】\n第一批要点'));
+    assert.ok(joined.includes('【第 9–16 轮·批次摘要】\n第二批要点'));
+    assert.ok(!joined.includes('17–24'), 'blank child text is skipped, not sent');
+    assert.ok(joined.includes('第 2 层'));
+    // Compaction never re-reads cumulative long/short text (input bounded by
+    // the fanout, design doc §9.2).
+    assert.ok(!joined.includes('旧短期摘要'));
+    assert.ok(!joined.includes('旧长期摘要'));
 });
 
 test('v6 批次解析：direct / 包裹 / 纯文本降级', () => {

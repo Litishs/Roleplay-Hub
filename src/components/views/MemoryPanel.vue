@@ -81,6 +81,17 @@
                                     </svg>
                                     <span>立即总结</span>
                                 </button>
+                                <button type="button" @click="compactMemoryNow()"
+                                    :disabled="!memorySettings.enabled"
+                                    class="inline-flex items-center text-xs px-3 py-1.5 bg-white hover:bg-gray-50 text-gray-600 rounded-lg border border-gray-200 transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-sm hover:shadow font-medium active:scale-95 hit-expand [--hit-out:-8px]">
+                                    <svg class="w-3.5 h-3.5 mr-1.5" fill="none" stroke="currentColor"
+                                        viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M4 6h16M4 12h10M4 18h7">
+                                        </path>
+                                    </svg>
+                                    <span>手动压实</span>
+                                </button>
                             </div>
                         </div>
                         <div v-if="memorySettings.enabled" class="mb-3 animate-fade-in">
@@ -162,6 +173,61 @@
                                         </span>
                                     </div>
                                     <input type="range" v-model.number="summaryBatchSizeSlider" min="4" max="24" step="2"
+                                        class="w-full touch-range cursor-pointer">
+                                </div>
+                                <!-- v6 L5: hierarchical compaction (design doc §9.1).
+                                         Off = flat ledger; the manual button above
+                                         still works for one explicit sweep. -->
+                                <div class="relative bg-gray-50/60 p-3 rounded-xl border border-gray-100 mt-2">
+                                    <div class="flex items-center justify-between">
+                                        <div class="relative flex items-center">
+                                            <label class="text-xs font-medium text-gray-500">层级压实</label>
+                                            <button type="button"
+                                                @click.stop="settingsHelpTopic = settingsHelpTopic === 'compaction' ? '' : 'compaction'"
+                                                class="settings-help-trigger"
+                                                :class="{ 'is-open': settingsHelpTopic === 'compaction' }"
+                                                :aria-expanded="settingsHelpTopic === 'compaction'"
+                                                aria-label="查看层级压实说明">
+                                                <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                        d="M9.1 9a3 3 0 115.8 1.1c-.6 1.1-1.9 1.3-2.5 2.2-.3.4-.4.8-.4 1.2M12 17h.01"></path>
+                                                </svg>
+                                            </button>
+                                            <div v-if="settingsHelpTopic === 'compaction'" class="settings-help-popover is-above">
+                                                <span class="settings-help-popover-content">同一层级的批次摘要攒够阈值后，自动重写成一段更连贯的长期要点（下层条目保留为折叠来源，可展开追溯）。关闭后记忆退回逐批平铺，注入内容仍是完整历史但叙述更碎片化。</span>
+                                            </div>
+                                        </div>
+                                        <label class="relative inline-flex items-center cursor-pointer">
+                                            <input type="checkbox" v-model="memorySettings.compactionEnabled" class="settings-toggle-input sr-only">
+                                            <div class="settings-toggle settings-toggle--compact"></div>
+                                        </label>
+                                    </div>
+                                </div>
+                                <div v-if="memorySettings.compactionEnabled"
+                                    class="relative bg-gray-50/60 p-3 rounded-xl border border-gray-100 mt-2">
+                                    <div class="flex justify-between items-center mb-2">
+                                        <div class="relative flex items-center">
+                                            <label class="text-xs font-medium text-gray-500">压实阈值</label>
+                                            <button type="button"
+                                                @click.stop="settingsHelpTopic = settingsHelpTopic === 'compactionFanout' ? '' : 'compactionFanout'"
+                                                class="settings-help-trigger"
+                                                :class="{ 'is-open': settingsHelpTopic === 'compactionFanout' }"
+                                                :aria-expanded="settingsHelpTopic === 'compactionFanout'"
+                                                aria-label="查看压实阈值说明">
+                                                <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                        d="M9.1 9a3 3 0 115.8 1.1c-.6 1.1-1.9 1.3-2.5 2.2-.3.4-.4.8-.4 1.2M12 17h.01"></path>
+                                                </svg>
+                                            </button>
+                                            <div v-if="settingsHelpTopic === 'compactionFanout'" class="settings-help-popover is-above">
+                                                <span class="settings-help-popover-content">同层摘要超过这个条数时折叠成一条更高层的长期要点（4–8）。数值越小长期摘要越紧凑、API 调用越频繁；越大越省调用，但单次压实输入更长。</span>
+                                            </div>
+                                        </div>
+                                        <span class="text-xs font-mono text-primary-600 bg-primary-50 px-1.5 py-0.5 rounded border border-primary-100">
+                                            {{ memorySettings.compactionFanout }} 条/组
+                                        </span>
+                                    </div>
+                                    <input type="range" v-model.number="memorySettings.compactionFanout" :min="compactFanoutMin" :max="compactFanoutMax" step="1"
                                         class="w-full touch-range cursor-pointer">
                                 </div>
                                 <div class="relative bg-gray-50/60 p-3 rounded-xl border border-gray-100 mt-2">
@@ -273,6 +339,27 @@
                             </div>
                         </div>
 
+                        <!-- v6 L5 §13: budget health block. The view hard-
+                             truncates to these caps, so this is the visible
+                             proof of the injection upper bound. -->
+                        <div class="rounded-xl bg-gray-50 border border-gray-100 px-3 py-2.5 space-y-2">
+                            <div class="flex items-center justify-between">
+                                <span class="text-[10px] font-bold text-gray-400">注入预算（实际 / 上限）</span>
+                                <span class="text-[10px] font-mono text-gray-400">实际注入 ≤ 各块上限之和</span>
+                            </div>
+                            <div v-for="row in memoryBudgetRows" :key="row.key" class="space-y-1">
+                                <div class="flex items-center justify-between text-[10px]">
+                                    <span class="text-gray-500">{{ row.label }}</span>
+                                    <span :class="['font-mono', row.over ? 'text-amber-600' : 'text-gray-500']">
+                                        {{ row.used }} / {{ row.budget }} tok
+                                    </span>
+                                </div>
+                                <div class="h-1 rounded-full bg-gray-200 overflow-hidden">
+                                    <div class="h-full rounded-full bg-primary-500" :style="{ width: row.percent + '%' }"></div>
+                                </div>
+                            </div>
+                        </div>
+
                         <div class="flex items-center justify-between gap-3">
                             <div class="flex items-center gap-1 rounded-xl bg-gray-100 p-1">
                                 <button type="button" @click="memoryLedgerTab = 'toc'"
@@ -300,9 +387,25 @@
                                         class="rounded-xl border border-gray-100 bg-white px-3 py-2 shadow-sm">
                                         <div class="flex items-center gap-2 flex-wrap mb-1">
                                             <span class="text-[10px] font-mono text-primary-700 bg-primary-50 border border-primary-100 rounded-md px-2 py-0.5">{{ item.label }}</span>
+                                            <span v-if="item.level > 0" class="text-[10px] font-mono text-gray-500 bg-gray-100 border border-gray-200 rounded-md px-1.5 py-0.5">L{{ item.level }}</span>
                                             <span class="text-[10px] font-mono text-gray-400">{{ item.tokens }} tok</span>
+                                            <button v-if="item.level > 0" type="button" @click="toggleFoldSources(item.entryId)"
+                                                class="text-[10px] font-bold text-primary-700 active:scale-95 transition-all">
+                                                {{ foldedSourcesOpen[item.entryId] ? '收起来源' : '折叠来源' }}
+                                            </button>
                                         </div>
                                         <p class="text-xs text-gray-700 leading-relaxed whitespace-pre-line">{{ item.summary }}</p>
+                                        <div v-if="foldedSourcesOpen[item.entryId]" class="mt-2 space-y-1.5 border-t border-gray-100 pt-2">
+                                            <div v-for="source in foldedSourcesFor(item.entryId)" :key="source.entryId"
+                                                class="rounded-lg bg-gray-50 border border-gray-100 px-2.5 py-2">
+                                                <div class="flex items-center gap-1.5 flex-wrap mb-1">
+                                                    <span class="text-[10px] font-mono text-gray-400">L{{ source.level }}</span>
+                                                    <span class="text-[10px] font-mono text-gray-400">{{ formatSourceRange(source) }}</span>
+                                                    <span v-if="source.stale" class="text-[10px] text-amber-600">已失效</span>
+                                                </div>
+                                                <p class="text-[11px] text-gray-500 leading-relaxed whitespace-pre-line">{{ source.text }}</p>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -545,7 +648,7 @@
 </template>
 
 <script>
-import { inject, reactive, ref } from "vue";
+import { computed, inject, reactive, ref } from "vue";
 import SettingsPageHeader from "../common/SettingsPageHeader.vue";
 // 2026-08-28 Phase 1.6: shared components are declared locally now that the
 // app-level global registration workaround has been removed.
@@ -565,6 +668,36 @@ export default {
       text: "",
       status: "open",
       deadline: ""
+    });
+    // v6 L5: folded-source expansion is panel-local state; ledger truth
+    // (base[] chain) stays in app.mjs.
+    const foldedSourcesOpen = reactive({});
+    const toggleFoldSources = (entryId) => {
+      foldedSourcesOpen[entryId] = !foldedSourcesOpen[entryId];
+    };
+    const foldedSourcesFor = (entryId) => (
+      foldedSourcesOpen[entryId] ? ctx.getMemoryEntryBase?.(entryId) || [] : []
+    );
+    const formatSourceRange = (source) => {
+      if (!source || !source.fromTurn) return "历史";
+      return source.fromTurn === source.toTurn
+        ? `第 ${source.fromTurn} 轮`
+        : `第 ${source.fromTurn}–${source.toTurn} 轮`;
+    };
+    // Budget health block (§13): actual injected tokens vs the view caps.
+    const memoryBudgetRows = computed(() => {
+      const stats = ctx.memoryBudgetStats?.value;
+      if (!stats) return [];
+      return [
+        { key: "long", label: "长期摘要", ...stats.long },
+        { key: "short", label: "短期摘要", ...stats.short },
+        { key: "toc", label: "记忆目录", ...stats.toc },
+        { key: "card", label: "信息卡", ...stats.card }
+      ].map(row => ({
+        ...row,
+        percent: row.budget > 0 ? Math.min(100, Math.round((row.used / row.budget) * 100)) : 0,
+        over: row.budget > 0 && row.used > row.budget
+      }));
     });
 
     const startAddFact = (factKind) => {
@@ -647,6 +780,11 @@ export default {
       memoryLedgerTab,
       pinDraft,
       factDraft,
+      memoryBudgetRows,
+      foldedSourcesOpen,
+      toggleFoldSources,
+      foldedSourcesFor,
+      formatSourceRange,
       startAddFact,
       startEditFact,
       cancelFactDraft,

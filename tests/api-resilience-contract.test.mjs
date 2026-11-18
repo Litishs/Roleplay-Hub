@@ -113,7 +113,7 @@ test('记忆召回走账本词法路径，发送链路不再调用嵌入接口',
     assert.ok(!sender.includes('requestMemoryEmbeddings'));
     assert.ok(!sender.includes('selectVectorMemoriesForChatContext'));
     assert.ok(!app.includes('const memoryRecallFallback = recallFallbackSelect;'));
-    assert.ok(app.includes("import { buildMemoryRecall, buildMemoryView } from './memory-view.mjs';"));
+    assert.ok(app.includes("import { VIEW_DEFAULTS, buildMemoryRecall, buildMemoryView } from './memory-view.mjs';"));
     assert.ok(app.includes('const selectMemoryLedgerRecall = () => {'));
 });
 

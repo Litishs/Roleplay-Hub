@@ -8,6 +8,9 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { HASH_VERSION } from '../src/modules/content-hash.mjs';
 import {
+    COMPACT_FANOUT,
+    COMPACT_FANOUT_MAX,
+    COMPACT_FANOUT_MIN,
     FACT_KIND_CHARACTER,
     FACT_KIND_PLOT,
     LEDGER_VERSION,
@@ -17,6 +20,7 @@ import {
     adoptLegacySummaries,
     appendEntry,
     appendProfileFacts,
+    applyCompaction,
     countEnabledPins,
     createEmptyLedger,
     filterLedgerForBranch,
@@ -31,6 +35,8 @@ import {
     pruneRewrittenStaleEntries,
     rangesToDoneBatches,
     propagateStaleUpward,
+    releaseOrphanedFolds,
+    selectCompactionGroup,
     validatePinText
 } from '../src/modules/memory-ledger.mjs';
 
@@ -377,4 +383,137 @@ test('ledger pins: text limits and enabled counting', () => {
     assert.equal(countEnabledPins(ledger), 1, 'disabled and blank pins do not count');
     assert.equal(ledger.entries[0].covers.length, 0);
     assert.equal(ledger.entries[0].meta.enabled, true);
+});
+
+// --- v6 L5: hierarchical compaction (design doc §9.1) ----------------------
+
+const turnIndexForIds = (...ids) => new Map(ids.map((id, index) => [id, index + 1]));
+
+const digestBatch = (count) => Array.from({ length: count }, (_, index) => makeDigestEntry({
+    id: `e${index + 1}`,
+    covers: [cover(`m${index + 1}`, 'h')],
+    text: `段${index + 1}`,
+    at: index + 1
+}));
+
+test('ledger compaction: over-full level folds the oldest fanout group', () => {
+    assert.equal(COMPACT_FANOUT, 5);
+    assert.equal(COMPACT_FANOUT_MIN, 4);
+    assert.equal(COMPACT_FANOUT_MAX, 8);
+    const liveIndex = turnIndexForIds('m1', 'm2', 'm3', 'm4', 'm5', 'm6');
+    const six = makeLedger(...digestBatch(6));
+    const group = selectCompactionGroup(six, liveIndex, { fanout: 5 });
+    assert.equal(group.level, 0);
+    assert.deepEqual(group.entries.map(entry => entry.id), ['e1', 'e2', 'e3', 'e4', 'e5'],
+        'the newest entry stays flat so the short window keeps fresh detail');
+    // Exactly at the threshold nothing folds.
+    assert.equal(selectCompactionGroup(makeLedger(...digestBatch(5)), liveIndex, { fanout: 5 }), null);
+    // A custom fanout is honored (the panel slider range).
+    assert.equal(selectCompactionGroup(six, liveIndex, { fanout: 8 }), null);
+});
+
+test('ledger compaction: group order follows story position, not append order', () => {
+    const entries = digestBatch(6);
+    const reordered = makeLedger(entries[2], entries[0], entries[1], entries[3], entries[4], entries[5]);
+    const liveIndex = turnIndexForIds('m1', 'm2', 'm3', 'm4', 'm5', 'm6');
+    const group = selectCompactionGroup(reordered, liveIndex, { fanout: 5 });
+    assert.deepEqual(group.entries.map(entry => entry.id), ['e1', 'e2', 'e3', 'e4', 'e5'],
+        'stale rewrites append out of order; the fold must still take the oldest span');
+});
+
+test('ledger compaction: stale / folded / text-less / uncovered entries never count', () => {
+    const entries = digestBatch(5);
+    const base = [
+        { ...entries[0], meta: { ...entries[0].meta, stale: true } },
+        { ...entries[1], meta: { ...entries[1].meta, folded: true } },
+        { ...entries[2], text: '   ' },
+        { ...entries[3], covers: [] },
+        ...entries.slice(4)
+    ];
+    const liveIndex = turnIndexForIds('m1', 'm2', 'm3', 'm4', 'm5');
+    assert.equal(selectCompactionGroup(makeLedger(...base), liveIndex, { fanout: 5 }), null,
+        'only one foldable entry remains, below the threshold');
+    // Pins and facts are not digest folds.
+    const ledger = makeLedger(
+        makePinEntry({ id: 'p1', text: '自由文本', at: 1 }),
+        makeFactEntry({
+            id: 'f1',
+            factKind: FACT_KIND_CHARACTER,
+            factKey: '甲',
+            text: '状态',
+            covers: [cover('m1', 'h')],
+            at: 1
+        })
+    );
+    assert.equal(selectCompactionGroup(ledger, liveIndex, { fanout: 2 }), null);
+});
+
+test('ledger compaction: apply appends the parent, unions covers and folds sources', () => {
+    const liveIndex = turnIndexForIds('m1', 'm2', 'm3', 'm4', 'm5', 'm6');
+    const ledger = makeLedger(...digestBatch(6));
+    const group = selectCompactionGroup(ledger, liveIndex, { fanout: 5 });
+    const parent = applyCompaction(ledger, {
+        entries: group.entries,
+        text: '  压实的长期要点  ',
+        id: 'fold-1',
+        at: 50
+    });
+    assert.ok(parent);
+    assert.equal(parent.kind, 'digest');
+    assert.equal(parent.level, 1);
+    assert.equal(parent.text, '压实的长期要点');
+    assert.deepEqual(parent.base, ['e1', 'e2', 'e3', 'e4', 'e5']);
+    assert.deepEqual(parent.covers.map(item => item.id), ['m1', 'm2', 'm3', 'm4', 'm5']);
+    assert.ok(ledger.entries.filter(entry => parent.base.includes(entry.id)).every(entry => entry.meta.folded));
+    assert.equal(ledger.entries.find(entry => entry.id === 'e6').meta.folded, false);
+    // Duplicate id (would break append-only): nothing changes.
+    const foldedBefore = ledger.entries.filter(entry => entry.meta.folded).length;
+    assert.equal(applyCompaction(ledger, { entries: group.entries, text: '再来一次', id: 'fold-1' }), null);
+    assert.equal(ledger.entries.filter(entry => entry.meta.folded).length, foldedBefore);
+    // Empty body never creates a fold row.
+    assert.equal(applyCompaction(ledger, { entries: group.entries, text: '  ', id: 'fold-2' }), null);
+});
+
+test('ledger compaction: duplicated covers are unioned without repeats', () => {
+    const liveIndex = turnIndexForIds('m1', 'm2');
+    const a = makeDigestEntry({ id: 'a', covers: [cover('m1', 'h'), cover('m2', 'h')], text: '甲', at: 1 });
+    const b = makeDigestEntry({ id: 'b', covers: [cover('m2', 'h')], text: '乙', at: 2 });
+    const ledger = makeLedger(a, b);
+    const parent = applyCompaction(ledger, { entries: [a, b], text: '合并', id: 'fold' });
+    assert.deepEqual(parent.covers.map(item => item.id), ['m1', 'm2']);
+    assert.equal(parent.level, 1, 'level = max child level + 1');
+    assert.ok(liveIndex.has('m2'), 'sanity');
+});
+
+test('ledger compaction: a stale parent releases its folded children', () => {
+    const liveIndex = turnIndexForIds('m1', 'm2');
+    const ledger = makeLedger(...digestBatch(2));
+    const parent = applyCompaction(ledger, { entries: ledger.entries.slice(), text: '合并', id: 'fold' });
+    assert.equal(parent.level, 1);
+    assert.equal(releaseOrphanedFolds(ledger), 0, 'live parent keeps children folded');
+    parent.meta.stale = true;
+    assert.equal(releaseOrphanedFolds(ledger), 2, 'stale parent no longer represents them');
+    assert.ok(ledger.entries.every(entry => entry.kind !== 'digest' || entry.meta.folded === false));
+    assert.ok(liveIndex.has('m1'), 'sanity');
+    // Fact folds are superseded by a newer key row, not by base[] — untouched.
+    const factLedger = makeLedger(
+        makeFactEntry({ id: 'f1', factKind: FACT_KIND_CHARACTER, factKey: '甲', text: '旧', covers: [], at: 1 })
+    );
+    factLedger.entries[0].meta.folded = true;
+    assert.equal(releaseOrphanedFolds(factLedger), 0);
+    assert.equal(factLedger.entries[0].meta.folded, true);
+});
+
+test('ledger compaction: branch filtering releases folds whose parent was cut', () => {
+    const ledger = makeLedger(...digestBatch(2));
+    const parent = applyCompaction(ledger, { entries: ledger.entries.slice(), text: '合并', id: 'fold' });
+    assert.ok(parent);
+    // The fork keeps m1 only: e2 dies, the parent (covers m1+m2) dies, e1
+    // survives and must rejoin injection instead of staying folded.
+    const child = filterLedgerForBranch(ledger, new Set(['m1']));
+    assert.equal(child.entries.some(entry => entry.level === 1), false);
+    assert.equal(child.entries.find(entry => entry.id === 'e2'), undefined);
+    assert.equal(child.entries.find(entry => entry.id === 'e1').meta.folded, false);
+    // The source ledger is untouched (branch copies are detached).
+    assert.equal(ledger.entries.find(entry => entry.id === 'e1').meta.folded, true);
 });

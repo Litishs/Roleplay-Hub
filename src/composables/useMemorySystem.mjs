@@ -48,6 +48,11 @@ export function useMemorySystem() {
         keepFloors: MEMORY_KEEP_FLOORS_DEFAULT,
         summaryBatchSize: SUMMARY_BATCH_SIZE_DEFAULT,
         profileStaleAfter: 40,           // 信息卡过期标注轮数（10–100，v5 M2）
+        // v6 L5: hierarchical compaction (design doc §9.1). Turning it off
+        // rolls the ledger back to a flat level-0 shape; the fanout is the
+        // per-level fold threshold (4–8, tuned in the panel).
+        compactionEnabled: true,
+        compactionFanout: 5,
         memoryProviderId: ''             // 记忆供应商（滚动总结），空=聊天供应商
     });
     const memoryGraphView = ref('list');

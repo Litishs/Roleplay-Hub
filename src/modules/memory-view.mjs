@@ -6,9 +6,9 @@
 //
 // Output: digest folding (long/short/toc + the batches projection the
 // panel keeps rendering), the pin layer and the info-card projection
-// (L4, design doc §10). Budgets use deliberately loose L1 defaults —
-// tightening happens in L5 (design doc §17 Q7) so upgraded users do not
-// see summaries abruptly shrink.
+// (L4, design doc §10). L5 tightens the three budgets so the hard
+// truncation below is a real injection bound (design doc §5.2 / §17 Q7);
+// long/short/card values match the v4-era targets users already know.
 //
 // Contract locks: tests/memory-view-contract.test.mjs.
 
@@ -17,9 +17,10 @@ import { extractVectorQueryTerms } from './memory-utils.mjs';
 import { PIN_ENABLED_LIMIT } from './memory-ledger.mjs';
 
 export const VIEW_DEFAULTS = Object.freeze({
-    longBudget: 12000,
-    shortBudget: 12000,
-    tocBudget: 4000,
+    longBudget: 600,
+    shortBudget: 1000,
+    tocBudget: 300,
+    cardBudget: 800,
     shortDigestCount: 4
 });
 
@@ -77,7 +78,9 @@ export const buildMemoryView = (ledger, liveTurnIndex, settings = {}) => {
     };
 
     const digests = entries
-        .filter(entry => entry.kind === 'digest' && isVisible(entry))
+        // Folded digests are represented by their level+1 parent. Including
+        // them would inject the same span twice (L5 / design doc §9.1).
+        .filter(entry => entry.kind === 'digest' && !entry.meta.folded && isVisible(entry))
         .map(entry => {
             const turns = resolveTurns(entry);
             return {
@@ -93,10 +96,20 @@ export const buildMemoryView = (ledger, liveTurnIndex, settings = {}) => {
         // out of order when stale ranges are rewritten).
         .sort((a, b) => (a.fromTurn - b.fromTurn) || (a.entry.meta.at - b.entry.meta.at));
 
-    const longText = truncateToBudget(digests.map(item => item.text).join('\n\n'), config.longBudget);
+    // long/short split (design doc §5.1 / §9.1): short carries the recent
+    // level-0 batches (fresh detail), long carries everything else — the
+    // folded higher levels plus older batches not yet compacted. The two
+    // sets are disjoint; the L1 projection intentionally let short be a
+    // suffix of long, which double-injected the same text.
+    const level0 = digests.filter(item => (Number(item.entry.level) || 0) === 0);
+    const shortPool = level0.length > 0 ? level0 : digests;
     const shortCount = Math.max(1, Math.floor(config.shortDigestCount));
+    const shortItems = shortPool.slice(Math.max(0, shortPool.length - shortCount));
+    const shortIds = new Set(shortItems.map(item => item.entry.id));
+    const longItems = digests.filter(item => !shortIds.has(item.entry.id));
+    const longText = truncateToBudget(longItems.map(item => item.text).join('\n\n'), config.longBudget);
     const shortText = truncateToBudget(
-        digests.slice(Math.max(0, digests.length - shortCount)).map(item => item.text).join('\n\n'),
+        shortItems.map(item => item.text).join('\n\n'),
         config.shortBudget
     );
 
@@ -110,6 +123,7 @@ export const buildMemoryView = (ledger, liveTurnIndex, settings = {}) => {
         toc.push({
             label: formatTurnLabel(item.fromTurn, item.toTurn),
             entryId: item.entry.id,
+            level: Number(item.entry.level) || 0,
             summary,
             tokens
         });
@@ -168,7 +182,8 @@ export const buildMemoryView = (ledger, liveTurnIndex, settings = {}) => {
             factGroups.set(`${factKind}:${factKey}`, candidate);
         }
     }
-    const card = { characters: [], openPlots: [] };
+    const characterRows = [];
+    const plotRows = [];
     factGroups.forEach(({ entry, factKind, factKey, lastSeenTurn, at }) => {
         const common = {
             entryId: entry.id,
@@ -178,16 +193,49 @@ export const buildMemoryView = (ledger, liveTurnIndex, settings = {}) => {
             at
         };
         if (factKind === 'character') {
-            card.characters.push({ ...common, name: factKey, status: String(entry.text || '').trim() });
+            const row = { ...common, name: factKey, status: String(entry.text || '').trim() };
+            characterRows.push({ row, cost: estimateTokens(`${row.name} ${row.status}`) });
         } else {
-            card.openPlots.push({
+            const row = {
                 ...common,
                 summary: factKey,
                 status: entry.meta.factStatus === 'closed' ? 'closed' : 'open',
                 deadline: String(entry.meta.factDeadline || '').trim()
-            });
+            };
+            plotRows.push({ row, cost: estimateTokens(`${row.summary} ${row.deadline}`) });
         }
     });
+
+    // cardBudget backstop (design doc §5.2): the per-key projection is
+    // bounded by the number of live keys, but a pathological card (dozens
+    // of plots) must still hit a hard cap. Locked rows win, then the
+    // freshest rows; overflow rows are dropped whole rather than cut
+    // mid-sentence, and at least one row is always kept.
+    const rankCardRows = (rows) => [...rows].sort((a, b) => (
+        (Number(b.row.manual) - Number(a.row.manual))
+        || ((b.row.lastSeenTurn || 0) - (a.row.lastSeenTurn || 0))
+        || ((b.row.at || 0) - (a.row.at || 0))
+    ));
+    const applyCardBudget = (rows) => {
+        const ranked = rankCardRows(rows);
+        if (!Number.isFinite(config.cardBudget) || config.cardBudget <= 0) {
+            return {
+                rows: ranked.map(item => item.row),
+                tokens: ranked.reduce((sum, item) => sum + item.cost, 0)
+            };
+        }
+        const kept = [];
+        let used = 0;
+        for (const item of ranked) {
+            if (kept.length > 0 && used + item.cost > config.cardBudget) continue;
+            used += item.cost;
+            kept.push(item);
+        }
+        return { rows: kept.map(item => item.row), tokens: used };
+    };
+    const characters = applyCardBudget(characterRows);
+    const openPlots = applyCardBudget(plotRows);
+    const card = { characters: characters.rows, openPlots: openPlots.rows };
 
     return {
         pins,
@@ -199,7 +247,14 @@ export const buildMemoryView = (ledger, liveTurnIndex, settings = {}) => {
         tokens: {
             long: estimateTokens(longText),
             short: estimateTokens(shortText),
-            toc: tocTokens
+            toc: tocTokens,
+            card: characters.tokens + openPlots.tokens
+        },
+        budgets: {
+            long: config.longBudget,
+            short: config.shortBudget,
+            toc: config.tocBudget,
+            card: config.cardBudget
         }
     };
 };
@@ -218,7 +273,9 @@ export const buildMemoryRecall = (ledger, liveTurnIndex, queryText, settings = {
     const entries = Array.isArray(ledger?.entries) ? ledger.entries : [];
     const scored = [];
     for (const entry of entries) {
-        if (entry.kind !== 'digest' || entry.meta.stale || entry.covers.length === 0) continue;
+        // Folded entries are already represented by their parent; returning
+        // both would spend the recall budget twice on the same span.
+        if (entry.kind !== 'digest' || entry.meta.stale || entry.meta.folded || entry.covers.length === 0) continue;
         const turns = [];
         let visible = true;
         for (const cover of entry.covers) {
