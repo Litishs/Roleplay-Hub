@@ -43,6 +43,7 @@ import RPHTtsText from './tts-text.mjs';
 import { MAIN_ID, SCOPE_SEPARATOR, createId, getScopeId, getOwnerId, isBranchScopeId, defaultBranchName, createMainBranch, normalizeBranches, collectSubtreeIds, buildBranchTree, formatWordCount } from './story-branch.mjs';
 import * as RPHMemorySummary from './memory-summary.mjs';
 import * as RPHMemoryProfile from './memory-profile.mjs';
+import { MIGRATION_NOTICE_KEY, adoptionStats, formatMigrationStatus, scopeMigrationStatus } from './memory-migration.mjs';
 import { VIEW_DEFAULTS, buildMemoryRecall, buildMemoryView } from './memory-view.mjs';
 import { createMemoryReconciler } from './memory-reconcile.mjs';
 import {
@@ -53,6 +54,7 @@ import {
     FACT_KIND_PLOT,
     PIN_ENABLED_LIMIT,
     PIN_TEXT_LIMIT,
+    adoptScopeLegacy,
     appendEntry,
     countEnabledPins,
     createEmptyLedger,
@@ -1496,7 +1498,10 @@ const __app = createApp({
             memorySettings,
             memoryGraphView,
             isClassicBatchExtracting,
-            classicBatchExtractProgress
+            classicBatchExtractProgress,
+            memoryMigration,
+            memoryMigrationFlash,
+            showMemoryMigrationNotice
         } = memorySystemState;
         let {
             _summaryInFlight,
@@ -5928,6 +5933,182 @@ const __app = createApp({
             }
         };
 
+        // --- v6 §20: migration visibility -----------------------------------
+        // The ledger adopts legacy keys lazily per scope, so users could never
+        // see whether their conversations were carried over. Everything below
+        // is read-only over storage plus one atomic adopt per scope; the
+        // background sweep never calls the model and can be interrupted at
+        // any point (each scope lands in a single save).
+        const collectMemoryScopeIds = async () => {
+            const scopes = new Set();
+            for (const character of (Array.isArray(characters.value) ? characters.value : [])) {
+                if (!character?.uuid) continue;
+                scopes.add(character.uuid);
+                const saved = await getScopedStoredValue('branches', character.uuid).catch(() => null);
+                const branches = Array.isArray(saved?.branches) ? saved.branches : [];
+                branches.forEach(branch => {
+                    if (branch?.id && branch.id !== 'main') {
+                        scopes.add(`${character.uuid}${SCOPE_SEPARATOR}${branch.id}`);
+                    }
+                });
+            }
+            return Array.from(scopes);
+        };
+
+        const readScopeLegacy = async (scopeId) => {
+            const [summaries, profile] = await Promise.all([
+                getScopedStoredValue('memory_summaries', scopeId).catch(() => null),
+                getScopedStoredValue('memory_profile', scopeId).catch(() => null)
+            ]);
+            return { summaries, profile };
+        };
+
+        const scopeMigrationInfo = async (scopeId) => {
+            const [ledger, legacy] = await Promise.all([
+                getScopedStoredValue('memory_ledger', scopeId).catch(() => null),
+                readScopeLegacy(scopeId)
+            ]);
+            return {
+                scopeId,
+                ledger: ledger && typeof ledger === 'object' ? normalizeLedger(ledger) : null,
+                ...legacy
+            };
+        };
+
+        const currentScopeMigrationStatus = computed(() => {
+            const scopeId = getCurrentChatStorageScopeId();
+            if (!scopeId || !memoryLedger.value) return null;
+            return scopeMigrationStatus({
+                ledger: memoryLedger.value,
+                summaries: memorySummaries.value,
+                profile: memoryProfile.value
+            });
+        });
+
+        const dismissMemoryMigrationFlash = () => { memoryMigrationFlash.value = null; };
+
+        // One atomic adopt for any scope, open or not. Returns the adopted
+        // ledger or null when there was nothing to carry over.
+        const adoptScopeLegacyNow = async (scopeId, { summaries, profile }) => {
+            const ledger = await getScopedStoredValue('memory_ledger', scopeId).catch(() => null);
+            const normalized = ledger && typeof ledger === 'object' ? normalizeLedger(ledger) : null;
+            const turnCovers = new Map();
+            if (scopeId === getCurrentChatStorageScopeId()) {
+                buildMemoryLiveSnapshot().turnCovers.forEach((covers, turn) => turnCovers.set(turn, covers));
+            } else {
+                const chat = await getScopedStoredValue('chat', scopeId).catch(() => null);
+                const snapshot = buildConversationTurnSnapshot(Array.isArray(chat) ? chat : [], { includeSystem: false });
+                snapshot.turns.forEach(turnInfo => {
+                    const covers = [];
+                    (turnInfo.sourceIndexes || []).forEach(index => {
+                        const message = (Array.isArray(chat) ? chat : [])[index];
+                        if (!message?.id) return;
+                        covers.push({ id: message.id, h: canonicalMessageHash(message) });
+                    });
+                    if (covers.length > 0) turnCovers.set(turnInfo.turn, covers);
+                });
+            }
+            const adopted = adoptScopeLegacy({
+                ledger: normalized,
+                summaries,
+                profile,
+                turnCovers,
+                makeId: generateUUID,
+                now: Date.now()
+            });
+            if (!adopted) return null;
+            await setScopedStoredValue('memory_ledger', scopeId, cloneForStorage(adopted), { clone: false });
+            if (scopeId === getCurrentChatStorageScopeId()) {
+                memoryLedger.value = adopted;
+                applyMemoryLedgerProjection(adopted);
+                await saveMemorySummariesNow(scopeId, memorySummaries.value).catch(() => { });
+            }
+            return adopted;
+        };
+
+        const runMemoryMigrationQueue = async (queue, { foreground = false } = {}) => {
+            if (memoryMigration.running) return { done: 0, reason: 'busy' };
+            if (queue.length === 0) return { done: 0, reason: 'empty' };
+            memoryMigration.running = true;
+            memoryMigration.total = queue.length;
+            memoryMigration.done = 0;
+            let done = 0;
+            try {
+                for (const item of queue) {
+                    memoryMigration.activeScope = item.scopeId;
+                    try {
+                        const adopted = await adoptScopeLegacyNow(item.scopeId, item);
+                        if (adopted) {
+                            done += 1;
+                            if (item.scopeId === getCurrentChatStorageScopeId()) {
+                                memoryMigrationFlash.value = {
+                                    scopeId: item.scopeId,
+                                    stats: adoptionStats(adopted),
+                                    at: Date.now()
+                                };
+                                setTimeout(() => { memoryMigrationFlash.value = null; }, 6000);
+                            }
+                        }
+                    } catch (error) {
+                        console.error('Memory migration failed for scope:', item.scopeId, error);
+                    }
+                    memoryMigration.done += 1;
+                    if (foreground) await new Promise(resolve => setTimeout(resolve, 0));
+                }
+            } finally {
+                memoryMigration.running = false;
+                memoryMigration.activeScope = '';
+                if (done > 0) {
+                    memoryMigration.finishedFlash = true;
+                    setTimeout(() => { memoryMigration.finishedFlash = false; }, 4000);
+                }
+            }
+            return { done, reason: 'done' };
+        };
+
+        // Boot scan: discover pending scopes, show the one-time notice and
+        // start the background sweep. Pure storage reads until an adopt runs.
+        const startMemoryMigrationScan = async () => {
+            if (memoryMigration.scanned) return;
+            memoryMigration.scanned = true;
+            const scopeIds = await collectMemoryScopeIds();
+            const queue = [];
+            let anyPending = false;
+            for (const scopeId of scopeIds) {
+                const info = await scopeMigrationInfo(scopeId);
+                const state = scopeMigrationStatus(info);
+                if (state.status === 'pending') {
+                    anyPending = true;
+                    queue.push({ scopeId, summaries: info.summaries, profile: info.profile });
+                }
+            }
+            if (!anyPending) return;
+            const seen = await getStoredValue(MIGRATION_NOTICE_KEY).catch(() => null);
+            if (!seen) showMemoryMigrationNotice.value = true;
+            runMemoryMigrationQueue(queue);
+        };
+
+        const closeMemoryMigrationNotice = async () => {
+            showMemoryMigrationNotice.value = false;
+            await setStoredValue(MIGRATION_NOTICE_KEY, true).catch(() => { });
+        };
+
+        const migrateAllMemoryNow = async () => {
+            const scopeIds = await collectMemoryScopeIds();
+            const queue = [];
+            for (const scopeId of scopeIds) {
+                const info = await scopeMigrationInfo(scopeId);
+                if (scopeMigrationStatus(info).status === 'pending') {
+                    queue.push({ scopeId, summaries: info.summaries, profile: info.profile });
+                }
+            }
+            const result = await runMemoryMigrationQueue(queue, { foreground: true });
+            if (result.reason === 'busy') showToast('记忆迁移正在进行中，请稍后再试');
+            else if (result.done === 0) showToast('没有待迁移的旧版记忆');
+            else showToast(`已迁移 ${result.done} 个会话的旧版记忆`);
+            return result;
+        };
+
         // Content-addressed snapshots. liveTurnIndex maps message id -> turn
         // number of the current live timeline (never persisted); liveIndex
         // maps id -> canonical hash for staleness checks. Hash cost is paid
@@ -6166,6 +6347,14 @@ const __app = createApp({
             buildLiveSnapshot: () => buildMemoryLiveSnapshot(),
             requestBatchDigest: requestRollingSummary,
             requestCompaction: requestMemoryCompaction,
+            notifyAdoption: (ledger) => {
+                memoryMigrationFlash.value = {
+                    scopeId: getCurrentChatStorageScopeId(),
+                    stats: adoptionStats(ledger),
+                    at: Date.now()
+                };
+                setTimeout(() => { memoryMigrationFlash.value = null; }, 6000);
+            },
             applyProjection: (ledger, live) => { applyMemoryLedgerProjection(ledger, live); },
             setProgress: setSummaryProgress,
             clearProgress: clearSummaryProgress,
@@ -9325,6 +9514,13 @@ const __app = createApp({
             // 初始化守卫解除：此后 saveData 才允许写入 user / memorySettings
             _initComplete = true;
 
+            // v6 §20: discover un-migrated conversations, show the one-time
+            // upgrade notice and start the background adoption sweep. Never
+            // blocks startup: every scope lands in its own atomic save.
+            startMemoryMigrationScan().catch(error => {
+                console.error('Memory migration scan failed:', error);
+            });
+
             // Restore Last Active Session
             if (lastActiveCharacterId.value !== null && characters.value[lastActiveCharacterId.value]) {
                 // Restore character selection without clearing chat history (we load it from DB)
@@ -9806,6 +10002,41 @@ const __app = createApp({
             compactFanoutMax: COMPACT_FANOUT_MAX,
             compactMemoryNow,
             getMemoryEntryBase,
+            // v6 §20 migration visibility
+            memoryMigration,
+            memoryMigrationFlash,
+            dismissMemoryMigrationFlash,
+            showMemoryMigrationNotice,
+            closeMemoryMigrationNotice,
+            migrateAllMemoryNow,
+            currentScopeMigrationStatus,
+            migrationStatusLabel: computed(() => {
+                const state = currentScopeMigrationStatus.value;
+                return state ? formatMigrationStatus(state) : '';
+            }),
+            // Sidebar capsule: "n/m" while the sweep runs, a short "all done"
+            // flash afterwards, then nothing.
+            memoryMigrationRunningHere: computed(() => memoryMigration.running
+                && memoryMigration.activeScope === getCurrentChatStorageScopeId()),
+            migrationFlashText: computed(() => {
+                const stats = memoryMigrationFlash.value?.stats;
+                if (!stats) return '';
+                const parts = [];
+                if (stats.digests > 0) parts.push(`${stats.digests} 条摘要`);
+                if (stats.facts > 0) parts.push(`${stats.facts} 条信息卡`);
+                if (stats.pins > 0) parts.push(`${stats.pins} 条手动记忆`);
+                return parts.join(' · ') || '完成';
+            }),
+            memoryMigrationBadge: computed(() => {
+                if (memoryMigration.running) {
+                    return `${memoryMigration.done}/${memoryMigration.total}`;
+                }
+                if (memoryMigration.finishedFlash) return '已全部迁移';
+                if (memoryMigration.scanned && memoryMigration.total > 0 && memoryMigration.done < memoryMigration.total) {
+                    return `${memoryMigration.done}/${memoryMigration.total}`;
+                }
+                return '';
+            }),
             // Manual memory + info-card CRUD (v6 L4 / v5 M2 UX).
             memoryPinsLimit: PIN_ENABLED_LIMIT,
             memoryPinTextLimit: PIN_TEXT_LIMIT,

@@ -289,6 +289,40 @@
                     </div>
                     </div>
 
+                <!-- v6 §20: migration status line. Derived from storage
+                     only; the sweep runs in the background and never blocks
+                     this page. Visible even with the engine off, because
+                     adoption is pure bookkeeping. -->
+                <div v-if="currentScopeMigrationStatus"
+                    class="bg-white/70 backdrop-blur-sm p-1 rounded-2xl border border-gray-200 shadow-sm mb-4 overflow-hidden">
+                    <div class="px-4 pb-3 pt-3 space-y-2">
+                        <div class="flex items-center gap-2 flex-wrap">
+                            <span class="text-[10px] font-bold text-gray-400">迁移状态</span>
+                            <span class="text-[11px] text-gray-600">{{ migrationStatusLabel }}</span>
+                            <span v-if="memoryMigration.running"
+                                class="text-[10px] font-mono text-primary-700">后台迁移 {{ memoryMigration.done }}/{{ memoryMigration.total }}</span>
+                            <div class="ml-auto flex items-center gap-1.5">
+                                <button v-if="currentScopeMigrationStatus.status === 'pending'"
+                                    type="button" @click="migrateAllMemoryNow()"
+                                    class="text-[10px] font-bold px-2 py-1 rounded-lg bg-primary-600 text-white active:scale-95 transition-all">
+                                    立即迁移
+                                </button>
+                                <button type="button" @click="exportMemories()"
+                                    class="text-[10px] font-bold px-2 py-1 rounded-lg border border-gray-200 bg-white text-gray-600 active:scale-95 transition-all">
+                                    导出备份
+                                </button>
+                            </div>
+                        </div>
+                        <div v-if="memoryMigration.running" class="h-1 rounded-full bg-gray-200 overflow-hidden">
+                            <div class="h-full rounded-full bg-primary-500 transition-all"
+                                :style="{ width: migrationPercent + '%' }"></div>
+                        </div>
+                        <p class="text-[10px] text-gray-400 leading-relaxed">
+                            迁移与总结都是逐条原子落盘：任何时刻退出应用最多丢失正在写入的一条，下次启动自动补齐。
+                        </p>
+                    </div>
+                </div>
+
                 <!-- Memory Ledger View (v6 L4): directory / info-card tabs.
                      Retrieval stays the TOC + tool_memory; the card tab is the
                      v5 M2 read/edit/lock UX on top of fact entries. -->
@@ -684,6 +718,11 @@ export default {
         ? `第 ${source.fromTurn} 轮`
         : `第 ${source.fromTurn}–${source.toTurn} 轮`;
     };
+    const migrationPercent = computed(() => {
+      const state = ctx.memoryMigration;
+      if (!state || !state.total) return 0;
+      return Math.min(100, Math.round((state.done / state.total) * 100));
+    });
     // Budget health block (§13): actual injected tokens vs the view caps.
     const memoryBudgetRows = computed(() => {
       const stats = ctx.memoryBudgetStats?.value;
@@ -781,6 +820,7 @@ export default {
       pinDraft,
       factDraft,
       memoryBudgetRows,
+      migrationPercent,
       foldedSourcesOpen,
       toggleFoldSources,
       foldedSourcesFor,

@@ -384,6 +384,35 @@
         </div>
     </transition>
 
+    <!-- v6 §20: one-time memory upgrade notice. Shown only when legacy
+         memory content was found without a ledger yet; offers a backup
+         export before the background adoption sweep continues. -->
+    <div v-if="showMemoryMigrationNotice"
+        class="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fade-in">
+        <div
+            class="bg-white rounded-xl border border-gray-200 w-full max-w-md flex flex-col shadow-2xl transform transition-all scale-100 overflow-hidden relative">
+            <div class="bg-gradient-to-r from-primary-50 to-blue-50 p-5 border-b border-gray-100">
+                <h3 class="text-xl font-bold text-gray-900">记忆系统已升级</h3>
+                <p class="text-xs text-gray-500 mt-1">旧版摘要将过继到新的记忆账本</p>
+            </div>
+            <div class="p-5 space-y-3 text-sm text-gray-600">
+                <p>检测到本机的旧版滚动摘要与信息卡。它们会在后台逐个会话过继为新的记忆账本条目，原文聊天记录不受影响。</p>
+                <p>过继是逐条原子落盘：<b>任何时刻退出应用都不会丢记忆</b>，最多丢失正在写入的一条，下次启动自动补齐。侧栏与记忆面板会显示迁移进度。</p>
+                <p class="text-xs text-gray-400">如想留一份升级前的副本，可先导出备份（含全部记忆与设置）。</p>
+            </div>
+            <div class="p-4 flex justify-end gap-2 border-t border-gray-100">
+                <button @click="exportMemories(); closeMemoryMigrationNotice()"
+                    class="px-4 py-2.5 bg-white text-primary-700 font-medium rounded-lg border border-primary-200 shadow-sm hover:bg-primary-50 transition-all active:scale-95">
+                    先导出备份
+                </button>
+                <button @click="closeMemoryMigrationNotice"
+                    class="px-8 py-2.5 bg-primary-600 hover:bg-primary-700 text-white font-medium rounded-lg shadow-sm hover:shadow transition-all active:scale-95">
+                    知道了
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- Author Notice Modal (首次启动致谢) -->
     <div v-if="showAuthorNoticeModal"
         class="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fade-in">

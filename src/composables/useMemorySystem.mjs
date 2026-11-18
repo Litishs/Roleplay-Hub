@@ -60,6 +60,20 @@ export function useMemorySystem() {
     const classicBatchExtractProgress = ref({ current: 0, total: 0 });
     let _classicMemoriesLoaded = false;
 
+    // --- Memory migration visibility (v6 §20) ---
+    // Progress of the background legacy-adoption sweep: total = scopes found
+    // pending at scan time, done = scopes carried into the ledger so far.
+    const memoryMigration = reactive({
+        scanned: false,
+        total: 0,
+        done: 0,
+        running: false,
+        activeScope: '',
+        finishedFlash: false
+    });
+    const memoryMigrationFlash = ref(null);   // { scopeId, stats, at } for the chat strip
+    const showMemoryMigrationNotice = ref(false);
+
     // --- Memory panel modal flags ---
     const showNoMemoryNeededModal = ref(false);
     const showMemorySettings = ref(false);
@@ -93,6 +107,10 @@ export function useMemorySystem() {
         _classicMemoriesLoaded,
         // modal flags
         showNoMemoryNeededModal,
-        showMemorySettings
+        showMemorySettings,
+        // migration visibility
+        memoryMigration,
+        memoryMigrationFlash,
+        showMemoryMigrationNotice
     };
 }

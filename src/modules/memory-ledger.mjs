@@ -603,6 +603,47 @@ export const adoptLegacySummaries = ({ summaries, turnCovers, makeId, now = Date
     return entries;
 };
 
+// Storage-level adoption for scopes that are not currently open (v6 §20.3).
+// Mirrors reconcile step 0 exactly — same guards, same entry shapes — so a
+// background sweep and an open-conversation adoption produce identical
+// ledgers. Pure: reads nothing, writes nothing; the caller persists the
+// returned ledger in one atomic save. Returns null when there is nothing
+// to adopt (already adopted, or no legacy content).
+export const adoptScopeLegacy = ({
+    ledger = null,
+    summaries = null,
+    profile = null,
+    turnCovers,
+    makeId,
+    now = Date.now()
+} = {}) => {
+    const base = ledger && Array.isArray(ledger.entries) ? ledger : createEmptyLedger();
+    let changed = false;
+    const hasDigestEntries = base.entries.some(entry => entry.kind === 'digest');
+    if (!hasDigestEntries) {
+        const adopted = adoptLegacySummaries({ summaries, turnCovers, makeId, now });
+        if (adopted.length > 0) {
+            adopted.forEach(entry => appendEntry(base, entry));
+            changed = true;
+        }
+    }
+    if (!base.profileAdopted) {
+        const hasLegacyRows = Boolean(profile && (
+            (Array.isArray(profile.characters) && profile.characters.length > 0)
+            || (Array.isArray(profile.openPlots) && profile.openPlots.length > 0)
+        ));
+        if (hasLegacyRows) {
+            const adoptedFacts = adoptLegacyProfile({ profile, makeId, now });
+            adoptedFacts.forEach(entry => appendEntry(base, entry));
+            base.profileAdopted = true;
+            if (adoptedFacts.length > 0) changed = true;
+        }
+    }
+    if (!changed) return null;
+    base.updatedAt = now;
+    return base;
+};
+
 // --- Branch filtering (design doc §7, consumed by L2) ----------------------
 
 // An entry survives a fork iff every message it consumed survived. Pins

@@ -151,6 +151,7 @@ export function createMemoryReconciler(deps) {
         // 0. Legacy adoption: only when no digest coverage exists yet. Pins and
         // facts may already be in the ledger (L4) without implying that the
         // v4 summary layer was adopted.
+        let adoptedThisPass = 0;
         const hasDigestEntries = ledger.entries.some(entry => entry.kind === 'digest');
         if (!hasDigestEntries && typeof deps.loadLegacySummaries === 'function') {
             const adopted = adoptLegacySummaries({
@@ -161,6 +162,7 @@ export function createMemoryReconciler(deps) {
             });
             if (adopted.length > 0) {
                 adopted.forEach(entry => appendEntry(ledger, entry));
+                adoptedThisPass += adopted.length;
                 dirty = true;
             }
         }
@@ -181,10 +183,12 @@ export function createMemoryReconciler(deps) {
                 });
                 adoptedFacts.forEach(entry => appendEntry(ledger, entry));
                 ledger.profileAdopted = true;
-                if (adoptedFacts.length > 0) dirty = true;
+                if (adoptedFacts.length > 0) {
+                    adoptedThisPass += adoptedFacts.length;
+                    dirty = true;
+                }
             }
         }
-
         // 1. Invalidation: pure local, synchronous, no API.
         let invalidated = invalidateEntries(ledger, live.liveIndex);
         invalidated += propagateStaleUpward(ledger);
@@ -197,6 +201,10 @@ export function createMemoryReconciler(deps) {
             deps.applyProjection?.(ledger, live);
             await deps.saveLedgerNow(scopeId, ledger);
         }
+        // v6 §20: announce a just-persisted adoption (the chat strip "old
+        // memory carried over") without the reconciler knowing anything
+        // about presentation.
+        if (adoptedThisPass > 0) deps.notifyAdoption?.(ledger);
 
         // 2/3. Hole computation and batch filling (one model call per batch).
         const pendingState = { keepFloors: settings.keepFloors, batchSize: settings.summaryBatchSize };

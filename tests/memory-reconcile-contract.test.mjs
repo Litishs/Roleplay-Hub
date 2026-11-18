@@ -480,3 +480,16 @@ test('reconcile compaction: an edit unfolds the stale parent children and refill
         'surviving siblings were unfolded instead of staying invisible');
     assert.equal(ledger.entries.length, 6, 'regenerated batch + five surviving batches');
 });
+
+test('reconcile: a completed adoption notifies the UI exactly once (§20)', async () => {
+    const live = createLive(makeTurns(8));
+    const legacy = { long: '旧长期', short: '', batches: [{ fromTurn: 1, toTurn: 2, status: 'done' }] };
+    const notifications = [];
+    const harness = createHarness({ live, legacy });
+    harness.deps.notifyAdoption = (ledger) => notifications.push(ledger.entries.length);
+    await harness.reconciler.reconcile({});
+    assert.deepEqual(notifications, [2], 'one notice carrying the adopted ledger');
+    // A second run adopts nothing and stays silent.
+    await harness.reconciler.reconcile({});
+    assert.equal(notifications.length, 1);
+});
