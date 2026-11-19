@@ -16,6 +16,7 @@
 
 import { computePendingBatch } from './memory-summary.mjs';
 import {
+    adoptLegacyFragments,
     adoptLegacyProfile,
     adoptLegacySummaries,
     applyCompaction,
@@ -164,6 +165,23 @@ export function createMemoryReconciler(deps) {
                 adopted.forEach(entry => appendEntry(ledger, entry));
                 adoptedThisPass += adopted.length;
                 dirty = true;
+            }
+            // Shards ride the same window: if this pass adopts first (a send
+            // landing before the boot sweep reaches the scope), the sweep's
+            // digest guard would otherwise orphan the shard text forever.
+            if (typeof deps.loadLegacyFragments === 'function') {
+                const fragments = await deps.loadLegacyFragments();
+                const adoptedFragments = adoptLegacyFragments({
+                    fragments,
+                    turnCovers: live.turnCovers,
+                    makeId: deps.makeId,
+                    now: now()
+                });
+                if (adoptedFragments.length > 0) {
+                    adoptedFragments.forEach(entry => appendEntry(ledger, entry));
+                    adoptedThisPass += adoptedFragments.length;
+                    dirty = true;
+                }
             }
         }
         // v4 info card -> fact entries. Guarded by a ledger flag, not by

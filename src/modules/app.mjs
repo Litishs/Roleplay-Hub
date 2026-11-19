@@ -6338,6 +6338,15 @@ const __app = createApp({
             loadLegacyProfile: () => (memoryProfile.value && profileLib()
                 ? profileLib().normalizeProfile(memoryProfile.value)
                 : null),
+            // v4 shards are read from storage only inside the adoption window
+            // (reconcile step 0, before any digest exists): the runtime shard
+            // variable was retired with the vector stack in L3.
+            loadLegacyFragments: async () => {
+                const scopeId = getCurrentChatStorageScopeId();
+                if (!scopeId) return null;
+                const fragments = await getScopedStoredValue('memories', scopeId).catch(() => null);
+                return Array.isArray(fragments) ? fragments : null;
+            },
             saveLedgerNow: persistMemoryLedgerAndProjection,
             buildLiveSnapshot: () => buildMemoryLiveSnapshot(),
             requestBatchDigest: requestRollingSummary,

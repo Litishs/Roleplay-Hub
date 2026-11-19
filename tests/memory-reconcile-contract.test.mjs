@@ -47,6 +47,7 @@ const createHarness = ({
     live,
     legacy = null,
     legacyProfile = null,
+    legacyFragments = null,
     settings = {},
     failOnCall = 0,
     gated = false,
@@ -72,6 +73,7 @@ const createHarness = ({
         setLedger: (next) => { ledger = next; },
         loadLegacySummaries: () => legacy,
         loadLegacyProfile: () => legacyProfile,
+        loadLegacyFragments: async () => legacyFragments,
         saveLedgerNow: async (scopeId, data) => { saves.push(JSON.parse(JSON.stringify(data))); },
         buildLiveSnapshot: () => live,
         requestBatchDigest: async (batch, signal, context) => {
@@ -353,6 +355,31 @@ test('reconcile: pins in the ledger do not block legacy summary adoption', async
         'the legacy long text is adopted despite the pin');
     assert.deepEqual(harness.calls[0].batch, { fromTurn: 3, toTurn: 4 },
         'adopted coverage prevents resummarizing turns 1-2');
+});
+
+test('reconcile: a send before the sweep reaches the scope still adopts shards', async () => {
+    // Race window: reconcile step 0 adopts first and creates digests, so the
+    // boot sweep's digest guard would skip the shards forever. Step 0 must
+    // adopt them in the same window.
+    const live = createLive(makeTurns(6));
+    const legacy = { long: '旧长期', short: '', batches: [] };
+    const legacyFragments = [
+        { summary: '第2轮段落', turn: 2, vectorMemory: true },
+        { summary: '历史已删段落', turn: 40, vectorMemory: true }
+    ];
+    const harness = createHarness({ live, legacy, legacyFragments });
+    await harness.reconciler.reconcile({});
+    const ledger = harness.getLedger();
+    const shard = ledger.entries.find(entry => entry.text === '第2轮段落');
+    assert.ok(shard, 'the shard text is adopted by step 0');
+    assert.deepEqual(shard.covers, live.turnCovers.get(2), 'turn 2 resolves to live covers');
+    const gone = ledger.entries.find(entry => entry.text === '历史已删段落');
+    assert.deepEqual(gone.covers, [], 'unreachable turn keeps covers empty');
+    assert.ok(ledger.entries.some(entry => entry.kind === 'digest' && entry.text === '旧长期'));
+    // A second pass must not re-adopt: digests exist now.
+    const before = ledger.entries.length;
+    await harness.reconciler.reconcile({});
+    assert.equal(harness.getLedger().entries.length, before, 'no double adoption');
 });
 
 // --- v6 L5: hierarchical compaction (design doc §9.1 / §9.2) ---------------
