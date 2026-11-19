@@ -43,7 +43,7 @@ import RPHTtsText from './tts-text.mjs';
 import { MAIN_ID, SCOPE_SEPARATOR, createId, getScopeId, getOwnerId, isBranchScopeId, defaultBranchName, createMainBranch, normalizeBranches, collectSubtreeIds, buildBranchTree, formatWordCount } from './story-branch.mjs';
 import * as RPHMemorySummary from './memory-summary.mjs';
 import * as RPHMemoryProfile from './memory-profile.mjs';
-import { MIGRATION_NOTICE_KEY, adoptionStats, formatMigrationStatus, scopeMigrationStatus } from './memory-migration.mjs';
+import { MIGRATION_NOTICE_KEY, adoptionStats, formatMigrationStatus, hasLegacyContent, scopeMigrationStatus } from './memory-migration.mjs';
 import { VIEW_DEFAULTS, buildMemoryRecall, buildMemoryView } from './memory-view.mjs';
 import { createMemoryReconciler } from './memory-reconcile.mjs';
 import {
@@ -54,6 +54,7 @@ import {
     FACT_KIND_PLOT,
     PIN_ENABLED_LIMIT,
     PIN_TEXT_LIMIT,
+    adoptLegacyFragments,
     adoptScopeLegacy,
     appendEntry,
     countEnabledPins,
@@ -5854,17 +5855,6 @@ const __app = createApp({
         const summaryLib = () => RPHMemorySummary;
         const profileLib = () => RPHMemoryProfile;
 
-        const saveMemoryProfileNow = async (scopeId, data) => {
-            const target = data || memoryProfile.value;
-            if (!currentCharacter.value?.uuid || !target) return;
-            await setScopedStoredValue(
-                'memory_profile',
-                scopeId || getCurrentChatStorageScopeId(),
-                cloneForStorage(target),
-                { clone: false }
-            );
-        };
-
         const loadMemoryProfile = async (characterId) => {
             try {
                 const saved = await getScopedStoredValue('memory_profile', characterId);
@@ -10106,26 +10096,57 @@ const __app = createApp({
             importMemories: (event) => readJsonFileInput(event, async data => {
                 const savedLedger = data?.ledger;
                 const hasLedger = Boolean(savedLedger && Array.isArray(savedLedger.entries));
-                if (!hasLedger && !data?.summaries) throw new Error('这不是记忆账本文件');
+                // Pre-ledger backups (v4 exports: vector shards + summaries +
+                // profile) carry no ledger. Dropping them on the floor would
+                // silently destroy the user's memory, so they go through the
+                // same adoption path as the upgrade sweep: fragments become
+                // legacy digests, summaries/profile become legacy rows.
+                const legacyFragments = hasLedger ? [] : (Array.isArray(data) ? data : data?.memories) || [];
+                const hasLegacyPayload = !hasLedger && Boolean(
+                    legacyFragments.length
+                    || hasLegacyContent({ summaries: data?.summaries, profile: data?.profile })
+                );
+                if (!hasLedger && !hasLegacyPayload) throw new Error('这不是记忆账本文件');
+                const scopeId = getCurrentChatStorageScopeId();
+                const now = Date.now();
+                const turnCovers = buildMemoryLiveSnapshot().turnCovers;
+                let ledger;
                 if (hasLedger) {
-                    memoryLedger.value = normalizeLedger(savedLedger);
-                    await saveMemoryLedgerNow(getCurrentChatStorageScopeId(), memoryLedger.value);
-                    applyMemoryLedgerProjection(memoryLedger.value);
+                    ledger = normalizeLedger(savedLedger);
+                } else {
+                    // Replace the derived layers with the backup content but
+                    // keep the pins the user wrote in this conversation.
+                    const existing = memoryLedger.value && Array.isArray(memoryLedger.value.entries) ? memoryLedger.value : null;
+                    ledger = createEmptyLedger();
+                    (existing ? existing.entries.filter(entry => entry.kind === 'pin') : [])
+                        .forEach(pin => appendEntry(ledger, pin));
                 }
-                if (data?.summaries && typeof data.summaries === 'object') {
-                    memorySummaries.value = {
-                        long: String(data.summaries.long || '').trim(),
-                        short: String(data.summaries.short || '').trim(),
-                        batches: Array.isArray(data.summaries.batches) ? data.summaries.batches : [],
-                        updatedAt: Number(data.summaries.updatedAt) || 0
-                    };
-                    await saveMemorySummariesNow();
+                const pinsBefore = ledger.entries.filter(entry => entry.kind === 'pin').length;
+                // Adoption rides along on both paths: pre-ledger backups carry
+                // summaries/profile, and even a v6 export can hold an
+                // unadopted legacy profile next to a pin-only ledger. The
+                // guards inside keep it idempotent.
+                adoptScopeLegacy({
+                    ledger,
+                    summaries: data?.summaries || null,
+                    profile: data?.profile || null,
+                    turnCovers,
+                    makeId: generateUUID,
+                    now
+                });
+                if (!hasLedger) {
+                    adoptLegacyFragments({ fragments: legacyFragments, turnCovers, makeId: generateUUID, now })
+                        .forEach(entry => appendEntry(ledger, entry));
                 }
-                if (data?.profile && typeof data.profile === 'object' && profileLib()) {
-                    memoryProfile.value = profileLib().normalizeProfile(data.profile);
-                    await saveMemoryProfileNow();
-                }
-                showToast('记忆账本已导入', 'success');
+                // Never trade a live ledger for an import that carried nothing.
+                if (ledger.entries.length === pinsBefore) throw new Error('备份里没有可导入的记忆内容');
+                memoryLedger.value = ledger;
+                await persistMemoryLedgerAndProjection(scopeId, ledger);
+                const stats = adoptionStats(ledger);
+                const parts = [];
+                if (stats.digests > 0) parts.push(`${stats.digests} 条摘要`);
+                if (stats.facts > 0) parts.push(`${stats.facts} 条信息卡`);
+                showToast(hasLedger ? '记忆账本已导入' : `旧版记忆已过继到账本：${parts.join(' · ') || '空'}（手动记忆保留）`, 'success');
             }, error => showToast(`导入失败: ${error.message || 'JSON 格式错误'}`, 'error')),
             toggleMobileMenu, closeMobileMenu,
             fetchModels, selectModel, selectQuickModels, sendMessage, autoResizeInput, handleChatInput, handleChatCompositionStart, handleChatCompositionEnd, handleChatInputPaste, prepareChatInputSend, handleChatInputKeydown, handleChatInputFocus, handleChatInputBlur, stopGeneration, clearChat, toggleChatFullscreen,

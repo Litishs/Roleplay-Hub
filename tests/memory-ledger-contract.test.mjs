@@ -16,6 +16,7 @@ import {
     LEDGER_VERSION,
     PIN_ENABLED_LIMIT,
     PIN_TEXT_LIMIT,
+    adoptLegacyFragments,
     adoptLegacyProfile,
     adoptLegacySummaries,
     appendEntry,
@@ -228,6 +229,35 @@ test('ledger: adoption keeps long/short text when no coverage resolves', () => {
     assert.equal(entries[0].level, 1);
     assert.deepEqual(entries[0].covers, []);
     assert.equal(entries[0].text, '只有文本');
+});
+
+test('ledger: legacy vector fragments become legacy digests with resolvable covers', () => {
+    const turnCovers = new Map([[3, [cover('u3', 'h3'), cover('a3', 'h3a')]]]);
+    let seq = 0;
+    const entries = adoptLegacyFragments({
+        fragments: [
+            { summary: '第三轮的段落记忆', turn: 3, vectorMemory: true, enabled: true },
+            { summary: '历史已删的段落记忆', turn: 9, vectorMemory: true },
+            { summary: '无轮号的段落记忆', vectorMemory: true },
+            { summary: '', turn: 1, vectorMemory: true },
+            { paragraph: '旧字段名的段落', turn: 2, vectorMemory: true, enabled: false }
+        ],
+        turnCovers,
+        makeId: () => `frag-${++seq}`,
+        now: 7
+    });
+    assert.equal(entries.length, 4, 'empty text is skipped');
+    const resolved = entries[0];
+    assert.deepEqual(resolved.covers, [cover('u3', 'h3'), cover('a3', 'h3a')]);
+    assert.ok(resolved.meta.legacy);
+    assert.equal(resolved.meta.enabled, true);
+    const gone = entries[1];
+    assert.deepEqual(gone.covers, [], 'unreachable turn keeps covers empty so the text never invalidates');
+    assert.deepEqual(entries[2].covers, []);
+    const disabled = entries[3];
+    assert.equal(disabled.text, '旧字段名的段落');
+    assert.equal(disabled.meta.enabled, false, 'disabled shards stay out of the injection');
+    assert.equal(adoptLegacyFragments({ fragments: null, turnCovers, makeId: () => 'x' }).length, 0);
 });
 
 test('ledger: branch filter keeps only entries whose covers all survived', () => {

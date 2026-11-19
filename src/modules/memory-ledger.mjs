@@ -603,6 +603,28 @@ export const adoptLegacySummaries = ({ summaries, turnCovers, makeId, now = Date
     return entries;
 };
 
+// Legacy vector shards (the v4 export "memories" array): paragraph digest
+// text plus embeddings the retired retrieval stack can no longer use. The
+// text is user memory, so an import rebuilds each shard as a legacy digest:
+// the fragment turn resolves to covers while that turn still exists in the
+// live timeline, and falls back to covers:[] (never invalidated) once the
+// history is gone. Disabled shards stay disabled instead of silently
+// re-entering the injection.
+export const adoptLegacyFragments = ({ fragments, turnCovers, makeId, now = Date.now() }) => {
+    if (!Array.isArray(fragments)) return [];
+    const entries = [];
+    for (const fragment of fragments) {
+        const text = String(fragment?.summary || fragment?.paragraph || '').trim();
+        if (!text) continue;
+        const turn = asCount(fragment?.turn);
+        const covers = turn >= 1 ? (turnCovers?.get(turn) || []) : [];
+        const entry = makeDigestEntry({ id: makeId(), covers, text, at: now, legacy: true });
+        if (fragment?.enabled === false) entry.meta.enabled = false;
+        entries.push(entry);
+    }
+    return entries;
+};
+
 // Storage-level adoption for scopes that are not currently open (v6 §20.3).
 // Mirrors reconcile step 0 exactly — same guards, same entry shapes — so a
 // background sweep and an open-conversation adoption produce identical

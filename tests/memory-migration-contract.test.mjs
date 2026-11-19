@@ -116,6 +116,22 @@ test('migration: UI surfaces progress without blocking anything', () => {
     assert.ok(modal.includes('closeMemoryMigrationNotice'));
 });
 
+test('migration: importing a pre-ledger backup adopts it instead of dropping it', () => {
+    // The import handler must route legacy payloads (v4 exports: memories
+    // shards + summaries + profile) through the same adoption path as the
+    // upgrade sweep, keep the conversation's pins, and persist atomically.
+    const handler = app.slice(app.indexOf('importMemories: (event)'), app.indexOf('toggleMobileMenu, closeMobileMenu,'));
+    assert.ok(handler.includes('adoptScopeLegacy({'), 'legacy summaries/profile go through adoption');
+    assert.ok(handler.includes('adoptLegacyFragments('), 'vector shards become legacy digests');
+    assert.ok(handler.includes("entries.filter(entry => entry.kind === 'pin')"), 'existing pins survive the replacement');
+    assert.ok(handler.includes('persistMemoryLedgerAndProjection(scopeId, ledger)'), 'one atomic save + projection');
+    assert.ok(handler.includes('旧版记忆已过继到账本'), 'the toast tells the user what was carried over');
+    assert.ok(handler.includes('备份里没有可导入的记忆内容'), 'an empty backup never trades away a live ledger');
+    assert.ok(handler.includes('hasLegacyContent('), 'payload detection shares the sweep predicate');
+    // The retired legacy-profile write path must not come back.
+    assert.ok(!app.includes('saveMemoryProfileNow'), 'legacy profile key is never written again');
+});
+
 test('migration: the sweep never calls the model and survives interruption', () => {
     // adoptScopeLegacy is pure storage-level synthesis: no fetch, no prompt.
     const source = app.slice(app.indexOf('const adoptScopeLegacyNow'), app.indexOf('const runMemoryMigrationQueue'));
