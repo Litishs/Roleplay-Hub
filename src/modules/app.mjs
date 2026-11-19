@@ -54,7 +54,6 @@ import {
     FACT_KIND_PLOT,
     PIN_ENABLED_LIMIT,
     PIN_TEXT_LIMIT,
-    adoptLegacyFragments,
     adoptScopeLegacy,
     appendEntry,
     countEnabledPins,
@@ -5946,11 +5945,16 @@ const __app = createApp({
         };
 
         const readScopeLegacy = async (scopeId) => {
-            const [summaries, profile] = await Promise.all([
+            const [summaries, profile, fragments] = await Promise.all([
                 getScopedStoredValue('memory_summaries', scopeId).catch(() => null),
-                getScopedStoredValue('memory_profile', scopeId).catch(() => null)
+                getScopedStoredValue('memory_profile', scopeId).catch(() => null),
+                // v4 vector shards: retired as a retrieval source (L3) but the
+                // paragraph text is user memory. A full-backup restore from a
+                // pre-ledger build leaves them with no ledger to adopt into,
+                // so the sweep carries them over as legacy digests.
+                getScopedStoredValue('memories', scopeId).catch(() => null)
             ]);
-            return { summaries, profile };
+            return { summaries, profile, fragments: Array.isArray(fragments) ? fragments : null };
         };
 
         const scopeMigrationInfo = async (scopeId) => {
@@ -5979,7 +5983,7 @@ const __app = createApp({
 
         // One atomic adopt for any scope, open or not. Returns the adopted
         // ledger or null when there was nothing to carry over.
-        const adoptScopeLegacyNow = async (scopeId, { summaries, profile }) => {
+        const adoptScopeLegacyNow = async (scopeId, { summaries, profile, fragments = null }) => {
             const ledger = await getScopedStoredValue('memory_ledger', scopeId).catch(() => null);
             const normalized = ledger && typeof ledger === 'object' ? normalizeLedger(ledger) : null;
             const turnCovers = new Map();
@@ -6002,6 +6006,7 @@ const __app = createApp({
                 ledger: normalized,
                 summaries,
                 profile,
+                fragments,
                 turnCovers,
                 makeId: generateUUID,
                 now: Date.now()
@@ -6069,7 +6074,7 @@ const __app = createApp({
                 const state = scopeMigrationStatus(info);
                 if (state.status === 'pending') {
                     anyPending = true;
-                    queue.push({ scopeId, summaries: info.summaries, profile: info.profile });
+                    queue.push({ scopeId, summaries: info.summaries, profile: info.profile, fragments: info.fragments });
                 }
             }
             if (!anyPending) return;
@@ -6089,7 +6094,7 @@ const __app = createApp({
             for (const scopeId of scopeIds) {
                 const info = await scopeMigrationInfo(scopeId);
                 if (scopeMigrationStatus(info).status === 'pending') {
-                    queue.push({ scopeId, summaries: info.summaries, profile: info.profile });
+                    queue.push({ scopeId, summaries: info.summaries, profile: info.profile, fragments: info.fragments });
                 }
             }
             const result = await runMemoryMigrationQueue(queue, { foreground: true });
@@ -10102,10 +10107,11 @@ const __app = createApp({
                 // same adoption path as the upgrade sweep: fragments become
                 // legacy digests, summaries/profile become legacy rows.
                 const legacyFragments = hasLedger ? [] : (Array.isArray(data) ? data : data?.memories) || [];
-                const hasLegacyPayload = !hasLedger && Boolean(
-                    legacyFragments.length
-                    || hasLegacyContent({ summaries: data?.summaries, profile: data?.profile })
-                );
+                const hasLegacyPayload = !hasLedger && hasLegacyContent({
+                    summaries: data?.summaries,
+                    profile: data?.profile,
+                    fragments: legacyFragments
+                });
                 if (!hasLedger && !hasLegacyPayload) throw new Error('这不是记忆账本文件');
                 const scopeId = getCurrentChatStorageScopeId();
                 const now = Date.now();
@@ -10130,14 +10136,11 @@ const __app = createApp({
                     ledger,
                     summaries: data?.summaries || null,
                     profile: data?.profile || null,
+                    fragments: hasLedger ? null : legacyFragments,
                     turnCovers,
                     makeId: generateUUID,
                     now
                 });
-                if (!hasLedger) {
-                    adoptLegacyFragments({ fragments: legacyFragments, turnCovers, makeId: generateUUID, now })
-                        .forEach(entry => appendEntry(ledger, entry));
-                }
                 // Never trade a live ledger for an import that carried nothing.
                 if (ledger.entries.length === pinsBefore) throw new Error('备份里没有可导入的记忆内容');
                 memoryLedger.value = ledger;

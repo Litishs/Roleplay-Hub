@@ -11,10 +11,13 @@
 // Logical storage name; the app storage layer adds the rp_hub_ prefix.
 export const MIGRATION_NOTICE_KEY = 'memory_migration_notice_seen';
 
-// Legacy content worth carrying over: done batches, long/short text or
-// info-card rows. An empty summaries blob (all-zero defaults) is not legacy
-// content — adopting it would only create empty placeholder entries.
-export const hasLegacyContent = ({ summaries = null, profile = null } = {}) => {
+// Legacy content worth carrying over: done batches, long/short text,
+// info-card rows or v4 vector shards. An empty summaries blob (all-zero
+// defaults) is not legacy content — adopting it would only create empty
+// placeholder entries. Shards matter because a full-backup restore from a
+// pre-ledger build leaves memories_<scope> behind with no ledger: most of
+// the user's memory text lives in those paragraph digests.
+export const hasLegacyContent = ({ summaries = null, profile = null, fragments = null } = {}) => {
     const batches = Array.isArray(summaries?.batches)
         ? summaries.batches.filter(batch => batch && batch.status === 'done')
         : [];
@@ -25,7 +28,9 @@ export const hasLegacyContent = ({ summaries = null, profile = null } = {}) => {
         (Array.isArray(profile?.characters) && profile.characters.length > 0)
         || (Array.isArray(profile?.openPlots) && profile.openPlots.length > 0)
     );
-    return batches.length > 0 || hasText || hasProfileRows;
+    const hasFragments = Array.isArray(fragments) && fragments.some(fragment =>
+        String(fragment?.summary || fragment?.paragraph || '').trim());
+    return batches.length > 0 || hasText || hasProfileRows || hasFragments;
 };
 
 // What an adopted ledger carries, for the "what was migrated" line: legacy
@@ -44,9 +49,9 @@ export const adoptionStats = (ledger) => {
 //             scope still reads through the v4 fallback path.
 // migrated  — a ledger exists and carries adopted legacy entries.
 // clean     — nothing to carry over (fresh scope, or rebuilt from scratch).
-export const scopeMigrationStatus = ({ ledger = null, summaries = null, profile = null } = {}) => {
+export const scopeMigrationStatus = ({ ledger = null, summaries = null, profile = null, fragments = null } = {}) => {
     const hasLedger = Boolean(ledger && Array.isArray(ledger.entries));
-    const legacy = hasLegacyContent({ summaries, profile });
+    const legacy = hasLegacyContent({ summaries, profile, fragments });
     let status = 'clean';
     if (!hasLedger && legacy) status = 'pending';
     else if (hasLedger) {

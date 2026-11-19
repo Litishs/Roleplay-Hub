@@ -635,17 +635,26 @@ export const adoptScopeLegacy = ({
     ledger = null,
     summaries = null,
     profile = null,
+    fragments = null,
     turnCovers,
     makeId,
     now = Date.now()
 } = {}) => {
     const base = ledger && Array.isArray(ledger.entries) ? ledger : createEmptyLedger();
     let changed = false;
+    // Digest-layer adoption shares one guard: once the ledger has its own
+    // digests, re-adopting old summaries or shards would inject the same
+    // history twice.
     const hasDigestEntries = base.entries.some(entry => entry.kind === 'digest');
     if (!hasDigestEntries) {
         const adopted = adoptLegacySummaries({ summaries, turnCovers, makeId, now });
         if (adopted.length > 0) {
             adopted.forEach(entry => appendEntry(base, entry));
+            changed = true;
+        }
+        const adoptedFragments = adoptLegacyFragments({ fragments, turnCovers, makeId, now });
+        if (adoptedFragments.length > 0) {
+            adoptedFragments.forEach(entry => appendEntry(base, entry));
             changed = true;
         }
     }

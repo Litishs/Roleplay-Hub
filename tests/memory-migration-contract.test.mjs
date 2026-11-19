@@ -32,6 +32,11 @@ test('migration: legacy content detection ignores empty blobs', () => {
     assert.equal(hasLegacyContent({ profile: { characters: [{ name: '甲', status: '状态' }], openPlots: [] } }), true);
     assert.equal(hasLegacyContent({ summaries: { batches: [{ fromTurn: 1, toTurn: 2, status: 'failed' }] } }), false,
         'failed-only batches carry nothing adoptable');
+    assert.equal(hasLegacyContent({ fragments: [{ summary: '段落', turn: 1 }] }), true,
+        'v4 shards alone mark a scope pending: a restored pre-ledger backup keeps most memory there');
+    assert.equal(hasLegacyContent({ fragments: [{ summary: '  ', turn: 1 }, {}] }), false,
+        'blank shards carry nothing adoptable');
+    assert.equal(scopeMigrationStatus({ fragments: [{ summary: '段落' }] }).status, 'pending');
 });
 
 test('migration: per-scope status is derived, never stored', () => {
@@ -62,12 +67,15 @@ test('migration: adoptScopeLegacy mirrors reconcile step 0 without touching stor
     const summaries = { long: '旧长期', short: '', batches: [{ fromTurn: 1, toTurn: 1, status: 'done' }] };
     const profile = { characters: [{ name: '甲', status: '状态' }], openPlots: [] };
     let seq = 0;
-    const adopted = adoptScopeLegacy({ summaries, profile, turnCovers, makeId: () => `id-${++seq}`, now: 5 });
+    const fragments = [{ summary: '旧分片段落', turn: 1, vectorMemory: true }];
+    const adopted = adoptScopeLegacy({ summaries, profile, fragments, turnCovers, makeId: () => `id-${++seq}`, now: 5 });
     assert.ok(adopted);
     assert.equal(adopted.profileAdopted, true);
-    assert.equal(adopted.entries.filter(entry => entry.kind === 'digest').length, 2,
-        'coverage placeholder + legacy text entry');
+    assert.equal(adopted.entries.filter(entry => entry.kind === 'digest').length, 3,
+        'coverage placeholder + legacy text entry + shard paragraph');
     assert.equal(adopted.entries.filter(entry => entry.kind === 'fact').length, 1);
+    const shard = adopted.entries.find(entry => entry.text === '旧分片段落');
+    assert.deepEqual(shard.covers, [{ id: 'u1', h: 'h' }, { id: 'a1', h: 'h' }], 'shard turn resolves to live covers');
     // Idempotent: a second call over the produced ledger adopts nothing.
     assert.equal(adoptScopeLegacy({ ledger: adopted, summaries, profile, turnCovers, makeId: () => 'x', now: 6 }), null);
     // No legacy content, no ledger: nothing to do.
@@ -92,6 +100,8 @@ test('migration: app wires the background sweep and the notice gate', () => {
     assert.ok(app.includes('const seen = await getStoredValue(MIGRATION_NOTICE_KEY)'), 'notice shows once');
     assert.ok(app.includes("setStoredValue(MIGRATION_NOTICE_KEY, true)"));
     assert.ok(app.includes('notifyAdoption: (ledger) => {'), 'lazy adoption also flashes the chat strip');
+    assert.ok(app.includes("getScopedStoredValue('memories', scopeId)"),
+        'the sweep reads v4 shards so a restored pre-ledger backup adopts them');
     assert.ok(useMemorySystem.includes('memoryMigration') && useMemorySystem.includes('memoryMigrationFlash'));
     assert.equal(MIGRATION_NOTICE_KEY, 'memory_migration_notice_seen');
 });
@@ -121,8 +131,8 @@ test('migration: importing a pre-ledger backup adopts it instead of dropping it'
     // shards + summaries + profile) through the same adoption path as the
     // upgrade sweep, keep the conversation's pins, and persist atomically.
     const handler = app.slice(app.indexOf('importMemories: (event)'), app.indexOf('toggleMobileMenu, closeMobileMenu,'));
-    assert.ok(handler.includes('adoptScopeLegacy({'), 'legacy summaries/profile go through adoption');
-    assert.ok(handler.includes('adoptLegacyFragments('), 'vector shards become legacy digests');
+    assert.ok(handler.includes('adoptScopeLegacy({'), 'legacy summaries/profile/shards go through adoption');
+    assert.ok(handler.includes('fragments: hasLedger ? null : legacyFragments'), 'vector shards ride the same adoption call');
     assert.ok(handler.includes("entries.filter(entry => entry.kind === 'pin')"), 'existing pins survive the replacement');
     assert.ok(handler.includes('persistMemoryLedgerAndProjection(scopeId, ledger)'), 'one atomic save + projection');
     assert.ok(handler.includes('旧版记忆已过继到账本'), 'the toast tells the user what was carried over');
