@@ -34,7 +34,7 @@ jobs:
         run: npm run build:js
 
       # 不跑 prepare:vendor：本 job 只验证源码契约，构建产物相关的断言会自行
-      # skip（见 tests/local-embedding-contract.test.mjs）。带产物的完整校验
+      # skip（见 tests/vendor-assets-contract.test.mjs）。带产物的完整校验
       # 由 release.yml 在 build:web 之后执行。
       - name: Run contract tests
         run: npm test

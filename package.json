@@ -4,7 +4,7 @@
     "private": true,
     "description": "Android build for Roleplay Hub",
     "scripts": {
-        "prepare:vendor": "node scripts/prepare-vendor.mjs && node scripts/prepare-local-embedding.mjs",
+        "prepare:vendor": "node scripts/prepare-vendor.mjs",
         "build:css": "tailwindcss -c tailwind.main.config.cjs -i assets/css/tailwind.input.css -o assets/generated/tailwind.css --minify && tailwindcss -c tailwind.character.config.cjs -i assets/css/tailwind.input.css -o assets/generated/character.css --minify && tailwindcss -c tailwind.novel.config.cjs -i assets/css/tailwind.input.css -o assets/generated/novel.css --minify",
         "build:umd-shims": "node scripts/build-umd-shims.mjs",
         "build:web": "npm run prepare:vendor && npm run build:css && npm run build:umd-shims && npm run build:js && node scripts/build-web.mjs",
@@ -13,9 +13,8 @@
         "android:open": "cap open android",
         "android:debug": "npm run android:sync && powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-android-debug.ps1",
         "android:release": "npm run android:sync && powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-android-release.ps1",
-        "build:js": "vite build",
-        "dev": "vite",
-        "prepare:embedding": "node scripts/pack-embedding-model.mjs"
+        "build:js": "vite build" ,
+        "dev": "vite"
     },
     "dependencies": {
         "@capacitor/android": "^7.6.9",
@@ -33,7 +32,6 @@
     "devDependencies": {
         "@capacitor/cli": "^7.4.0",
         "@happy-dom/global-registrator": "^20.14.0",
-        "@huggingface/transformers": "^3.8.1",
         "@vitejs/plugin-vue": "^6.0.8",
         "@vue/test-utils": "^2.5.0",
         "daisyui": "^4.12.24",

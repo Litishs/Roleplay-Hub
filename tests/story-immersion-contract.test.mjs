@@ -55,8 +55,10 @@ test('per-character TTS: editor exposes the voice picker bound to the character 
 
 test('story timeline: MemoryPanel shows summary batches/plot lines/character profiles', () => {
     assert.match(memoryPanel, /剧情时间线/);
-    assert.match(memoryPanel, /memoryProfile\?\.openPlots/);
-    assert.match(memoryPanel, /memoryProfile\?\.characters/);
+    // v6 L4: the timeline reads the ledger-projected card, not the legacy
+    // memory_profile object.
+    assert.match(memoryPanel, /memoryCard\.openPlots/);
+    assert.match(memoryPanel, /memoryCard\.characters/);
     assert.match(memoryPanel, /\.some\(b => b\.status === 'done'\)/, 'shown only when at least one summary batch is done');
 });
 

@@ -2,7 +2,7 @@
 // documents/swipe候选重掷工程方案.md
 // Covers: pure data-layer invariants (runtime import), app.mjs text contracts
 // for the regenerate/mergeOrRestore/switch/edit paths, persistence passthrough,
-// vector patrol M0 change, MessageList.vue wiring and the runtime-policy cap.
+// the ledger writer's window rule (swipe-safe), MessageList.vue wiring and the runtime-policy cap.
 
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
@@ -13,7 +13,6 @@ const read = (relativePath) => readFile(new URL(`../${relativePath}`, import.met
 const app = await read('src/modules/app.mjs');
 const swipeModule = await read('src/modules/swipe-candidates.mjs');
 const policy = await read('src/modules/runtime-policy.mjs');
-const vectorPatrol = await read('src/composables/useVectorMemoryPatrol.mjs');
 const cardOps = await read('src/composables/useCardOperations.mjs');
 const messageList = await read('src/components/chat/MessageList.vue');
 
@@ -193,14 +192,18 @@ test('editMessage save retires the candidate set', () => {
     assert.ok(fn.includes('delete msg.activeSwipeIndex;'), 'activeSwipeIndex cleared on edit save');
 });
 
-test('M0 memory patrol: the newest turn is unconditionally excluded from vector extraction', () => {
-    assert.ok(vectorPatrol.includes('const safeTurns = snapshot.turns.slice(0, -1);'), 'unconditional last-turn exclusion');
-    assert.ok(!vectorPatrol.includes('isConversationBusy.value ? snapshot.turns.slice(0, -1)'), 'busy-conditional exclusion removed');
-    // 2026-09-18 regression fix: the "conversation changed" rescan check must use the
-    // same last-turn-excluded basis as scannedTurnCount, otherwise an empty-chunk patrol
-    // spins a synchronous busy loop and freezes the renderer on device boot.
-    assert.ok(vectorPatrol.includes('const currentTurnCount = Math.max(0, buildConversationTurnSnapshot(chatHistory.value, { includeSystem: false }).turns.length - 1);'), 'rescan comparison on the safe basis');
-    assert.ok(!vectorPatrol.includes('.turns.length;\n                    if (added > 0'), 'old full-count comparison removed');
+test('M0 memory writer: the newest keepFloors turns are never digested (swipe-safe)', async () => {
+    // v6 L3: the vector patrol is gone; the equivalent invariant lives in the
+    // ledger hole computation. Swipe candidates rewrite only the last floor's
+    // content, so as long as the window edge is never digested, switching a
+    // candidate cannot stale any entry and cannot trigger a rewrite.
+    const { computePendingBatch } = await import('../src/modules/memory-summary.mjs');
+    const state = { keepFloors: 16, batchSize: 8 };
+    const inside = computePendingBatch([], 20, state, { force: true });
+    assert.ok(inside && inside.toTurn <= 20 - 16, 'force mode still stops at the window edge');
+    const batch = computePendingBatch([], 40, state, { force: true });
+    assert.ok(batch, 'history beyond the window has a pending batch');
+    assert.ok(batch.toTurn <= 40 - 16, 'forced batches stop at the window edge');
 });
 
 test('MessageList.vue: swipe switcher wired with arrows, counter, render conditions and regenerate title', () => {

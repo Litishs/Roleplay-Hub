@@ -24,11 +24,11 @@ test('flushAllPendingWrites orchestrates every pending persistence queue', () =>
     // Chat history + active streaming draft (the previous background path).
     assert.match(body, /persistSingleDraft\(activeDraft\)/);
     assert.match(body, /flushPendingChatHistorySave\(\)/);
-    // Scoped memories only when dirty (no unchanged-blob rewrites).
-    assert.match(body, /if \(_memoriesDirty\)/);
+    // Scoped classic memories only when dirty (no unchanged-blob rewrites).
+    // v6 L3: the vector memories queue was removed with the embedding stack.
     assert.match(body, /if \(_classicMemoriesDirty\)/);
-    assert.match(body, /saveMemoriesNow\(\)/);
     assert.match(body, /saveClassicMemoriesNow\(\)/);
+    assert.doesNotMatch(body, /saveMemoriesNow\(\)/);
     // Concurrent triggers (appStateChange + visibilitychange) share one pass.
     assert.match(body, /if \(_flushInFlight\) return _flushInFlight/);
 });
@@ -59,27 +59,18 @@ test('web hide signals (visibilitychange/pagehide) also trigger the flush', () =
     );
 });
 
-test('memory mutations mark the scope dirty only after a completed load', () => {
-    const from = app.indexOf('watch(memories, () => {');
-    assert.ok(from >= 0, 'memories dirty watcher exists');
-    const chunk = app.slice(from, from + 200);
-    assert.match(chunk, /if \(_memoriesLoaded\) _memoriesDirty = true;/);
-    assert.match(chunk, /flush: 'sync'/, 'sync flush excludes load-time assignments');
-
+test('classic memory mutations mark the scope dirty only after a completed load', () => {
     const classicFrom = app.indexOf('watch(classicMemories, () => {');
     assert.ok(classicFrom >= 0, 'classic memories dirty watcher exists');
     const classicChunk = app.slice(classicFrom, classicFrom + 220);
     assert.match(classicChunk, /if \(_classicMemoriesLoaded\) _classicMemoriesDirty = true;/);
     assert.match(classicChunk, /flush: 'sync'/);
+    // v6 L3: the vector memories watcher/save path is gone.
+    assert.ok(!app.includes('watch(memories, () => {'));
+    assert.ok(!app.includes('const saveMemoriesNow = async () => {'));
 });
 
-test('memory saves clear the dirty flag up front and re-mark it on failure', () => {
-    const from = app.indexOf('const saveMemoriesNow = async () => {');
-    const to = app.indexOf('const saveClassicMemoriesNow', from);
-    assert.ok(from >= 0 && to > from);
-    assert.match(app.slice(from, to), /_memoriesDirty = false;/);
-    assert.match(app.slice(from, to), /_memoriesDirty = true;/);
-
+test('classic memory saves clear the dirty flag up front and re-mark it on failure', () => {
     const classicFrom = app.indexOf('const saveClassicMemoriesNow = async () => {');
     const classicTo = app.indexOf('const persistAvatarMedia', classicFrom);
     assert.ok(classicFrom >= 0 && classicTo > classicFrom);

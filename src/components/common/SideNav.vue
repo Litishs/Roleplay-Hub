@@ -63,6 +63,12 @@
                         </path>
                     </svg>
                     <span v-show="!isSidebarCollapsed" class="whitespace-nowrap overflow-hidden">记忆系统</span>
+                    <!-- v6 §20: background adoption sweep progress capsule -->
+                    <span v-if="memoryMigrationBadge" v-show="!isSidebarCollapsed"
+                        :class="['ml-auto flex-shrink-0 text-[10px] font-mono px-1.5 py-0.5 rounded-md border',
+                            memoryMigration.running ? 'bg-primary-50 border-primary-100 text-primary-700' : 'bg-gray-50 border-gray-200 text-gray-500']">
+                        {{ memoryMigrationBadge }}
+                    </span>
                 </button>
                 <button @click="currentView = 'uitemplates'; closeMobileMenu()"
                     title="UI模板"

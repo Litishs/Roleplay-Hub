@@ -70,24 +70,14 @@ export function useMessageSender(deps) {
         getPostprocessedChatMessages,
         processRegex,
         stripDisabledImageGenContext,
-        // memory recall
-        memories,
+        // memory
         memorySummaries,
         memorySettings,
-        MEMORY_MODE_VECTOR,
-        MEMORY_VECTOR_DEFAULT_DEPTH,
-        ROLE_MEMORY_VECTOR_RECALL_OPEN_TAG,
-        ROLE_MEMORY_VECTOR_RECALL_CLOSE_TAG,
         isVectorMemoryRecallContent,
         isRoleMemoryContextContent,
-        isEnabledVectorMemory,
-        getMemoryEmptyTurnsKey,
         extractMemoryFromChat,
         buildMemoryContextForPrompt,
-        selectVectorMemoriesForChatContext,
-        getRetainedRecentMemoryTurns,
-        getVectorMemoryText,
-        mergeRepeatedTurnVectorMemories,
+        getLastMemoryRecallStats,
         // UI template pipeline
         updateUiTemplatesFromChat,
         stripUiTemplateContextInjection,
@@ -98,7 +88,6 @@ export function useMessageSender(deps) {
         // active tools
         appendActiveToolReminderToLatestUserMessage,
         buildActiveToolSystemPrompt,
-        shouldSuppressStandardVectorMemoryRecall,
         buildActiveToolResultPayload,
         resetActiveToolResultContext,
         promoteActiveToolCallsFromAssistant,
@@ -660,50 +649,6 @@ export function useMessageSender(deps) {
                         chatHistoryForContext = newChatHistoryForContext;
                     }
                 }
-            } else if (memorySettings.enabled
-                && memorySettings.mode === MEMORY_MODE_VECTOR
-                && memories.value.length > 0) {
-                const totalFloors = chatHistoryForContext.length;
-                const keepCount = memorySettings.keepFloors;
-
-                if (totalFloors > keepCount) {
-                    const candidateCount = totalFloors - keepCount;
-
-                    const memoryTurnSet = new Set(
-                        memories.value
-                            .filter(isEnabledVectorMemory)
-                            .map(memory => memory.turn || 0)
-                            .filter(turn => turn > 0)
-                    );
-                    const emptyLog = memorySettings.emptyTurns?.[
-                        getMemoryEmptyTurnsKey(getCurrentChatStorageScopeId())
-                    ] || [];
-                    const emptyTurnSet = new Set(emptyLog);
-
-                    const removableIndices = new Set();
-                    const contextSnapshot = buildConversationTurnSnapshot(chatHistoryForContext, { alreadyPostprocessed: true });
-
-                    contextSnapshot.turns.forEach(turnInfo => {
-                        if (!turnInfo.messageIndexes.every(messageIndex => messageIndex < candidateCount)) return;
-                        const hasMemory = memoryTurnSet.has(turnInfo.turn);
-                        const isEmpty = emptyTurnSet.has(turnInfo.turn);
-
-                        if (hasMemory || isEmpty) {
-                            turnInfo.messageIndexes.forEach(messageIndex => removableIndices.add(messageIndex));
-                        }
-                    });
-
-                    if (removableIndices.size > 0) {
-                        const newChatHistoryForContext = [];
-
-                        for (let idx = 0; idx < chatHistoryForContext.length; idx++) {
-                            if (!removableIndices.has(idx)) {
-                                newChatHistoryForContext.push(chatHistoryForContext[idx]);
-                            }
-                        }
-                        chatHistoryForContext = newChatHistoryForContext;
-                    }
-                }
             }
 
             // 添加聊天记录（按 token 预算保留最近楼层，至少保留现场窗口下限）
@@ -756,57 +701,20 @@ export function useMessageSender(deps) {
                 .filter(m => String(m.content || '').trim())
             );
 
-            let selectedVectorMemories = [];
-            if (memorySettings.enabled
-                && memorySettings.mode === MEMORY_MODE_VECTOR
-                && memories.value.length > 0
-                && !shouldSuppressStandardVectorMemoryRecall()) {
-                requestDiagnostic?.stage('memory_recall');
-                selectedVectorMemories = await selectVectorMemoriesForChatContext(
-                    {
-                        excludedTurns: getRetainedRecentMemoryTurns(postprocessedChatHistory)
-                    },
-                    generationController.signal,
-                    requestDiagnostic
-                );
-                requestDiagnostic?.stage('building_prompt');
-            }
-            // Activity Journal: vector memory recall summary (after recall + budget capping)
-            if (memorySettings.enabled
-                && memorySettings.mode === MEMORY_MODE_VECTOR
-                && memories.value.length > 0
-                && !shouldSuppressStandardVectorMemoryRecall()) {
-                if (selectedVectorMemories.length > 0) {
+            // v6 L3: lexical auto-recall happens inside
+            // buildMemoryContextForPrompt (memory-view.buildMemoryRecall);
+            // the send path no longer calls an embedding endpoint.
+            // Activity Journal: lexical ledger recall summary.
+            if (memorySettings.enabled) {
+                const recallStats = getLastMemoryRecallStats();
+                if (recallStats.count > 0) {
                     requestDiagnostic?.behavior?.({
-                        name: 'vector_memory_recall',
+                        name: 'memory_recall',
                         result: 'ok',
-                        chars: estimateTokens(selectedVectorMemories.map(m => getVectorMemoryText(m)).join('\n') || ''),
-                        meta: {
-                            backend: memorySettings.vectorBackend || 'local',
-                            recalled: selectedVectorMemories.length,
-                            lexicalFallback: selectedVectorMemories.some(m => m && m.vectorRecallMode === 'lexical-fallback')
-                        }
-                    });
-                } else {
-                    requestDiagnostic?.behavior?.({
-                        name: 'vector_memory_recall',
-                        result: 'skipped',
-                        meta: { backend: memorySettings.vectorBackend || 'local', reason: 'no_candidates_or_budget' }
+                        chars: recallStats.chars,
+                        meta: { recalled: recallStats.count, mode: 'lexical' }
                     });
                 }
-            }
-            if (contextBudget > 0 && selectedVectorMemories.length > 0) {
-                const remainingBudget = Math.max(0, contextBudget - estimateMessagesTokens(messages) - estimateTokens(timelineDigestText));
-                let used = 0;
-                const capped = [];
-                for (const memory of selectedVectorMemories) {
-                    if (capped.length >= 5) break;
-                    const est = estimateTokens(getVectorMemoryText(memory));
-                    if (capped.length > 0 && used + est > remainingBudget) break;
-                    used += est;
-                    capped.push(memory);
-                }
-                selectedVectorMemories = capped;
             }
 
             // Handle @D (At Depth) and other message-level injections
@@ -843,62 +751,6 @@ export function useMessageSender(deps) {
                             _worldInfoEntries: [entry]
                         });
                     });
-                }
-
-                // Memory Injection (at_depth style, grouped by turn, 证据分片收敛到 5 条)
-                if (memorySettings.enabled
-                    && memorySettings.mode === MEMORY_MODE_VECTOR
-                    && selectedVectorMemories.length > 0) {
-                    const enabledMemories = mergeRepeatedTurnVectorMemories(selectedVectorMemories).slice(0, 5);
-
-                    if (enabledMemories.length > 0) {
-                        const formatMemoryLine = (m) => {
-                            const turnValue = escapeXmlAttribute(m.turn || '?');
-                            const scoreValue = escapeXmlAttribute(m.vectorRecallMode === 'lexical-fallback'
-                                ? 'lexical-fallback'
-                                : (Number.isFinite(m.vectorScore) ? `${(m.vectorScore * 100).toFixed(1)}%` : 'unknown'));
-                            const fragmentText = indentXmlText(m.paragraph || m.summary || '', 4);
-                            const fragmentTag = `<memory_fragment turn="${turnValue}" similarity="${scoreValue}">`;
-                            return [
-                                `  ${fragmentTag}`,
-                                fragmentText,
-                                `  </memory_fragment>`
-                            ].join('\n');
-                        };
-
-                        const formattedContent = enabledMemories.map(formatMemoryLine).join('\n\n');
-                        const fullContent = [
-                            ROLE_MEMORY_VECTOR_RECALL_OPEN_TAG,
-                            '  <description>',
-                            '    以下内容是从往期对话记录中按当前输入检索出的相关记忆分片，并非全部历史。',
-                            '    请尽力理解这些分片之间的前因后果、人物关系和情绪延续，理清它们与当前对话的关联。',
-                            '    这些分片已按原对话时间顺序排列；它们不一定是今天或刚才发生的内容，请不要误当作当前现场，只把它们作为过往经历和关系背景参考。',
-                            '  </description>',
-                            formattedContent,
-                            ROLE_MEMORY_VECTOR_RECALL_CLOSE_TAG
-                        ].join('\n');
-
-                        const memoryDepth = Number(memorySettings.defaultDepth) || MEMORY_VECTOR_DEFAULT_DEPTH;
-
-                        const reversedForMemory = [...finalMessages].reverse();
-                        let countdown = memoryDepth;
-                        let targetIndex = -1;
-                        for (let i = 0; i < reversedForMemory.length; i++) {
-                            if (reversedForMemory[i].role === 'user' || reversedForMemory[i].role === 'assistant') {
-                                countdown--;
-                            }
-                            if (countdown < 0) {
-                                targetIndex = reversedForMemory.length - 1 - i;
-                                break;
-                            }
-                        }
-                        if (targetIndex < safeTargetLimit) targetIndex = safeTargetLimit;
-
-                        finalMessages.splice(targetIndex, 0, {
-                            role: 'user',
-                            content: fullContent
-                        });
-                    }
                 }
 
                 // User Top
@@ -1851,7 +1703,7 @@ export function useMessageSender(deps) {
                         name: 'memory_extract',
                         result: 'ok',
                         meta: {
-                            mode: memorySettings.mode || 'summary',
+                            mode: 'ledger',
                             enabled: memorySettings.enabled
                         }
                     });

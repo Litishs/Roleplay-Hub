@@ -34,7 +34,7 @@ test('buildCotPresetContent default body uses thinking_protocol with cot tag', (
 test('buildCotPresetContent toggles memory and UI-template sections', () => {
     const withMemory = buildCotPresetContent({ memoryEnabled: true });
     assert.ok(withMemory.includes('[记忆整理]'));
-    assert.ok(withMemory.includes('向量记忆'));
+    assert.ok(withMemory.includes('记忆账本条目'));
 
     const withVariables = buildCotPresetContent({ uiTemplateAnalysisEnabled: true });
     assert.ok(withVariables.includes('[变量更新分析]'));

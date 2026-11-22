@@ -32,7 +32,7 @@ function fixture() {
         normalizeActiveToolAggressivenessSettings() {},
         normalizeActiveTools: () => context.activeTools.value,
         persistNativeMediaAssets: async () => {},
-        saveMemorySettingsNow: async () => {}, saveMemoriesNow: async () => {},
+        saveMemorySettingsNow: async () => {},
         saveClassicMemoriesNow: async () => {},
         initDB: async () => { initCalls++; context.db = {}; },
         setStoredValue: async (key, value) => { writes.push({ key, value: JSON.parse(JSON.stringify(value)) }); },
@@ -41,7 +41,7 @@ function fixture() {
         },
         debounce: fn => () => pending.push(fn),
     });
-    vm.runInContext(section('const saveData = async (options = {}) => {', 'const saveConversationMutationNow ='), context);
+    vm.runInContext(section('const saveData = async () => {', 'const saveConversationMutationNow ='), context);
     vm.runInContext(section('const debouncedSave = debounce(() => {', '// Watch chat history length only'), context);
     return { context, writes, pending, initCalls: () => initCalls };
 }

@@ -3,11 +3,10 @@ import { readFile } from 'node:fs/promises';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
-const [app, sender, chatGuardSource, memoryFallbackSource, capConfig, java, uiState, utils, uiTemplatePipeline, dataLoaderSource, requestDiagnostics, toolPipeline] = await Promise.all([
+const [app, sender, chatGuardSource, capConfig, java, uiState, utils, uiTemplatePipeline, dataLoaderSource, requestDiagnostics, toolPipeline] = await Promise.all([
     readFile(new URL('../src/modules/app.mjs', import.meta.url), 'utf8'),
     readFile(new URL('../src/composables/useMessageSender.mjs', import.meta.url), 'utf8'),
     readFile(new URL('../src/modules/chat-request-guard.mjs', import.meta.url), 'utf8'),
-    readFile(new URL('../src/modules/memory-recall-fallback.mjs', import.meta.url), 'utf8'),
     readFile(new URL('../capacitor.config.json', import.meta.url), 'utf8'),
     readFile(new URL('../android/app/src/main/java/com/roleplayhub/app/NativeStoragePlugin.java', import.meta.url), 'utf8'),
     readFile(new URL('../src/composables/useUiState.mjs', import.meta.url), 'utf8'),
@@ -108,22 +107,14 @@ test('聊天参数与生图设置卡片提供恢复默认（密钥不参与重�
     assert.ok(apiConfigHtml.includes('Object.assign(ctx.settings, IMAGE_GEN_CARD_DEFAULTS)'), 'restore assigns the shared defaults');
 });
 
-test('聊天向量召回超时后仍通过关键词与最近轮次注入记忆', () => {
-    assert.ok(app.includes('MEMORY_CONTEXT_RECALL_TIMEOUT_MS = 20000'));
-    assert.ok(app.includes('MEMORY_CONTEXT_RECALL_RETRY_DELAY_MS = 60000'));
-    assert.ok(app.includes('const selectVectorMemoriesForChatContext = async (options = {}, generationSignal = null, diagnostic = null) => {'));
-    assert.ok(app.includes("abortSafely(recallController, 'Memory recall timed out')"));
-    assert.ok(app.includes('const selectVectorMemoriesLexicalFallback = (options = {}) => {'));
-    assert.ok(app.includes('const memoryRecallFallback = recallFallbackSelect;'));
-    assert.ok(app.includes('return memoryRecallFallback(vectorMemories, {'));
-    assert.ok(memoryFallbackSource.includes("vectorRecallMode: 'lexical-fallback'"));
-    assert.ok(app.includes("diagnostic?.stage('memory_recall_lexical_fallback')"));
-    assert.ok(app.includes("diagnostic?.stage('memory_recall_circuit_fallback')"));
-    assert.ok(app.includes('memoryRecallRetryAfter.set(recallBackendKey'));
-    assert.ok(app.includes('return selectVectorMemoriesLexicalFallback(options);'));
-    assert.ok(sender.includes("m.vectorRecallMode === 'lexical-fallback'"));
-    const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
-    assert.ok(appJs.includes('./memory-recall-fallback.mjs'));
+test('记忆召回走账本词法路径，发送链路不再调用嵌入接口', () => {
+    assert.ok(sender.includes('getLastMemoryRecallStats'));
+    assert.ok(sender.includes("name: 'memory_recall'"));
+    assert.ok(!sender.includes('requestMemoryEmbeddings'));
+    assert.ok(!sender.includes('selectVectorMemoriesForChatContext'));
+    assert.ok(!app.includes('const memoryRecallFallback = recallFallbackSelect;'));
+    assert.ok(app.includes("import { VIEW_DEFAULTS, buildMemoryRecall, buildMemoryView } from './memory-view.mjs';"));
+    assert.ok(app.includes('const selectMemoryLedgerRecall = () => {'));
 });
 
 test('SSE 网络心跳不会刷新有效 token 活跃时间', () => {
@@ -287,12 +278,11 @@ test('NativeStoragePlugin still exposes clipboardRead for the paste fix', () => 
     assert.ok(java.includes('public void clipboardRead(PluginCall call)'));
 });
 
-test('memory requests have a 60s timeout and validate embedding dimensions', () => {
+test('memory summary requests keep the shared 60s timeout wrapper', () => {
     assert.ok(app.includes('MEMORY_API_TIMEOUT_MS = 60000'));
     assert.ok(app.includes('const withTimeoutSignal = (signal, ms = MEMORY_API_TIMEOUT_MS) => {'));
-    assert.ok(app.includes('const validateEmbeddingVectors = (vectors, expectedCount) => {'));
     assert.ok(app.includes('signal: withTimeoutSignal(signal)'));
-    assert.ok(app.includes('\u5411\u91cf\u7ef4\u5ea6\u4e0e\u5df2\u6709\u8bb0\u5fc6\u4e0d\u4e00\u81f4')); // ????????????
+    assert.ok(!app.includes('validateEmbeddingVectors'), 'no embedding vector validation remains');
 });
 
 test('UI template analysis is concurrency-throttled', () => {

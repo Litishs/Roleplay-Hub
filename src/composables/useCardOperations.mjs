@@ -61,7 +61,6 @@ export function useCardOperations(deps) {
         waitForConversationIdle,
         // memory pipeline
         loadCharacterMemories,
-        abortVectorBatchExtraction,
         abortClassicBatchExtraction,
         abortRollingSummary,
         // ui-template runtime
@@ -148,6 +147,7 @@ export function useCardOperations(deps) {
                             deleteScopedStoredValue('classic_memories', scopeId),
                             deleteScopedStoredValue('memory_summaries', scopeId),
                             deleteScopedStoredValue('memory_profile', scopeId),
+                            deleteScopedStoredValue('memory_ledger', scopeId),
                             getDb().deleteFragments(scopeId)
                         ]));
                         await deleteScopedStoredValue('branches', char.uuid);
@@ -218,6 +218,7 @@ export function useCardOperations(deps) {
                                 deleteScopedStoredValue('classic_memories', scopeId),
                                 deleteScopedStoredValue('memory_summaries', scopeId),
                                 deleteScopedStoredValue('memory_profile', scopeId),
+                                deleteScopedStoredValue('memory_ledger', scopeId),
                                 getDb().deleteFragments(scopeId)
                             ]));
                             await deleteScopedStoredValue('branches', char.uuid);
@@ -286,7 +287,6 @@ export function useCardOperations(deps) {
             const previousCharacterIndex = currentCharacterIndex.value;
             const previousCharacter = currentCharacter.value;
             if (previousCharacterIndex !== index) {
-                abortVectorBatchExtraction();
                 abortClassicBatchExtraction();
                 abortRollingSummary();
             }

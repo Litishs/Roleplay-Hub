@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import * as storyBranch from '../src/modules/story-branch.mjs';
+import { filterLedgerForBranch, makeDigestEntry } from '../src/modules/memory-ledger.mjs';
 
 const [html, app, presets, cardOps, branching] = await Promise.all([
     readFile(new URL('../index.html', import.meta.url), 'utf8'),
@@ -95,10 +96,16 @@ test('useStoryBranching owns createStoryBranch with rollback and guards', () => 
     assert.ok(branching.includes('storyBranches.value = storyBranches.value.filter(branch => branch.id !== createdBranch.branchId);'), 'rollback kept');
     // guards reached through setter bridges, never rebound locally
     assert.ok(branching.includes('setApplyingCharacterScopedData(true);'), 'apply guard set through bridge');
-    assert.ok(branching.includes('setMemoriesLoaded(true);'), 'memories guard set through bridge');
+    // v6 L3: memories_* is no longer copied or guarded (ledger covers ⊆ survivors).
+    assert.ok(!branching.includes('setMemoriesLoaded'), 'vector memories guard removed');
+    assert.ok(!branching.includes("getScopedStoredValue('memories'"), 'vector memories not copied to branches');
     // fact-layer guard resets removed with the fact layer (2026-09-06 audit)
     assert.ok(!branching.includes('setFactLoadedCharacterId') && !branching.includes('memoryFacts'), 'fact reset removed');
     assert.ok(branching.includes('getDb() ? getDb().deleteFragments(createdBranch.branchScopeId) : Promise.resolve(),'), 'db reached through accessor');
+    assert.ok(branching.includes('setMemorySummaries(previousState.summaries);'));
+    assert.ok(branching.includes('setMemoryProfile(previousState.profile);'));
+    assert.ok(branching.includes("deleteScopedStoredValue('memory_summaries', createdBranch.branchScopeId)"));
+    assert.ok(branching.includes("deleteScopedStoredValue('memory_profile', createdBranch.branchScopeId)"));
     assert.ok(!/_(isApplyingCharacterScopedData|memoriesLoaded|classicMemoriesLoaded)\b/.test(branching.replace(/^\/\/.*$/gm, '')), 'no direct guard access in code');
     assert.ok(!branching.includes('\ndb ?') && !branching.includes(' db ? db.deleteFragments'), 'no direct db binding access');
     assert.ok(branching.includes('return { createStoryBranch };'));
@@ -120,6 +127,19 @@ test('app.js falls back to in-memory history when fork target is missing from st
     // 2026-08-29 (Phase 3.0): createStoryBranch moved to useStoryBranching.mjs
     assert.ok(branching.includes('const memorySourceIndex = forkMessageId'), '分支创建须尝试内存回退定位目标消息');
     assert.ok(branching.includes("branchChat = chatHistory.value.map(message => serializeChatMessage(message, 'final'))"), '内存回退须序列化消息后再写入分支');
+});
+
+test('mid-history forks rebuild derived memory layers from the branch timeline', () => {
+    // Summary/profile records hold final-state text (not per-batch snapshots),
+    // so trimming the batch list alone would keep the parent's post-fork events.
+    assert.ok(branching.includes('const parentTurnCount = buildConversationTurnSnapshot('), 'fork must measure the parent timeline before slicing');
+    assert.ok(branching.includes('if (forkTurn < parentTurnCount) {'), 'mid-history forks must be detected');
+    assert.ok(branching.includes("branchSummaries = { long: '', short: '', batches: [], updatedAt: now };"), 'summary text and batch list reset together');
+    assert.ok(branching.includes('branchProfile = null;'), 'profile reset for a mid-history fork');
+    assert.ok(branching.includes('setMemorySummaries(branchSummaries ? cloneForStorage(branchSummaries) : null);'), 'in-memory summary ref must not alias the parent branch');
+    assert.ok(branching.includes('setMemoryProfile(branchProfile ? cloneForStorage(branchProfile) : null);'), 'in-memory profile ref must not alias the parent branch');
+    assert.ok(app.includes('setMemorySummaries,') && app.includes('setMemoryProfile,'), 'setter bridges wired into useStoryBranching');
+    assert.ok(app.includes('abortClassicBatchExtraction();\n            abortRollingSummary();'), 'leaving a branch aborts the rolling summary chain');
 });
 
 test('app.js keeps branch scope ids in the outer function scope (no try-block leakage)', () => {
@@ -151,4 +171,53 @@ test('useStoryBranching receives flushCurrentBranchState as a dep', () => {
     const wiring = app.slice(app.indexOf('const { createStoryBranch } = useStoryBranching({'));
     const wiringEnd = wiring.indexOf('});');
     assert.ok(wiring.slice(0, wiringEnd).includes('flushCurrentBranchState,'), 'app.mjs passes flushCurrentBranchState');
+});
+
+test('v6 L2: branch memory is a covers ⊆ survivors filter (zero API)', () => {
+    assert.ok(branching.includes("getScopedStoredValue('memory_ledger', parentScopeId)"));
+    // The child ledger keeps only entries whose consumed messages survived.
+    assert.ok(branching.includes("const survivorIds = new Set(branchChat.map(message => message?.id).filter(Boolean));"));
+    assert.ok(branching.includes('filterLedgerForBranch(branchLedger, survivorIds)'));
+    // The child projection is folded from the filtered ledger, not copied.
+    assert.ok(branching.includes('buildMemorySummariesProjection(branchLedger, branchChat)'));
+    assert.ok(app.includes('buildMemorySummariesProjection: (ledger, chatMessages) => {'));
+    // Zero API calls on branch creation: inheritance is pure filtering.
+    assert.ok(!branching.includes('fetch('), 'branch creation never calls the model');
+    // Legacy fallback: data without covers rebuilds from the child chat.
+    assert.ok(branching.includes("branchSummaries = { long: '', short: '', batches: [], updatedAt: now };"));
+    // In-memory state and rollback follow the same pattern as summaries.
+    assert.ok(branching.includes('setMemoryLedger(branchLedger ? cloneForStorage(branchLedger) : null);'));
+    assert.ok(branching.includes('setMemoryLedger(previousState.ledger);'));
+    assert.ok(branching.includes("deleteScopedStoredValue('memory_ledger', createdBranch.branchScopeId)"));
+    assert.ok(app.includes('memoryLedger,') && app.includes('setMemoryLedger,'), 'ledger refs bridged into useStoryBranching');
+    // Ledger loaders wired at both scope entry points.
+    assert.ok(app.includes('await loadMemoryLedger(characterId);'));
+    assert.ok(app.includes('await loadMemoryLedger(targetScopeId);'));
+});
+
+test('v6 L2: forks of forks filter recursively (no post-fork leakage)', () => {
+    const ledger = {
+        version: 1,
+        hashVersion: 1,
+        updatedAt: 0,
+        entries: [
+            makeDigestEntry({ id: 'early', covers: [{ id: 'm1', h: 'h1' }], text: '早期' }),
+            makeDigestEntry({ id: 'mid', covers: [{ id: 'm1', h: 'h1' }, { id: 'm3', h: 'h3' }], text: '中段' }),
+            makeDigestEntry({ id: 'late', covers: [{ id: 'm5', h: 'h5' }], text: '后段' }),
+            makeDigestEntry({ id: 'pin', covers: [], text: '置顶' })
+        ]
+    };
+    // Fork after m1..m3 → mid/late dropped, pin follows.
+    const child = filterLedgerForBranch(ledger, new Set(['m1', 'm2', 'm3']));
+    assert.deepEqual(child.entries.map(entry => entry.id).sort(), ['early', 'mid', 'pin']);
+    // Fork the fork after m1..m2 → only entries fully inside the new tail.
+    const grandchild = filterLedgerForBranch(child, new Set(['m1', 'm2']));
+    assert.deepEqual(grandchild.entries.map(entry => entry.id).sort(), ['early', 'pin']);
+});
+
+test('v6: branch deletion clears the memory ledger', () => {
+    const flatMapStart = app.indexOf("const scopeIds = deleteIds.map(branchId => getStoryBranchScopeId(char.uuid, branchId));");
+    assert.ok(flatMapStart > 0, 'branch deletion cleanup block found');
+    const flatMapBlock = app.slice(flatMapStart, flatMapStart + 800);
+    assert.ok(flatMapBlock.includes("deleteScopedStoredValue('memory_ledger', scopeId)"), 'branch deletion clears ledger');
 });

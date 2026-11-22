@@ -27,6 +27,27 @@
                             </button>
                         </div>
                     </div>
+                    <!-- v6 §20: legacy adoption visibility strip. Shows while
+                         this conversation's old memory is being carried into
+                         the ledger, then a short green confirmation. -->
+                    <div v-if="memoryMigrationFlash || memoryMigrationRunningHere"
+                        class="mx-auto max-w-2xl px-2 -mt-8 md:-mt-10">
+                        <div :class="['flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold shadow-sm border',
+                            memoryMigrationFlash ? 'bg-white border-emerald-100 text-emerald-700' : 'bg-white border-primary-100 text-primary-700']">
+                            <span v-if="!memoryMigrationFlash"
+                                class="inline-block w-3 h-3 border-2 border-primary-400 border-t-transparent rounded-full animate-spin flex-shrink-0"></span>
+                            <span class="truncate">
+                                <template v-if="memoryMigrationFlash">
+                                    旧记忆已过继到账本：{{ migrationFlashText }}（逐条原子落盘，退出不丢）
+                                </template>
+                                <template v-else>正在过继本会话旧记忆…（可续，退出不丢）</template>
+                            </span>
+                            <button v-if="memoryMigrationFlash" type="button" @click="dismissMemoryMigrationFlash"
+                                class="ml-auto flex-shrink-0 px-1.5 text-gray-400 hover:text-gray-600 transition-colors hit-expand [--hit-out:-14px]">
+                                ✕
+                            </button>
+                        </div>
+                    </div>
                     <!-- Story recap: offers a plot review at the top of the chat once rolling summaries are ready (session-scoped collapse) -->
                     <div v-if="currentCharacter && chatRecapText && !recapDismissed"
                         class="mx-auto max-w-2xl px-2 -mt-8 md:-mt-10">
