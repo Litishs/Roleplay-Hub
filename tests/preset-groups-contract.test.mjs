@@ -95,6 +95,9 @@ test('useMessageSender consumes only the enabled group\u2019s enabled presets', 
 test('PresetsPanel renders groups as accordions with a group-level toggle', () => {
     assert.ok(panel.includes('settings-accordion'), '手风琴容器');
     assert.ok(panel.includes('settings-accordion-trigger'), '手风琴触发器');
+    // 2026-11: every group starts collapsed, including the builtin default
+    // preset group (openGroupIds starts empty, expansion lives per session).
+    assert.ok(panel.includes('const openGroupIds = ref(new Set())'), '分组默认全部收纳（含默认预设组）');
     assert.ok(panel.includes('settings-collapse'), '折叠面板');
     assert.ok(panel.includes('settings-toggle'), '组级滑块开关');
     assert.ok(panel.includes('setActivePresetGroup(group.id)'), '组级滑块调用互斥启用');

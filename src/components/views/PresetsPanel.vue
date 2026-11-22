@@ -200,9 +200,8 @@ export default {
     const ctx = inject("appContext");
     const app = ctx || {};
 
-    // 手风琴展开状态（默认展开默认预设组）
-    // appContext 里的 presetGroups/presets 是 ref，模板会自动解包；此处 JS 需取 .value
-    const openGroupIds = ref(new Set((app.presetGroups?.value || []).filter(g => g.builtin).map(g => g.id)));
+    // 手风琴展开状态：分组默认全部收纳（含默认预设组），展开状态仅存本会话
+    const openGroupIds = ref(new Set());
     const isGroupOpen = (id) => openGroupIds.value.has(id);
     const toggleGroup = (id) => {
       const next = new Set(openGroupIds.value);
