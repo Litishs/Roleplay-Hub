@@ -181,7 +181,10 @@
 
             <div v-show="!isSidebarCollapsed" class="sidebar-nav-caption">系统</div>
             <div :class="isSidebarCollapsed ? 'space-y-2 mt-2' : 'space-y-1.5'">
-                <button @click="currentView = 'plugins'; closeMobileMenu()"
+                <!-- Plugin marketplace entry is temporarily hidden; the view
+                     itself stays wired (plugins-panel in index.html). Flip
+                     pluginsMarketEnabled to true to restore it. -->
+                <button v-if="pluginsMarketEnabled" @click="currentView = 'plugins'; closeMobileMenu()"
                     title="插件市场"
                     :class="['sidebar-nav-button flex items-center rounded-xl transition-all duration-200 font-medium', currentView === 'plugins' ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900', isSidebarCollapsed ? 'w-12 h-12 mx-auto justify-center p-0' : 'w-full px-3 py-2.5']">
                     <svg class="w-5 h-5" :class="isSidebarCollapsed ? 'mr-0' : 'mr-3'" fill="none" stroke="currentColor"
@@ -227,7 +230,10 @@ import { inject } from "vue";
 export default {
   setup() {
     const ctx = inject("appContext");
-    return ctx || {};
+    // Plugin marketplace entry is temporarily hidden (2026-11): the
+    // PluginsPanel view stays intact and reachable only through the flag.
+    const pluginsMarketEnabled = false;
+    return { ...(ctx || {}), pluginsMarketEnabled };
   }
 };
 </script>

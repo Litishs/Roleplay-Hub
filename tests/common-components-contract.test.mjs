@@ -97,9 +97,15 @@ test("SideNav renders every destination as a flat, sectioned list", async () => 
   assert.ok(!vue.includes("currentView = 'characters'"), "character management moved into the home header");
 
   for (const view of ["memory", "uitemplates", "usage", "generator", "square", "novel",
-    "presets", "worldinfo", "regex", "tools", "plugins", "settings"]) {
+    "presets", "worldinfo", "regex", "tools", "settings"]) {
     assert.ok(vue.includes(`currentView = '${view}'`), `missing destination ${view}`);
   }
+
+  // 2026-11: the plugin marketplace entry is temporarily hidden; the view
+  // itself stays wired (settings-ui-contract pins the panel). Re-enable by
+  // flipping pluginsMarketEnabled in SideNav.vue.
+  assert.match(vue, /const pluginsMarketEnabled = false/, "the plugins entry is hidden behind its flag");
+  assert.match(vue, /v-if="pluginsMarketEnabled"/, "the plugins button is behind the flag");
 
   // Captions lead each section and are hidden in the collapsed rail.
   const sections = (vue.match(/class="sidebar-nav-caption"/g) || []).length;
