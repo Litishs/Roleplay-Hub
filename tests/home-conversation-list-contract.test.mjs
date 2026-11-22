@@ -83,11 +83,12 @@ test("sortConversations puts recent conversations first and keeps store order fo
 });
 
 test("home screen wiring: landing view, dual pane, back navigation and persistence", async () => {
-    const [indexHtml, uiState, app, list] = await Promise.all([
+    const [indexHtml, uiState, app, list, panel] = await Promise.all([
         read('../index.html'),
         read('../src/composables/useUiState.mjs'),
         read('../src/modules/app.mjs'),
-        read('../src/components/chat/ConversationList.vue')
+        read('../src/components/chat/ConversationList.vue'),
+        read('../src/components/views/CharacterPanel.vue')
     ]);
 
     // Landing view is the conversation list; the chat is a detail view.
@@ -109,8 +110,22 @@ test("home screen wiring: landing view, dual pane, back navigation and persisten
     assert.match(app, /const sortedConversations = computed\(\(\) => sortConversations/);
     assert.match(app, /sortedConversations, conversationSummaries/);
 
-    // Rows open the chat; management lives in the home header.
+    // Rows open the chat; management lives in the home header. The header's
+    // primary action imports a card (.png/.json via importCharacter) instead
+    // of creating a blank one — creation stays in the management view's add menu.
     assert.match(list, /ctx\.selectCharacter\(item\.index\)/);
     assert.match(list, /@click="currentView = 'characters'"/);
-    assert.match(list, /@click="createNewCharacter"/);
+    assert.match(list, /@click="importInputRef\?\.click\(\)"/);
+    assert.match(list, /accept="\.png,\.json"/);
+    assert.match(list, /@change="importCharacter\(\$event\)"/);
+    assert.ok(!list.includes('createNewCharacter'), 'the home header no longer creates blank cards');
+    // A thumbnail is always rendered: card image, gray placeholder, and on a
+    // broken image the letter-circle fallback (never a blank white disc).
+    assert.match(list, /@error="markAvatarFailed\(item\)"/, 'broken avatars fall back to the letter circle');
+    assert.match(list, /v-if="item\.char\.avatar && !avatarFailed\(item\)"/);
+
+    // The characters view returns to the conversation list on mobile instead
+    // of opening the navigation drawer (QQ-style layered back navigation).
+    assert.match(panel, /@click="currentView = 'home'"/, 'characters header back button returns to the list');
+    assert.match(panel, /title="返回会话"/);
 });

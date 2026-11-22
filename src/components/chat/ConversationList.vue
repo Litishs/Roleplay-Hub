@@ -25,13 +25,16 @@
                             d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
                     </svg>
                 </button>
-                <button type="button" @click="createNewCharacter"
+                <button type="button" @click="importInputRef?.click()"
                     class="p-2 rounded-xl bg-primary-600 hover:bg-primary-700 text-white shadow-sm transition-colors"
-                    title="新建角色" aria-label="新建角色">
+                    title="导入角色卡" aria-label="导入角色卡">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
                     </svg>
                 </button>
+                <input ref="importInputRef" type="file" accept=".png,.json" @change="importCharacter($event)"
+                    class="hidden" aria-hidden="true">
             </div>
         </header>
 
@@ -55,7 +58,8 @@
                     item.index === currentCharacterIndex ? 'is-active' : '']">
                 <span class="relative flex-shrink-0 rounded-full overflow-hidden border border-gray-200 bg-gray-100"
                     :class="compact ? 'w-8 h-8' : 'w-11 h-11'">
-                    <img v-if="item.char.avatar" :src="item.char.avatar" alt="" class="h-full w-full object-cover" />
+                    <img v-if="item.char.avatar && !avatarFailed(item)" :src="item.char.avatar" alt=""
+                        class="h-full w-full object-cover" @error="markAvatarFailed(item)" />
                     <span v-else
                         class="flex h-full w-full items-center justify-center bg-gradient-to-br from-primary-500 to-primary-600 font-bold text-white"
                         :class="compact ? 'text-[11px]' : 'text-sm'">
@@ -127,6 +131,25 @@ export default {
   setup() {
     const ctx = inject("appContext");
     const query = ref('');
+    // Hidden card-import input opened by the header button; importCharacter
+    // accepts .png/.json and resets the input itself after each run.
+    const importInputRef = ref(null);
+
+    // Thumbnails must never render blank: PNG imports carry the card image as
+    // a data URL, JSON imports fall back to a gray placeholder, and when even
+    // that image fails to decode (corrupt backup, bad data URL) the row falls
+    // back to the letter circle below.
+    const avatarFailures = ref(new Set());
+    const avatarKey = (item) => item.char?.uuid || `${item.index}:${item.char?.name || ''}`;
+    const markAvatarFailed = (item) => {
+        const key = avatarKey(item);
+        if (!avatarFailures.value.has(key)) {
+            const next = new Set(avatarFailures.value);
+            next.add(key);
+            avatarFailures.value = next;
+        }
+    };
+    const avatarFailed = (item) => avatarFailures.value.has(avatarKey(item));
 
     // ctx entries are refs/computeds; unwrap before deciding the shape.
     const unwrap = (value) => (value && typeof value === 'object' && 'value' in value ? value.value : value);
@@ -167,6 +190,9 @@ export default {
 
     return {
       query,
+      importInputRef,
+      avatarFailed,
+      markAvatarFailed,
       visibleConversations,
       isGeneratingHere,
       isUnread,
