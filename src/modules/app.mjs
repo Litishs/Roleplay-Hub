@@ -107,6 +107,7 @@ const AsyncUsageStatsPanel = defineAsyncComponent(() => import('../components/vi
 const AsyncMemoryPanel = defineAsyncComponent(() => import('../components/views/MemoryPanel.vue'));
 import { generateUUID, parseCot } from './utils.mjs';
 import { buildConversationEntry, markConversationRead, mergeConversationEntry, sortConversations } from './conversation-summary.mjs';
+import { isTabRoot, recordViewChange, tabOfView } from './tab-navigation.mjs';
 import { useMemorySystem } from '../composables/useMemorySystem.mjs';
 import { useWorldInfo } from '../composables/useWorldInfo.mjs';
 import { useCharacterState } from '../composables/useCharacterState.mjs';
@@ -220,6 +221,8 @@ const __app = createApp({
         let { isMobileSidebarOpen, nativeAppStateListener, nativeBackButtonListener } = uiState;
         const {
             currentView,
+            navStack,
+            isRootTextFocused,
             appVersionName,
             appVersionCode,
             appBuildType,
@@ -571,6 +574,50 @@ const __app = createApp({
 
         const closeMobileMenu = () => {
             setMobileSidebarOpen(false);
+        };
+
+        // --- Narrow-screen tab shell (2026-11-23) ---
+        // Every writer of currentView (templates, selectCharacter, the system
+        // back handler) flows through this watcher, so the Back stack cannot
+        // drift from what is on screen. Roots are the four tab pages; anything
+        // else is a detail view of the tab given by tabOfView().
+        watch(currentView, (to, from) => {
+            navStack.value = recordViewChange(navStack.value, from, to);
+            // Leaving a tab root removes the bar's only reason to hide, even if
+            // the focused field vanished without a focusout (removed from DOM).
+            if (!isTabRoot(to)) isRootTextFocused.value = false;
+        });
+        const isTabRootView = computed(() => isTabRoot(currentView.value));
+        const activeTab = computed(() => tabOfView(currentView.value));
+
+        const goBack = () => {
+            const entry = navStack.value[navStack.value.length - 1];
+            if (entry) navStack.value = navStack.value.slice(0, -1);
+            currentView.value = entry ? entry.from : tabOfView(currentView.value);
+        };
+
+        const switchTab = tab => {
+            navStack.value = [];
+            currentView.value = tab;
+        };
+
+        // The native shell pads the WebView above the IME, so a focused text
+        // field on a tab-root page would leave the tab bar floating right over
+        // the keyboard. Hide it for as long as such a field holds focus.
+        const ROOT_TEXT_INPUT_SELECTOR = 'input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="file"]):not([type="color"]):not([type="hidden"]):not([type="image"]), textarea, [contenteditable="true"]';
+        let rootTextBlurTimer = 0;
+        const handleRootTextFocusIn = (event) => {
+            if (!isMobileViewport() || !isTabRoot(currentView.value)) return;
+            if (event.target?.matches?.(ROOT_TEXT_INPUT_SELECTOR)) {
+                clearTimeout(rootTextBlurTimer);
+                isRootTextFocused.value = true;
+            }
+        };
+        const handleRootTextFocusOut = () => {
+            clearTimeout(rootTextBlurTimer);
+            // Same grace period as the chat input: focus usually moves straight
+            // to another control, and hiding on every hop would flicker.
+            rootTextBlurTimer = setTimeout(() => { isRootTextFocused.value = false; }, 180);
         };
 
         const applyMobileVisualViewportHeight = (height, { force = false } = {}) => {
@@ -9289,10 +9336,13 @@ const __app = createApp({
                         closeMobileMenu();
                     } else if (isChatFullscreen.value) {
                         await toggleChatFullscreen();
+                    } else if (!isTabRoot(currentView.value)) {
+                        // Detail views go back to the page they were opened
+                        // from (tab-navigation.mjs), not straight to the list.
+                        goBack();
                     } else if (currentView.value !== 'home') {
-                        // Chat is a detail view now: back returns to the list
-                        // instead of jumping straight out of the app.
-                        currentView.value = 'home';
+                        // Other tabs fall back to 会话; 会话 itself leaves the app.
+                        switchTab('home');
                     } else {
                         await nativeApp.minimizeApp();
                     }
@@ -9637,6 +9687,8 @@ const __app = createApp({
 
             // --- 消息正文里的 data-slash 按钮 ---
             document.addEventListener('click', handleMarkdownSlashClick);
+            document.addEventListener('focusin', handleRootTextFocusIn);
+            document.addEventListener('focusout', handleRootTextFocusOut);
 
             // --- 全局点击外部区域收起面板 ---
             document.addEventListener('click', (e) => {
@@ -9661,6 +9713,8 @@ const __app = createApp({
             nativeBackButtonListener?.remove();
             document.removeEventListener('fullscreenchange', syncChatFullscreenState);
             document.removeEventListener('webkitfullscreenchange', syncChatFullscreenState);
+            document.removeEventListener('focusin', handleRootTextFocusIn);
+            document.removeEventListener('focusout', handleRootTextFocusOut);
             if (window.visualViewport) {
                 window.visualViewport.removeEventListener('resize', handleMobileViewportResize);
                 window.visualViewport.removeEventListener('scroll', handleMobileViewportResize);
@@ -9671,6 +9725,7 @@ const __app = createApp({
             if (chatInputSyncRaf) cancelAnimationFrame(chatInputSyncRaf);
             if (chatInputResizeRaf) cancelAnimationFrame(chatInputResizeRaf);
             clearTimeout(mobileKeyboardBlurTimer);
+            clearTimeout(rootTextBlurTimer);
         });
         // 解析并截断生成的包含 HTML UI 的正文，避免闪屏问题
         const processMainContent = (mainText, isGeneratingState) => {
@@ -9829,7 +9884,7 @@ const __app = createApp({
             switchProfile, createNewProfile, deleteProfile, userProfiles, activeProfileId, showProfileDropdown,
             backupInProgress, exportNativeBackup, restoreNativeBackup,
             processMainContent,
-            currentView, showDescriptionPanel, showModelSelector, modelSelectionTarget, openModelSelector, showChatModelSelector, showCharacterEditor, showAddCharacterMenu, showPresetEditor, showUiTemplateEditor,
+            currentView, goBack, switchTab, isTabRootView, activeTab, showDescriptionPanel, showModelSelector, modelSelectionTarget, openModelSelector, showChatModelSelector, showCharacterEditor, showAddCharacterMenu, showPresetEditor, showUiTemplateEditor,
             memoryProviderSelectOptions, memoryProviderLabel,
             memorySummaries, memoryProfile, summaryProgress, retryRollingSummary, clearSummaryProgress, runRollingSummaryCheck,
             providerTags, activeProviderTag, getProviderDisplayName,
