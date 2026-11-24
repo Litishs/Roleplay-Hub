@@ -829,6 +829,17 @@
             height: 1.375rem;
         }
 
+        /* 扩展 entry card: same shell as the workshop cards, but the row keeps
+           its 56px settings pitch and monochrome icon. overflow: hidden clips
+           the row's hover fill to the rounded corners. */
+        .tab-hub-row-card {
+            overflow: hidden;
+            border: 1px solid var(--hub-card-border);
+            border-radius: 0.75rem;
+            background: var(--hub-card-bg);
+            box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+        }
+
         .tab-hub-status__text {
             display: block;
             max-width: 7rem;

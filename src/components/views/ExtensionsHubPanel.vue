@@ -1,17 +1,18 @@
 <template>
     <!-- Narrow-screen "扩展" tab (2026-11-23): one flat list of the six
-         destinations the drawer used to carry, in the maintainer's order. Rows
-         reuse the settings list classes, so hover, density and dark mode come
-         for free. Each row's right side reports its current state (reference
-         2026-11-24): live counts, the active preset group, the running update.
-         Always mounted (v-show) so a later push animation can slide a page
-         over a root that is still painted. -->
+         destinations the drawer used to carry, in the maintainer's order. Each
+         entry is its own card (2026-11-24 follow-up: separate cards, not one
+         shared panel), so the hub reads the same way as 工坊. Rows reuse the
+         settings row classes for typography and hover; each row's right side
+         reports its current state: live counts, the active preset group, the
+         running update. Always mounted (v-show) so a later push animation can
+         slide a page over a root that is still painted. -->
     <div v-show="currentView === 'ext'" class="management-view tab-hub-view">
         <settings-page-header title="扩展" :back="false"></settings-page-header>
-        <div class="settings-stack">
-            <div class="settings-group-card">
-                <button v-for="entry in entries" :key="entry.view" type="button"
-                    class="settings-accordion-trigger settings-link-row" @click="currentView = entry.view">
+        <div class="tab-hub-cards">
+            <div v-for="entry in entries" :key="entry.view" class="tab-hub-row-card">
+                <button type="button" class="settings-accordion-trigger settings-link-row"
+                    @click="currentView = entry.view">
                     <span class="settings-accordion-icon">
                         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                             <path v-for="(d, index) in entry.icon" :key="index" stroke-linecap="round"

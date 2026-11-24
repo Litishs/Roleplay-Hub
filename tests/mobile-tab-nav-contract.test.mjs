@@ -173,6 +173,11 @@ test('the 扩展 tab lists the six destinations in the chosen order', async () =
   const hub = await read('src/components/views/ExtensionsHubPanel.vue');
   assert.match(hub, /v-show="currentView === 'ext'" class="management-view tab-hub-view"/);
   assert.match(hub, /<settings-page-header title="扩展" :back="false"><\/settings-page-header>/);
+  // 2026-11-24 follow-up: each entry is its own card instead of one shared
+  // settings panel with dividers.
+  assert.match(hub, /<div class="tab-hub-cards">/);
+  assert.match(hub, /class="tab-hub-row-card"/);
+  assert.doesNotMatch(hub, /settings-group-card/, '扩展 no longer shares one card');
   assert.match(hub, /@click="currentView = entry\.view"/);
   const list = hub.slice(hub.indexOf('const ENTRIES = ['), hub.indexOf('];', hub.indexOf('const ENTRIES = [')));
   assert.deepEqual(entryOrder(list), ['memory', 'presets', 'worldinfo', 'regex', 'uitemplates', 'tools']);
@@ -321,6 +326,15 @@ test('styles: hub cards and status carry the reference layout in both themes', a
   // 44px tinted tile, so the workshop glyphs read as tiles rather than rows.
   assert.match(css, /\.tab-hub-card__icon \{[\s\S]{0,200}width: 2\.75rem;[\s\S]{0,60}height: 2\.75rem;/);
   assert.match(css, /\.tab-hub-card__icon \{[\s\S]{0,260}background: var\(--hub-icon-bg\);[\s\S]{0,60}color: var\(--hub-icon-fg\);/);
+  // 扩展 rows are their own cards with the same shell and the same 10px gap.
+  const rowCardStart = css.search(/^ {8}\.tab-hub-row-card \{/m);
+  assert.ok(rowCardStart > 0, 'the 扩展 row card rule must exist');
+  const rowCardBlock = css.slice(rowCardStart, css.indexOf('}', rowCardStart));
+  for (const declaration of ['overflow: hidden;', 'border: 1px solid var(--hub-card-border);',
+    'border-radius: 0.75rem;', 'background: var(--hub-card-bg);']) {
+    assert.ok(rowCardBlock.includes(declaration), `the row card must declare ${declaration}`);
+  }
+  assert.match(css, /\.tab-hub-cards \{\s*display: grid;\s*gap: 0\.625rem;\s*\}/);
   // Right-hand status text: bold, single line, and ellipsised so a long custom
   // preset group name cannot widen the row.
   const statusStart = css.search(/^ {8}\.tab-hub-status__text \{/m);
