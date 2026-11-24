@@ -5,23 +5,24 @@
                     <div
                         class="relative w-full max-w-lg pointer-events-auto p-2.5 md:p-3 bg-white/90 backdrop-blur-xl border border-white/40 shadow-lg rounded-3xl ring-1 ring-black/5 transition-all duration-300 flex flex-col input-island">
                         <!-- Latest usage bar (inline panel toggle) -->
-                        <div v-if="settings.showLatestUsageBar && latestMainTokenUsage"
+                        <div v-if="settings.showLatestUsageBar"
                             class="mx-1 mb-1 grid py-0.5 text-xs text-gray-500"
+                            :title="latestMainTokenUsage ? '最近一次主对话请求的 Token' : '暂无用量：发送一次后显示'"
                             style="grid-template-columns: 4fr 3fr 4fr;">
                             <span class="flex min-w-0 items-center justify-center gap-1 whitespace-nowrap px-1" title="输入 Token">
                                 <span class="h-1.5 w-1.5 flex-none rounded-full bg-primary-500"></span>
                                 <span class="font-mono font-semibold tabular-nums text-gray-700">
-                                    {{ formatLatestTokenCount(latestMainTokenUsage.inputTokens) }}</span>
+                                    {{ latestMainTokenUsage ? formatLatestTokenCount(latestMainTokenUsage.inputTokens) : '—' }}</span>
                             </span>
                             <span class="flex min-w-0 items-center justify-center gap-1 whitespace-nowrap px-1" title="输出 Token">
                                 <span class="h-1.5 w-1.5 flex-none rounded-full bg-yellow-400"></span>
                                 <span class="font-mono font-semibold tabular-nums text-gray-700">
-                                    {{ formatLatestTokenCount(latestMainTokenUsage.outputTokens) }}</span>
+                                    {{ latestMainTokenUsage ? formatLatestTokenCount(latestMainTokenUsage.outputTokens) : '—' }}</span>
                             </span>
                             <span class="flex min-w-0 items-center justify-center gap-1 whitespace-nowrap px-1" title="合计 Token">
                                 <span class="h-1.5 w-1.5 flex-none rounded-full bg-green-500"></span>
                                 <span class="font-mono font-semibold tabular-nums text-gray-700">
-                                    {{ formatLatestTokenCount(latestMainTokenUsage.totalTokens) }}</span>
+                                    {{ latestMainTokenUsage ? formatLatestTokenCount(latestMainTokenUsage.totalTokens) : '—' }}</span>
                             </span>
                         </div>
                         <!-- Pending chat image attachments -->

@@ -91,11 +91,14 @@ test('MessageInput panel hosts the stage-2 controls and usage bar', async () => 
   // New toggles
   assert.match(messageInput, /v-model="settings\.showLatestUsageBar"[\s\S]*?aria-label="最新用量"/);
   assert.match(messageInput, /v-model="settings\.styleFilterEnabled"[\s\S]*?aria-label="文风过滤"/);
-  // Usage bar above the toolbar row
-  assert.match(messageInput, /v-if="settings\.showLatestUsageBar && latestMainTokenUsage"/);
-  assert.match(messageInput, /title="输入 Token"[\s\S]*?formatLatestTokenCount\(latestMainTokenUsage\.inputTokens\)/);
-  assert.match(messageInput, /title="输出 Token"[\s\S]*?formatLatestTokenCount\(latestMainTokenUsage\.outputTokens\)/);
-  assert.match(messageInput, /title="合计 Token"[\s\S]*?formatLatestTokenCount\(latestMainTokenUsage\.totalTokens\)/);
+  // Usage bar above the input row. It renders as soon as the toggle is on and
+  // shows em-dashes until the first request records usage (2026-11-24: it used
+  // to require history, so enabling the toggle looked like it did nothing).
+  assert.match(messageInput, /v-if="settings\.showLatestUsageBar"/);
+  assert.doesNotMatch(messageInput, /v-if="settings\.showLatestUsageBar && latestMainTokenUsage"/);
+  assert.match(messageInput, /latestMainTokenUsage \? formatLatestTokenCount\(latestMainTokenUsage\.inputTokens\) : '—'/);
+  assert.match(messageInput, /latestMainTokenUsage \? formatLatestTokenCount\(latestMainTokenUsage\.outputTokens\) : '—'/);
+  assert.match(messageInput, /latestMainTokenUsage \? formatLatestTokenCount\(latestMainTokenUsage\.totalTokens\) : '—'/);
 });
 
 test('immersive-mode toggle re-reveals bubbles whose reveal class was wiped', async () => {
