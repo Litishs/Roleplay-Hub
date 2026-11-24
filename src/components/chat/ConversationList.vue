@@ -12,12 +12,24 @@
             <h2 class="font-bold text-gray-800 truncate" :class="compact ? 'text-sm' : 'text-lg'">会话</h2>
             <div class="ml-auto flex items-center gap-1">
                 <button type="button" @click="currentView = 'characters'"
-                    class="p-2 rounded-xl text-gray-500 hover:text-primary-600 hover:bg-gray-100 transition-colors"
+                    class="p-2 rounded-xl bg-gray-100 text-gray-600 hover:text-primary-600 hover:bg-gray-200 transition-colors"
                     :title="compact ? '角色卡管理' : '管理角色卡'" aria-label="角色卡管理">
                     <svg class="w-4.5 h-4.5" style="width:1.125rem;height:1.125rem" fill="none" stroke="currentColor"
                         viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                             d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+                    </svg>
+                </button>
+                <!-- Direct blank-card creation (2026-11-24) between management and
+                     import: the management view's add menu still offers the same
+                     action, but creating a card is common enough to be one tap
+                     from the list. -->
+                <button type="button" @click="createNewCharacter"
+                    class="p-2 rounded-xl bg-gray-100 text-gray-600 hover:text-primary-600 hover:bg-gray-200 transition-colors"
+                    title="新建角色卡" aria-label="新建角色卡">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M12 4v16m8-8H4"></path>
                     </svg>
                 </button>
                 <button type="button" @click="importInputRef?.click()"
