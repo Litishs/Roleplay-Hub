@@ -250,3 +250,20 @@ test("dark theme remaps semantic pale tints globally", async () => {
   assert.match(css, /\[data-theme='dark'\] \.text-purple-700 \{ color: #d8b4fe !important; \}/);
   assert.match(css, /\[data-theme='dark'\] \.border-red-200,[\s\S]{0,120}border-color: #713c46 !important;/);
 });
+
+test("icons share one stroke weight and header icon buttons one treatment", async () => {
+  // 1.8 was used by the sidebar and the hub rows while the rest of the app
+  // draws at 2; unify so the same glyph does not change weight per page.
+  for (const file of ["src/components/common/SideNav.vue",
+    "src/components/views/ExtensionsHubPanel.vue", "src/components/views/WorkshopHubPanel.vue"]) {
+    assert.doesNotMatch(await read(file), /stroke-width="1\.8"/, `${file} keeps the 2px stroke`);
+  }
+  // Secondary icon buttons are one neutral block (home header + page headers),
+  // with a dark value instead of the old white card.
+  const css = await read("assets/css/styles.css");
+  assert.match(css, /\.settings-icon-button \{[\s\S]{0,220}background: #f3f4f6;/);
+  assert.match(css, /\[data-theme='dark'\] \.settings-icon-button \{[\s\S]{0,120}background: var\(--d-surface-2\);/);
+  assert.match(css, /\.settings-icon-button:active \{[^}]*scale\(0\.96\)/);
+  const home = await read("src/components/chat/ConversationList.vue");
+  assert.equal((home.match(/class="settings-icon-button"/g) || []).length, 3, "home header uses the shared block");
+});

@@ -1343,8 +1343,7 @@
         }
 
         .settings-icon-button--danger:hover {
-            border-color: #fecaca;
-            background: #fef2f2;
+            background: #fee2e2;
             color: #dc2626;
         }
 
@@ -1435,23 +1434,27 @@
             padding-block: 0.375rem;
         }
 
+        /* Secondary icon button (2026-11-24): one neutral block everywhere —
+           the same treatment as the home header actions, instead of the old
+           white card + shadow that stayed white in dark mode. 40px visual
+           (10px padding + 20px icon); the ::after rule below expands the hit
+           area to 44px. Primary actions keep .settings-create-button. */
         .settings-icon-button {
             padding: 0.625rem;
-            border: 1px solid #e5e7eb;
+            border: 0;
             border-radius: 0.75rem;
-            background: #fff;
+            background: #f3f4f6;
             color: #4b5563;
-            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-            transition: all 0.15s ease;
+            transition: background-color 0.15s ease, color 0.15s ease, transform 0.1s ease;
         }
 
         .settings-icon-button:hover {
-            background: #f9fafb;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+            background: #e5e7eb;
+            color: #1f2937;
         }
 
         .settings-icon-button:active {
-            transform: scale(0.95);
+            transform: scale(0.96);
         }
 
         .settings-create-button {
@@ -3424,21 +3427,17 @@ opacity: 0;
             background: #19332f !important;
         }
 
-        [data-theme='dark'] .user-settings-toolbar .settings-icon-button {
-            border-color: #344150;
-            background: #1b2531;
-            color: #aeb9c8;
-            box-shadow: none;
+        [data-theme='dark'] .settings-icon-button {
+            background: var(--d-surface-2);
+            color: var(--d-text-3);
         }
 
-        [data-theme='dark'] .user-settings-toolbar .settings-icon-button:hover {
-            border-color: #465466;
-            background: #202b38;
-            color: #e5e7eb;
+        [data-theme='dark'] .settings-icon-button:hover {
+            background: var(--d-surface-3);
+            color: var(--d-text);
         }
 
-        [data-theme='dark'] .user-settings-toolbar .settings-icon-button--danger:hover {
-            border-color: #713c46;
+        [data-theme='dark'] .settings-icon-button--danger:hover {
             background: #3a2229;
             color: #fca5a5;
         }

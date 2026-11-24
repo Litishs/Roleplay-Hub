@@ -21,7 +21,7 @@
                 class="tab-hub-card" @click="currentView = entry.view">
                 <span class="tab-hub-card__icon">
                     <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" :d="entry.icon"></path>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="entry.icon"></path>
                     </svg>
                 </span>
                 <span class="settings-accordion-copy">

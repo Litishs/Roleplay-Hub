@@ -26,7 +26,7 @@
                     <span class="settings-accordion-icon">
                         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                             <path v-for="(d, index) in entry.icon" :key="index" stroke-linecap="round"
-                                stroke-linejoin="round" stroke-width="1.8" :d="d"></path>
+                                stroke-linejoin="round" stroke-width="2" :d="d"></path>
                         </svg>
                     </span>
                     <span class="settings-accordion-copy">

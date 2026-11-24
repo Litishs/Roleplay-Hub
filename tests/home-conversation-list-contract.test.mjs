@@ -122,10 +122,10 @@ test("home screen wiring: landing view, dual pane, back navigation and persisten
     assert.match(list, /accept="\.png,\.json"/);
     assert.match(list, /@change="importCharacter\(\$event\)"/);
     assert.match(list, /@click="createNewCharacter"[\s\S]{0,320}title="新建角色卡" aria-label="新建角色卡"/);
-    // The manager, new-card and import buttons share the same neutral
-    // highlight block (2026-11-24).
+    // The manager, new-card and import buttons all use the shared secondary
+    // icon-button block (2026-11-24).
     const header = list.slice(list.indexOf('<header'), list.indexOf('</header>'));
-    assert.equal((header.match(/bg-gray-100/g) || []).length, 3, 'all three header icon buttons share the block');
+    assert.equal((header.match(/class="settings-icon-button"/g) || []).length, 3, 'all three header icon buttons share the block');
     const order = ["@click=\"currentView = 'characters'\"", '@click="createNewCharacter"', '@click="importInputRef?.click()"']
       .map((token) => header.indexOf(token));
     assert.ok(order.every((at) => at >= 0), 'all three header actions exist');
