@@ -76,10 +76,13 @@ import EmbeddedViewContent from '../components/common/EmbeddedViewContent.vue';
 import GenerationTimer from '../components/common/GenerationTimer.vue';
 import SettingsPageHeader from '../components/common/SettingsPageHeader.vue';
 import SideNav from '../components/common/SideNav.vue';
+import BottomTabBar from '../components/common/BottomTabBar.vue';
 import ToastNotification from '../components/common/ToastNotification.vue';
 import ConfirmDialog from '../components/common/ConfirmDialog.vue';
 import ModalDialog from '../components/common/ModalDialog.vue';
 import WorldInfoPanel from '../components/views/WorldInfoPanel.vue';
+import ExtensionsHubPanel from '../components/views/ExtensionsHubPanel.vue';
+import WorkshopHubPanel from '../components/views/WorkshopHubPanel.vue';
 import CharacterInfo from '../components/chat/CharacterInfo.vue';
 import MessageList from '../components/chat/MessageList.vue';
 import MessageInput from '../components/chat/MessageInput.vue';
@@ -93,6 +96,8 @@ import ConversationList from '../components/chat/ConversationList.vue';
 // import/export dialogs). Settings sub-panels (UpdateChecker, DataManager,
 // PresetManager, ApiConfig, AdvancedSettings, TtsSettings) are imported
 // directly by SettingsPanel.vue, so they ride along in its async chunk.
+// The narrow-screen tab roots (WorkshopHubPanel / ExtensionsHubPanel) and the
+// tab bar are always mounted too, so they stay synchronous like SideNav.
 const AsyncCharacterPanel = defineAsyncComponent(() => import('../components/views/CharacterPanel.vue'));
 const AsyncGeneratorPanel = defineAsyncComponent(() => import('../components/views/GeneratorPanel.vue'));
 const AsyncSquarePanel = defineAsyncComponent(() => import('../components/views/SquarePanel.vue'));
@@ -135,7 +140,7 @@ const __app = createApp({
     components: {
         CharacterPanel: AsyncCharacterPanel, GeneratorPanel: AsyncGeneratorPanel, SquarePanel: AsyncSquarePanel, NovelPanel: AsyncNovelPanel, SettingsPanel: AsyncSettingsPanel, PluginsPanel: AsyncPluginsPanel, PresetsPanel: AsyncPresetsPanel, UiTemplatePanel: AsyncUiTemplatePanel, RegexPanel: AsyncRegexPanel, ToolsPanel: AsyncToolsPanel, UsageStatsPanel: AsyncUsageStatsPanel, MemoryPanel: AsyncMemoryPanel, WorldInfoPanel,
         UiTemplatePending, EmbeddedViewContent, GenerationTimer, SettingsPageHeader,
-        SideNav, ToastNotification, ConfirmDialog, ModalDialog,
+        SideNav, BottomTabBar, WorkshopHubPanel, ExtensionsHubPanel, ToastNotification, ConfirmDialog, ModalDialog,
         CharacterInfo, MessageList, MessageInput, ConversationList,
         CustomSelect: RPHubCustomSelect,
         UiTemplateFrame: UiTemplateFrame,
@@ -150,6 +155,9 @@ const __app = createApp({
         'message-input': MessageInput,
         'conversation-list': ConversationList,
         'side-nav': SideNav,
+        'bottom-tab-bar': BottomTabBar,
+        'workshop-hub-panel': WorkshopHubPanel,
+        'extensions-hub-panel': ExtensionsHubPanel,
         'toast-notification': ToastNotification,
         'confirm-dialog': ConfirmDialog,
         'modal-dialog': ModalDialog

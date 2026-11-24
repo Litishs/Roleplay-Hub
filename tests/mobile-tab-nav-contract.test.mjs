@@ -130,3 +130,91 @@ test('a focused text field on a tab-root page hides the tab bar', async () => {
   // Only text entry counts: tapping a button or a switch must not hide the bar.
   assert.match(app, /ROOT_TEXT_INPUT_SELECTOR = '[^']*input:not\(\[type="checkbox"\]\)[^']*textarea[^']*contenteditable/);
 });
+
+test('index.html wraps the views in one box and mounts the tab shell', async () => {
+  const html = await read('index.html');
+  assert.match(html, /<div class="app-views flex-1 min-h-0 flex flex-col relative" :class="\{ 'has-tab-bar': isTabRootView \}">/);
+  const viewsStart = html.indexOf('<div class="app-views');
+  const viewsEnd = html.indexOf('</div>', html.indexOf('<extensions-hub-panel'));
+  const bar = html.indexOf('<bottom-tab-bar></bottom-tab-bar>');
+  assert.ok(viewsStart > 0 && viewsEnd > viewsStart && bar > viewsEnd, 'the tab bar must come after the views box');
+  // The tab roots stay mounted like the home view, so a detail view can later
+  // slide in over a root that is still painted.
+  assert.match(html, /<workshop-hub-panel v-show="currentView === 'workshop'"><\/workshop-hub-panel>/);
+  assert.match(html, /<extensions-hub-panel v-show="currentView === 'ext'"><\/extensions-hub-panel>/);
+  assert.ok(html.indexOf(`<div v-show="currentView === 'home'"`) > viewsStart, 'the home view lives inside the views box');
+  assert.match(html, /<side-nav><\/side-nav>/, 'wide screens keep the left sidebar');
+});
+
+test('the tab bar shows the four tabs in order, only on tab roots', async () => {
+  const bar = await read('src/components/common/BottomTabBar.vue');
+  assert.match(bar, /v-show="isTabRootView && !isRootTextFocused"/);
+  assert.match(bar, /class="bottom-tab-bar" aria-label="主导航"/);
+  assert.match(bar, /@click="switchTab\(tab\.id\)"/);
+  assert.match(bar, /:aria-current="activeTab === tab\.id \? 'page' : undefined"/);
+  assert.match(bar, /import \{ TAB_ORDER \} from "\.\.\/\.\.\/modules\/tab-navigation\.mjs";/);
+  assert.match(bar, /const tabs = TAB_ORDER\.map\(id => \(\{ id, \.\.\.TAB_META\[id\] \}\)\);/);
+  const labels = [...bar.matchAll(/^ {4}(home|workshop|ext|settings): \{\n\s+label: '([^']+)'/gm)].map((match) => `${match[1]}=${match[2]}`);
+  assert.deepEqual(labels, ['home=会话', 'workshop=工坊', 'ext=扩展', 'settings=设置']);
+});
+
+const entryOrder = (source) => [...source.matchAll(/view: '([a-z]+)', label: '([^']+)'/g)].map((match) => match[1]);
+
+test('the 扩展 tab lists the six destinations in the chosen order', async () => {
+  const hub = await read('src/components/views/ExtensionsHubPanel.vue');
+  assert.match(hub, /v-show="currentView === 'ext'" class="management-view tab-hub-view"/);
+  assert.match(hub, /<settings-page-header title="扩展" :back="false"><\/settings-page-header>/);
+  assert.match(hub, /@click="currentView = entry\.view"/);
+  const list = hub.slice(hub.indexOf('const ENTRIES = ['), hub.indexOf('];', hub.indexOf('const ENTRIES = [')));
+  assert.deepEqual(entryOrder(list), ['memory', 'presets', 'worldinfo', 'regex', 'uitemplates', 'tools']);
+  // The drawer's status cues move with their entries.
+  assert.match(hub, /entry\.view === 'memory' && memoryMigrationBadge/);
+  assert.match(hub, /entry\.view === 'uitemplates' && uiTemplateUpdateStatus\.state === 'running'/);
+  // The plugin marketplace stays behind the same flag as the sidebar's entry,
+  // and is appended only while that flag is on.
+  assert.match(hub, /const pluginsMarketEnabled = false;/);
+  assert.match(hub, /const entries = pluginsMarketEnabled \? \[\.\.\.ENTRIES, PLUGIN_ENTRY\] : ENTRIES;/);
+  assert.doesNotMatch(hub, /text-(red|green|amber|emerald|rose|violet|sky)-\d/, 'icons stay monochrome');
+});
+
+test('the 工坊 tab lists the three online workshops in order', async () => {
+  const hub = await read('src/components/views/WorkshopHubPanel.vue');
+  assert.match(hub, /v-show="currentView === 'workshop'" class="management-view tab-hub-view"/);
+  assert.match(hub, /<settings-page-header title="工坊" :back="false"><\/settings-page-header>/);
+  assert.deepEqual(entryOrder(hub), ['generator', 'square', 'novel']);
+});
+
+test('the tab shell components are registered synchronously', async () => {
+  const app = await read('src/modules/app.mjs');
+  for (const name of ['BottomTabBar', 'WorkshopHubPanel', 'ExtensionsHubPanel']) {
+    assert.match(app, new RegExp(`import ${name} from '\.\./components/(common|views)/${name}\.vue';`));
+  }
+  assert.match(app, /SideNav, BottomTabBar, WorkshopHubPanel, ExtensionsHubPanel, ToastNotification/);
+  assert.match(app, /'bottom-tab-bar': BottomTabBar,/);
+  assert.match(app, /'workshop-hub-panel': WorkshopHubPanel,/);
+  assert.match(app, /'extensions-hub-panel': ExtensionsHubPanel,/);
+});
+
+test('SettingsPageHeader can drop its leading button for root pages', async () => {
+  const header = await read('src/components/common/SettingsPageHeader.vue');
+  assert.match(header, /<button v-if="back" @click="\$emit\('menu'\)" class="mobile-menu-button">/);
+  assert.match(header, /back: \{ type: Boolean, default: true \}/);
+});
+
+test('styles: overlay tab bar with variable colours, dark override and view reservation', async () => {
+  const css = await read('assets/css/styles.css');
+  assert.match(css, /:root \{[^}]*--tab-bar-h: 4\.25rem;/);
+  // The base rule starts its own line; the fullscreen and dark rules also end
+  // with this selector and must not be picked up instead.
+  const barStart = css.search(/^ {8}\.bottom-tab-bar \{/m);
+  assert.ok(barStart > 0, 'the tab bar rule must exist');
+  const barBlock = css.slice(barStart, css.indexOf('}', barStart));
+  for (const declaration of ['position: absolute;', 'bottom: 0;', 'height: var(--tab-bar-h);',
+    'background: var(--tab-bar-bg);', '--tab-bar-active: #2563eb;']) {
+    assert.ok(barBlock.includes(declaration), `the tab bar must declare ${declaration}`);
+  }
+  assert.match(css, /\[data-theme='dark'\] \.bottom-tab-bar \{[\s\S]{0,300}--tab-bar-active: #93c5fd;/);
+  assert.match(css, /@media \(max-width: 767\.98px\) \{\s*\.app-views\.has-tab-bar \{\s*padding-bottom: var\(--tab-bar-h\);\s*\}\s*\}/);
+  assert.match(css, /@media \(min-width: 768px\) \{\s*\.bottom-tab-bar \{\s*display: none !important;/);
+  assert.match(css, /\.app-native-fullscreen \.bottom-tab-bar,/);
+});

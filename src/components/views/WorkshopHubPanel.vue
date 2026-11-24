@@ -1,0 +1,51 @@
+<template>
+    <!-- Narrow-screen "工坊" tab (2026-11-23): the three online workshops behind
+         one root page. Rows reuse the settings list classes, so hover, density
+         and dark mode come for free. Always mounted (v-show) so a later push
+         animation can slide a workshop over a root that is still painted. -->
+    <div v-show="currentView === 'workshop'" class="management-view tab-hub-view">
+        <settings-page-header title="工坊" :back="false"></settings-page-header>
+        <div class="settings-stack">
+            <div class="settings-group-card">
+                <button v-for="entry in entries" :key="entry.view" type="button"
+                    class="settings-accordion-trigger settings-link-row" @click="currentView = entry.view">
+                    <span class="settings-accordion-icon">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" :d="entry.icon"></path>
+                        </svg>
+                    </span>
+                    <span class="settings-accordion-copy">
+                        <span class="settings-accordion-title">{{ entry.label }}</span>
+                        <span class="settings-accordion-description">{{ entry.description }}</span>
+                    </span>
+                    <!-- The trigger grid has a tail column; keep it filled so the
+                         chevron stays at the right edge. -->
+                    <span class="tab-hub-tail"></span>
+                    <svg class="settings-collapse-chevron settings-accordion-chevron" fill="none"
+                        stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </div>
+</template>
+
+<script>
+import { inject } from "vue";
+
+// Icons follow the sidebar entries these replace (SideNav.vue); 万相广场 takes
+// a globe because the sidebar's four-squares icon now marks the 工坊 tab itself.
+const ENTRIES = [
+    { view: 'generator', label: '角色卡生成', description: '从一句话设定生成完整角色卡', icon: 'M13 10V3L4 14h7v7l9-11h-7z' },
+    { view: 'square', label: '万相广场', description: '社区分享的角色卡与灵感', icon: 'M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z' },
+    { view: 'novel', label: '小说生成', description: '长篇续写与章节管理', icon: 'M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253' }
+];
+
+export default {
+  setup() {
+    const ctx = inject("appContext");
+    return { ...(ctx || {}), entries: ENTRIES };
+  }
+};
+</script>

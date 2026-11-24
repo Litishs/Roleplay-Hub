@@ -1,7 +1,7 @@
 <template>
   <div class="settings-page-header">
     <div class="flex items-center">
-      <button @click="$emit('menu')" class="mobile-menu-button">
+      <button v-if="back" @click="$emit('menu')" class="mobile-menu-button">
         <svg class="w-6 h-6" fill="none" stroke="currentColor"><use href="#icon-menu"></use></svg>
       </button>
       <h2 class="text-xl md:text-2xl font-bold text-gray-800 flex items-center">
@@ -19,7 +19,9 @@
 <script>
 export default {
   props: {
-    title: String
+    title: String,
+    // Root tab pages (工坊 / 扩展) pass false: there is nothing to go back to.
+    back: { type: Boolean, default: true }
   },
   emits: ['menu']
 }
