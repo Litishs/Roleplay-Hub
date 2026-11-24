@@ -20,7 +20,7 @@
                         <span class="settings-accordion-title">{{ entry.label }}</span>
                         <span class="settings-accordion-description">{{ entry.description }}</span>
                     </span>
-                    <span class="tab-hub-tail">
+                    <span class="settings-link-tail">
                         <!-- v6 §20: the sweep capsule used to live in the drawer's
                              记忆系统 row; keep it where the entry now is. -->
                         <span v-if="entry.view === 'memory' && memoryMigrationBadge"

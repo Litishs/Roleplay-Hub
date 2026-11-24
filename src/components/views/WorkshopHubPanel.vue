@@ -20,7 +20,7 @@
                     </span>
                     <!-- The trigger grid has a tail column; keep it filled so the
                          chevron stays at the right edge. -->
-                    <span class="tab-hub-tail"></span>
+                    <span class="settings-link-tail"></span>
                     <svg class="settings-collapse-chevron settings-accordion-chevron" fill="none"
                         stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>

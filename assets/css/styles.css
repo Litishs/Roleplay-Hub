@@ -747,14 +747,15 @@
             outline-offset: -2px;
         }
 
-        /* Hub rows (工坊 / 扩展) sit directly in a settings card, outside the
-           .settings-accordion wrappers that draw the dividers, so they carry
-           their own hairlines. */
-        .settings-link-row + .settings-link-row {
+        /* Link rows (the hub pages, 用量统计 in the settings data group) sit
+           directly in a settings card, outside the .settings-accordion wrappers
+           that draw the dividers, so they carry their own hairlines. */
+        .settings-link-row + .settings-link-row,
+        .settings-accordion + .settings-link-row {
             border-top: 1px solid #edf0f4;
         }
 
-        .tab-hub-tail {
+        .settings-link-tail {
             display: flex;
             align-items: center;
             justify-content: flex-end;
@@ -2187,6 +2188,13 @@
                 display: none;
             }
 
+            /* Narrow-screen-only link rows (用量统计). Hidden through this file
+               rather than `md:hidden`: it loads after tailwind.css, and the
+               trigger's `display: grid` would win at equal specificity. */
+            .settings-link-row--narrow {
+                display: none;
+            }
+
             .editor-modal-header {
                 padding: 1.25rem;
             }
@@ -3398,7 +3406,8 @@ opacity: 0;
             --tab-bar-active-bg: rgba(59, 130, 246, 0.28);
             --tab-bar-press: rgba(148, 163, 184, 0.18);
         }
-        [data-theme='dark'] .settings-link-row + .settings-link-row {
+        [data-theme='dark'] .settings-link-row + .settings-link-row,
+        [data-theme='dark'] .settings-accordion + .settings-link-row {
             border-top-color: #293544;
         }
         [data-theme='dark'] .management-item-controls {

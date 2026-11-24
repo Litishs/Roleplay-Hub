@@ -288,3 +288,26 @@ test('nothing of the drawer is left in the app sources', async () => {
     assert.doesNotMatch(sources[index], drawer, `${paths[index]} still references the drawer`);
   }
 });
+
+test('settings: 用量统计 is a link row in the data group, hidden on wide screens', async () => {
+  const settings = await read('src/components/views/SettingsPanel.vue');
+  const dataGroup = settings.slice(settings.indexOf('aria-labelledby="settings-group-data"'), settings.indexOf('<UpdateChecker />'));
+  assert.ok(dataGroup.length > 0, 'the data group must exist');
+  const triggerAt = dataGroup.indexOf('aria-controls="local-data-panel"');
+  const usageAt = dataGroup.indexOf('@click="currentView = \'usage\'"');
+  assert.ok(triggerAt > 0, 'the local-data accordion is in the data group');
+  assert.ok(usageAt > triggerAt, 'the usage row follows the local-data accordion');
+  const usageRow = dataGroup.slice(usageAt, dataGroup.indexOf('</button>', usageAt));
+  assert.match(usageRow, /settings-accordion-trigger settings-link-row settings-link-row--narrow/);
+  assert.match(usageRow, /settings-accordion-title">用量统计</);
+  assert.match(usageRow, /d="M9 5l7 7-7 7"/, 'a right chevron marks it as a link, not an accordion');
+  // Exactly one way in on narrow screens; the sidebar keeps its own on wide ones.
+  assert.equal(settings.split(`currentView = 'usage'`).length - 1, 1);
+  assert.match(await read('src/components/common/SideNav.vue'), /currentView = 'usage'/, 'wide screens keep the sidebar entry');
+
+  // The hide rule lives in styles.css (see the cascade note there), not as a utility.
+  const css = await read('assets/css/styles.css');
+  assert.match(css, /@media \(min-width: 768px\) \{[\s\S]{0,600}\.settings-link-row--narrow \{\s*display: none;/);
+  assert.match(css, /\.settings-accordion \+ \.settings-link-row \{/);
+  assert.match(css, /\[data-theme='dark'\] \.settings-accordion \+ \.settings-link-row \{/);
+});
