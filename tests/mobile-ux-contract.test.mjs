@@ -294,3 +294,12 @@ test("detail titles match the navigation names", async () => {
   assert.match(await read("src/components/views/PresetsPanel.vue"), /<settings-page-header title="预设" @back="goBack">/);
   assert.match(await read("src/components/views/RegexPanel.vue"), /<settings-page-header title="正则" @back="goBack">/);
 });
+
+test("management page headers stick to the top of the scroll view", async () => {
+  const css = await read("assets/css/styles.css");
+  assert.match(css, /\.settings-page-header,\s*\.management-header \{[\s\S]{0,320}position: sticky;[\s\S]{0,400}top: -1rem;/);
+  assert.match(css, /\[data-theme='dark'\] \.settings-page-header,\s*\[data-theme='dark'\] \.management-header/);
+  for (const file of ["SettingsPanel", "PluginsPanel", "CharacterPanel"]) {
+    assert.match(await read(`src/components/views/${file}.vue`), /class="management-header/, `${file} uses the shared sticky header`);
+  }
+});

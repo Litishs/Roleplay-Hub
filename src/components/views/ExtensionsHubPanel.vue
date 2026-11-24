@@ -25,8 +25,15 @@
                     @click="currentView = entry.view">
                     <span class="settings-accordion-icon">
                         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                            <path v-for="(d, index) in entry.icon" :key="index" stroke-linecap="round"
-                                stroke-linejoin="round" stroke-width="2" :d="d"></path>
+                            <!-- Shared glyphs come from the sprite; the rest stay
+                                 local so a single entry can still be tweaked. -->
+                            <template v-if="entry.symbol">
+                                <use :href="entry.symbol"></use>
+                            </template>
+                            <template v-else>
+                                <path v-for="(d, index) in entry.icon" :key="index" stroke-linecap="round"
+                                    stroke-linejoin="round" stroke-width="2" :d="d"></path>
+                            </template>
                         </svg>
                     </span>
                     <span class="settings-accordion-copy">
@@ -62,7 +69,7 @@ import SettingsPageHeader from "../common/SettingsPageHeader.vue";
 const ENTRIES = [
     { view: 'memory', label: '记忆系统', description: '账本、事实与固定记忆', icon: ['M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z'] },
     { view: 'presets', label: '预设', description: '提示词与生成参数组合', icon: ['M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4M6 18a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4'] },
-    { view: 'worldinfo', label: '世界书', description: '关键词触发的设定条目', icon: ['M12 6.25v13m0-13C10.83 5.48 9.25 5 7.5 5S4.17 5.48 3 6.25v13C4.17 18.48 5.75 18 7.5 18s3.33.48 4.5 1.25m0-13C13.17 5.48 14.75 5 16.5 5S19.83 5.48 21 6.25v13C19.83 18.48 18.25 18 16.5 18s-3.33.48-4.5 1.25'] },
+    { view: 'worldinfo', label: '世界书', description: '关键词触发的设定条目', symbol: '#icon-book' },
     { view: 'regex', label: '正则', description: '收发文本的查找替换脚本', icon: ['M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4'] },
     { view: 'uitemplates', label: 'UI模板', description: '消息内的可交互界面', icon: ['M4 5a2 2 0 012-2h12a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm4 3h8M8 12h8M8 16h5'] },
     { view: 'tools', label: '工具', description: '允许模型调用的功能', icon: ['M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94L14.7 6.3z'] }

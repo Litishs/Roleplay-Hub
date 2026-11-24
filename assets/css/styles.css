@@ -1828,6 +1828,27 @@
             margin-bottom: 1rem;
         }
 
+        /* Page headers stay put while the management view scrolls, matching the
+           home bar's persistent title (2026-11-24). The negative margins cancel
+           .management-view padding so the opaque strip covers the full column;
+           content scrolls underneath. */
+        .settings-page-header,
+        .management-header {
+            position: sticky;
+            /* Negative so the header pins to the view's top edge: the sticky
+               containing box starts at the management-view padding (1rem). */
+            top: -1rem;
+            z-index: 6;
+            margin: -1rem -1rem 0;
+            padding: 1rem;
+            background: #f9fafb;
+        }
+
+        [data-theme='dark'] .settings-page-header,
+        [data-theme='dark'] .management-header {
+            background: var(--d-bg);
+        }
+
         .management-view {
             height: 100%;
             padding: 1rem;
@@ -2411,8 +2432,12 @@
                 padding: 1.25rem;
             }
 
-            .settings-page-header {
-                margin-bottom: 1.5rem;
+            /* Sticky geometry follows the larger desktop padding. */
+            .settings-page-header,
+            .management-header {
+                top: -1.5rem;
+                margin: -1.5rem -1.5rem 0;
+                padding: 1.5rem;
             }
 
             /* Wide screens: one content column for every management view
