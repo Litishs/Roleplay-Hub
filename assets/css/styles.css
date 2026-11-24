@@ -2080,6 +2080,19 @@
                 display: none;
             }
 
+            /* Hub rows are links, not accordions: names such as 预设 / 正则 /
+               工具 say little on their own, and the hub pages have room to
+               spare, so they keep their description line on phones. Two lines
+               need the standard 56px pitch; pinning it also keeps the hairline
+               borders from making the rows differ by a pixel. */
+            .tab-hub-view .settings-link-row {
+                min-height: 3.5rem;
+            }
+
+            .tab-hub-view .settings-link-row .settings-accordion-description {
+                display: block;
+            }
+
             .settings-accordion-value,
             .settings-accordion-summary {
                 max-width: 8rem;

@@ -271,6 +271,20 @@ test('the embedded workshop pages keep their floating Back tab', async () => {
   assert.doesNotMatch(embedded, /'menu'/);
 });
 
+test('styles: hub rows keep their description line on phones', async () => {
+  // Phones hide the description line on settings rows to keep them compact.
+  // Hub rows are links whose names alone say little, so they opt back in.
+  const css = await read('assets/css/styles.css');
+  assert.match(css, /@media \(max-width: 640px\) \{[\s\S]{0,2400}\.tab-hub-view \.settings-link-row \.settings-accordion-description \{\s*display: block;/);
+  // Two lines need the standard pitch; pinning it also stops the hairline
+  // borders from making the rows differ by a pixel.
+  assert.match(css, /@media \(max-width: 640px\) \{[\s\S]{0,2400}\.tab-hub-view \.settings-link-row \{\s*min-height: 3\.5rem;/);
+  for (const file of ['WorkshopHubPanel', 'ExtensionsHubPanel']) {
+    const hub = await read(`src/components/views/${file}.vue`);
+    assert.match(hub, /class="settings-accordion-description">\{\{ entry\.description \}\}<\/span>/, `${file} renders a description`);
+  }
+});
+
 test('styles: the back arrow is a 44px target and no drawer rule survives', async () => {
   const css = await read('assets/css/styles.css');
   const start = css.search(/^ {8}\.settings-back-button \{/m);
