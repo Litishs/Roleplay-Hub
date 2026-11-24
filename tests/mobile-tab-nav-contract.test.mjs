@@ -15,7 +15,7 @@ const ROOT = new URL('../', import.meta.url);
 const read = async (path) => (await readFile(new URL(path, ROOT), 'utf8')).replace(/\r\n/g, '\n');
 
 test('every view belongs to exactly one of the four tabs', () => {
-  assert.deepEqual([...TAB_ORDER], ['home', 'workshop', 'ext', 'settings']);
+  assert.deepEqual([...TAB_ORDER], ['home', 'ext', 'workshop', 'settings']);
   const expected = {
     home: ['home', 'chat', 'characters'],
     workshop: ['workshop', 'generator', 'square', 'novel'],
@@ -163,8 +163,15 @@ test('the tab bar shows the four tabs in order, only on tab roots', async () => 
   assert.match(bar, /:aria-current="activeTab === tab\.id \? 'page' : undefined"/);
   assert.match(bar, /import \{ TAB_ORDER \} from "\.\.\/\.\.\/modules\/tab-navigation\.mjs";/);
   assert.match(bar, /const tabs = TAB_ORDER\.map\(id => \(\{ id, \.\.\.TAB_META\[id\] \}\)\);/);
+  // TAB_META is a lookup map; the visible order comes from TAB_ORDER (asserted
+  // above), so every tab id needs a label and icon there.
   const labels = [...bar.matchAll(/^ {4}(home|workshop|ext|settings): \{\n\s+label: '([^']+)'/gm)].map((match) => `${match[1]}=${match[2]}`);
   assert.deepEqual(labels, ['home=会话', 'workshop=工坊', 'ext=扩展', 'settings=设置']);
+  // One shared highlight slider, moved by transform (not four painted pills).
+  assert.match(bar, /<span class="bottom-tab__slider" aria-hidden="true"/);
+  assert.ok(bar.includes('translateX(${activeIndex * 100}%)'), 'the slider follows the active index');
+  assert.match(bar, /const activeIndex = computed\(\(\) => \{/);
+  assert.ok(bar.includes('TAB_ORDER.indexOf(readRef(app.activeTab))'));
 });
 
 const entryOrder = (source) => [...source.matchAll(/view: '([a-z]+)', label: '([^']+)'/g)].map((match) => match[1]);
@@ -255,6 +262,35 @@ test('styles: overlay tab bar with variable colours, dark override and view rese
   assert.match(css, /@media \(max-width: 767\.98px\) \{\s*\.app-views\.has-tab-bar \{\s*padding-bottom: var\(--tab-bar-h\);\s*\}\s*\}/);
   assert.match(css, /@media \(min-width: 768px\) \{\s*\.bottom-tab-bar \{\s*display: none !important;/);
   assert.match(css, /\.app-native-fullscreen \.bottom-tab-bar,/);
+
+  // Sliding highlight: one cell-wide element, moved with transform only, and
+  // respecting prefers-reduced-motion.
+  const sliderStart = css.search(/^ {8}\.bottom-tab__slider \{/m);
+  assert.ok(sliderStart > 0, 'the slider rule must exist');
+  const sliderBlock = css.slice(sliderStart, css.indexOf('}', sliderStart));
+  for (const declaration of ['position: absolute;', 'width: calc((100% - 0.75rem) / 4);',
+    'transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);', 'pointer-events: none;']) {
+    assert.ok(sliderBlock.includes(declaration), `the slider must declare ${declaration}`);
+  }
+  assert.match(css, /\.bottom-tab__slider-pill \{[\s\S]{0,160}background: var\(--tab-bar-active-bg\);/);
+  assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{[\s\S]{0,400}\.bottom-tab__slider \{/);
+  // The active pill is no longer painted per tab: only the slider carries it.
+  assert.doesNotMatch(css, /\.bottom-tab\.is-active \.bottom-tab__pill \{/);
+});
+
+test('styles: the embedded Back ball is draggable and phone-only', async () => {
+  const css = await read('assets/css/styles.css');
+  const ballStart = css.search(/^ {8}\.embedded-back-ball \{/m);
+  assert.ok(ballStart > 0, 'the back ball rule must exist');
+  const ballBlock = css.slice(ballStart, css.indexOf('}', ballStart));
+  for (const declaration of ['position: absolute;', 'top: 50%;', 'right: 0.75rem;',
+    'width: 3.25rem;', 'height: 3.25rem;', 'border-radius: 9999px;',
+    'transform: translateY(-50%);', 'touch-action: none;']) {
+    assert.ok(ballBlock.includes(declaration), `the back ball must declare ${declaration}`);
+  }
+  assert.match(css, /\.embedded-back-ball\.is-positioned \{\s*transform: none;\s*\}/);
+  assert.match(css, /\[data-theme='dark'\] \.embedded-back-ball \{[\s\S]{0,160}background: rgba\(31, 41, 55, 0\.94\);/);
+  assert.match(css, /\.settings-link-row--narrow \{\s*display: none;\s*\}[\s\S]{0,400}\.embedded-back-ball \{\s*display: none;/);
 });
 
 test('the sidebar is desktop-only and keeps every desktop destination', async () => {
@@ -292,9 +328,21 @@ test('detail page headers lead with the shared Back helper', async () => {
   assert.doesNotMatch(settings, /mobile-menu-button|toggleMobileMenu/);
 });
 
-test('the embedded workshop pages keep their floating Back tab', async () => {
+test('the embedded workshop pages use a draggable floating Back ball', async () => {
   const embedded = await read('src/components/common/EmbeddedViewContent.vue');
-  assert.match(embedded, /<button type="button" @click="\$emit\('back'\)" aria-label="返回"/);
+  assert.match(embedded, /<button type="button" ref="ball" aria-label="返回"\s*\n\s*class="embedded-back-ball"/);
+  // Default position comes from CSS (right edge, vertically centred); the first
+  // drag switches to explicit left/top.
+  assert.match(embedded, /:class="\{ 'is-positioned': dragPosition, 'is-dragging': dragging \}"/);
+  assert.match(embedded, /:style="dragPosition \? \{ left: dragPosition\.left \+ 'px', top: dragPosition\.top \+ 'px' \} : null"/);
+  // Drag vs tap: movement above the threshold moves the ball; a tap emits Back.
+  for (const handler of ['@pointerdown="onPointerDown"', '@pointermove="onPointerMove"',
+    '@pointerup="onPointerUp"', '@pointercancel="onPointerCancel"']) {
+    assert.ok(embedded.includes(handler), `the ball handles ${handler}`);
+  }
+  assert.match(embedded, /const DRAG_THRESHOLD = 6;/);
+  assert.match(embedded, /if \(drag\.moved\) \{[\s\S]{0,160}suppressClick = true/);
+  assert.match(embedded, /onClick\(\) \{[\s\S]{0,120}\$emit\('back'\)/);
   assert.match(embedded, /emits: \['load', 'back'\]/);
   assert.doesNotMatch(embedded, /'menu'/);
 });

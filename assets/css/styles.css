@@ -58,6 +58,58 @@
             }
         }
 
+        /* Floating Back ball on the embedded workshop pages (2026-11-24).
+           Defaults to the right edge, vertically centred; the first drag
+           switches it to explicit left/top coordinates. 52px keeps the target
+           well above the 44px minimum, and touch-action: none stops the page
+           (or the iframe) from scrolling while it is dragged. */
+        .embedded-back-ball {
+            position: absolute;
+            top: 50%;
+            right: 0.75rem;
+            z-index: 20;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 3.25rem;
+            height: 3.25rem;
+            border: 1px solid #e2e8f0;
+            border-radius: 9999px;
+            background: rgba(255, 255, 255, 0.95);
+            color: #475569;
+            box-shadow: 0 6px 18px -8px rgba(15, 23, 42, 0.45);
+            transform: translateY(-50%);
+            touch-action: none;
+            user-select: none;
+            -webkit-user-select: none;
+            transition: transform 0.12s ease, background-color 0.15s ease;
+        }
+
+        .embedded-back-ball svg {
+            width: 1.25rem;
+            height: 1.25rem;
+        }
+
+        .embedded-back-ball.is-positioned {
+            transform: none;
+        }
+
+        .embedded-back-ball:active {
+            background: #f1f5f9;
+        }
+
+        .embedded-back-ball:not(.is-positioned):active {
+            transform: translateY(-50%) scale(0.96);
+        }
+
+        .embedded-back-ball.is-positioned:active {
+            transform: scale(0.96);
+        }
+
+        .embedded-back-ball.is-dragging {
+            cursor: grabbing;
+        }
+
         .entry-transition {
             position: fixed;
             inset: 0;
@@ -694,6 +746,8 @@
         /* One tab is a 77x62 target at the narrowest supported width (320px),
            well above the 44px minimum from the mobile review. */
         .bottom-tab {
+            position: relative;
+            z-index: 1;
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -706,6 +760,38 @@
             font-weight: 500;
             line-height: 0.875rem;
             transition: color 0.2s ease;
+        }
+
+        /* Sliding active indicator: one element shared by all four tabs, so a
+           switch moves the pill instead of cross-fading four backgrounds.
+           transform-only, per the animation constraints in the design doc.
+           Its width is one grid cell; the visible label copy is only there to
+           reproduce the tab's line box, so the pill lands on the icons. */
+        .bottom-tab__slider {
+            position: absolute;
+            top: 0.375rem;
+            left: 0.375rem;
+            z-index: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 0.1875rem;
+            width: calc((100% - 0.75rem) / 4);
+            height: calc(100% - 0.375rem);
+            /* Same type metrics as a tab, so the placeholder label's line box
+               equals the real one and the pill sits on the icons. */
+            font-size: 0.6875rem;
+            line-height: 0.875rem;
+            pointer-events: none;
+            transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+        }
+
+        .bottom-tab__slider-pill {
+            width: 3.375rem;
+            height: 1.75rem;
+            border-radius: 9999px;
+            background: var(--tab-bar-active-bg);
         }
 
         .bottom-tab__pill {
@@ -736,10 +822,6 @@
         .bottom-tab.is-active {
             color: var(--tab-bar-active);
             font-weight: 700;
-        }
-
-        .bottom-tab.is-active .bottom-tab__pill {
-            background: var(--tab-bar-active-bg);
         }
 
         .bottom-tab:focus-visible {
@@ -2269,7 +2351,8 @@
             .settings-collapse,
             .settings-collapse__content,
             .settings-collapse-chevron,
-            .segmented-switch__indicator {
+            .segmented-switch__indicator,
+            .bottom-tab__slider {
                 transition-duration: 0.01ms !important;
                 transition-delay: 0s !important;
             }
@@ -2297,6 +2380,12 @@
                rather than `md:hidden`: it loads after tailwind.css, and the
                trigger's `display: grid` would win at equal specificity. */
             .settings-link-row--narrow {
+                display: none;
+            }
+
+            /* The embedded pages show a full-width iframe on wide screens; the
+               floating Back ball is a phone-only affordance. */
+            .embedded-back-ball {
                 display: none;
             }
 
@@ -3480,6 +3569,14 @@ opacity: 0;
         }
         [data-theme='dark'] .settings-back-button:active {
             background-color: var(--d-surface-3);
+        }
+        [data-theme='dark'] .embedded-back-ball {
+            border-color: var(--d-border);
+            background: rgba(31, 41, 55, 0.94);
+            color: var(--d-text-3);
+        }
+        [data-theme='dark'] .embedded-back-ball:active {
+            background: var(--d-surface-2);
         }
         [data-theme='dark'] .chat-input-box {
             caret-color: var(--d-text);

@@ -3,8 +3,16 @@
          sidebar and detail pages use the whole screen, so the bar only shows on
          the four tab roots. It is an overlay: tab-root views reserve its height
          through .app-views.has-tab-bar, which lets content sit under it later
-         (glass) and lets it animate without moving the layout. -->
+         (glass) and lets it animate without moving the layout.
+         The active highlight is one shared slider (2026-11-24) instead of a
+         per-tab background, so switching tabs moves a single element. -->
     <nav v-show="isTabRootView && !isRootTextFocused" class="bottom-tab-bar" aria-label="主导航">
+        <span class="bottom-tab__slider" aria-hidden="true"
+            :style="{ transform: `translateX(${activeIndex * 100}%)` }">
+            <span class="bottom-tab__slider-pill"></span>
+            <!-- Mirrors the tab label's line box so the pill lands on the icons. -->
+            <span class="bottom-tab__label">&nbsp;</span>
+        </span>
         <button v-for="tab in tabs" :key="tab.id" type="button" class="bottom-tab"
             :class="{ 'is-active': activeTab === tab.id }"
             :aria-current="activeTab === tab.id ? 'page' : undefined" :aria-label="tab.label"
@@ -21,7 +29,7 @@
 </template>
 
 <script>
-import { inject } from "vue";
+import { computed, inject } from "vue";
 import { TAB_ORDER } from "../../modules/tab-navigation.mjs";
 
 // Labels and icon paths mirror the sidebar's (SideNav.vue) so a destination
@@ -51,10 +59,18 @@ const TAB_META = {
 // Plain data: the tabs never change at runtime, so this need not be reactive.
 const tabs = TAB_ORDER.map(id => ({ id, ...TAB_META[id] }));
 
+// Tab order and the active id are the only inputs the slider needs.
+const readRef = (value) => (value && typeof value === "object" && "value" in value ? value.value : value);
+
 export default {
   setup() {
     const ctx = inject("appContext");
-    return { ...(ctx || {}), tabs };
+    const app = ctx || {};
+    const activeIndex = computed(() => {
+      const index = TAB_ORDER.indexOf(readRef(app.activeTab));
+      return index < 0 ? 0 : index;
+    });
+    return { ...app, tabs, activeIndex };
   }
 };
 </script>

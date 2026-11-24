@@ -9,7 +9,8 @@
 // detail view that belongs to the tab returned by tabOfView(). Wide screens
 // keep the left sidebar and do not show the hubs, but the same rules apply.
 
-const TAB_ORDER = Object.freeze(['home', 'workshop', 'ext', 'settings']);
+// 扩展 sits left of 工坊 (maintainer request 2026-11-24).
+const TAB_ORDER = Object.freeze(['home', 'ext', 'workshop', 'settings']);
 
 const VIEW_TAB = Object.freeze({
     home: 'home', chat: 'home', characters: 'home',
