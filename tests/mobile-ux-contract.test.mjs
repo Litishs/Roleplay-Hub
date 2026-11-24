@@ -112,7 +112,12 @@ test("hit-expansion utilities and shared-class expansions exist in styles.css", 
 test("chat header and composer controls carry hit expansion", async () => {
   const html = await read("index.html");
   assert.match(html, /goBack[^>]*p-2\.5 -m-2\.5/, "the mobile back arrow must reach a 44px hit area");
-  assert.match(html, /toggleChatFullscreen"\s*\n?\s*class="p-2\.5/, "fullscreen toggle must use real 44px padding");
+  // The unused fullscreen button gave way to a world-info shortcut (2026-11-24):
+  // the character's bound entries live on the 世界书 page, and Back returns to
+  // the chat through the shared nav stack.
+  assert.match(html, /@click="currentView = 'worldinfo'"[\s\S]{0,320}title="世界书" aria-label="查看世界书"/,
+    "the chat header must open the world-info page");
+  assert.doesNotMatch(html, /toggleChatFullscreen/, "the unused fullscreen button is gone from the chat header");
   assert.match(html, /clearChat"\s*\n?\s*class="p-2\.5/, "clear-chat must use real 44px padding");
 
   const composer = await read("src/components/chat/MessageInput.vue");

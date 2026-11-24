@@ -164,15 +164,14 @@
                                 <div v-else class="text-white/60 italic drop-shadow-sm">未选择角色卡</div>
                             </div>
                             <div class="flex items-center gap-2">
-                                <button @click="toggleChatFullscreen"
+                                <!-- 世界书快捷入口（2026-11-24，取代无实际用途的全屏按钮）：
+                                     直接进入世界书页，角色的「绑定」条目与全局条目都在那一页查看。 -->
+                                <button @click="currentView = 'worldinfo'"
                                     class="p-2.5 text-white/70 hover:text-white rounded-full hover:bg-white/10 transition-colors"
-                                    :title="isChatFullscreen ? '退出全屏' : '全屏聊天'">
+                                    title="世界书" aria-label="查看世界书">
                                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path v-if="!isChatFullscreen" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                            d="M8 4H5a1 1 0 00-1 1v3m12-4h3a1 1 0 011 1v3M4 16v3a1 1 0 001 1h3m8 0h3a1 1 0 001-1v-3">
-                                        </path>
-                                        <path v-else stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                            d="M9 4v4a1 1 0 01-1 1H4m11-5v4a1 1 0 001 1h4M9 20v-4a1 1 0 00-1-1H4m11 5v-4a1 1 0 011-1h4">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253">
                                         </path>
                                     </svg>
                                 </button>
