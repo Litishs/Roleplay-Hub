@@ -5,17 +5,18 @@ import test from 'node:test';
 test('MessageInput hosts the inline quick-settings panel bound to existing settings', async () => {
   const messageInput = await readFile(new URL('../src/components/chat/MessageInput.vue', import.meta.url), 'utf8');
 
-  // Trigger button next to the send button
+  // Trigger button in the flat action strip under the input row
   assert.match(messageInput, /@click\.stop="showChatModelSelector = !showChatModelSelector"/);
   assert.match(messageInput, /title="快速设置"/);
-  // Trigger lives in the top toolbar row (above the send key, level with the story-branch button)
+  // QQ-style dock (2026-11-24): the trigger lives in the action strip BELOW the
+  // input textarea, as the last button of the evenly-spread row
   assert.ok(
-    messageInput.indexOf('title="快速设置"') < messageInput.indexOf('ref="inputBox"'),
-    'quick-settings trigger should sit in the toolbar row above the input textarea',
+    messageInput.indexOf('title="快速设置"') > messageInput.indexOf('ref="inputBox"'),
+    'quick-settings trigger should sit in the action strip below the input textarea',
   );
-  const sendRow = messageInput.match(/<div class="flex-shrink-0 flex items-center gap-1">[\s\S]*?<\/div>\r?\n/)?.[0] || '';
+  const sendRow = messageInput.match(/<div class="relative w-full flex items-end gap-2">[\s\S]*?<\/div>\r?\n/)?.[0] || '';
   assert.ok(sendRow.includes('sendMessage') && !sendRow.includes('showChatModelSelector'),
-    'send/stop row should not contain the quick-settings trigger');
+    'input/send row should not contain the quick-settings trigger');
 
   // Popover panel anchored above-right of the trigger
   assert.match(messageInput, /v-if="showChatModelSelector"/);

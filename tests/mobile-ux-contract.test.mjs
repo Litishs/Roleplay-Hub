@@ -123,8 +123,13 @@ test("chat header and composer controls carry hit expansion", async () => {
   const composer = await read("src/components/chat/MessageInput.vue");
   const expanded = composer.match(/hit-expand/g) || [];
   assert.ok(expanded.length >= 8, `composer icon row must carry hit expansion (found ${expanded.length})`);
-  assert.match(composer, /flex items-center gap-3">\s*<!-- Send Image Button -->|<!-- Left controls: SendImage \/ AutoImage -->\s*<div class="flex items-center gap-3">/,
-    "composer toolbar cluster must space expanded hits apart (gap-3)");
+  // QQ-style dock (2026-11-24): input row on top (textarea + wide 发送/停止),
+  // flat action strip below — no chips, hits spread by justify-between.
+  assert.match(composer, /relative w-full flex items-center justify-between px-0\.5 mt-1">\s*<!-- Composer actions: SendImage \/ AutoImage \/ Instruction \/ Context \/ Branch \/ QuickSettings -->/,
+    "composer actions must be the flat evenly-spread strip");
+  assert.doesNotMatch(composer, /w-\[44px\] h-\[44px\]/, "old circular send key is gone");
+  assert.match(composer, /w-20 md:w-24 h-\[44px\] md:h-\[46px\] rounded-2xl bg-primary-600 text-white text-\[15px\] font-bold/,
+    "send key is the wide rounded rectangle from the QQ reference");
   assert.match(composer, /hit-expand \[--hit-out:-12px\]/, "image chip remove button needs -12px expansion");
 });
 
