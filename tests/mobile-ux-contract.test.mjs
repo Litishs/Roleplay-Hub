@@ -267,3 +267,30 @@ test("icons share one stroke weight and header icon buttons one treatment", asyn
   const home = await read("src/components/chat/ConversationList.vue");
   assert.equal((home.match(/class="settings-icon-button"/g) || []).length, 3, "home header uses the shared block");
 });
+
+test("motion and surface tokens drive the shared components", async () => {
+  const css = await read("assets/css/styles.css");
+  assert.match(css, /--motion-fast: 0\.15s;/);
+  assert.match(css, /--motion-base: 0\.22s;/);
+  assert.match(css, /--motion-slow: 0\.32s;/);
+  assert.match(css, /--motion-standard: cubic-bezier\(0\.22, 1, 0\.36, 1\);/);
+  assert.match(css, /\.bottom-tab__slider \{[\s\S]{0,800}transform var\(--motion-base\) var\(--motion-standard\)/);
+  assert.match(css, /grid-template-rows var\(--motion-slow\) var\(--motion-standard\)/);
+  assert.match(css, /animation: fadeIn var\(--motion-slow\) ease-out;/);
+  assert.match(css, /animation: message-in-elegant var\(--motion-slow\)/);
+  // Reduced motion now also stops the message/live animations.
+  assert.match(css, /prefers-reduced-motion: reduce\)[\s\S]{0,1600}\.animate-message-in,[\s\S]{0,500}animation: none !important;/);
+  // One card recipe, no duplicated light/dark values per component.
+  assert.match(css, /--surface-card-bg: #ffffff;/);
+  assert.match(css, /\.settings-group-card \{[\s\S]{0,220}background: var\(--surface-card-bg\)/);
+  assert.match(css, /\.tab-hub-card \{[\s\S]{0,800}background: var\(--surface-card-bg\)/);
+  assert.match(css, /\.tab-hub-row-card \{[\s\S]{0,300}background: var\(--surface-card-bg\)/);
+  assert.doesNotMatch(css, /\[data-theme='dark'\] \.settings-group-card \{/);
+  // Wide screens get one content column.
+  assert.match(css, /\.management-view \{[\s\S]{0,220}max-width: 48rem;[\s\S]{0,120}margin-left: auto;/);
+});
+
+test("detail titles match the navigation names", async () => {
+  assert.match(await read("src/components/views/PresetsPanel.vue"), /<settings-page-header title="预设" @back="goBack">/);
+  assert.match(await read("src/components/views/RegexPanel.vue"), /<settings-page-header title="正则" @back="goBack">/);
+});

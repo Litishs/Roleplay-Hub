@@ -1,6 +1,6 @@
 <template>
             <div v-if="currentView === 'regex'" class="management-view">
-                <settings-page-header title="正则脚本" @back="goBack">
+                <settings-page-header title="正则" @back="goBack">
                     <template #icon>
                         <svg class="w-6 h-6 md:w-7 md:h-7 mr-2 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path>

@@ -5,6 +5,17 @@
             /* Height of the narrow-screen tab bar. Tab-root views reserve it
                (.app-views.has-tab-bar), so it must equal the bar's real height. */
             --tab-bar-h: 4.25rem;
+            /* Shared motion tokens (2026-11-24): three speeds, one standard
+               curve, so new components do not add another 0.18s/.22s variant. */
+            --motion-fast: 0.15s;
+            --motion-base: 0.22s;
+            --motion-slow: 0.32s;
+            --motion-standard: cubic-bezier(0.22, 1, 0.36, 1);
+            /* One card recipe (settings cards and hub cards share it). */
+            --surface-card-bg: #ffffff;
+            --surface-card-border: #e2e8f0;
+            --surface-card-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+            --surface-card-radius: 0.75rem;
         }
 
         @supports (height: 100dvh) {
@@ -784,7 +795,7 @@
             font-size: 0.6875rem;
             line-height: 0.875rem;
             pointer-events: none;
-            transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+            transition: transform var(--motion-base) var(--motion-standard);
         }
 
         .bottom-tab__slider-pill {
@@ -843,13 +854,10 @@
             justify-content: flex-end;
         }
 
-        /* Mobile tab roots (工坊 / 扩展, 2026-11-24). Colours live in variables
-           so the dark theme only swaps values, the same pattern as the tab bar.
-           工坊 renders one card per workshop; 扩展 keeps the settings card and
-           only adds the right-hand status text. */
+        /* Mobile tab roots (工坊 / 扩展, 2026-11-24). Accent/hover colours live
+           in variables so the dark theme only swaps values; the card shell
+           itself uses the shared --surface-card-* recipe. */
         .tab-hub-view {
-            --hub-card-bg: #ffffff;
-            --hub-card-border: #e2e8f0;
             --hub-card-hover: #f8fafc;
             --hub-icon-bg: rgba(59, 130, 246, 0.12);
             --hub-icon-fg: #2563eb;
@@ -869,13 +877,13 @@
             width: 100%;
             min-height: 4.75rem;
             padding: 0.75rem 0.875rem;
-            border: 1px solid var(--hub-card-border);
-            border-radius: 0.75rem;
-            background: var(--hub-card-bg);
-            box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+            border: 1px solid var(--surface-card-border);
+            border-radius: var(--surface-card-radius);
+            background: var(--surface-card-bg);
+            box-shadow: var(--surface-card-shadow);
             color: inherit;
             text-align: left;
-            transition: background-color 0.15s ease, transform 0.1s ease;
+            transition: background-color var(--motion-fast) ease, transform 0.1s ease;
         }
 
         .tab-hub-card:hover {
@@ -911,10 +919,10 @@
            the row's hover fill to the rounded corners. */
         .tab-hub-row-card {
             overflow: hidden;
-            border: 1px solid var(--hub-card-border);
-            border-radius: 0.75rem;
-            background: var(--hub-card-bg);
-            box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+            border: 1px solid var(--surface-card-border);
+            border-radius: var(--surface-card-radius);
+            background: var(--surface-card-bg);
+            box-shadow: var(--surface-card-shadow);
         }
 
         .tab-hub-status__text {
@@ -935,7 +943,7 @@
             opacity: 0;
             pointer-events: none;
             transition:
-                grid-template-rows 0.36s cubic-bezier(0.22, 1, 0.36, 1),
+                grid-template-rows var(--motion-slow) var(--motion-standard),
                 opacity 0.2s ease;
         }
 
@@ -995,10 +1003,10 @@
         .settings-group-card {
             min-width: 0;
             overflow: hidden;
-            border: 1px solid #e2e8f0;
-            border-radius: 0.75rem;
-            background: #fff;
-            box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+            border: 1px solid var(--surface-card-border);
+            border-radius: var(--surface-card-radius);
+            background: var(--surface-card-bg);
+            box-shadow: var(--surface-card-shadow);
             transition: border-color 0.2s ease, box-shadow 0.2s ease;
         }
 
@@ -1025,7 +1033,7 @@
             padding: 0.5rem 0.875rem;
             color: #334155;
             text-align: left;
-            transition: background-color 0.18s ease, color 0.18s ease;
+            transition: background-color var(--motion-fast) ease, color var(--motion-fast) ease;
         }
 
         .settings-accordion-trigger:hover {
@@ -1824,7 +1832,7 @@
             height: 100%;
             padding: 1rem;
             overflow-y: auto;
-            animation: fadeIn 0.3s ease-out;
+            animation: fadeIn var(--motion-slow) ease-out;
         }
 
         .settings-section-heading {
@@ -2350,13 +2358,25 @@
             .settings-collapse__content,
             .settings-collapse-chevron,
             .segmented-switch__indicator,
-            .bottom-tab__slider {
+            .bottom-tab__slider,
+            .settings-accordion-trigger,
+            .settings-icon-button,
+            .tab-hub-card,
+            .embedded-back-ball,
+            .bottom-tab {
                 transition-duration: 0.01ms !important;
                 transition-delay: 0s !important;
             }
 
-            .settings-help-popover {
-                animation: none;
+            .settings-help-popover,
+            .animate-message-in,
+            .animate-message-fade-in,
+            .typing-indicator span,
+            .live-dots i,
+            .memory-extracting {
+                /* !important: the animation shorthands are declared later in
+                   this file and would otherwise win on equal specificity. */
+                animation: none !important;
             }
         }
 
@@ -2395,7 +2415,14 @@
                 margin-bottom: 1.5rem;
             }
 
+            /* Wide screens: one content column for every management view
+               (2026-11-24). Settings and plugins already capped their header at
+               48rem while the body stretched; the cap now lives on the view. */
             .management-view {
+                width: 100%;
+                max-width: 48rem;
+                margin-left: auto;
+                margin-right: auto;
                 padding: 1.5rem;
             }
         }
@@ -2732,11 +2759,11 @@
 
         /* Elegant Message Entrance Animation */
         .animate-message-in {
-            animation: message-in-elegant 0.32s cubic-bezier(0.22, 0.61, 0.36, 1) backwards;
+            animation: message-in-elegant var(--motion-slow) var(--motion-standard) backwards;
         }
 
         .animate-message-fade-in {
-            animation: message-fade-in 0.35s ease-out backwards;
+            animation: message-fade-in var(--motion-slow) ease-out backwards;
         }
 
         @keyframes message-in-elegant {
@@ -3240,16 +3267,14 @@ opacity: 0;
             --d-text-3: #d1d5db;
             --d-text-4: #9ca3af;
             --d-text-5: #6b7280;
+            /* Same card recipe, dark values. */
+            --surface-card-bg: #18212c;
+            --surface-card-border: #2c3948;
+            --surface-card-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
         }
 
         [data-theme='dark'] .settings-group-caption {
             color: #7f8b9c;
-        }
-
-        [data-theme='dark'] .settings-group-card {
-            border-color: #2c3948;
-            background: #18212c;
-            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
         }
 
         [data-theme='dark'] .settings-group-card.is-open {
@@ -3667,8 +3692,6 @@ opacity: 0;
             --tab-bar-press: rgba(148, 163, 184, 0.18);
         }
         [data-theme='dark'] .tab-hub-view {
-            --hub-card-bg: #18212c;
-            --hub-card-border: #2c3948;
             --hub-card-hover: #1c2733;
             --hub-icon-bg: rgba(96, 165, 250, 0.18);
             --hub-icon-fg: #93c5fd;

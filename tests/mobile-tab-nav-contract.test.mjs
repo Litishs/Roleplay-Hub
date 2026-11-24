@@ -269,11 +269,11 @@ test('styles: overlay tab bar with variable colours, dark override and view rese
   assert.ok(sliderStart > 0, 'the slider rule must exist');
   const sliderBlock = css.slice(sliderStart, css.indexOf('}', sliderStart));
   for (const declaration of ['position: absolute;', 'width: calc((100% - 0.75rem) / 4);',
-    'transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);', 'pointer-events: none;']) {
+    'transition: transform var(--motion-base) var(--motion-standard);', 'pointer-events: none;']) {
     assert.ok(sliderBlock.includes(declaration), `the slider must declare ${declaration}`);
   }
   assert.match(css, /\.bottom-tab__slider-pill \{[\s\S]{0,160}background: var\(--tab-bar-active-bg\);/);
-  assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{[\s\S]{0,400}\.bottom-tab__slider \{/);
+  assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{[\s\S]{0,700}\.bottom-tab__slider[,\s]/);
   // The active pill is no longer painted per tab: only the slider carries it.
   assert.doesNotMatch(css, /\.bottom-tab\.is-active \.bottom-tab__pill \{/);
 });
@@ -368,7 +368,7 @@ test('styles: hub cards and status carry the reference layout in both themes', a
   assert.ok(cardStart > 0, 'the hub card rule must exist');
   const cardBlock = css.slice(cardStart, css.indexOf('}', cardStart));
   for (const declaration of ['grid-template-columns: 2.75rem minmax(0, 1fr) 1rem;',
-    'min-height: 4.75rem;', 'border-radius: 0.75rem;', 'background: var(--hub-card-bg);']) {
+    'min-height: 4.75rem;', 'border-radius: var(--surface-card-radius);', 'background: var(--surface-card-bg);']) {
     assert.ok(cardBlock.includes(declaration), `the hub card must declare ${declaration}`);
   }
   // 44px tinted tile, so the workshop glyphs read as tiles rather than rows.
@@ -378,8 +378,8 @@ test('styles: hub cards and status carry the reference layout in both themes', a
   const rowCardStart = css.search(/^ {8}\.tab-hub-row-card \{/m);
   assert.ok(rowCardStart > 0, 'the 扩展 row card rule must exist');
   const rowCardBlock = css.slice(rowCardStart, css.indexOf('}', rowCardStart));
-  for (const declaration of ['overflow: hidden;', 'border: 1px solid var(--hub-card-border);',
-    'border-radius: 0.75rem;', 'background: var(--hub-card-bg);']) {
+  for (const declaration of ['overflow: hidden;', 'border: 1px solid var(--surface-card-border);',
+    'border-radius: var(--surface-card-radius);', 'background: var(--surface-card-bg);']) {
     assert.ok(rowCardBlock.includes(declaration), `the row card must declare ${declaration}`);
   }
   assert.match(css, /\.tab-hub-cards \{\s*display: grid;\s*gap: 0\.625rem;\s*\}/);
@@ -393,7 +393,8 @@ test('styles: hub cards and status carry the reference layout in both themes', a
   }
   // Accent and surfaces are variables; dark mode swaps values only.
   assert.match(css, /\.tab-hub-view \{[\s\S]{0,300}--hub-icon-bg: rgba\(59, 130, 246, 0\.12\);/);
-  assert.match(css, /\[data-theme='dark'\] \.tab-hub-view \{[\s\S]{0,300}--hub-card-bg: #18212c;[\s\S]{0,200}--hub-icon-fg: #93c5fd;/);
+  assert.match(css, /\[data-theme='dark'\] \.tab-hub-view \{[\s\S]{0,300}--hub-icon-fg: #93c5fd;/);
+  assert.match(css, /\[data-theme='dark'\] \{[\s\S]{0,900}--surface-card-bg: #18212c;/);
 });
 
 test('styles: the back arrow is a 44px target and no drawer rule survives', async () => {
