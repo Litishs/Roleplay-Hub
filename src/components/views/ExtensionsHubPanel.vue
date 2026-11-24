@@ -8,7 +8,17 @@
          running update. Always mounted (v-show) so a later push animation can
          slide a page over a root that is still painted. -->
     <div v-show="currentView === 'ext'" class="management-view tab-hub-view">
-        <settings-page-header title="扩展" :back="false"></settings-page-header>
+        <settings-page-header title="扩展" :back="false">
+            <!-- Same 24px primary glyph as the tab bar entry (2026-11-24), so the
+                 four tab roots share one title spec. -->
+            <template #icon>
+                <svg class="w-6 h-6 md:w-7 md:h-7 mr-2 text-primary-600" fill="none" stroke="currentColor"
+                    viewBox="0 0 24 24" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 00-1-1H4a2 2 0 110-4h1a1 1 0 001-1V7a1 1 0 011-1h3a1 1 0 001-1V4z"></path>
+                </svg>
+            </template>
+        </settings-page-header>
         <div class="tab-hub-cards">
             <div v-for="entry in entries" :key="entry.view" class="tab-hub-row-card">
                 <button type="button" class="settings-accordion-trigger settings-link-row"

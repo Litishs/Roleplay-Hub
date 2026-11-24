@@ -856,11 +856,6 @@
             --hub-status-fg: #475569;
         }
 
-        .tab-hub-view .settings-page-header h2 {
-            font-size: 1.375rem;
-            line-height: 1.75rem;
-        }
-
         .tab-hub-cards {
             display: grid;
             gap: 0.625rem;
@@ -3534,6 +3529,70 @@ opacity: 0;
         [data-theme='dark'] .border-gray-300\/90 { border-color: rgba(75,85,99,.9) !important; }
         [data-theme='dark'] .border-gray-400\/80 { border-color: rgba(75,85,99,.8) !important; }
         /* 注：border-white/* 在彩色按钮上，保留半透明白 */
+
+        /* —— 语义浅色块（2026-11-24 全量补齐） ——
+           Tailwind 生成的是浅色底 + 深色字；深色主题下若不映射，这些块会变成
+           近白亮块（实测：primary-50 背景 rgb(239,246,255)、世界书「绑定」徽章
+           rgb(254,252,232)）。这里统一映射成深色底 + 浅色字/边，保留色相作为
+           语义信号；settings-panel-body 内原有的更具体规则仍然优先。 */
+        [data-theme='dark'] .bg-primary-50 { background-color: #252c49 !important; }
+        [data-theme='dark'] .bg-primary-100 { background-color: #30385d !important; }
+        [data-theme='dark'] .bg-blue-50,
+        [data-theme='dark'] .bg-blue-50\/80,
+        [data-theme='dark'] .bg-blue-50\/85 { background-color: rgba(30,64,175,.42) !important; }
+        [data-theme='dark'] .bg-blue-100 { background-color: #1e3a5f !important; }
+        [data-theme='dark'] .bg-blue-200 { background-color: #27496f !important; }
+        [data-theme='dark'] .bg-red-50,
+        [data-theme='dark'] .bg-red-50\/70,
+        [data-theme='dark'] .bg-red-50\/80 { background-color: #3a2229 !important; }
+        [data-theme='dark'] .bg-red-100 { background-color: #4a2a30 !important; }
+        [data-theme='dark'] .bg-yellow-50 { background-color: #332a18 !important; }
+        [data-theme='dark'] .bg-amber-50\/70 { background-color: rgba(51,42,24,.85) !important; }
+        [data-theme='dark'] .bg-green-50 { background-color: #19332f !important; }
+        [data-theme='dark'] .bg-green-100 { background-color: #1d3d37 !important; }
+        [data-theme='dark'] .bg-purple-50 { background-color: #2b2340 !important; }
+        [data-theme='dark'] .bg-purple-100 { background-color: #362b52 !important; }
+        [data-theme='dark'] .bg-rose-50 { background-color: #3a2229 !important; }
+        [data-theme='dark'] .bg-rose-100 { background-color: #462a33 !important; }
+        [data-theme='dark'] .bg-rose-200 { background-color: #573540 !important; }
+
+        [data-theme='dark'] .border-red-100 { border-color: #5a3138 !important; }
+        [data-theme='dark'] .border-red-200,
+        [data-theme='dark'] .border-red-200\/40 { border-color: #713c46 !important; }
+        [data-theme='dark'] .border-red-300,
+        [data-theme='dark'] .border-red-300\/50 { border-color: rgba(113,60,70,.7) !important; }
+        [data-theme='dark'] .border-yellow-100,
+        [data-theme='dark'] .border-yellow-200 { border-color: #6b5525 !important; }
+        [data-theme='dark'] .border-amber-100 { border-color: #6b5525 !important; }
+        [data-theme='dark'] .border-green-200 { border-color: #2f5b4f !important; }
+        [data-theme='dark'] .border-emerald-100 { border-color: #2f5b4f !important; }
+        [data-theme='dark'] .border-purple-200 { border-color: #4c3a6b !important; }
+        [data-theme='dark'] .border-rose-200 { border-color: #713c46 !important; }
+        [data-theme='dark'] .border-blue-100 { border-color: #2b3f63 !important; }
+        [data-theme='dark'] .border-blue-200,
+        [data-theme='dark'] .border-blue-200\/50,
+        [data-theme='dark'] .border-blue-200\/60 { border-color: #33507a !important; }
+
+        [data-theme='dark'] .text-primary-600,
+        [data-theme='dark'] .text-primary-700 { color: #93c5fd !important; }
+        [data-theme='dark'] .text-blue-600,
+        [data-theme='dark'] .text-blue-700,
+        [data-theme='dark'] .text-blue-800 { color: #93c5fd !important; }
+        [data-theme='dark'] .text-red-600,
+        [data-theme='dark'] .text-red-700,
+        [data-theme='dark'] .text-red-800 { color: #fca5a5 !important; }
+        [data-theme='dark'] .text-yellow-600,
+        [data-theme='dark'] .text-yellow-700,
+        [data-theme='dark'] .text-yellow-800 { color: #fbbf24 !important; }
+        [data-theme='dark'] .text-amber-600,
+        [data-theme='dark'] .text-amber-800 { color: #fbbf24 !important; }
+        [data-theme='dark'] .text-green-600,
+        [data-theme='dark'] .text-green-700,
+        [data-theme='dark'] .text-green-800 { color: #6ee7b7 !important; }
+        [data-theme='dark'] .text-emerald-600,
+        [data-theme='dark'] .text-emerald-700 { color: #6ee7b7 !important; }
+        [data-theme='dark'] .text-purple-700 { color: #d8b4fe !important; }
+        [data-theme='dark'] .text-rose-700 { color: #fda4af !important; }
 
         /* —— hover/focus 变体（深色下 hover 提亮） —— */
         [data-theme='dark'] .hover\:bg-gray-50:hover { background-color: var(--d-surface) !important; }

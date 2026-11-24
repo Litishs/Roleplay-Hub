@@ -179,7 +179,7 @@ const entryOrder = (source) => [...source.matchAll(/view: '([a-z]+)', label: '([
 test('the 扩展 tab lists the six destinations in the chosen order', async () => {
   const hub = await read('src/components/views/ExtensionsHubPanel.vue');
   assert.match(hub, /v-show="currentView === 'ext'" class="management-view tab-hub-view"/);
-  assert.match(hub, /<settings-page-header title="扩展" :back="false"><\/settings-page-header>/);
+  assert.match(hub, /<settings-page-header title="扩展" :back="false">[\s\S]{0,700}<template #icon>[\s\S]{0,700}<\/settings-page-header>/);
   // 2026-11-24 follow-up: each entry is its own card instead of one shared
   // settings panel with dividers.
   assert.match(hub, /<div class="tab-hub-cards">/);
@@ -208,7 +208,7 @@ test('the 扩展 tab lists the six destinations in the chosen order', async () =
 test('the 工坊 tab lists the three online workshops as separate cards', async () => {
   const hub = await read('src/components/views/WorkshopHubPanel.vue');
   assert.match(hub, /v-show="currentView === 'workshop'" class="management-view tab-hub-view"/);
-  assert.match(hub, /<settings-page-header title="工坊" :back="false"><\/settings-page-header>/);
+  assert.match(hub, /<settings-page-header title="工坊" :back="false">[\s\S]{0,700}<template #icon>[\s\S]{0,700}<\/settings-page-header>/);
   // Reference 2026-11-24: one card per workshop, each with its tinted icon
   // tile, instead of the single settings card used by 扩展.
   assert.match(hub, /<div class="tab-hub-cards">/);
@@ -443,4 +443,24 @@ test('settings: 用量统计 is a link row in the data group, hidden on wide scr
   assert.match(css, /@media \(min-width: 768px\) \{[\s\S]{0,600}\.settings-link-row--narrow \{\s*display: none;/);
   assert.match(css, /\.settings-accordion \+ \.settings-link-row \{/);
   assert.match(css, /\[data-theme='dark'\] \.settings-accordion \+ \.settings-link-row \{/);
+});
+
+test('the four tab roots share one title spec', async () => {
+  const css = await read('assets/css/styles.css');
+  // No per-root font-size override: 20px (mobile) / 24px (desktop) comes from
+  // SettingsPageHeader and the home header classes (2026-11-24 unification).
+  assert.doesNotMatch(css, /\.tab-hub-view \.settings-page-header h2/);
+
+  const home = await read('src/components/chat/ConversationList.vue');
+  assert.match(home, /<h2 class="flex items-center font-bold text-gray-800 truncate"\s*\n\s*:class="compact \? 'text-sm' : 'text-xl md:text-2xl'">/);
+  assert.match(home, /v-if="!compact" class="w-6 h-6 md:w-7 md:h-7 mr-2 flex-shrink-0 text-primary-600"/);
+
+  for (const [file, title] of [['ExtensionsHubPanel', '扩展'], ['WorkshopHubPanel', '工坊']]) {
+    const hub = await read(`src/components/views/${file}.vue`);
+    assert.match(hub, new RegExp(`<settings-page-header title="${title}" :back="false">[\\s\\S]{0,400}<template #icon>[\\s\\S]{0,400}w-6 h-6 md:w-7 md:h-7 mr-2 text-primary-600`), `${file} passes the shared title icon`);
+  }
+
+  const settings = await read('src/components/views/SettingsPanel.vue');
+  assert.match(settings, /<h2 class="text-xl md:text-2xl font-bold text-gray-800 flex items-center">/);
+  assert.match(settings, /w-6 h-6 md:w-7 md:h-7 mr-2 text-primary-600/);
 });

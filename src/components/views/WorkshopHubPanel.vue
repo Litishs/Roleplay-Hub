@@ -5,7 +5,17 @@
          rows. Always mounted (v-show) so a later push animation can slide a
          workshop over a root that is still painted. -->
     <div v-show="currentView === 'workshop'" class="management-view tab-hub-view">
-        <settings-page-header title="工坊" :back="false"></settings-page-header>
+        <settings-page-header title="工坊" :back="false">
+            <!-- Same 24px primary glyph as the tab bar entry (2026-11-24), so the
+                 four tab roots share one title spec. -->
+            <template #icon>
+                <svg class="w-6 h-6 md:w-7 md:h-7 mr-2 text-primary-600" fill="none" stroke="currentColor"
+                    viewBox="0 0 24 24" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M4 5a2 2 0 012-2h3a2 2 0 012 2v3a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm9 0a2 2 0 012-2h3a2 2 0 012 2v3a2 2 0 01-2 2h-3a2 2 0 01-2-2V5zm-9 9a2 2 0 012-2h3a2 2 0 012 2v3a2 2 0 01-2 2H6a2 2 0 01-2-2v-3zm9 0a2 2 0 012-2h3a2 2 0 012 2v3a2 2 0 01-2 2h-3a2 2 0 01-2-2v-3z"></path>
+                </svg>
+            </template>
+        </settings-page-header>
         <div class="tab-hub-cards">
             <button v-for="entry in entries" :key="entry.view" type="button"
                 class="tab-hub-card" @click="currentView = entry.view">

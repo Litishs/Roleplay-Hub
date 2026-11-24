@@ -234,3 +234,19 @@ test("quick-settings popover closes on a chat-log tap", async () => {
   const messageList = await read("src/components/chat/MessageList.vue");
   assert.match(messageList, /@click="showChatModelSelector = false"/, "tapping the log dismisses the quick-settings popover");
 });
+
+test("dark theme remaps semantic pale tints globally", async () => {
+  // Tailwind's pale surfaces need dark values, or badges/alerts become glowing
+  // near-white blocks. The settings panels had scoped rules; this pins the
+  // global mapping added for the rest of the app (2026-11-24).
+  const css = await read("assets/css/styles.css");
+  for (const cls of ["bg-primary-50", "bg-primary-100", "bg-red-50", "bg-yellow-50",
+    "bg-green-50", "bg-purple-50", "bg-rose-50"]) {
+    assert.ok(css.includes(`[data-theme='dark'] .${cls}`), `${cls} needs a dark value`);
+  }
+  assert.match(css, /\[data-theme='dark'\] \.text-red-600,[\s\S]{0,120}color: #fca5a5 !important;/);
+  assert.match(css, /\[data-theme='dark'\] \.text-green-600,[\s\S]{0,120}color: #6ee7b7 !important;/);
+  assert.match(css, /\[data-theme='dark'\] \.text-yellow-600,[\s\S]{0,120}color: #fbbf24 !important;/);
+  assert.match(css, /\[data-theme='dark'\] \.text-purple-700 \{ color: #d8b4fe !important; \}/);
+  assert.match(css, /\[data-theme='dark'\] \.border-red-200,[\s\S]{0,120}border-color: #713c46 !important;/);
+});
