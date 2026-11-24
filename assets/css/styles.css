@@ -3275,6 +3275,18 @@ opacity: 0;
             overscroll-behavior: contain;
         }
 
+        /* Quick-settings card (2026-11-24). Tailwind did not emit the old
+           w-[min(22rem,calc(100vw_-_3rem))] arbitrary class, so the panel fell
+           back to its content width (112px) and overflowed the viewport top.
+           A real class also lets us cap the height on short screens. */
+        .quick-settings-panel {
+            width: min(22rem, calc(100vw - 3rem));
+            max-height: calc(100vh - 6rem);
+            max-height: calc(100dvh - 6rem);
+            overflow-y: auto;
+            overscroll-behavior: contain;
+        }
+
         /* ============================================================
          * 深色模式覆盖规则
          * 由 documentElement.dataset.theme === 'dark' 驱动

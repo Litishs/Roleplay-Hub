@@ -54,7 +54,7 @@
                         
                         <!-- QQ 风格输入坞（2026-11-24）：上行 = 输入框 + 宽发送键；下行 = 扁平操作条 -->
                         <div class="relative w-full flex items-end gap-2">
-                            <textarea role="textbox" aria-multiline="true"
+                            <textarea rows="1" role="textbox" aria-multiline="true"
                                 @input="handleChatInput" @compositionstart="handleChatCompositionStart"
                                 @compositionend="handleChatCompositionEnd" @focus="handleChatInputFocus"
                                 @blur="handleChatInputBlur" @keydown="handleChatInputKeydown"
@@ -165,7 +165,7 @@
                                     leave-from-class="opacity-100 translate-y-0 scale-100"
                                     leave-to-class="opacity-0 translate-y-2 scale-95">
                                     <div v-if="showChatModelSelector"
-                                        class="absolute bottom-full right-0 mb-3 z-50 pointer-events-auto w-[min(22rem,calc(100vw_-_3rem))] transform-gpu origin-bottom-right">
+                                        class="absolute bottom-full right-0 mb-14 z-50 pointer-events-auto quick-settings-panel transform-gpu origin-bottom-right">
                                         <div @click.stop
                                             class="bg-white/95 backdrop-blur-xl border border-gray-200 shadow-xl rounded-2xl p-3 flex flex-col gap-3 ring-1 ring-black/5">
                                             <!-- Model slots -->

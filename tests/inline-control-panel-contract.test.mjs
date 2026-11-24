@@ -18,10 +18,17 @@ test('MessageInput hosts the inline quick-settings panel bound to existing setti
   assert.ok(sendRow.includes('sendMessage') && !sendRow.includes('showChatModelSelector'),
     'input/send row should not contain the quick-settings trigger');
 
-  // Popover panel anchored above-right of the trigger
+  // Popover panel anchored above-right of the trigger, clearing the input row
   assert.match(messageInput, /v-if="showChatModelSelector"/);
-  assert.match(messageInput, /absolute bottom-full right-0 mb-3 z-50/);
+  assert.match(messageInput, /absolute bottom-full right-0 mb-14 z-50 pointer-events-auto quick-settings-panel/);
   assert.match(messageInput, /@click\.stop\s+class="bg-white\/95 backdrop-blur-xl/);
+  // Sizing (2026-11-24): one-row textarea = 44px, same as the send key; the
+  // popover width is a real class because Tailwind did not emit the old
+  // w-[min(22rem,calc(100vw_-_3rem))] arbitrary value.
+  assert.match(messageInput, /<textarea rows="1" role="textbox"/);
+  const styles = await readFile(new URL('../assets/css/styles.css', import.meta.url), 'utf8');
+  assert.match(styles, /\.quick-settings-panel \{[\s\S]{0,220}width: min\(22rem, calc\(100vw - 3rem\)\);/);
+  assert.match(styles, /\.quick-settings-panel \{[\s\S]{0,320}max-height: calc\(100dvh - 6rem\);/);
 
   // Model slots wired to the app-level computed/select pair; each row shows
   // the slot's bound provider label when one is recorded
