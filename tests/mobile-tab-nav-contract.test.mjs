@@ -179,6 +179,13 @@ test('the 扩展 tab lists the six destinations in the chosen order', async () =
   // The drawer's status cues move with their entries.
   assert.match(hub, /entry\.view === 'memory' && memoryMigrationBadge/);
   assert.match(hub, /entry\.view === 'uitemplates' && uiTemplateUpdateStatus\.state === 'running'/);
+  // Every other row reports live state instead of a placeholder: the count or
+  // name comes from the same state the detail page renders.
+  for (const source of ['ctx.memoryTocEntries', 'ctx.presetGroups', 'ctx.worldInfo',
+    'ctx.regexScripts', 'ctx.currentUiTemplates', 'ctx.activeTools']) {
+    assert.ok(hub.includes(source), `the hub status reads ${source}`);
+  }
+  assert.match(hub, /v-else class="tab-hub-status__text">\{\{ statusFor\(entry\.view\) \}\}<\/span>/);
   // The plugin marketplace stays behind the same flag as the sidebar's entry,
   // and is appended only while that flag is on.
   assert.match(hub, /const pluginsMarketEnabled = false;/);
@@ -186,11 +193,27 @@ test('the 扩展 tab lists the six destinations in the chosen order', async () =
   assert.doesNotMatch(hub, /text-(red|green|amber|emerald|rose|violet|sky)-\d/, 'icons stay monochrome');
 });
 
-test('the 工坊 tab lists the three online workshops in order', async () => {
+test('the 工坊 tab lists the three online workshops as separate cards', async () => {
   const hub = await read('src/components/views/WorkshopHubPanel.vue');
   assert.match(hub, /v-show="currentView === 'workshop'" class="management-view tab-hub-view"/);
   assert.match(hub, /<settings-page-header title="工坊" :back="false"><\/settings-page-header>/);
+  // Reference 2026-11-24: one card per workshop, each with its tinted icon
+  // tile, instead of the single settings card used by 扩展.
+  assert.match(hub, /<div class="tab-hub-cards">/);
+  assert.match(hub, /class="tab-hub-card" @click="currentView = entry\.view"/);
+  assert.match(hub, /class="tab-hub-card__icon"/);
   assert.deepEqual(entryOrder(hub), ['generator', 'square', 'novel']);
+});
+
+test('hub panels register the page header they use locally', async () => {
+  // The root app's `components` option only resolves the root template. A panel
+  // that writes <settings-page-header> without importing it renders no title
+  // (and logs a Vue warning) — caught in the browser on 2026-11-24.
+  for (const file of ['WorkshopHubPanel', 'ExtensionsHubPanel']) {
+    const hub = await read(`src/components/views/${file}.vue`);
+    assert.match(hub, /import SettingsPageHeader from "\.\.\/common\/SettingsPageHeader\.vue";/, `${file} imports the header`);
+    assert.match(hub, /components: \{ SettingsPageHeader \}/, `${file} registers the header`);
+  }
 });
 
 test('the tab shell components are registered synchronously', async () => {
@@ -273,9 +296,10 @@ test('the embedded workshop pages keep their floating Back tab', async () => {
 
 test('styles: hub rows keep their description line on phones', async () => {
   // Phones hide the description line on settings rows to keep them compact.
-  // Hub rows are links whose names alone say little, so they opt back in.
+  // Hub rows are links whose names alone say little, so they opt back in — and
+  // so do the 工坊 cards, which are not link rows.
   const css = await read('assets/css/styles.css');
-  assert.match(css, /@media \(max-width: 640px\) \{[\s\S]{0,2400}\.tab-hub-view \.settings-link-row \.settings-accordion-description \{\s*display: block;/);
+  assert.match(css, /@media \(max-width: 640px\) \{[\s\S]{0,2400}\.tab-hub-view \.settings-link-row \.settings-accordion-description,\s*\.tab-hub-view \.tab-hub-card \.settings-accordion-description \{\s*display: block;/);
   // Two lines need the standard pitch; pinning it also stops the hairline
   // borders from making the rows differ by a pixel.
   assert.match(css, /@media \(max-width: 640px\) \{[\s\S]{0,2400}\.tab-hub-view \.settings-link-row \{\s*min-height: 3\.5rem;/);
@@ -283,6 +307,31 @@ test('styles: hub rows keep their description line on phones', async () => {
     const hub = await read(`src/components/views/${file}.vue`);
     assert.match(hub, /class="settings-accordion-description">\{\{ entry\.description \}\}<\/span>/, `${file} renders a description`);
   }
+});
+
+test('styles: hub cards and status carry the reference layout in both themes', async () => {
+  const css = await read('assets/css/styles.css');
+  const cardStart = css.search(/^ {8}\.tab-hub-card \{/m);
+  assert.ok(cardStart > 0, 'the hub card rule must exist');
+  const cardBlock = css.slice(cardStart, css.indexOf('}', cardStart));
+  for (const declaration of ['grid-template-columns: 2.75rem minmax(0, 1fr) 1rem;',
+    'min-height: 4.75rem;', 'border-radius: 0.75rem;', 'background: var(--hub-card-bg);']) {
+    assert.ok(cardBlock.includes(declaration), `the hub card must declare ${declaration}`);
+  }
+  // 44px tinted tile, so the workshop glyphs read as tiles rather than rows.
+  assert.match(css, /\.tab-hub-card__icon \{[\s\S]{0,200}width: 2\.75rem;[\s\S]{0,60}height: 2\.75rem;/);
+  assert.match(css, /\.tab-hub-card__icon \{[\s\S]{0,260}background: var\(--hub-icon-bg\);[\s\S]{0,60}color: var\(--hub-icon-fg\);/);
+  // Right-hand status text: bold, single line, and ellipsised so a long custom
+  // preset group name cannot widen the row.
+  const statusStart = css.search(/^ {8}\.tab-hub-status__text \{/m);
+  assert.ok(statusStart > 0, 'the status rule must exist');
+  const statusBlock = css.slice(statusStart, css.indexOf('}', statusStart));
+  for (const declaration of ['max-width: 7rem;', 'font-weight: 700;', 'text-overflow: ellipsis;', 'white-space: nowrap;']) {
+    assert.ok(statusBlock.includes(declaration), `the status must declare ${declaration}`);
+  }
+  // Accent and surfaces are variables; dark mode swaps values only.
+  assert.match(css, /\.tab-hub-view \{[\s\S]{0,300}--hub-icon-bg: rgba\(59, 130, 246, 0\.12\);/);
+  assert.match(css, /\[data-theme='dark'\] \.tab-hub-view \{[\s\S]{0,300}--hub-card-bg: #18212c;[\s\S]{0,200}--hub-icon-fg: #93c5fd;/);
 });
 
 test('styles: the back arrow is a 44px target and no drawer rule survives', async () => {

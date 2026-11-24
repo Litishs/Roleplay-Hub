@@ -1,38 +1,35 @@
 <template>
     <!-- Narrow-screen "工坊" tab (2026-11-23): the three online workshops behind
-         one root page. Rows reuse the settings list classes, so hover, density
-         and dark mode come for free. Always mounted (v-show) so a later push
-         animation can slide a workshop over a root that is still painted. -->
+         one root page. Each workshop is its own card (reference 2026-11-24) so
+         the destinations read as three separate products rather than settings
+         rows. Always mounted (v-show) so a later push animation can slide a
+         workshop over a root that is still painted. -->
     <div v-show="currentView === 'workshop'" class="management-view tab-hub-view">
         <settings-page-header title="工坊" :back="false"></settings-page-header>
-        <div class="settings-stack">
-            <div class="settings-group-card">
-                <button v-for="entry in entries" :key="entry.view" type="button"
-                    class="settings-accordion-trigger settings-link-row" @click="currentView = entry.view">
-                    <span class="settings-accordion-icon">
-                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" :d="entry.icon"></path>
-                        </svg>
-                    </span>
-                    <span class="settings-accordion-copy">
-                        <span class="settings-accordion-title">{{ entry.label }}</span>
-                        <span class="settings-accordion-description">{{ entry.description }}</span>
-                    </span>
-                    <!-- The trigger grid has a tail column; keep it filled so the
-                         chevron stays at the right edge. -->
-                    <span class="settings-link-tail"></span>
-                    <svg class="settings-collapse-chevron settings-accordion-chevron" fill="none"
-                        stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+        <div class="tab-hub-cards">
+            <button v-for="entry in entries" :key="entry.view" type="button"
+                class="tab-hub-card" @click="currentView = entry.view">
+                <span class="tab-hub-card__icon">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" :d="entry.icon"></path>
                     </svg>
-                </button>
-            </div>
+                </span>
+                <span class="settings-accordion-copy">
+                    <span class="settings-accordion-title">{{ entry.label }}</span>
+                    <span class="settings-accordion-description">{{ entry.description }}</span>
+                </span>
+                <svg class="settings-collapse-chevron settings-accordion-chevron" fill="none"
+                    stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                </svg>
+            </button>
         </div>
     </div>
 </template>
 
 <script>
 import { inject } from "vue";
+import SettingsPageHeader from "../common/SettingsPageHeader.vue";
 
 // Icons follow the sidebar entries these replace (SideNav.vue); 万相广场 takes
 // a globe because the sidebar's four-squares icon now marks the 工坊 tab itself.
@@ -43,6 +40,9 @@ const ENTRIES = [
 ];
 
 export default {
+  // Registered locally: the root app's `components` option only resolves the
+  // root template, so panels must import what their own template uses.
+  components: { SettingsPageHeader },
   setup() {
     const ctx = inject("appContext");
     return { ...(ctx || {}), entries: ENTRIES };
