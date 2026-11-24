@@ -741,6 +741,10 @@
             --tab-bar-active: #2563eb;
             --tab-bar-active-bg: rgba(59, 130, 246, 0.16);
             --tab-bar-press: rgba(148, 163, 184, 0.16);
+            /* Shared by the real icon pill and the sliding highlight, so the two
+               can never drift apart (2026-11-24: enlarged from 54x28). */
+            --tab-pill-w: 3.75rem;
+            --tab-pill-h: 2rem;
             position: absolute;
             left: 0;
             right: 0;
@@ -799,8 +803,8 @@
         }
 
         .bottom-tab__slider-pill {
-            width: 3.375rem;
-            height: 1.75rem;
+            width: var(--tab-pill-w);
+            height: var(--tab-pill-h);
             border-radius: 9999px;
             background: var(--tab-bar-active-bg);
         }
@@ -808,8 +812,8 @@
         .bottom-tab__pill {
             display: grid;
             place-items: center;
-            width: 3.375rem;
-            height: 1.75rem;
+            width: var(--tab-pill-w);
+            height: var(--tab-pill-h);
             border-radius: 9999px;
             transition: background-color 0.2s ease;
         }

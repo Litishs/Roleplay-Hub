@@ -273,6 +273,11 @@ test('styles: overlay tab bar with variable colours, dark override and view rese
     assert.ok(sliderBlock.includes(declaration), `the slider must declare ${declaration}`);
   }
   assert.match(css, /\.bottom-tab__slider-pill \{[\s\S]{0,160}background: var\(--tab-bar-active-bg\);/);
+  // The real icon pill and the sliding highlight share one size token, so they
+  // cannot drift apart (enlarged 2026-11-24).
+  assert.match(css, /--tab-pill-w: 3\.75rem;\s*--tab-pill-h: 2rem;/);
+  assert.match(css, /\.bottom-tab__slider-pill \{\s*width: var\(--tab-pill-w\);\s*height: var\(--tab-pill-h\);/);
+  assert.match(css, /\.bottom-tab__pill \{[\s\S]{0,160}width: var\(--tab-pill-w\);[\s\S]{0,80}height: var\(--tab-pill-h\);/);
   assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{[\s\S]{0,700}\.bottom-tab__slider[,\s]/);
   // The active pill is no longer painted per tab: only the slider carries it.
   assert.doesNotMatch(css, /\.bottom-tab\.is-active \.bottom-tab__pill \{/);
