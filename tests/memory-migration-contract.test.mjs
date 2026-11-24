@@ -130,7 +130,7 @@ test('migration: importing a pre-ledger backup adopts it instead of dropping it'
     // The import handler must route legacy payloads (v4 exports: memories
     // shards + summaries + profile) through the same adoption path as the
     // upgrade sweep, keep the conversation's pins, and persist atomically.
-    const handler = app.slice(app.indexOf('importMemories: (event)'), app.indexOf('toggleMobileMenu, closeMobileMenu,'));
+    const handler = app.slice(app.indexOf('importMemories: (event)'), app.indexOf('fetchModels, selectModel,'));
     assert.ok(handler.includes('adoptScopeLegacy({'), 'legacy summaries/profile/shards go through adoption');
     assert.ok(handler.includes('fragments: hasLedger ? null : legacyFragments'), 'vector shards ride the same adoption call');
     assert.ok(handler.includes("entries.filter(entry => entry.kind === 'pin')"), 'existing pins survive the replacement');

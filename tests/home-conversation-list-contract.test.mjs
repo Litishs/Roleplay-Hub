@@ -101,8 +101,10 @@ test("home screen wiring: landing view, dual pane, back navigation and persisten
     assert.match(indexHtml, /<conversation-list compact><\/conversation-list>/);
     assert.match(indexHtml, /v-show="!isChatFullscreen"/, 'full screen chat hides the side list');
 
-    // Back from the chat returns to the list instead of minimizing.
-    assert.match(app, /else if \(currentView\.value !== 'home'\) \{[\s\S]{0,240}currentView\.value = 'home';/);
+    // Back from the chat returns to the page it was opened from (the list)
+    // instead of minimizing; the other tabs fall back to the list
+    // (tab shell, 2026-11-23 — rules in src/modules/tab-navigation.mjs).
+    assert.match(app, /else if \(!isTabRoot\(currentView\.value\)\) \{[\s\S]{0,240}goBack\(\);[\s\S]{0,240}switchTab\('home'\);/);
 
     // Summaries live in their own KV key and are exposed to templates.
     assert.match(app, /setStoredValue\('chat_summaries'/);
@@ -124,8 +126,8 @@ test("home screen wiring: landing view, dual pane, back navigation and persisten
     assert.match(list, /@error="markAvatarFailed\(item\)"/, 'broken avatars fall back to the letter circle');
     assert.match(list, /v-if="item\.char\.avatar && !avatarFailed\(item\)"/);
 
-    // The characters view returns to the conversation list on mobile instead
-    // of opening the navigation drawer (QQ-style layered back navigation).
-    assert.match(panel, /@click="currentView = 'home'"/, 'characters header back button returns to the list');
-    assert.match(panel, /title="返回会话"/);
+    // The characters view returns to the page it was opened from (the list, or
+    // the chat's empty state) through the shared Back helper of the tab shell.
+    assert.match(panel, /@click="goBack"/, 'characters header back button uses the shared Back helper');
+    assert.doesNotMatch(panel, /@click="currentView = 'home'"/, 'it no longer jumps straight to the list');
 });

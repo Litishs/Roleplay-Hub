@@ -1,14 +1,10 @@
 <template>
-    <!-- Mobile Sidebar Overlay -->
-    <div @click="closeMobileMenu"
-        class="fixed inset-0 bg-black/30 backdrop-blur-sm z-40 md:hidden mobile-overlay">
-    </div>
-
-    <!-- Sidebar (Desktop & Mobile Drawer). Sections are captions, not
-         accordions: with the groups flattened every destination stays one tap
-         away, including in the collapsed icon rail. -->
+    <!-- Desktop sidebar. Narrow screens navigate with the bottom tab bar
+         instead (BottomTabBar.vue), so this is hidden below 768px. Sections are
+         captions, not accordions: with the groups flattened every destination
+         stays one tap away, including in the collapsed icon rail. -->
     <div
-        class="app-sidebar fixed inset-y-0 left-0 z-50 w-72 bg-white/95 border-r border-gray-200/80 transform transition-all duration-300 md:relative md:translate-x-0 flex flex-col shadow-2xl md:shadow-sm md:rounded-none rounded-r-3xl overflow-hidden"
+        class="app-sidebar hidden md:flex w-72 bg-white/95 border-r border-gray-200/80 transition-all duration-300 flex-col md:shadow-sm overflow-hidden"
         :class="[isSidebarCollapsed ? 'md:w-16' : 'md:w-72']">
         <!-- Sidebar Header -->
         <div class="h-16 flex items-center border-b border-gray-100/80 bg-white/70 backdrop-blur-xl transition-all duration-300"
@@ -42,7 +38,7 @@
             :class="isSidebarCollapsed ? 'px-2' : 'px-3'">
             <div v-show="!isSidebarCollapsed" class="sidebar-nav-caption">常用</div>
             <div :class="isSidebarCollapsed ? 'space-y-2' : 'space-y-1.5'">
-                <button @click="currentView = 'home'; closeMobileMenu()"
+                <button @click="currentView = 'home'"
                     title="会话"
                     :class="['sidebar-nav-button flex items-center rounded-xl transition-all duration-200 font-medium', ['home', 'chat'].includes(currentView) ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900', isSidebarCollapsed ? 'w-12 h-12 mx-auto justify-center p-0' : 'w-full px-3 py-2.5']">
                     <svg class="w-5 h-5" :class="isSidebarCollapsed ? 'mr-0' : 'mr-3'" fill="none" stroke="currentColor"
@@ -53,7 +49,7 @@
                     </svg>
                     <span v-show="!isSidebarCollapsed" class="whitespace-nowrap overflow-hidden">会话</span>
                 </button>
-                <button @click="currentView = 'memory'; closeMobileMenu()"
+                <button @click="currentView = 'memory'"
                     title="记忆系统"
                     :class="['sidebar-nav-button flex items-center rounded-xl transition-all duration-200 font-medium', currentView === 'memory' ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900', isSidebarCollapsed ? 'w-12 h-12 mx-auto justify-center p-0' : 'w-full px-3 py-2.5']">
                     <svg class="w-5 h-5" :class="isSidebarCollapsed ? 'mr-0' : 'mr-3'" fill="none" stroke="currentColor"
@@ -70,7 +66,7 @@
                         {{ memoryMigrationBadge }}
                     </span>
                 </button>
-                <button @click="currentView = 'uitemplates'; closeMobileMenu()"
+                <button @click="currentView = 'uitemplates'"
                     title="UI模板"
                     :class="['sidebar-nav-button flex items-center rounded-xl transition-all duration-200 font-medium', currentView === 'uitemplates' ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900', isSidebarCollapsed ? 'w-12 h-12 mx-auto justify-center p-0' : 'w-full px-3 py-2.5']">
                     <svg class="w-5 h-5" :class="isSidebarCollapsed ? 'mr-0' : 'mr-3'" fill="none" stroke="currentColor"
@@ -84,7 +80,7 @@
                         <span class="inline-block w-2 h-2 rounded-full bg-primary-500 memory-extracting"></span>
                     </span>
                 </button>
-                <button @click="currentView = 'usage'; closeMobileMenu()"
+                <button @click="currentView = 'usage'"
                     title="用量统计"
                     :class="['sidebar-nav-button flex items-center rounded-xl transition-all duration-200 font-medium', currentView === 'usage' ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900', isSidebarCollapsed ? 'w-12 h-12 mx-auto justify-center p-0' : 'w-full px-3 py-2.5']">
                     <svg class="w-5 h-5" :class="isSidebarCollapsed ? 'mr-0' : 'mr-3'" fill="none" stroke="currentColor"
@@ -98,7 +94,7 @@
 
             <div v-show="!isSidebarCollapsed" class="sidebar-nav-caption">在线</div>
             <div :class="isSidebarCollapsed ? 'space-y-2 mt-2' : 'space-y-1.5'">
-                <button @click="currentView = 'generator'; closeMobileMenu()"
+                <button @click="currentView = 'generator'"
                     title="角色卡生成"
                     :class="['sidebar-nav-button flex items-center rounded-xl transition-all duration-200 font-medium', currentView === 'generator' ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900', isSidebarCollapsed ? 'w-12 h-12 mx-auto justify-center p-0' : 'w-full px-3 py-2.5']">
                     <svg class="w-5 h-5" :class="isSidebarCollapsed ? 'mr-0' : 'mr-3'" fill="none" stroke="currentColor"
@@ -108,7 +104,7 @@
                     </svg>
                     <span v-show="!isSidebarCollapsed" class="whitespace-nowrap overflow-hidden">角色卡生成</span>
                 </button>
-                <button @click="currentView = 'square'; closeMobileMenu()"
+                <button @click="currentView = 'square'"
                     title="万相广场"
                     :class="['sidebar-nav-button flex items-center rounded-xl transition-all duration-200 font-medium', currentView === 'square' ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900', isSidebarCollapsed ? 'w-12 h-12 mx-auto justify-center p-0' : 'w-full px-3 py-2.5']">
                     <svg class="w-5 h-5" :class="isSidebarCollapsed ? 'mr-0' : 'mr-3'" fill="none" stroke="currentColor"
@@ -119,7 +115,7 @@
                     </svg>
                     <span v-show="!isSidebarCollapsed" class="whitespace-nowrap overflow-hidden">万相广场</span>
                 </button>
-                <button @click="currentView = 'novel'; closeMobileMenu()"
+                <button @click="currentView = 'novel'"
                     title="小说生成"
                     :class="['sidebar-nav-button flex items-center rounded-xl transition-all duration-200 font-medium', currentView === 'novel' ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900', isSidebarCollapsed ? 'w-12 h-12 mx-auto justify-center p-0' : 'w-full px-3 py-2.5']">
                     <svg class="w-5 h-5" :class="isSidebarCollapsed ? 'mr-0' : 'mr-3'" fill="none" stroke="currentColor"
@@ -134,7 +130,7 @@
 
             <div v-show="!isSidebarCollapsed" class="sidebar-nav-caption">高级</div>
             <div :class="isSidebarCollapsed ? 'space-y-2 mt-2' : 'space-y-1.5'">
-                <button @click="currentView = 'presets'; closeMobileMenu()"
+                <button @click="currentView = 'presets'"
                     title="预设"
                     :class="['sidebar-nav-button flex items-center rounded-xl transition-all duration-200 font-medium', currentView === 'presets' ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900', isSidebarCollapsed ? 'w-12 h-12 mx-auto justify-center p-0' : 'w-full px-3 py-2.5']">
                     <svg class="w-5 h-5" :class="isSidebarCollapsed ? 'mr-0' : 'mr-3'" fill="none" stroke="currentColor"
@@ -145,7 +141,7 @@
                     </svg>
                     <span v-show="!isSidebarCollapsed" class="whitespace-nowrap overflow-hidden">预设</span>
                 </button>
-                <button @click="currentView = 'worldinfo'; closeMobileMenu()"
+                <button @click="currentView = 'worldinfo'"
                     title="世界书"
                     :class="['sidebar-nav-button flex items-center rounded-xl transition-all duration-200 font-medium', currentView === 'worldinfo' ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900', isSidebarCollapsed ? 'w-12 h-12 mx-auto justify-center p-0' : 'w-full px-3 py-2.5']">
                     <svg class="w-5 h-5" :class="isSidebarCollapsed ? 'mr-0' : 'mr-3'" fill="none" stroke="currentColor"
@@ -156,7 +152,7 @@
                     </svg>
                     <span v-show="!isSidebarCollapsed" class="whitespace-nowrap overflow-hidden">世界书</span>
                 </button>
-                <button @click="currentView = 'regex'; closeMobileMenu()"
+                <button @click="currentView = 'regex'"
                     title="正则脚本"
                     :class="['sidebar-nav-button flex items-center rounded-xl transition-all duration-200 font-medium', currentView === 'regex' ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900', isSidebarCollapsed ? 'w-12 h-12 mx-auto justify-center p-0' : 'w-full px-3 py-2.5']">
                     <svg class="w-5 h-5" :class="isSidebarCollapsed ? 'mr-0' : 'mr-3'" fill="none" stroke="currentColor"
@@ -166,7 +162,7 @@
                     </svg>
                     <span v-show="!isSidebarCollapsed" class="whitespace-nowrap overflow-hidden">正则</span>
                 </button>
-                <button @click="currentView = 'tools'; closeMobileMenu()"
+                <button @click="currentView = 'tools'"
                     title="工具"
                     :class="['sidebar-nav-button flex items-center rounded-xl transition-all duration-200 font-medium', currentView === 'tools' ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900', isSidebarCollapsed ? 'w-12 h-12 mx-auto justify-center p-0' : 'w-full px-3 py-2.5']">
                     <svg class="w-5 h-5" :class="isSidebarCollapsed ? 'mr-0' : 'mr-3'" fill="none" stroke="currentColor"
@@ -184,7 +180,7 @@
                 <!-- Plugin marketplace entry is temporarily hidden; the view
                      itself stays wired (plugins-panel in index.html). Flip
                      pluginsMarketEnabled to true to restore it. -->
-                <button v-if="pluginsMarketEnabled" @click="currentView = 'plugins'; closeMobileMenu()"
+                <button v-if="pluginsMarketEnabled" @click="currentView = 'plugins'"
                     title="插件市场"
                     :class="['sidebar-nav-button flex items-center rounded-xl transition-all duration-200 font-medium', currentView === 'plugins' ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900', isSidebarCollapsed ? 'w-12 h-12 mx-auto justify-center p-0' : 'w-full px-3 py-2.5']">
                     <svg class="w-5 h-5" :class="isSidebarCollapsed ? 'mr-0' : 'mr-3'" fill="none" stroke="currentColor"
@@ -195,7 +191,7 @@
                     </svg>
                     <span v-show="!isSidebarCollapsed" class="whitespace-nowrap overflow-hidden">插件市场</span>
                 </button>
-                <button @click="currentView = 'settings'; closeMobileMenu()"
+                <button @click="currentView = 'settings'"
                     title="设置"
                     :class="['sidebar-nav-button flex items-center rounded-xl transition-all duration-200 font-medium', currentView === 'settings' ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900', isSidebarCollapsed ? 'w-12 h-12 mx-auto justify-center p-0' : 'w-full px-3 py-2.5']">
                     <svg class="w-5 h-5" :class="isSidebarCollapsed ? 'mr-0' : 'mr-3'" fill="none" stroke="currentColor" viewBox="0 0 24 24"><use href="#icon-settings"></use></svg>

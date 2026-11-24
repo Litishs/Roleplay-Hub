@@ -1,10 +1,6 @@
 <template>
             <div v-if="currentView === 'settings'" class="management-view">
                 <div class="max-w-3xl mx-auto flex items-center mb-4 md:mb-6">
-                    <button @click="toggleMobileMenu"
-                            class="mobile-menu-button">
-                        <svg class="w-6 h-6" fill="none" stroke="currentColor"><use href="#icon-menu"></use></svg>
-                    </button>
                     <h2 class="text-xl md:text-2xl font-bold text-gray-800 flex items-center">
                         <svg class="w-6 h-6 md:w-7 md:h-7 mr-2 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><use href="#icon-settings"></use></svg>
                         设置
@@ -271,6 +267,29 @@
                                     </div>
                                 </div>
                             </div>
+                            <!-- 用量统计 lives here on narrow screens, where the tab bar
+                                 replaced the drawer (2026-11-23). Wide screens keep the
+                                 sidebar entry, so this row is hidden there
+                                 (.settings-link-row--narrow in styles.css: this file loads
+                                 after tailwind.css, so `md:hidden` would not win against
+                                 the trigger's `display: grid`). -->
+                            <button type="button" @click="currentView = 'usage'"
+                                class="settings-accordion-trigger settings-link-row settings-link-row--narrow">
+                                <span class="settings-accordion-icon">
+                                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 19V9m5 10V5m5 14v-7m5 7V3M3 21h18"></path>
+                                    </svg>
+                                </span>
+                                <span class="settings-accordion-copy">
+                                    <span class="settings-accordion-title">用量统计</span>
+                                    <span class="settings-accordion-description">Token 与请求次数</span>
+                                </span>
+                                <span class="settings-link-tail"></span>
+                                <svg class="settings-collapse-chevron settings-accordion-chevron" fill="none"
+                                    stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                                </svg>
+                            </button>
                         </div>
                     </section>
                 </div>

@@ -8,7 +8,7 @@
                     </svg>
                 </button>
                 <embedded-view-content :src="squareUrl" :loading="isSquareLoading"
-                    loading-text="加载万相广场中..." @menu="toggleMobileMenu" @load="onSquareLoad">
+                    loading-text="加载万相广场中..." @back="goBack" @load="onSquareLoad">
                 </embedded-view-content>
             </div>
 

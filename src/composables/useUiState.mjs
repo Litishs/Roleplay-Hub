@@ -61,9 +61,16 @@ export function useUiState() {
     // --- View / navigation shell ---
     // The app lands on the conversation list; the chat is a detail view.
     const currentView = ref('home');
-    let isMobileSidebarOpen = false;
     let nativeAppStateListener = null;
     let nativeBackButtonListener = null;
+    // Narrow-screen tab shell (2026-11-23): Back returns a detail view to the
+    // page it was opened from. Entries are { view, from }; the rules live in
+    // src/modules/tab-navigation.mjs.
+    const navStack = ref([]);
+    // True while a text field on a tab-root page holds focus. The native shell
+    // lifts the WebView above the keyboard, which would leave the tab bar
+    // floating right over it.
+    const isRootTextFocused = ref(false);
     const isSidebarCollapsed = ref(false);
     const isAdvancedNavOpen = ref(false);
     const toggleAdvancedNav = () => {
@@ -152,7 +159,8 @@ export function useUiState() {
         globalConfirmModal,
         showVueConfirmModal,
         currentView,
-        isMobileSidebarOpen,
+        navStack,
+        isRootTextFocused,
         nativeAppStateListener,
         nativeBackButtonListener,
         isSidebarCollapsed,

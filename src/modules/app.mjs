@@ -76,10 +76,13 @@ import EmbeddedViewContent from '../components/common/EmbeddedViewContent.vue';
 import GenerationTimer from '../components/common/GenerationTimer.vue';
 import SettingsPageHeader from '../components/common/SettingsPageHeader.vue';
 import SideNav from '../components/common/SideNav.vue';
+import BottomTabBar from '../components/common/BottomTabBar.vue';
 import ToastNotification from '../components/common/ToastNotification.vue';
 import ConfirmDialog from '../components/common/ConfirmDialog.vue';
 import ModalDialog from '../components/common/ModalDialog.vue';
 import WorldInfoPanel from '../components/views/WorldInfoPanel.vue';
+import ExtensionsHubPanel from '../components/views/ExtensionsHubPanel.vue';
+import WorkshopHubPanel from '../components/views/WorkshopHubPanel.vue';
 import CharacterInfo from '../components/chat/CharacterInfo.vue';
 import MessageList from '../components/chat/MessageList.vue';
 import MessageInput from '../components/chat/MessageInput.vue';
@@ -93,6 +96,8 @@ import ConversationList from '../components/chat/ConversationList.vue';
 // import/export dialogs). Settings sub-panels (UpdateChecker, DataManager,
 // PresetManager, ApiConfig, AdvancedSettings, TtsSettings) are imported
 // directly by SettingsPanel.vue, so they ride along in its async chunk.
+// The narrow-screen tab roots (WorkshopHubPanel / ExtensionsHubPanel) and the
+// tab bar are always mounted too, so they stay synchronous like SideNav.
 const AsyncCharacterPanel = defineAsyncComponent(() => import('../components/views/CharacterPanel.vue'));
 const AsyncGeneratorPanel = defineAsyncComponent(() => import('../components/views/GeneratorPanel.vue'));
 const AsyncSquarePanel = defineAsyncComponent(() => import('../components/views/SquarePanel.vue'));
@@ -107,6 +112,7 @@ const AsyncUsageStatsPanel = defineAsyncComponent(() => import('../components/vi
 const AsyncMemoryPanel = defineAsyncComponent(() => import('../components/views/MemoryPanel.vue'));
 import { generateUUID, parseCot } from './utils.mjs';
 import { buildConversationEntry, markConversationRead, mergeConversationEntry, sortConversations } from './conversation-summary.mjs';
+import { isTabRoot, recordViewChange, tabOfView } from './tab-navigation.mjs';
 import { useMemorySystem } from '../composables/useMemorySystem.mjs';
 import { useWorldInfo } from '../composables/useWorldInfo.mjs';
 import { useCharacterState } from '../composables/useCharacterState.mjs';
@@ -134,7 +140,7 @@ const __app = createApp({
     components: {
         CharacterPanel: AsyncCharacterPanel, GeneratorPanel: AsyncGeneratorPanel, SquarePanel: AsyncSquarePanel, NovelPanel: AsyncNovelPanel, SettingsPanel: AsyncSettingsPanel, PluginsPanel: AsyncPluginsPanel, PresetsPanel: AsyncPresetsPanel, UiTemplatePanel: AsyncUiTemplatePanel, RegexPanel: AsyncRegexPanel, ToolsPanel: AsyncToolsPanel, UsageStatsPanel: AsyncUsageStatsPanel, MemoryPanel: AsyncMemoryPanel, WorldInfoPanel,
         UiTemplatePending, EmbeddedViewContent, GenerationTimer, SettingsPageHeader,
-        SideNav, ToastNotification, ConfirmDialog, ModalDialog,
+        SideNav, BottomTabBar, WorkshopHubPanel, ExtensionsHubPanel, ToastNotification, ConfirmDialog, ModalDialog,
         CharacterInfo, MessageList, MessageInput, ConversationList,
         CustomSelect: RPHubCustomSelect,
         UiTemplateFrame: UiTemplateFrame,
@@ -149,6 +155,9 @@ const __app = createApp({
         'message-input': MessageInput,
         'conversation-list': ConversationList,
         'side-nav': SideNav,
+        'bottom-tab-bar': BottomTabBar,
+        'workshop-hub-panel': WorkshopHubPanel,
+        'extensions-hub-panel': ExtensionsHubPanel,
         'toast-notification': ToastNotification,
         'confirm-dialog': ConfirmDialog,
         'modal-dialog': ModalDialog
@@ -217,9 +226,11 @@ const __app = createApp({
         // destructured at the original declaration sites to keep names identical.
         const { globalConfirmModal, showVueConfirmModal } = uiState;
 
-        let { isMobileSidebarOpen, nativeAppStateListener, nativeBackButtonListener } = uiState;
+        let { nativeAppStateListener, nativeBackButtonListener } = uiState;
         const {
             currentView,
+            navStack,
+            isRootTextFocused,
             appVersionName,
             appVersionCode,
             appBuildType,
@@ -558,19 +569,48 @@ const __app = createApp({
         };
 
         
-        const setMobileSidebarOpen = (open) => {
-            const shouldOpen = !!open && isMobileViewport();
-            isMobileSidebarOpen = shouldOpen;
-            document.querySelector('.app-sidebar')?.classList.toggle('mobile-sidebar-open', shouldOpen);
-            document.querySelector('.mobile-overlay')?.classList.toggle('mobile-sidebar-open', shouldOpen);
+        // --- Narrow-screen tab shell (2026-11-23) ---
+        // Every writer of currentView (templates, selectCharacter, the system
+        // back handler) flows through this watcher, so the Back stack cannot
+        // drift from what is on screen. Roots are the four tab pages; anything
+        // else is a detail view of the tab given by tabOfView().
+        watch(currentView, (to, from) => {
+            navStack.value = recordViewChange(navStack.value, from, to);
+            // Leaving a tab root removes the bar's only reason to hide, even if
+            // the focused field vanished without a focusout (removed from DOM).
+            if (!isTabRoot(to)) isRootTextFocused.value = false;
+        });
+        const isTabRootView = computed(() => isTabRoot(currentView.value));
+        const activeTab = computed(() => tabOfView(currentView.value));
+
+        const goBack = () => {
+            const entry = navStack.value[navStack.value.length - 1];
+            if (entry) navStack.value = navStack.value.slice(0, -1);
+            currentView.value = entry ? entry.from : tabOfView(currentView.value);
         };
 
-        const toggleMobileMenu = () => {
-            setMobileSidebarOpen(!isMobileSidebarOpen);
+        const switchTab = tab => {
+            navStack.value = [];
+            currentView.value = tab;
         };
 
-        const closeMobileMenu = () => {
-            setMobileSidebarOpen(false);
+        // The native shell pads the WebView above the IME, so a focused text
+        // field on a tab-root page would leave the tab bar floating right over
+        // the keyboard. Hide it for as long as such a field holds focus.
+        const ROOT_TEXT_INPUT_SELECTOR = 'input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="file"]):not([type="color"]):not([type="hidden"]):not([type="image"]), textarea, [contenteditable="true"]';
+        let rootTextBlurTimer = 0;
+        const handleRootTextFocusIn = (event) => {
+            if (!isMobileViewport() || !isTabRoot(currentView.value)) return;
+            if (event.target?.matches?.(ROOT_TEXT_INPUT_SELECTOR)) {
+                clearTimeout(rootTextBlurTimer);
+                isRootTextFocused.value = true;
+            }
+        };
+        const handleRootTextFocusOut = () => {
+            clearTimeout(rootTextBlurTimer);
+            // Same grace period as the chat input: focus usually moves straight
+            // to another control, and hiding on every hop would flicker.
+            rootTextBlurTimer = setTimeout(() => { isRootTextFocused.value = false; }, 180);
         };
 
         const applyMobileVisualViewportHeight = (height, { force = false } = {}) => {
@@ -604,7 +644,6 @@ const __app = createApp({
 
         const syncMobileVisualViewport = ({ force = false } = {}) => {
             if (!isMobileViewport()) {
-                closeMobileMenu();
                 isMobileKeyboardOpen.value = false;
                 lastAppliedMobileViewportHeight = 0;
                 lastAppliedMobileKeyboardInset = 0;
@@ -4646,7 +4685,6 @@ const __app = createApp({
                 }
                 return;
             }
-            closeMobileMenu();
             isChatFullscreen.value = true;
             const fullscreenTarget = document.documentElement || document.body;
             if (fullscreenTarget?.requestFullscreen || fullscreenTarget?.webkitRequestFullscreen) {
@@ -9285,14 +9323,15 @@ const __app = createApp({
                     // selector) close as "cancel": uncommitted picks are dropped,
                     // matching a cancel affordance.
                     if (dismissTopOverlayForBack()) return;
-                    if (isMobileSidebarOpen) {
-                        closeMobileMenu();
-                    } else if (isChatFullscreen.value) {
+                    if (isChatFullscreen.value) {
                         await toggleChatFullscreen();
+                    } else if (!isTabRoot(currentView.value)) {
+                        // Detail views go back to the page they were opened
+                        // from (tab-navigation.mjs), not straight to the list.
+                        goBack();
                     } else if (currentView.value !== 'home') {
-                        // Chat is a detail view now: back returns to the list
-                        // instead of jumping straight out of the app.
-                        currentView.value = 'home';
+                        // Other tabs fall back to 会话; 会话 itself leaves the app.
+                        switchTab('home');
                     } else {
                         await nativeApp.minimizeApp();
                     }
@@ -9637,6 +9676,8 @@ const __app = createApp({
 
             // --- 消息正文里的 data-slash 按钮 ---
             document.addEventListener('click', handleMarkdownSlashClick);
+            document.addEventListener('focusin', handleRootTextFocusIn);
+            document.addEventListener('focusout', handleRootTextFocusOut);
 
             // --- 全局点击外部区域收起面板 ---
             document.addEventListener('click', (e) => {
@@ -9656,11 +9697,12 @@ const __app = createApp({
         });
 
         onBeforeUnmount(() => {
-            closeMobileMenu();
             nativeAppStateListener?.remove();
             nativeBackButtonListener?.remove();
             document.removeEventListener('fullscreenchange', syncChatFullscreenState);
             document.removeEventListener('webkitfullscreenchange', syncChatFullscreenState);
+            document.removeEventListener('focusin', handleRootTextFocusIn);
+            document.removeEventListener('focusout', handleRootTextFocusOut);
             if (window.visualViewport) {
                 window.visualViewport.removeEventListener('resize', handleMobileViewportResize);
                 window.visualViewport.removeEventListener('scroll', handleMobileViewportResize);
@@ -9671,6 +9713,7 @@ const __app = createApp({
             if (chatInputSyncRaf) cancelAnimationFrame(chatInputSyncRaf);
             if (chatInputResizeRaf) cancelAnimationFrame(chatInputResizeRaf);
             clearTimeout(mobileKeyboardBlurTimer);
+            clearTimeout(rootTextBlurTimer);
         });
         // 解析并截断生成的包含 HTML UI 的正文，避免闪屏问题
         const processMainContent = (mainText, isGeneratingState) => {
@@ -9829,7 +9872,7 @@ const __app = createApp({
             switchProfile, createNewProfile, deleteProfile, userProfiles, activeProfileId, showProfileDropdown,
             backupInProgress, exportNativeBackup, restoreNativeBackup,
             processMainContent,
-            currentView, showDescriptionPanel, showModelSelector, modelSelectionTarget, openModelSelector, showChatModelSelector, showCharacterEditor, showAddCharacterMenu, showPresetEditor, showUiTemplateEditor,
+            currentView, goBack, switchTab, isTabRootView, activeTab, isRootTextFocused, showDescriptionPanel, showModelSelector, modelSelectionTarget, openModelSelector, showChatModelSelector, showCharacterEditor, showAddCharacterMenu, showPresetEditor, showUiTemplateEditor,
             memoryProviderSelectOptions, memoryProviderLabel,
             memorySummaries, memoryProfile, summaryProgress, retryRollingSummary, clearSummaryProgress, runRollingSummaryCheck,
             providerTags, activeProviderTag, getProviderDisplayName,
@@ -10160,7 +10203,6 @@ const __app = createApp({
                 if (stats.facts > 0) parts.push(`${stats.facts} 条信息卡`);
                 showToast(hasLedger ? '记忆账本已导入' : `旧版记忆已过继到账本：${parts.join(' · ') || '空'}（手动记忆保留）`, 'success');
             }, error => showToast(`导入失败: ${error.message || 'JSON 格式错误'}`, 'error')),
-            toggleMobileMenu, closeMobileMenu,
             fetchModels, selectModel, selectQuickModels, sendMessage, autoResizeInput, handleChatInput, handleChatCompositionStart, handleChatCompositionEnd, handleChatInputPaste, prepareChatInputSend, handleChatInputKeydown, handleChatInputFocus, handleChatInputBlur, stopGeneration, clearChat, toggleChatFullscreen,
             pendingChatImages, pendingChatImageReadCount, isRecognizingImages, requestChatImageSelection, handleChatImageSelection, removePendingChatImage,
             handleConfirm, handleCancel, // Export handlers

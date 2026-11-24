@@ -1,6 +1,6 @@
 <template>
             <div v-if="currentView === 'uitemplates'" class="management-view">
-                <settings-page-header title="UI模板" @menu="toggleMobileMenu">
+                <settings-page-header title="UI模板" @back="goBack">
                     <template #icon>
                         <svg class="w-6 h-6 md:w-7 md:h-7 mr-2 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 5a2 2 0 012-2h12a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm4 3h8M8 12h8M8 16h5"></path>

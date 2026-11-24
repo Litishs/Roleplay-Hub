@@ -3,9 +3,9 @@
                 <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 md:mb-6 gap-3">
                     <div class="flex items-center justify-between w-full md:w-auto">
                         <div class="flex items-center">
-                            <button @click="currentView = 'home'"
+                            <button @click="goBack"
                                 class="md:hidden mr-3 p-2 bg-white border border-gray-200 rounded-xl text-gray-500 shadow-sm active:scale-95 transition-all flex-shrink-0"
-                                title="返回会话" aria-label="返回会话">
+                                title="返回" aria-label="返回">
                                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                         d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
