@@ -91,11 +91,19 @@ test('app.mjs maintains the Back stack through one watcher on currentView', asyn
   assert.match(app, /const isTabRootView = computed\(\(\) => isTabRoot\(currentView\.value\)\);/);
   assert.match(app, /const activeTab = computed\(\(\) => tabOfView\(currentView\.value\)\);/);
 
-  // Templates reach the helpers through the shared app context.
+  // Templates reach the helpers through the shared app context. Everything the
+  // tab bar reads must really travel through it: a flag that is declared and
+  // consumed but never exposed fails silently (isRootTextFocused did, and the
+  // bar stopped hiding for the keyboard until a browser run caught it).
   const ctxStart = app.indexOf('const __ctx = {');
   assert.ok(ctxStart > 0, 'app context object must exist');
-  const ctx = app.slice(ctxStart, ctxStart + 200000);
-  for (const name of ['goBack', 'switchTab', 'isTabRootView', 'activeTab']) {
+  const ctx = app.slice(ctxStart, app.indexOf('\n        };', ctxStart));
+  assert.ok(ctx.length > 1000, 'app context object must have a body');
+  const tabBar = await read('src/components/common/BottomTabBar.vue');
+  const readByTabBar = [...new Set(tabBar.slice(0, tabBar.indexOf('<script>'))
+    .match(/\bisTabRootView\b|\bisRootTextFocused\b|\bactiveTab\b|\bswitchTab\b|\bgoBack\b/g) || [])];
+  assert.ok(readByTabBar.includes('isRootTextFocused'), 'the tab bar reads the text-focus flag');
+  for (const name of ['goBack', ...readByTabBar]) {
     assert.match(ctx, new RegExp(`\\b${name}\\b`), `app context must expose ${name}`);
   }
 });

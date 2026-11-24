@@ -9872,7 +9872,7 @@ const __app = createApp({
             switchProfile, createNewProfile, deleteProfile, userProfiles, activeProfileId, showProfileDropdown,
             backupInProgress, exportNativeBackup, restoreNativeBackup,
             processMainContent,
-            currentView, goBack, switchTab, isTabRootView, activeTab, showDescriptionPanel, showModelSelector, modelSelectionTarget, openModelSelector, showChatModelSelector, showCharacterEditor, showAddCharacterMenu, showPresetEditor, showUiTemplateEditor,
+            currentView, goBack, switchTab, isTabRootView, activeTab, isRootTextFocused, showDescriptionPanel, showModelSelector, modelSelectionTarget, openModelSelector, showChatModelSelector, showCharacterEditor, showAddCharacterMenu, showPresetEditor, showUiTemplateEditor,
             memoryProviderSelectOptions, memoryProviderLabel,
             memorySummaries, memoryProfile, summaryProgress, retryRollingSummary, clearSummaryProgress, runRollingSummaryCheck,
             providerTags, activeProviderTag, getProviderDisplayName,
