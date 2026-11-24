@@ -105,7 +105,7 @@ test('Android ThemeBridge plugin and values-night fallback exist', async () => {
     new URL('../android/app/src/main/res/values-night/styles.xml', import.meta.url),
     'utf8'
   );
-  assert.match(night, /#111827/);
+  assert.match(night, /#121212/);
   assert.match(night, /windowLightStatusBar">false/);
 });
 test('application theme and MainActivity prevent the title bar from showing on OEM skins', async () => {

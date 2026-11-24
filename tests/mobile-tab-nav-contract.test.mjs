@@ -289,7 +289,7 @@ test('styles: the embedded Back ball is draggable and phone-only', async () => {
     assert.ok(ballBlock.includes(declaration), `the back ball must declare ${declaration}`);
   }
   assert.match(css, /\.embedded-back-ball\.is-positioned \{\s*transform: none;\s*\}/);
-  assert.match(css, /\[data-theme='dark'\] \.embedded-back-ball \{[\s\S]{0,160}background: rgba\(31, 41, 55, 0\.94\);/);
+  assert.match(css, /\[data-theme='dark'\] \.embedded-back-ball \{[\s\S]{0,160}background: rgba\(26, 26, 26, 0\.94\);/);
   assert.match(css, /\.settings-link-row--narrow \{\s*display: none;\s*\}[\s\S]{0,400}\.embedded-back-ball \{\s*display: none;/);
 });
 
@@ -394,7 +394,7 @@ test('styles: hub cards and status carry the reference layout in both themes', a
   // Accent and surfaces are variables; dark mode swaps values only.
   assert.match(css, /\.tab-hub-view \{[\s\S]{0,300}--hub-icon-bg: rgba\(59, 130, 246, 0\.12\);/);
   assert.match(css, /\[data-theme='dark'\] \.tab-hub-view \{[\s\S]{0,300}--hub-icon-fg: #93c5fd;/);
-  assert.match(css, /\[data-theme='dark'\] \{[\s\S]{0,900}--surface-card-bg: #18212c;/);
+  assert.match(css, /\[data-theme='dark'\] \{[\s\S]{0,900}--surface-card-bg: #1a1a1a;/);
 });
 
 test('styles: the back arrow is a 44px target and no drawer rule survives', async () => {

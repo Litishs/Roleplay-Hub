@@ -19,7 +19,7 @@ import com.getcapacitor.annotation.CapacitorPlugin;
 public class ThemeBridgePlugin extends Plugin {
 
     private static final int COLOR_LIGHT = Color.rgb(249, 250, 251); // #F9FAFB
-    private static final int COLOR_DARK = Color.rgb(17, 24, 39);     // #111827 gray-900
+    private static final int COLOR_DARK = Color.rgb(18, 18, 18);     // #121212 neutral charcoal
 
     @PluginMethod
     public void setDark(PluginCall call) {
