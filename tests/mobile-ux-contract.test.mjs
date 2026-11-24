@@ -111,7 +111,7 @@ test("hit-expansion utilities and shared-class expansions exist in styles.css", 
 
 test("chat header and composer controls carry hit expansion", async () => {
   const html = await read("index.html");
-  assert.match(html, /toggleMobileMenu[^>]*p-2\.5 -m-2\.5/, "mobile hamburger must reach a 44px hit area");
+  assert.match(html, /goBack[^>]*p-2\.5 -m-2\.5/, "the mobile back arrow must reach a 44px hit area");
   assert.match(html, /toggleChatFullscreen"\s*\n?\s*class="p-2\.5/, "fullscreen toggle must use real 44px padding");
   assert.match(html, /clearChat"\s*\n?\s*class="p-2\.5/, "clear-chat must use real 44px padding");
 
@@ -158,11 +158,11 @@ test("system back button dismisses overlays before navigating or minimizing", as
   const app = await read("src/modules/app.mjs");
   assert.match(app, /const backOverlayStack = \[/, "back overlay stack must exist");
   assert.match(app, /const dismissTopOverlayForBack = \(\) => \{/, "dismiss helper must exist");
-  // The handler must consult the overlay stack before the sidebar/fullscreen/view branches.
+  // The handler must consult the overlay stack before the fullscreen/view branches.
   assert.match(
     app,
-    /dismissTopOverlayForBack\(\)\) return;[\s\S]{0,200}isMobileSidebarOpen/,
-    "back handler must dismiss overlays before the sidebar branch"
+    /dismissTopOverlayForBack\(\)\) return;[\s\S]{0,120}isChatFullscreen\.value/,
+    "back handler must dismiss overlays before the fullscreen branch"
   );
   // Editors and pickers must all be registered (audit A2 inventory).
   for (const flag of ["showConfirmModal", "showStoryBranchNameEditor", "showStoryBranchModal", "showContextViewerModal",

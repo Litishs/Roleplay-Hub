@@ -6,7 +6,8 @@
 // lands. Design record: documents/移动端底部标签栏导航工程方案.md.
 
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { readdir, readFile } from 'node:fs/promises';
+import { sep } from 'node:path';
 import test from 'node:test';
 import { NAV_STACK_LIMIT, TAB_ORDER, isTabRoot, recordViewChange, tabOfView } from '../src/modules/tab-navigation.mjs';
 
@@ -195,10 +196,11 @@ test('the tab shell components are registered synchronously', async () => {
   assert.match(app, /'extensions-hub-panel': ExtensionsHubPanel,/);
 });
 
-test('SettingsPageHeader can drop its leading button for root pages', async () => {
+test('SettingsPageHeader leads detail pages with a Back arrow and can drop it on roots', async () => {
   const header = await read('src/components/common/SettingsPageHeader.vue');
-  assert.match(header, /<button v-if="back" @click="\$emit\('menu'\)" class="mobile-menu-button">/);
+  assert.match(header, /<button v-if="back" type="button" @click="\$emit\('back'\)" class="settings-back-button" aria-label="返回">/);
   assert.match(header, /back: \{ type: Boolean, default: true \}/);
+  assert.match(header, /emits: \['back'\]/);
 });
 
 test('styles: overlay tab bar with variable colours, dark override and view reservation', async () => {
@@ -217,4 +219,72 @@ test('styles: overlay tab bar with variable colours, dark override and view rese
   assert.match(css, /@media \(max-width: 767\.98px\) \{\s*\.app-views\.has-tab-bar \{\s*padding-bottom: var\(--tab-bar-h\);\s*\}\s*\}/);
   assert.match(css, /@media \(min-width: 768px\) \{\s*\.bottom-tab-bar \{\s*display: none !important;/);
   assert.match(css, /\.app-native-fullscreen \.bottom-tab-bar,/);
+});
+
+test('the sidebar is desktop-only and keeps every desktop destination', async () => {
+  const nav = await read('src/components/common/SideNav.vue');
+  assert.match(nav, /class="app-sidebar hidden md:flex /);
+  assert.doesNotMatch(nav, /mobile-overlay|closeMobileMenu|toggleMobileMenu/);
+  for (const view of ['home', 'memory', 'uitemplates', 'usage', 'generator', 'square', 'novel',
+    'presets', 'worldinfo', 'regex', 'tools', 'settings']) {
+    assert.ok(nav.includes(`currentView = '${view}'`), `the sidebar still lists ${view}`);
+  }
+});
+
+test('detail page headers lead with the shared Back helper', async () => {
+  const html = await read('index.html');
+  assert.match(html, /<button v-if="!isChatFullscreen" @click="goBack" aria-label="返回"/, 'chat header');
+  assert.doesNotMatch(html, /icon-menu/, 'the drawer menu icon is gone');
+
+  const list = await read('src/components/chat/ConversationList.vue');
+  assert.doesNotMatch(list, /toggleMobileMenu|打开导航/, 'the home header no longer opens a drawer');
+
+  const characters = await read('src/components/views/CharacterPanel.vue');
+  assert.match(characters, /<button @click="goBack"[\s\S]{0,220}aria-label="返回">/);
+
+  const plugins = await read('src/components/views/PluginsPanel.vue');
+  assert.match(plugins, /@click="goBack" class="settings-back-button"/);
+
+  for (const file of ['MemoryPanel', 'PresetsPanel', 'RegexPanel', 'ToolsPanel', 'UiTemplatePanel',
+    'WorldInfoPanel', 'UsageStatsPanel', 'GeneratorPanel', 'SquarePanel', 'NovelPanel']) {
+    const panel = await read(`src/components/views/${file}.vue`);
+    assert.match(panel, /@back="goBack"/, `${file} must handle the header's back event`);
+  }
+
+  // 设置 is a tab root: nothing to go back to, so its title has no leading button.
+  const settings = await read('src/components/views/SettingsPanel.vue');
+  assert.doesNotMatch(settings, /mobile-menu-button|toggleMobileMenu/);
+});
+
+test('the embedded workshop pages keep their floating Back tab', async () => {
+  const embedded = await read('src/components/common/EmbeddedViewContent.vue');
+  assert.match(embedded, /<button type="button" @click="\$emit\('back'\)" aria-label="返回"/);
+  assert.match(embedded, /emits: \['load', 'back'\]/);
+  assert.doesNotMatch(embedded, /'menu'/);
+});
+
+test('styles: the back arrow is a 44px target and no drawer rule survives', async () => {
+  const css = await read('assets/css/styles.css');
+  const start = css.search(/^ {8}\.settings-back-button \{/m);
+  assert.ok(start > 0, 'the back button rule must exist');
+  const block = css.slice(start, css.indexOf('}', start));
+  assert.match(block, /width: 2\.75rem;/);
+  assert.match(block, /height: 2\.75rem;/);
+  assert.match(css, /@media \(min-width: 768px\) \{[\s\S]{0,400}\.settings-back-button \{\s*display: none;/);
+  assert.match(css, /\[data-theme='dark'\] \.settings-back-button \{/);
+  assert.doesNotMatch(css, /\.mobile-overlay|\.mobile-sidebar-open|\.mobile-menu-button/);
+});
+
+test('nothing of the drawer is left in the app sources', async () => {
+  const extra = ['index.html', 'assets/css/styles.css'];
+  const files = (await readdir(new URL('src/', ROOT), { recursive: true }))
+    .filter((file) => /\.(vue|mjs|js)$/.test(file))
+    .map((file) => `src/${String(file).split(sep).join('/')}`);
+  assert.ok(files.length > 50, `expected the whole source tree, found ${files.length} files`);
+  const paths = [...files, ...extra];
+  const sources = await Promise.all(paths.map(read));
+  const drawer = /toggleMobileMenu|closeMobileMenu|setMobileSidebarOpen|isMobileSidebarOpen|mobile-sidebar-open|mobile-overlay|mobile-menu-button/;
+  for (let index = 0; index < sources.length; index += 1) {
+    assert.doesNotMatch(sources[index], drawer, `${paths[index]} still references the drawer`);
+  }
 });

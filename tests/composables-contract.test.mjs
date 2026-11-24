@@ -265,7 +265,7 @@ test('app.mjs wires useUiState with single call and site destructuring', () => {
     assert.ok(app.includes('const { showContextViewerModal } = uiState;'));
     assert.ok(app.includes('const { quotaValue, quotaLoading, quotaError, backupInProgress } = uiState;'));
     // mutable non-reactive guards use let-destructuring
-    assert.ok(app.includes('let { isMobileSidebarOpen, nativeAppStateListener, nativeBackButtonListener } = uiState;'));
+    assert.ok(app.includes('let { nativeAppStateListener, nativeBackButtonListener } = uiState;'));
     assert.ok(app.includes('let { toastIdSeed } = uiState;'));
     // UI template run lifecycle guards moved to useUiTemplatePipeline (Phase 3.0)
     assert.ok(!uiStateSource.includes('let uiTemplateUpdateSeq'), 'seq guard moved to pipeline');

@@ -61,7 +61,6 @@ export function useUiState() {
     // --- View / navigation shell ---
     // The app lands on the conversation list; the chat is a detail view.
     const currentView = ref('home');
-    let isMobileSidebarOpen = false;
     let nativeAppStateListener = null;
     let nativeBackButtonListener = null;
     // Narrow-screen tab shell (2026-11-23): Back returns a detail view to the
@@ -160,7 +159,6 @@ export function useUiState() {
         globalConfirmModal,
         showVueConfirmModal,
         currentView,
-        isMobileSidebarOpen,
         navStack,
         isRootTextFocused,
         nativeAppStateListener,

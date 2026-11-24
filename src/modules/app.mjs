@@ -226,7 +226,7 @@ const __app = createApp({
         // destructured at the original declaration sites to keep names identical.
         const { globalConfirmModal, showVueConfirmModal } = uiState;
 
-        let { isMobileSidebarOpen, nativeAppStateListener, nativeBackButtonListener } = uiState;
+        let { nativeAppStateListener, nativeBackButtonListener } = uiState;
         const {
             currentView,
             navStack,
@@ -569,21 +569,6 @@ const __app = createApp({
         };
 
         
-        const setMobileSidebarOpen = (open) => {
-            const shouldOpen = !!open && isMobileViewport();
-            isMobileSidebarOpen = shouldOpen;
-            document.querySelector('.app-sidebar')?.classList.toggle('mobile-sidebar-open', shouldOpen);
-            document.querySelector('.mobile-overlay')?.classList.toggle('mobile-sidebar-open', shouldOpen);
-        };
-
-        const toggleMobileMenu = () => {
-            setMobileSidebarOpen(!isMobileSidebarOpen);
-        };
-
-        const closeMobileMenu = () => {
-            setMobileSidebarOpen(false);
-        };
-
         // --- Narrow-screen tab shell (2026-11-23) ---
         // Every writer of currentView (templates, selectCharacter, the system
         // back handler) flows through this watcher, so the Back stack cannot
@@ -659,7 +644,6 @@ const __app = createApp({
 
         const syncMobileVisualViewport = ({ force = false } = {}) => {
             if (!isMobileViewport()) {
-                closeMobileMenu();
                 isMobileKeyboardOpen.value = false;
                 lastAppliedMobileViewportHeight = 0;
                 lastAppliedMobileKeyboardInset = 0;
@@ -4701,7 +4685,6 @@ const __app = createApp({
                 }
                 return;
             }
-            closeMobileMenu();
             isChatFullscreen.value = true;
             const fullscreenTarget = document.documentElement || document.body;
             if (fullscreenTarget?.requestFullscreen || fullscreenTarget?.webkitRequestFullscreen) {
@@ -9340,9 +9323,7 @@ const __app = createApp({
                     // selector) close as "cancel": uncommitted picks are dropped,
                     // matching a cancel affordance.
                     if (dismissTopOverlayForBack()) return;
-                    if (isMobileSidebarOpen) {
-                        closeMobileMenu();
-                    } else if (isChatFullscreen.value) {
+                    if (isChatFullscreen.value) {
                         await toggleChatFullscreen();
                     } else if (!isTabRoot(currentView.value)) {
                         // Detail views go back to the page they were opened
@@ -9716,7 +9697,6 @@ const __app = createApp({
         });
 
         onBeforeUnmount(() => {
-            closeMobileMenu();
             nativeAppStateListener?.remove();
             nativeBackButtonListener?.remove();
             document.removeEventListener('fullscreenchange', syncChatFullscreenState);
@@ -10223,7 +10203,6 @@ const __app = createApp({
                 if (stats.facts > 0) parts.push(`${stats.facts} 条信息卡`);
                 showToast(hasLedger ? '记忆账本已导入' : `旧版记忆已过继到账本：${parts.join(' · ') || '空'}（手动记忆保留）`, 'success');
             }, error => showToast(`导入失败: ${error.message || 'JSON 格式错误'}`, 'error')),
-            toggleMobileMenu, closeMobileMenu,
             fetchModels, selectModel, selectQuickModels, sendMessage, autoResizeInput, handleChatInput, handleChatCompositionStart, handleChatCompositionEnd, handleChatInputPaste, prepareChatInputSend, handleChatInputKeydown, handleChatInputFocus, handleChatInputBlur, stopGeneration, clearChat, toggleChatFullscreen,
             pendingChatImages, pendingChatImageReadCount, isRecognizingImages, requestChatImageSelection, handleChatImageSelection, removePendingChatImage,
             handleConfirm, handleCancel, // Export handlers

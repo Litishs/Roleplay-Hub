@@ -1753,14 +1753,29 @@
             opacity: 0.4;
         }
 
-        .mobile-menu-button {
-            margin-right: 0.75rem;
+        /* Back arrow at the start of a detail page header on narrow screens
+           (2026-11-23; replaces the drawer's menu button). A 44px target whose
+           negative margins keep it from pushing the title off the content edge. */
+        .settings-back-button {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 2.75rem;
+            height: 2.75rem;
+            margin: -0.625rem 0.375rem -0.625rem -0.625rem;
+            border-radius: 0.75rem;
             color: #6b7280;
-            transition: color 0.15s ease;
+            transition: background-color 0.15s ease, color 0.15s ease, transform 0.1s ease;
         }
 
-        .mobile-menu-button:active {
-            color: #374151;
+        .settings-back-button svg {
+            width: 1.5rem;
+            height: 1.5rem;
+        }
+
+        .settings-back-button:active {
+            background-color: #f3f4f6;
+            transform: scale(0.95);
         }
 
         .settings-toggle {
@@ -2168,7 +2183,7 @@
                 box-shadow: 1px 0 0 rgba(229, 231, 235, 0.75);
             }
 
-            .mobile-menu-button {
+            .settings-back-button {
                 display: none;
             }
 
@@ -2426,61 +2441,6 @@
                 background-color: rgba(255, 255, 255, 0.97) !important;
             }
 
-            /* Mobile sidebar drawer */
-            .mobile-overlay {
-                background: rgba(15, 23, 42, 0.38) !important;
-                opacity: 0;
-                pointer-events: none;
-                visibility: hidden;
-                touch-action: none;
-                contain: paint;
-                transform: translateZ(0);
-                transition:
-                    opacity 0.28s cubic-bezier(0.22, 0.78, 0.25, 1),
-                    visibility 0s linear 0.28s;
-            }
-
-            .mobile-overlay.mobile-sidebar-open {
-                opacity: 1;
-                pointer-events: auto;
-                visibility: visible;
-                transition-delay: 0s;
-            }
-
-            .app-sidebar {
-                width: calc(min(18rem, 84vw) + 8px);
-                max-width: calc(84vw + 8px);
-                /* Overscan the left edge: the drawer is a composited layer
-                   (will-change/backface-visibility), and on high-DPI WebViews
-                   edge anti-aliasing can expose the page behind by a hair.
-                   Extending 8px past the viewport edge means anything showing
-                   at x=0 is the drawer's own background. padding-left keeps
-                   the content at the same on-screen position. */
-                left: -8px;
-                padding-left: 8px;
-                border-top-right-radius: 1.5rem;
-                border-bottom-right-radius: 1.5rem;
-                transform: translate3d(-104%, 0, 0);
-                transform-origin: left center;
-                transition: transform 0.28s cubic-bezier(0.22, 0.78, 0.25, 1);
-                contain: layout paint style;
-                will-change: transform;
-                backface-visibility: hidden;
-                box-shadow:
-                    18px 0 54px -24px rgba(15, 23, 42, 0.45),
-                    0 0 0 1px rgba(255, 255, 255, 0.72) inset;
-            }
-
-            .app-sidebar.mobile-sidebar-open {
-                pointer-events: auto;
-                transform: translate3d(0, 0, 0);
-            }
-
-            .app-sidebar:not(.mobile-sidebar-open) {
-                pointer-events: none;
-                transform: translate3d(-104%, 0, 0);
-            }
-
             /* Description panel overlay */
             .desc-panel-overlay {
                 background-color: rgba(0, 0, 0, 0.12) !important;
@@ -2541,12 +2501,6 @@
             /* World Info Footer */
             .wi-footer {
                 background-color: rgba(249, 250, 251, 0.95) !important;
-            }
-        }
-
-        @media (max-width: 768px) and (prefers-reduced-motion: reduce) {
-            .app-sidebar {
-                transition-duration: 0.16s !important;
             }
         }
 
@@ -3401,11 +3355,18 @@ opacity: 0;
         [data-theme='dark'] .app-sidebar {
             background: linear-gradient(180deg, #1f2937 0%, #171f2b 100%) !important;
             border-color: var(--d-border) !important;
-            /* The mobile drawer paints a 72%-white 1px inner ring (light-theme
-               polish); in dark mode it reads as a light seam along the edges. */
+            /* Dates from the drawer era (a 72%-white inner ring on the light
+               theme read as a seam in dark mode). Kept so wide screens look
+               exactly as before; the sidebar no longer renders below 768px. */
             box-shadow:
                 18px 0 54px -24px rgba(0, 0, 0, 0.6),
                 0 0 0 1px rgba(255, 255, 255, 0.06) inset !important;
+        }
+        [data-theme='dark'] .settings-back-button {
+            color: var(--d-text-4);
+        }
+        [data-theme='dark'] .settings-back-button:active {
+            background-color: var(--d-surface-3);
         }
         [data-theme='dark'] .chat-input-box {
             caret-color: var(--d-text);

@@ -1,5 +1,7 @@
 <template>
-  <button @click="$emit('menu')"
+  <!-- Full-bleed embedded page: the only exit on narrow screens is this floating
+       Back tab (the workshop is a detail view; there is no title bar). -->
+  <button type="button" @click="$emit('back')" aria-label="返回"
     class="md:hidden absolute left-0 top-1/2 transform -translate-y-1/2 z-20 pl-2 pr-1.5 py-3 bg-white/90 backdrop-blur-md text-gray-600 text-xs font-medium rounded-r-xl shadow-lg border border-l-0 border-gray-200 active:scale-95 transition-all flex flex-col items-center gap-1">
     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
@@ -30,6 +32,6 @@ export default {
     loading: Boolean,
     loadingText: String
   },
-  emits: ['load', 'menu']
+  emits: ['load', 'back']
 }
 </script>

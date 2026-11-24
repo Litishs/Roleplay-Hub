@@ -1,7 +1,7 @@
 <template>
             <div v-if="currentView === 'novel'" class="h-full overflow-hidden flex flex-col bg-gray-50 relative">
                 <embedded-view-content :src="novelUrl" :loading="isNovelLoading"
-                    loading-text="加载小说工坊中..." @menu="toggleMobileMenu" @load="onNovelLoad">
+                    loading-text="加载小说工坊中..." @back="goBack" @load="onNovelLoad">
                 </embedded-view-content>
             </div>
 </template>

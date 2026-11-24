@@ -9,11 +9,6 @@
              /85 stayed white in dark mode and lit up this whole bar. -->
         <header class="flex items-center gap-2 flex-shrink-0 border-b border-gray-200 bg-white/90 px-3"
             :class="compact ? 'h-12' : 'h-14'">
-            <button type="button" v-if="!compact" @click="toggleMobileMenu"
-                class="md:hidden -ml-1 p-2.5 rounded-xl text-gray-500 hover:text-gray-800 hover:bg-gray-100 transition-colors"
-                aria-label="打开导航">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor"><use href="#icon-menu"></use></svg>
-            </button>
             <h2 class="font-bold text-gray-800 truncate" :class="compact ? 'text-sm' : 'text-lg'">会话</h2>
             <div class="ml-auto flex items-center gap-1">
                 <button type="button" @click="currentView = 'characters'"

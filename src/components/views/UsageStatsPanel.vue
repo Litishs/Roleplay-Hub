@@ -1,6 +1,6 @@
 <template>
             <div v-if="currentView === 'usage'" class="management-view">
-                <settings-page-header title="用量统计" @menu="toggleMobileMenu">
+                <settings-page-header title="用量统计" @back="goBack">
                     <template #icon>
                         <svg class="w-6 h-6 md:w-7 md:h-7 mr-2 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 19V9m5 10V5m5 14v-7m5 7V3M3 21h18"></path>
