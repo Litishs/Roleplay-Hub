@@ -133,6 +133,10 @@ export function useSettingsState() {
         fontFamilyVersion: 4,
         fontSize: window.innerWidth > 768 ? 16 : 14,
         themeMode: 'system',
+        // Conversation-list privacy mode (2026-11-25): blurs names, avatars,
+        // previews and times in both conversation lists; a long press peeks at
+        // one row. Persisted with the rest of settings, so it survives restarts.
+        privacyMode: false,
         imageGenKey: '',
         imageModel: IMAGE_GEN_CARD_DEFAULTS.imageModel,   // 生图版本（NAI model id，-1/-5 为每次生成扣点）
         imageGenProviderId: 'sta1n',

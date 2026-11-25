@@ -3,7 +3,7 @@
          point, replaces the old "chat is the app root" model) and as the
          wide-screen side column next to the open chat. -->
     <div class="conversation-list flex flex-col h-full min-h-0 bg-gray-50"
-        :class="compact ? 'conversation-list--compact' : ''">
+        :class="[compact ? 'conversation-list--compact' : '', privacyOn ? 'is-private' : '']">
         <!-- bg-white/90, not /85: the dark-theme override in styles.css covers
              the 10-step opacity scale (40/50/60/70/80/90/95) only, so a stray
              /85 stayed white in dark mode and lit up this whole bar. -->
@@ -49,6 +49,26 @@
                             d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
                     </svg>
                 </button>
+                <!-- Privacy mode (2026-11-25): blurs every row; a long press
+                     peeks at one. The glyph shows the state, not the action:
+                     open eye = rows visible, slashed eye = rows hidden. -->
+                <button type="button" @click="togglePrivacyMode"
+                    class="settings-icon-button privacy-toggle"
+                    :class="{ 'is-active': privacyOn }"
+                    :aria-pressed="privacyOn ? 'true' : 'false'"
+                    :title="privacyOn ? '关闭隐私模式' : '隐私模式'"
+                    :aria-label="privacyOn ? '关闭隐私模式' : '隐私模式'">
+                    <svg v-if="!privacyOn" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z"></path>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                    </svg>
+                    <svg v-else class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.242 4.242L9.88 9.88"></path>
+                    </svg>
+                </button>
                 <input ref="importInputRef" type="file" accept=".png,.json" @change="importCharacter($event)"
                     class="hidden" aria-hidden="true">
             </div>
@@ -67,38 +87,45 @@
         </div>
 
         <div class="min-h-0 flex-1 overflow-y-auto custom-scrollbar" :class="compact ? 'px-1.5 py-1.5' : 'px-2 py-2'">
-            <button v-for="item in visibleConversations" :key="item.char.uuid || item.index" type="button"
+            <button v-for="item in visibleConversations" :key="rowKey(item)" type="button"
                 @click="openConversation(item)"
+                @pointerdown="startPeek(item, $event)"
+                @pointerup="releasePeek"
+                @pointerleave="endPeek"
+                @pointercancel="endPeek"
+                @pointermove="movePeek"
+                @contextmenu="onRowContextMenu"
                 :class="['conversation-row w-full flex items-center text-left transition-colors rounded-xl',
                     compact ? 'gap-2 px-1.5 py-1.5' : 'gap-3 px-2.5 py-2.5',
-                    item.index === currentCharacterIndex ? 'is-active' : '']">
-                <span class="relative flex-shrink-0 rounded-full overflow-hidden border border-gray-200 bg-gray-100"
+                    item.index === currentCharacterIndex ? 'is-active' : '',
+                    isRedacted(item) ? 'is-redacted' : '']">
+                <span class="conversation-row__avatar relative flex-shrink-0 rounded-full overflow-hidden border border-gray-200 bg-gray-100"
                     :class="compact ? 'w-8 h-8' : 'w-11 h-11'">
                     <img v-if="item.char.avatar && !avatarFailed(item)" :src="item.char.avatar" alt=""
-                        class="h-full w-full object-cover" @error="markAvatarFailed(item)" />
+                        class="conversation-row__avatar-media h-full w-full object-cover" @error="markAvatarFailed(item)" />
                     <span v-else
-                        class="flex h-full w-full items-center justify-center bg-gradient-to-br from-primary-500 to-primary-600 font-bold text-white"
+                        class="conversation-row__avatar-media flex h-full w-full items-center justify-center bg-gradient-to-br from-primary-500 to-primary-600 font-bold text-white"
                         :class="compact ? 'text-[11px]' : 'text-sm'">
                         {{ (item.char.name || '?').charAt(0).toUpperCase() }}
                     </span>
                     <span v-if="isUnread(item) && !isGeneratingHere(item)"
-                        class="absolute right-0 top-0 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-white"
+                        class="conversation-row__unread absolute right-0 top-0 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-white"
                         aria-label="有新回复"></span>
                 </span>
 
                 <span class="min-w-0 flex-1">
                     <span class="flex items-baseline gap-2">
-                        <span class="truncate font-bold text-gray-800" :class="compact ? 'text-[13px]' : 'text-sm'">
+                        <span class="conversation-row__name truncate font-bold text-gray-800" :class="compact ? 'text-[13px]' : 'text-sm'">
                             {{ item.char.name || '未命名角色' }}
                         </span>
-                        <span class="ml-auto flex-shrink-0 text-[10px] text-gray-400 tabular-nums">
+                        <span class="conversation-row__time ml-auto flex-shrink-0 text-[10px] text-gray-400 tabular-nums">
                             {{ formatConversationTime(item.summary && item.summary.at) }}
                         </span>
                     </span>
                     <span class="mt-0.5 flex items-center gap-1.5 text-gray-500" :class="compact ? 'text-[11px]' : 'text-xs'">
                         <span v-if="isGeneratingHere(item)"
-                            class="flex-shrink-0 rounded bg-primary-100 px-1 text-[9px] font-bold text-primary-700">生成中</span>
-                        <span class="truncate">{{ previewFor(item) }}</span>
+                            class="conversation-row__status flex-shrink-0 rounded bg-primary-100 px-1 text-[9px] font-bold text-primary-700">生成中</span>
+                        <span class="conversation-row__preview truncate">{{ previewFor(item) }}</span>
                     </span>
                 </span>
             </button>
@@ -167,6 +194,102 @@ export default {
     };
     const avatarFailed = (item) => avatarFailures.value.has(avatarKey(item));
 
+    // --- Privacy mode (2026-11-25) ---
+    // settings.privacyMode persists with the rest of the app settings. While it
+    // is on every row is blurred; holding a row peeks at it. Releasing keeps the
+    // row readable briefly (0.35s) and then blurs it again, so the content does
+    // not vanish in the same frame as the finger. A held peek never opens the
+    // chat: the click that follows a reveal is swallowed once, while a normal
+    // tap keeps opening the conversation with or without privacy mode.
+    const LONG_PRESS_MS = 260;
+    const PEEK_MOVE_TOLERANCE = 8;
+    const PEEK_REBLUR_MS = 350;
+    const revealedKey = ref(null);
+    let peekTimer = 0;
+    let reblurTimer = 0;
+    let peekKey = null;
+    let peekStart = null;
+    let suppressClickKey = null;
+
+    const privacyOn = computed(() => !!ctx?.settings?.privacyMode);
+    const rowKey = (item) => item.char?.uuid || String(item.index);
+    const isRedacted = (item) => privacyOn.value && revealedKey.value !== rowKey(item);
+
+    const cancelPeekTimers = () => {
+      clearTimeout(peekTimer);
+      peekTimer = 0;
+      clearTimeout(reblurTimer);
+      reblurTimer = 0;
+    };
+
+    const togglePrivacyMode = () => {
+      if (!ctx?.settings) return;
+      ctx.settings.privacyMode = !ctx.settings.privacyMode;
+      // Whatever was peeked at must not stay readable after the switch.
+      revealedKey.value = null;
+      cancelPeekTimers();
+      peekKey = null;
+      peekStart = null;
+    };
+
+    const startPeek = (item, event) => {
+      if (!privacyOn.value) return;
+      if (event?.isPrimary === false) return;
+      cancelPeekTimers();
+      // A new press starts a new gesture: suppression only ever applies to the
+      // click that ends the gesture which revealed the row.
+      suppressClickKey = null;
+      peekKey = rowKey(item);
+      peekStart = { x: event.clientX, y: event.clientY };
+      peekTimer = setTimeout(() => {
+        peekTimer = 0;
+        revealedKey.value = peekKey;
+        // Kept until the click that follows the release. It deliberately has no
+        // expiry timer: holding for longer than a second used to drop the guard
+        // and the release then opened the chat.
+        suppressClickKey = peekKey;
+      }, LONG_PRESS_MS);
+    };
+
+    // Release: stay readable for a moment, then blur again. The pointerleave
+    // that follows a touch release must not cut this short, so endPeek() only
+    // acts while the press is still active.
+    const releasePeek = () => {
+      if (!peekKey) return;
+      const key = peekKey;
+      clearTimeout(peekTimer);
+      peekTimer = 0;
+      peekKey = null;
+      peekStart = null;
+      if (revealedKey.value !== key) return;
+      clearTimeout(reblurTimer);
+      reblurTimer = setTimeout(() => {
+        reblurTimer = 0;
+        if (revealedKey.value === key) revealedKey.value = null;
+      }, PEEK_REBLUR_MS);
+    };
+
+    const endPeek = () => {
+      // Moving away or cancelling while still holding hides the row at once.
+      if (!peekKey) return;
+      cancelPeekTimers();
+      if (revealedKey.value === peekKey) revealedKey.value = null;
+      peekKey = null;
+      peekStart = null;
+    };
+
+    const movePeek = (event) => {
+      if (!peekStart) return;
+      if (Math.abs(event.clientX - peekStart.x) > PEEK_MOVE_TOLERANCE
+          || Math.abs(event.clientY - peekStart.y) > PEEK_MOVE_TOLERANCE) endPeek();
+    };
+
+    const onRowContextMenu = (event) => {
+      // While hidden, a long press belongs to the peek gesture: suppress the
+      // WebView context menu so it cannot be used to inspect the avatar.
+      if (privacyOn.value) event.preventDefault();
+    };
+
     // ctx entries are refs/computeds; unwrap before deciding the shape.
     const unwrap = (value) => (value && typeof value === 'object' && 'value' in value ? value.value : value);
 
@@ -201,6 +324,10 @@ export default {
     };
 
     const openConversation = (item) => {
+      if (suppressClickKey && suppressClickKey === rowKey(item)) {
+        suppressClickKey = null;
+        return;
+      }
       if (typeof ctx?.selectCharacter === 'function') ctx.selectCharacter(item.index);
     };
 
@@ -215,6 +342,15 @@ export default {
       previewFor,
       openConversation,
       formatConversationTime,
+      privacyOn,
+      togglePrivacyMode,
+      isRedacted,
+      rowKey,
+      startPeek,
+      releasePeek,
+      endPeek,
+      movePeek,
+      onRowContextMenu,
       ...(ctx || {})
     };
   }

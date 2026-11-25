@@ -669,6 +669,42 @@
             background: rgba(59, 130, 246, 0.22);
         }
 
+        /* Conversation-list privacy mode (2026-11-25). Row content is blurred
+           instead of removed: row heights, ordering and the unread dot stay
+           intact. The dot sits outside the blurred avatar media, so it remains
+           readable, and a long press peeks at one row at a time. */
+        .conversation-row.is-redacted .conversation-row__avatar-media {
+            filter: blur(9px);
+        }
+
+        .conversation-row.is-redacted .conversation-row__name,
+        .conversation-row.is-redacted .conversation-row__time,
+        .conversation-row.is-redacted .conversation-row__preview,
+        .conversation-row.is-redacted .conversation-row__status {
+            filter: blur(6px);
+            opacity: 0.5;
+            user-select: none;
+        }
+
+        /* Long press is the peek gesture while hidden; leave no text selection
+           or image callout to compete with it. */
+        .conversation-list.is-private .conversation-row {
+            -webkit-touch-callout: none;
+            user-select: none;
+        }
+
+        /* The toggle reads as pressed while privacy is on, using the same
+           primary tint as the active tab. */
+        .settings-icon-button.privacy-toggle.is-active {
+            background: rgba(59, 130, 246, 0.14);
+            color: #2563eb;
+        }
+
+        [data-theme='dark'] .settings-icon-button.privacy-toggle.is-active {
+            background: rgba(147, 197, 253, 0.18);
+            color: #93c5fd;
+        }
+
         /* Wide-screen chat keeps the conversation list in its own column. */
         .chat-dual-pane {
             min-height: 0;
