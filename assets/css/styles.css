@@ -5,6 +5,17 @@
             /* Height of the narrow-screen tab bar. Tab-root views reserve it
                (.app-views.has-tab-bar), so it must equal the bar's real height. */
             --tab-bar-h: 4.25rem;
+            /* Shared motion tokens (2026-11-24): three speeds, one standard
+               curve, so new components do not add another 0.18s/.22s variant. */
+            --motion-fast: 0.15s;
+            --motion-base: 0.22s;
+            --motion-slow: 0.32s;
+            --motion-standard: cubic-bezier(0.22, 1, 0.36, 1);
+            /* One card recipe (settings cards and hub cards share it). */
+            --surface-card-bg: #ffffff;
+            --surface-card-border: #e2e8f0;
+            --surface-card-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+            --surface-card-radius: 0.75rem;
         }
 
         @supports (height: 100dvh) {
@@ -634,7 +645,7 @@
         }
 
         [data-theme='dark'] .sidebar-nav-caption {
-            color: #7f8b9c;
+            color: #8c8c8c;
         }
 
         /* Conversation list rows. The active row needs its own themed tint:
@@ -650,7 +661,7 @@
         }
 
         [data-theme='dark'] .conversation-row:hover {
-            background: rgba(148, 163, 184, 0.14);
+            background: rgba(163, 163, 163, 0.14);
         }
 
         [data-theme='dark'] .conversation-row.is-active,
@@ -730,6 +741,10 @@
             --tab-bar-active: #2563eb;
             --tab-bar-active-bg: rgba(59, 130, 246, 0.16);
             --tab-bar-press: rgba(148, 163, 184, 0.16);
+            /* Shared by the real icon pill and the sliding highlight, so the two
+               can never drift apart (2026-11-24: enlarged from 54x28). */
+            --tab-pill-w: 3.75rem;
+            --tab-pill-h: 2rem;
             position: absolute;
             left: 0;
             right: 0;
@@ -784,12 +799,12 @@
             font-size: 0.6875rem;
             line-height: 0.875rem;
             pointer-events: none;
-            transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+            transition: transform var(--motion-base) var(--motion-standard);
         }
 
         .bottom-tab__slider-pill {
-            width: 3.375rem;
-            height: 1.75rem;
+            width: var(--tab-pill-w);
+            height: var(--tab-pill-h);
             border-radius: 9999px;
             background: var(--tab-bar-active-bg);
         }
@@ -797,8 +812,8 @@
         .bottom-tab__pill {
             display: grid;
             place-items: center;
-            width: 3.375rem;
-            height: 1.75rem;
+            width: var(--tab-pill-w);
+            height: var(--tab-pill-h);
             border-radius: 9999px;
             transition: background-color 0.2s ease;
         }
@@ -843,22 +858,14 @@
             justify-content: flex-end;
         }
 
-        /* Mobile tab roots (工坊 / 扩展, 2026-11-24). Colours live in variables
-           so the dark theme only swaps values, the same pattern as the tab bar.
-           工坊 renders one card per workshop; 扩展 keeps the settings card and
-           only adds the right-hand status text. */
+        /* Mobile tab roots (工坊 / 扩展, 2026-11-24). Accent/hover colours live
+           in variables so the dark theme only swaps values; the card shell
+           itself uses the shared --surface-card-* recipe. */
         .tab-hub-view {
-            --hub-card-bg: #ffffff;
-            --hub-card-border: #e2e8f0;
             --hub-card-hover: #f8fafc;
             --hub-icon-bg: rgba(59, 130, 246, 0.12);
             --hub-icon-fg: #2563eb;
             --hub-status-fg: #475569;
-        }
-
-        .tab-hub-view .settings-page-header h2 {
-            font-size: 1.375rem;
-            line-height: 1.75rem;
         }
 
         .tab-hub-cards {
@@ -874,13 +881,13 @@
             width: 100%;
             min-height: 4.75rem;
             padding: 0.75rem 0.875rem;
-            border: 1px solid var(--hub-card-border);
-            border-radius: 0.75rem;
-            background: var(--hub-card-bg);
-            box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+            border: 1px solid var(--surface-card-border);
+            border-radius: var(--surface-card-radius);
+            background: var(--surface-card-bg);
+            box-shadow: var(--surface-card-shadow);
             color: inherit;
             text-align: left;
-            transition: background-color 0.15s ease, transform 0.1s ease;
+            transition: background-color var(--motion-fast) ease, transform 0.1s ease;
         }
 
         .tab-hub-card:hover {
@@ -916,10 +923,10 @@
            the row's hover fill to the rounded corners. */
         .tab-hub-row-card {
             overflow: hidden;
-            border: 1px solid var(--hub-card-border);
-            border-radius: 0.75rem;
-            background: var(--hub-card-bg);
-            box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+            border: 1px solid var(--surface-card-border);
+            border-radius: var(--surface-card-radius);
+            background: var(--surface-card-bg);
+            box-shadow: var(--surface-card-shadow);
         }
 
         .tab-hub-status__text {
@@ -940,7 +947,7 @@
             opacity: 0;
             pointer-events: none;
             transition:
-                grid-template-rows 0.36s cubic-bezier(0.22, 1, 0.36, 1),
+                grid-template-rows var(--motion-slow) var(--motion-standard),
                 opacity 0.2s ease;
         }
 
@@ -1000,10 +1007,10 @@
         .settings-group-card {
             min-width: 0;
             overflow: hidden;
-            border: 1px solid #e2e8f0;
-            border-radius: 0.75rem;
-            background: #fff;
-            box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+            border: 1px solid var(--surface-card-border);
+            border-radius: var(--surface-card-radius);
+            background: var(--surface-card-bg);
+            box-shadow: var(--surface-card-shadow);
             transition: border-color 0.2s ease, box-shadow 0.2s ease;
         }
 
@@ -1030,7 +1037,7 @@
             padding: 0.5rem 0.875rem;
             color: #334155;
             text-align: left;
-            transition: background-color 0.18s ease, color 0.18s ease;
+            transition: background-color var(--motion-fast) ease, color var(--motion-fast) ease;
         }
 
         .settings-accordion-trigger:hover {
@@ -1348,8 +1355,7 @@
         }
 
         .settings-icon-button--danger:hover {
-            border-color: #fecaca;
-            background: #fef2f2;
+            background: #fee2e2;
             color: #dc2626;
         }
 
@@ -1440,23 +1446,27 @@
             padding-block: 0.375rem;
         }
 
+        /* Secondary icon button (2026-11-24): one neutral block everywhere —
+           the same treatment as the home header actions, instead of the old
+           white card + shadow that stayed white in dark mode. 40px visual
+           (10px padding + 20px icon); the ::after rule below expands the hit
+           area to 44px. Primary actions keep .settings-create-button. */
         .settings-icon-button {
             padding: 0.625rem;
-            border: 1px solid #e5e7eb;
+            border: 0;
             border-radius: 0.75rem;
-            background: #fff;
+            background: #f3f4f6;
             color: #4b5563;
-            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-            transition: all 0.15s ease;
+            transition: background-color 0.15s ease, color 0.15s ease, transform 0.1s ease;
         }
 
         .settings-icon-button:hover {
-            background: #f9fafb;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+            background: #e5e7eb;
+            color: #1f2937;
         }
 
         .settings-icon-button:active {
-            transform: scale(0.95);
+            transform: scale(0.96);
         }
 
         .settings-create-button {
@@ -1677,17 +1687,17 @@
         /* Dark theme: the action bar glass and its hover washes are hardcoded
            light values above — neutral dark surfaces here (audit §2.7 rule). */
         [data-theme='dark'] .message-action-bar {
-            background: rgba(31, 41, 55, 0.56);
+            background: rgba(26, 26, 26, 0.56);
             box-shadow: 0 5px 14px -10px rgba(0, 0, 0, 0.6);
         }
 
         [data-theme='dark'] .message-action-button {
-            color: rgba(156, 163, 175, 0.85);
+            color: rgba(163, 163, 163, 0.85);
         }
 
         [data-theme='dark'] .message-action-button:hover {
             color: #60a5fa;
-            background: rgba(55, 65, 81, 0.72);
+            background: rgba(48, 48, 48, 0.72);
         }
 
         [data-theme='dark'] .message-action-button--danger:hover {
@@ -1728,7 +1738,7 @@
         }
 
         [data-theme='dark'] input[type="range"].touch-range {
-            --range-track: #374151;
+            --range-track: #303030;
         }
 
         /* Segmented switches: option rows meet the 44px minimum (slim variant
@@ -1787,16 +1797,16 @@
         }
 
         [data-theme='dark'] .message-switcher {
-            background: rgba(31, 41, 55, 0.56);
+            background: rgba(26, 26, 26, 0.56);
         }
 
         [data-theme='dark'] .message-switcher-button {
-            color: rgba(156, 163, 175, 0.85);
+            color: rgba(163, 163, 163, 0.85);
         }
 
         [data-theme='dark'] .message-switcher-button:hover {
             color: #60a5fa;
-            background: rgba(55, 65, 81, 0.72);
+            background: rgba(48, 48, 48, 0.72);
         }
 
         /* Candidate counter inside the name-row switcher: mono digits so the
@@ -1812,7 +1822,7 @@
         }
 
         [data-theme='dark'] .message-action-swipe-counter {
-            color: rgba(156, 163, 175, 0.85);
+            color: rgba(163, 163, 163, 0.85);
         }
 
         .settings-page-header {
@@ -1822,11 +1832,32 @@
             margin-bottom: 1rem;
         }
 
+        /* Page headers stay put while the management view scrolls, matching the
+           home bar's persistent title (2026-11-24). The negative margins cancel
+           .management-view padding so the opaque strip covers the full column;
+           content scrolls underneath. */
+        .settings-page-header,
+        .management-header {
+            position: sticky;
+            /* Negative so the header pins to the view's top edge: the sticky
+               containing box starts at the management-view padding (1rem). */
+            top: -1rem;
+            z-index: 6;
+            margin: -1rem -1rem 0;
+            padding: 1rem;
+            background: #f9fafb;
+        }
+
+        [data-theme='dark'] .settings-page-header,
+        [data-theme='dark'] .management-header {
+            background: var(--d-bg);
+        }
+
         .management-view {
             height: 100%;
             padding: 1rem;
             overflow-y: auto;
-            animation: fadeIn 0.3s ease-out;
+            animation: fadeIn var(--motion-slow) ease-out;
         }
 
         .settings-section-heading {
@@ -2352,13 +2383,25 @@
             .settings-collapse__content,
             .settings-collapse-chevron,
             .segmented-switch__indicator,
-            .bottom-tab__slider {
+            .bottom-tab__slider,
+            .settings-accordion-trigger,
+            .settings-icon-button,
+            .tab-hub-card,
+            .embedded-back-ball,
+            .bottom-tab {
                 transition-duration: 0.01ms !important;
                 transition-delay: 0s !important;
             }
 
-            .settings-help-popover {
-                animation: none;
+            .settings-help-popover,
+            .animate-message-in,
+            .animate-message-fade-in,
+            .typing-indicator span,
+            .live-dots i,
+            .memory-extracting {
+                /* !important: the animation shorthands are declared later in
+                   this file and would otherwise win on equal specificity. */
+                animation: none !important;
             }
         }
 
@@ -2393,11 +2436,22 @@
                 padding: 1.25rem;
             }
 
-            .settings-page-header {
-                margin-bottom: 1.5rem;
+            /* Sticky geometry follows the larger desktop padding. */
+            .settings-page-header,
+            .management-header {
+                top: -1.5rem;
+                margin: -1.5rem -1.5rem 0;
+                padding: 1.5rem;
             }
 
+            /* Wide screens: one content column for every management view
+               (2026-11-24). Settings and plugins already capped their header at
+               48rem while the body stretched; the cap now lives on the view. */
             .management-view {
+                width: 100%;
+                max-width: 48rem;
+                margin-left: auto;
+                margin-right: auto;
                 padding: 1.5rem;
             }
         }
@@ -2734,11 +2788,11 @@
 
         /* Elegant Message Entrance Animation */
         .animate-message-in {
-            animation: message-in-elegant 0.32s cubic-bezier(0.22, 0.61, 0.36, 1) backwards;
+            animation: message-in-elegant var(--motion-slow) var(--motion-standard) backwards;
         }
 
         .animate-message-fade-in {
-            animation: message-fade-in 0.35s ease-out backwards;
+            animation: message-fade-in var(--motion-slow) ease-out backwards;
         }
 
         @keyframes message-in-elegant {
@@ -3221,88 +3275,99 @@ opacity: 0;
             overscroll-behavior: contain;
         }
 
+        /* Quick-settings card (2026-11-24). Tailwind did not emit the old
+           w-[min(22rem,calc(100vw_-_3rem))] arbitrary class, so the panel fell
+           back to its content width (112px) and overflowed the viewport top.
+           A real class also lets us cap the height on short screens. */
+        .quick-settings-panel {
+            width: min(22rem, calc(100vw - 3rem));
+            max-height: calc(100vh - 6rem);
+            max-height: calc(100dvh - 6rem);
+            overflow-y: auto;
+            overscroll-behavior: contain;
+        }
+
         /* ============================================================
          * 深色模式覆盖规则
          * 由 documentElement.dataset.theme === 'dark' 驱动
          * （app.js applyTheme 设置，head 内联脚本首屏防闪）。
          * 不改 index.html 里的 tailwind 类名，统一在此用
          * [data-theme='dark'] 作用域覆盖高频工具类 + 关键组件类。
-         * 调色板取 Tailwind gray-900 系：页面底 #111827 / 卡片面 #1f2937。
+         * 调色板取中性炭灰（2026-11-24 由 Tailwind 冷灰切换）：页面底 #121212 /
+         * 卡片面 #1a1a1a；表面与边框不再带蓝调，主色仍是品牌蓝。
          * ============================================================ */
         [data-theme='dark'] {
             color-scheme: dark;
-            --d-bg: #111827;
-            --d-surface: #1f2937;
-            --d-surface-2: #262e3a;
-            --d-surface-3: #374151;
-            --d-border: #374151;
-            --d-border-soft: #2d3748;
-            --d-text: #f9fafb;
-            --d-text-2: #e5e7eb;
-            --d-text-3: #d1d5db;
-            --d-text-4: #9ca3af;
-            --d-text-5: #6b7280;
+            --d-bg: #121212;
+            --d-surface: #1a1a1a;
+            --d-surface-2: #212121;
+            --d-surface-3: #2b2b2b;
+            --d-border: #303030;
+            --d-border-soft: #262626;
+            --d-text: #f5f5f5;
+            --d-text-2: #e5e5e5;
+            --d-text-3: #d4d4d4;
+            --d-text-4: #a3a3a3;
+            --d-text-5: #737373;
+            /* Same card recipe, dark values. */
+            --surface-card-bg: #1a1a1a;
+            --surface-card-border: #303030;
+            --surface-card-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
         }
 
         [data-theme='dark'] .settings-group-caption {
-            color: #7f8b9c;
-        }
-
-        [data-theme='dark'] .settings-group-card {
-            border-color: #2c3948;
-            background: #18212c;
-            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+            color: #8c8c8c;
         }
 
         [data-theme='dark'] .settings-group-card.is-open {
-            border-color: #374657;
+            border-color: #3a3a3a;
             box-shadow: 0 5px 16px rgba(0, 0, 0, 0.2);
         }
 
         [data-theme='dark'] .settings-accordion + .settings-accordion {
-            border-top-color: #293544;
+            border-top-color: #2a2a2a;
         }
 
         [data-theme='dark'] .settings-accordion-trigger {
-            color: #d1d5db;
+            color: #d4d4d4;
         }
 
         [data-theme='dark'] .settings-accordion-trigger:hover {
-            background: #1c2733;
+            background: #232323;
         }
 
         [data-theme='dark'] .settings-accordion-title {
-            color: #e5e7eb;
+            color: #e5e5e5;
         }
 
         [data-theme='dark'] .settings-accordion-description {
-            color: #7f8b9c;
+            color: #8c8c8c;
         }
 
         [data-theme='dark'] .settings-accordion-value,
         [data-theme='dark'] .settings-accordion-summary {
-            color: #aab4c2;
+            color: #b0b0b0;
         }
 
         [data-theme='dark'] .settings-accordion-chevron {
-            color: #7f8b9c;
+            color: #8c8c8c;
         }
 
         [data-theme='dark'] .settings-accordion-icon {
-            color: #93a3b8;
+            color: #a3a3a3;
         }
 
         [data-theme='dark'] .settings-accordion-avatar {
             /* Neutral surface: the avatar should not reintroduce the accent
                colour the rest of the row icons gave up. */
-            border-color: #34405a;
-            background: #1f2a37;
-            color: #cbd5e1;
+            border-color: #3a3a3a;
+            background: #242424;
+            color: #d4d4d4;
         }
 
         [data-theme='dark'] .settings-accordion-badge {
-            background: rgba(148, 163, 184, 0.18);
-            color: #aab4c2;
+            background: rgba(163, 163, 163, 0.18);
+            color: #b0b0b0;
         }
 
         [data-theme='dark'] .settings-accordion-badge--ok {
@@ -3321,83 +3386,83 @@ opacity: 0;
         }
 
         [data-theme='dark'] .settings-panel-body {
-            border-top-color: #293544;
-            background: #151d27;
+            border-top-color: #2a2a2a;
+            background: #161616;
         }
 
         [data-theme='dark'] .user-settings-avatar {
-            border-color: #202b38;
-            background: #283451;
+            border-color: #232323;
+            background: #2b2b2b;
             color: #b7c4ff;
-            box-shadow: 0 0 0 1px #3a4655, 0 2px 8px rgba(0, 0, 0, 0.28);
+            box-shadow: 0 0 0 1px #3a3a3a, 0 2px 8px rgba(0, 0, 0, 0.28);
         }
 
         [data-theme='dark'] .user-settings-avatar-edit {
-            border-color: #202b38;
+            border-color: #232323;
         }
 
         [data-theme='dark'] .user-settings-profile-trigger {
-            border-color: #344150;
-            background: #1b2531;
-            color: #d1d5db;
+            border-color: #303030;
+            background: #1c1c1c;
+            color: #d4d4d4;
         }
 
         [data-theme='dark'] .user-settings-profile-trigger:hover {
-            border-color: #465466;
-            background: #202b38;
+            border-color: #3a3a3a;
+            background: #232323;
         }
 
         [data-theme='dark'] .user-settings-profile-menu {
-            border-color: #344150;
-            background: rgba(24, 33, 44, 0.98);
+            border-color: #303030;
+            background: rgba(26, 26, 26, 0.98);
             box-shadow: 0 14px 30px rgba(0, 0, 0, 0.4);
         }
 
         [data-theme='dark'] .user-settings-profile-option {
-            color: #cbd5e1;
+            color: #d4d4d4;
         }
 
         [data-theme='dark'] .user-settings-profile-option:hover {
-            background: #202b38;
+            background: #232323;
         }
 
         [data-theme='dark'] .user-settings-profile-option.is-active {
-            background: #203451;
+            background: #2b2b2b;
             color: #93c5fd;
         }
 
         [data-theme='dark'] .user-settings-profile-option-avatar {
-            background: #2a3644;
-            color: #cbd5e1;
+            background: #2b2b2b;
+            color: #d4d4d4;
         }
 
         [data-theme='dark'] .settings-field-label {
-            color: #9aa6b6;
+            color: #9a9a9a;
         }
 
         [data-theme='dark'] .settings-form-control {
-            border-color: #344150;
-            background: #1b2531;
-            color: #e5e7eb;
+            border-color: #303030;
+            background: #1c1c1c;
+            color: #e5e5e5;
         }
 
         [data-theme='dark'] .settings-form-control:focus {
             border-color: #5686bd;
-            background: #202b38;
+            background: #232323;
             box-shadow: 0 0 0 3px rgba(86, 134, 189, 0.16);
         }
 
         [data-theme='dark'] .settings-accordion .segmented-switch {
-            background: #111923;
+            background: #141414;
         }
 
         [data-theme='dark'] .settings-accordion .segmented-switch__indicator {
-            background: #263341;
-            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 0 0 1px #3b4858;
+            background: #2b2b2b;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 0 0 1px #3a3a3a;
         }
 
         [data-theme='dark'] .settings-accordion .segmented-switch__option {
-            color: #8f9aaa;
+            color: #9a9a9a;
         }
 
         [data-theme='dark'] .settings-accordion .segmented-switch__option.is-active {
@@ -3406,21 +3471,21 @@ opacity: 0;
 
         [data-theme='dark'] .settings-accordion .model-setting-row,
         [data-theme='dark'] .settings-accordion .generation-setting-card {
-            border-color: #303c4b;
-            background: #1b2531;
+            border-color: #303030;
+            background: #1c1c1c;
             box-shadow: none;
         }
 
         [data-theme='dark'] .settings-accordion .settings-subsection-card {
-            border-color: #263241;
-            background: #141b24;
+            border-color: #2a2a2a;
+            background: #161616;
             box-shadow: none;
         }
 
         [data-theme='dark'] .settings-accordion .model-setting-row:hover,
         [data-theme='dark'] .settings-accordion .generation-setting-card:hover {
-            border-color: #425164;
-            background: #202b38;
+            border-color: #3a3a3a;
+            background: #232323;
             box-shadow: none;
         }
 
@@ -3429,21 +3494,17 @@ opacity: 0;
             background: #19332f !important;
         }
 
-        [data-theme='dark'] .user-settings-toolbar .settings-icon-button {
-            border-color: #344150;
-            background: #1b2531;
-            color: #aeb9c8;
-            box-shadow: none;
+        [data-theme='dark'] .settings-icon-button {
+            background: var(--d-surface-2);
+            color: var(--d-text-3);
         }
 
-        [data-theme='dark'] .user-settings-toolbar .settings-icon-button:hover {
-            border-color: #465466;
-            background: #202b38;
-            color: #e5e7eb;
+        [data-theme='dark'] .settings-icon-button:hover {
+            background: var(--d-surface-3);
+            color: var(--d-text);
         }
 
-        [data-theme='dark'] .user-settings-toolbar .settings-icon-button--danger:hover {
-            border-color: #713c46;
+        [data-theme='dark'] .settings-icon-button--danger:hover {
             background: #3a2229;
             color: #fca5a5;
         }
@@ -3490,50 +3551,114 @@ opacity: 0;
         [data-theme='dark'] .bg-gray-50 { background-color: var(--d-bg) !important; }
         [data-theme='dark'] .bg-gray-100 { background-color: var(--d-surface-2) !important; }
         [data-theme='dark'] .bg-gray-200 { background-color: var(--d-surface-3) !important; }
-        [data-theme='dark'] .bg-gray-300 { background-color: #4b5563 !important; }
+        [data-theme='dark'] .bg-gray-300 { background-color: #525252 !important; }
 
         /* —— 背景类（半透明：浅色面板/卡片层 → 深色半透明） —— */
-        [data-theme='dark'] .bg-white\/40 { background-color: rgba(31,41,55,.4) !important; }
-        [data-theme='dark'] .bg-white\/50 { background-color: rgba(31,41,55,.5) !important; }
-        [data-theme='dark'] .bg-white\/60 { background-color: rgba(31,41,55,.6) !important; }
-        [data-theme='dark'] .bg-white\/70 { background-color: rgba(31,41,55,.7) !important; }
-        [data-theme='dark'] .bg-white\/80 { background-color: rgba(31,41,55,.8) !important; }
-        [data-theme='dark'] .bg-white\/90 { background-color: rgba(31,41,55,.9) !important; }
-        [data-theme='dark'] .bg-white\/95 { background-color: rgba(31,41,55,.95) !important; }
-        [data-theme='dark'] .bg-gray-50\/30 { background-color: rgba(31,41,55,.3) !important; }
-        [data-theme='dark'] .bg-gray-50\/50 { background-color: rgba(31,41,55,.5) !important; }
-        [data-theme='dark'] .bg-gray-50\/55 { background-color: rgba(31,41,55,.55) !important; }
-        [data-theme='dark'] .bg-gray-50\/60 { background-color: rgba(31,41,55,.6) !important; }
-        [data-theme='dark'] .bg-gray-50\/70 { background-color: rgba(31,41,55,.7) !important; }
-        [data-theme='dark'] .bg-gray-50\/80 { background-color: rgba(17,24,39,.85) !important; }
-        [data-theme='dark'] .bg-gray-100\/50 { background-color: rgba(38,46,58,.5) !important; }
-        [data-theme='dark'] .bg-gray-100\/70 { background-color: rgba(38,46,58,.7) !important; }
-        [data-theme='dark'] .bg-gray-200\/50 { background-color: rgba(55,65,81,.5) !important; }
+        [data-theme='dark'] .bg-white\/40 { background-color: rgba(26,26,26,.4) !important; }
+        [data-theme='dark'] .bg-white\/50 { background-color: rgba(26,26,26,.5) !important; }
+        [data-theme='dark'] .bg-white\/60 { background-color: rgba(26,26,26,.6) !important; }
+        [data-theme='dark'] .bg-white\/70 { background-color: rgba(26,26,26,.7) !important; }
+        [data-theme='dark'] .bg-white\/80 { background-color: rgba(26,26,26,.8) !important; }
+        [data-theme='dark'] .bg-white\/90 { background-color: rgba(26,26,26,.9) !important; }
+        [data-theme='dark'] .bg-white\/95 { background-color: rgba(26,26,26,.95) !important; }
+        [data-theme='dark'] .bg-gray-50\/30 { background-color: rgba(26,26,26,.3) !important; }
+        [data-theme='dark'] .bg-gray-50\/50 { background-color: rgba(26,26,26,.5) !important; }
+        [data-theme='dark'] .bg-gray-50\/55 { background-color: rgba(26,26,26,.55) !important; }
+        [data-theme='dark'] .bg-gray-50\/60 { background-color: rgba(26,26,26,.6) !important; }
+        [data-theme='dark'] .bg-gray-50\/70 { background-color: rgba(26,26,26,.7) !important; }
+        [data-theme='dark'] .bg-gray-50\/80 { background-color: rgba(18,18,18,.85) !important; }
+        [data-theme='dark'] .bg-gray-100\/50 { background-color: rgba(33,33,33,.5) !important; }
+        [data-theme='dark'] .bg-gray-100\/70 { background-color: rgba(33,33,33,.7) !important; }
+        [data-theme='dark'] .bg-gray-200\/50 { background-color: rgba(48,48,48,.5) !important; }
         /* 注：bg-white/10、/20、/30 通常是彩色按钮上的玻璃效果，保留不覆盖 */
 
         /* —— 文本类 —— */
-        [data-theme='dark'] .text-gray-300 { color: #4b5563 !important; }
+        [data-theme='dark'] .text-gray-300 { color: #525252 !important; }
         [data-theme='dark'] .text-gray-400 { color: var(--d-text-5) !important; }
         [data-theme='dark'] .text-gray-500 { color: var(--d-text-4) !important; }
         [data-theme='dark'] .text-gray-600 { color: var(--d-text-3) !important; }
         [data-theme='dark'] .text-gray-700 { color: var(--d-text-2) !important; }
-        [data-theme='dark'] .text-gray-800 { color: #f3f4f6 !important; }
+        [data-theme='dark'] .text-gray-800 { color: #f5f5f5 !important; }
         [data-theme='dark'] .text-gray-900 { color: var(--d-text) !important; }
 
         /* —— 边框类 —— */
         [data-theme='dark'] .border-gray-100 { border-color: var(--d-border-soft) !important; }
         [data-theme='dark'] .border-gray-200 { border-color: var(--d-border) !important; }
-        [data-theme='dark'] .border-gray-300 { border-color: #4b5563 !important; }
-        [data-theme='dark'] .border-gray-100\/80 { border-color: rgba(55,65,81,.8) !important; }
-        [data-theme='dark'] .border-gray-100\/60 { border-color: rgba(55,65,81,.6) !important; }
-        [data-theme='dark'] .border-gray-200\/50 { border-color: rgba(55,65,81,.5) !important; }
-        [data-theme='dark'] .border-gray-200\/60 { border-color: rgba(55,65,81,.6) !important; }
-        [data-theme='dark'] .border-gray-200\/70 { border-color: rgba(55,65,81,.7) !important; }
-        [data-theme='dark'] .border-gray-200\/80 { border-color: rgba(55,65,81,.8) !important; }
-        [data-theme='dark'] .border-gray-200\/90 { border-color: rgba(55,65,81,.9) !important; }
-        [data-theme='dark'] .border-gray-300\/90 { border-color: rgba(75,85,99,.9) !important; }
-        [data-theme='dark'] .border-gray-400\/80 { border-color: rgba(75,85,99,.8) !important; }
+        [data-theme='dark'] .border-gray-300 { border-color: #525252 !important; }
+        [data-theme='dark'] .border-gray-100\/80 { border-color: rgba(48,48,48,.8) !important; }
+        [data-theme='dark'] .border-gray-100\/60 { border-color: rgba(48,48,48,.6) !important; }
+        [data-theme='dark'] .border-gray-200\/50 { border-color: rgba(48,48,48,.5) !important; }
+        [data-theme='dark'] .border-gray-200\/60 { border-color: rgba(48,48,48,.6) !important; }
+        [data-theme='dark'] .border-gray-200\/70 { border-color: rgba(48,48,48,.7) !important; }
+        [data-theme='dark'] .border-gray-200\/80 { border-color: rgba(48,48,48,.8) !important; }
+        [data-theme='dark'] .border-gray-200\/90 { border-color: rgba(48,48,48,.9) !important; }
+        [data-theme='dark'] .border-gray-300\/90 { border-color: rgba(82,82,82,.9) !important; }
+        [data-theme='dark'] .border-gray-400\/80 { border-color: rgba(82,82,82,.8) !important; }
         /* 注：border-white/* 在彩色按钮上，保留半透明白 */
+
+        /* —— 语义浅色块（2026-11-24 全量补齐） ——
+           Tailwind 生成的是浅色底 + 深色字；深色主题下若不映射，这些块会变成
+           近白亮块（实测：primary-50 背景 rgb(239,246,255)、世界书「绑定」徽章
+           rgb(254,252,232)）。这里统一映射成深色底 + 浅色字/边，保留色相作为
+           语义信号；settings-panel-body 内原有的更具体规则仍然优先。 */
+        [data-theme='dark'] .bg-primary-50 { background-color: #252c49 !important; }
+        [data-theme='dark'] .bg-primary-100 { background-color: #30385d !important; }
+        [data-theme='dark'] .bg-blue-50,
+        [data-theme='dark'] .bg-blue-50\/80,
+        [data-theme='dark'] .bg-blue-50\/85 { background-color: rgba(30,64,175,.42) !important; }
+        [data-theme='dark'] .bg-blue-100 { background-color: #1e3a5f !important; }
+        [data-theme='dark'] .bg-blue-200 { background-color: #27496f !important; }
+        [data-theme='dark'] .bg-red-50,
+        [data-theme='dark'] .bg-red-50\/70,
+        [data-theme='dark'] .bg-red-50\/80 { background-color: #3a2229 !important; }
+        [data-theme='dark'] .bg-red-100 { background-color: #4a2a30 !important; }
+        [data-theme='dark'] .bg-yellow-50 { background-color: #332a18 !important; }
+        [data-theme='dark'] .bg-amber-50\/70 { background-color: rgba(51,42,24,.85) !important; }
+        [data-theme='dark'] .bg-green-50 { background-color: #19332f !important; }
+        [data-theme='dark'] .bg-green-100 { background-color: #1d3d37 !important; }
+        [data-theme='dark'] .bg-purple-50 { background-color: #2b2340 !important; }
+        [data-theme='dark'] .bg-purple-100 { background-color: #362b52 !important; }
+        [data-theme='dark'] .bg-rose-50 { background-color: #3a2229 !important; }
+        [data-theme='dark'] .bg-rose-100 { background-color: #462a33 !important; }
+        [data-theme='dark'] .bg-rose-200 { background-color: #573540 !important; }
+
+        [data-theme='dark'] .border-red-100 { border-color: #5a3138 !important; }
+        [data-theme='dark'] .border-red-200,
+        [data-theme='dark'] .border-red-200\/40 { border-color: #713c46 !important; }
+        [data-theme='dark'] .border-red-300,
+        [data-theme='dark'] .border-red-300\/50 { border-color: rgba(113,60,70,.7) !important; }
+        [data-theme='dark'] .border-yellow-100,
+        [data-theme='dark'] .border-yellow-200 { border-color: #6b5525 !important; }
+        [data-theme='dark'] .border-amber-100 { border-color: #6b5525 !important; }
+        [data-theme='dark'] .border-green-200 { border-color: #2f5b4f !important; }
+        [data-theme='dark'] .border-emerald-100 { border-color: #2f5b4f !important; }
+        [data-theme='dark'] .border-purple-200 { border-color: #4c3a6b !important; }
+        [data-theme='dark'] .border-rose-200 { border-color: #713c46 !important; }
+        [data-theme='dark'] .border-blue-100 { border-color: #2b3f63 !important; }
+        [data-theme='dark'] .border-blue-200,
+        [data-theme='dark'] .border-blue-200\/50,
+        [data-theme='dark'] .border-blue-200\/60 { border-color: #33507a !important; }
+
+        [data-theme='dark'] .text-primary-600,
+        [data-theme='dark'] .text-primary-700 { color: #93c5fd !important; }
+        [data-theme='dark'] .text-blue-600,
+        [data-theme='dark'] .text-blue-700,
+        [data-theme='dark'] .text-blue-800 { color: #93c5fd !important; }
+        [data-theme='dark'] .text-red-600,
+        [data-theme='dark'] .text-red-700,
+        [data-theme='dark'] .text-red-800 { color: #fca5a5 !important; }
+        [data-theme='dark'] .text-yellow-600,
+        [data-theme='dark'] .text-yellow-700,
+        [data-theme='dark'] .text-yellow-800 { color: #fbbf24 !important; }
+        [data-theme='dark'] .text-amber-600,
+        [data-theme='dark'] .text-amber-800 { color: #fbbf24 !important; }
+        [data-theme='dark'] .text-green-600,
+        [data-theme='dark'] .text-green-700,
+        [data-theme='dark'] .text-green-800 { color: #6ee7b7 !important; }
+        [data-theme='dark'] .text-emerald-600,
+        [data-theme='dark'] .text-emerald-700 { color: #6ee7b7 !important; }
+        [data-theme='dark'] .text-purple-700 { color: #d8b4fe !important; }
+        [data-theme='dark'] .text-rose-700 { color: #fda4af !important; }
 
         /* —— hover/focus 变体（深色下 hover 提亮） —— */
         [data-theme='dark'] .hover\:bg-gray-50:hover { background-color: var(--d-surface) !important; }
@@ -3541,21 +3666,21 @@ opacity: 0;
         [data-theme='dark'] .hover\:bg-gray-200:hover { background-color: var(--d-surface-3) !important; }
         [data-theme='dark'] .hover\:bg-white:hover { background-color: var(--d-surface-2) !important; }
         [data-theme='dark'] .md\:hover\:bg-white:hover { background-color: var(--d-surface-2) !important; }
-        [data-theme='dark'] .hover\:bg-white\/50:hover { background-color: rgba(31,41,55,.5) !important; }
-        [data-theme='dark'] .hover\:bg-gray-100\/50:hover { background-color: rgba(38,46,58,.5) !important; }
-        [data-theme='dark'] .hover\:bg-gray-200\/50:hover { background-color: rgba(55,65,81,.5) !important; }
+        [data-theme='dark'] .hover\:bg-white\/50:hover { background-color: rgba(26,26,26,.5) !important; }
+        [data-theme='dark'] .hover\:bg-gray-100\/50:hover { background-color: rgba(33,33,33,.5) !important; }
+        [data-theme='dark'] .hover\:bg-gray-200\/50:hover { background-color: rgba(48,48,48,.5) !important; }
         [data-theme='dark'] .focus\:bg-white:focus { background-color: var(--d-surface) !important; }
         [data-theme='dark'] .hover\:text-gray-600:hover { color: var(--d-text-3) !important; }
         [data-theme='dark'] .hover\:text-gray-700:hover { color: var(--d-text-2) !important; }
-        [data-theme='dark'] .hover\:text-gray-800:hover { color: #f3f4f6 !important; }
+        [data-theme='dark'] .hover\:text-gray-800:hover { color: #f5f5f5 !important; }
         [data-theme='dark'] .hover\:text-gray-900:hover { color: var(--d-text) !important; }
         [data-theme='dark'] .hover\:border-gray-100:hover { border-color: var(--d-border-soft) !important; }
         [data-theme='dark'] .hover\:border-gray-200:hover { border-color: var(--d-border) !important; }
-        [data-theme='dark'] .hover\:border-gray-300:hover { border-color: #4b5563 !important; }
+        [data-theme='dark'] .hover\:border-gray-300:hover { border-color: #525252 !important; }
 
         /* —— 关键组件类 —— */
         [data-theme='dark'] .app-sidebar {
-            background: linear-gradient(180deg, #1f2937 0%, #171f2b 100%) !important;
+            background: linear-gradient(180deg, #1c1c1c 0%, #161616 100%) !important;
             border-color: var(--d-border) !important;
             /* Dates from the drawer era (a 72%-white inner ring on the light
                theme read as a seam in dark mode). Kept so wide screens look
@@ -3572,7 +3697,7 @@ opacity: 0;
         }
         [data-theme='dark'] .embedded-back-ball {
             border-color: var(--d-border);
-            background: rgba(31, 41, 55, 0.94);
+            background: rgba(26, 26, 26, 0.94);
             color: var(--d-text-3);
         }
         [data-theme='dark'] .embedded-back-ball:active {
@@ -3589,11 +3714,11 @@ opacity: 0;
         }
         [data-theme='dark'] .chat-input-scrollbar:hover,
         [data-theme='dark'] .chat-input-scrollbar:focus {
-            scrollbar-color: rgba(75, 85, 99, 0.86) transparent;
+            scrollbar-color: rgba(82, 82, 82, 0.86) transparent;
         }
         [data-theme='dark'] .chat-input-scrollbar:hover::-webkit-scrollbar-thumb,
         [data-theme='dark'] .chat-input-scrollbar:focus::-webkit-scrollbar-thumb {
-            background: rgba(75, 85, 99, 0.9);
+            background: rgba(82, 82, 82, 0.9);
             background-clip: content-box;
         }
         [data-theme='dark'] .sidebar-nav-button.bg-primary-50 {
@@ -3605,34 +3730,32 @@ opacity: 0;
             --tab-bar-border: var(--d-border);
             --tab-bar-fg: var(--d-text-4);
             --tab-bar-active: #93c5fd;
-            --tab-bar-active-bg: rgba(59, 130, 246, 0.28);
-            --tab-bar-press: rgba(148, 163, 184, 0.18);
+            --tab-bar-active-bg: rgba(59, 130, 246, 0.22);
+            --tab-bar-press: rgba(163, 163, 163, 0.18);
         }
         [data-theme='dark'] .tab-hub-view {
-            --hub-card-bg: #18212c;
-            --hub-card-border: #2c3948;
-            --hub-card-hover: #1c2733;
+            --hub-card-hover: #232323;
             --hub-icon-bg: rgba(96, 165, 250, 0.18);
             --hub-icon-fg: #93c5fd;
-            --hub-status-fg: #e5e7eb;
+            --hub-status-fg: #e5e5e5;
         }
         [data-theme='dark'] .settings-link-row + .settings-link-row,
         [data-theme='dark'] .settings-accordion + .settings-link-row {
-            border-top-color: #293544;
+            border-top-color: #2a2a2a;
         }
         [data-theme='dark'] .management-item-controls {
-            border-top-color: rgba(55, 65, 81, 0.9);
+            border-top-color: rgba(48, 48, 48, 0.9);
         }
         [data-theme='dark'] .settings-toggle {
             background: var(--d-surface-3);
         }
         [data-theme='dark'] .settings-toggle::after {
-            border-color: #4b5563;
+            border-color: #525252;
             background: var(--d-surface);
         }
         [data-theme='dark'] .editor-modal-header {
             border-bottom-color: var(--d-border);
-            background: rgba(31, 41, 55, 0.85);
+            background: rgba(26, 26, 26, 0.85);
         }
         [data-theme='dark'] .modal-close-button {
             color: var(--d-text-4);
@@ -3656,10 +3779,10 @@ opacity: 0;
         }
 
         /* —— 渐变工具类（低频兜底） —— */
-        [data-theme='dark'] .from-gray-50 { --tw-gradient-from: #111827 var(--tw-gradient-from-position); }
-        [data-theme='dark'] .from-gray-100 { --tw-gradient-from: #1f2937 var(--tw-gradient-from-position); }
-        [data-theme='dark'] .to-gray-100 { --tw-gradient-to: #1f2937 var(--tw-gradient-to-position); }
-        [data-theme='dark'] .to-gray-200 { --tw-gradient-to: #374151 var(--tw-gradient-to-position); }
+        [data-theme='dark'] .from-gray-50 { --tw-gradient-from: #121212 var(--tw-gradient-from-position); }
+        [data-theme='dark'] .from-gray-100 { --tw-gradient-from: #1a1a1a var(--tw-gradient-from-position); }
+        [data-theme='dark'] .to-gray-100 { --tw-gradient-to: #1a1a1a var(--tw-gradient-to-position); }
+        [data-theme='dark'] .to-gray-200 { --tw-gradient-to: #303030 var(--tw-gradient-to-position); }
 
         .tool-call-detail {
             display: flex;
@@ -4305,6 +4428,6 @@ opacity: 0;
 .rph-style-speaker { font-weight: 700; color: #0f766e; }
 .rph-style-inner { color: #7c3aed; }
 [data-theme='dark'] .rph-style-dialogue { color: #93c5fd; }
-[data-theme='dark'] .rph-style-action { color: #9ca3af; }
+[data-theme='dark'] .rph-style-action { color: #a3a3a3; }
 [data-theme='dark'] .rph-style-speaker { color: #5eead4; }
 [data-theme='dark'] .rph-style-inner { color: #c4b5fd; }

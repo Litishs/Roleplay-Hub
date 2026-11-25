@@ -1,6 +1,6 @@
 <template>
             <div v-if="currentView === 'settings'" class="management-view">
-                <div class="max-w-3xl mx-auto flex items-center mb-4 md:mb-6">
+                <div class="management-header max-w-3xl mx-auto flex items-center">
                     <h2 class="text-xl md:text-2xl font-bold text-gray-800 flex items-center">
                         <svg class="w-6 h-6 md:w-7 md:h-7 mr-2 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><use href="#icon-settings"></use></svg>
                         设置

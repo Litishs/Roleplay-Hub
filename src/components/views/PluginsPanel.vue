@@ -1,6 +1,6 @@
 <template>
     <div v-if="currentView === 'plugins'" class="management-view">
-        <div class="max-w-3xl mx-auto flex items-center mb-4 md:mb-6">
+        <div class="management-header max-w-3xl mx-auto flex items-center">
             <button type="button" @click="goBack" class="settings-back-button" aria-label="返回">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>

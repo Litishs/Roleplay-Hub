@@ -112,14 +112,24 @@ test("hit-expansion utilities and shared-class expansions exist in styles.css", 
 test("chat header and composer controls carry hit expansion", async () => {
   const html = await read("index.html");
   assert.match(html, /goBack[^>]*p-2\.5 -m-2\.5/, "the mobile back arrow must reach a 44px hit area");
-  assert.match(html, /toggleChatFullscreen"\s*\n?\s*class="p-2\.5/, "fullscreen toggle must use real 44px padding");
+  // The unused fullscreen button gave way to a world-info shortcut (2026-11-24):
+  // the character's bound entries live on the 世界书 page, and Back returns to
+  // the chat through the shared nav stack.
+  assert.match(html, /@click="currentView = 'worldinfo'"[\s\S]{0,320}title="世界书" aria-label="查看世界书"/,
+    "the chat header must open the world-info page");
+  assert.doesNotMatch(html, /toggleChatFullscreen/, "the unused fullscreen button is gone from the chat header");
   assert.match(html, /clearChat"\s*\n?\s*class="p-2\.5/, "clear-chat must use real 44px padding");
 
   const composer = await read("src/components/chat/MessageInput.vue");
   const expanded = composer.match(/hit-expand/g) || [];
   assert.ok(expanded.length >= 8, `composer icon row must carry hit expansion (found ${expanded.length})`);
-  assert.match(composer, /flex items-center gap-3">\s*<!-- Send Image Button -->|<!-- Left controls: SendImage \/ AutoImage -->\s*<div class="flex items-center gap-3">/,
-    "composer toolbar cluster must space expanded hits apart (gap-3)");
+  // QQ-style dock (2026-11-24): input row on top (textarea + wide 发送/停止),
+  // flat action strip below — no chips, hits spread by justify-between.
+  assert.match(composer, /relative w-full flex items-center justify-between px-0\.5 mt-1">\s*<!-- Composer actions: SendImage \/ AutoImage \/ Instruction \/ Context \/ Branch \/ QuickSettings -->/,
+    "composer actions must be the flat evenly-spread strip");
+  assert.doesNotMatch(composer, /w-\[44px\] h-\[44px\]/, "old circular send key is gone");
+  assert.match(composer, /w-20 md:w-24 h-\[44px\] md:h-\[46px\] rounded-2xl bg-primary-600 text-white text-\[15px\] font-bold/,
+    "send key is the wide rounded rectangle from the QQ reference");
   assert.match(composer, /hit-expand \[--hit-out:-12px\]/, "image chip remove button needs -12px expansion");
 });
 
@@ -228,4 +238,73 @@ test("message action bar stays on one line and never overflows the phone viewpor
 test("quick-settings popover closes on a chat-log tap", async () => {
   const messageList = await read("src/components/chat/MessageList.vue");
   assert.match(messageList, /@click="showChatModelSelector = false"/, "tapping the log dismisses the quick-settings popover");
+});
+
+test("dark theme remaps semantic pale tints globally", async () => {
+  // Tailwind's pale surfaces need dark values, or badges/alerts become glowing
+  // near-white blocks. The settings panels had scoped rules; this pins the
+  // global mapping added for the rest of the app (2026-11-24).
+  const css = await read("assets/css/styles.css");
+  for (const cls of ["bg-primary-50", "bg-primary-100", "bg-red-50", "bg-yellow-50",
+    "bg-green-50", "bg-purple-50", "bg-rose-50"]) {
+    assert.ok(css.includes(`[data-theme='dark'] .${cls}`), `${cls} needs a dark value`);
+  }
+  assert.match(css, /\[data-theme='dark'\] \.text-red-600,[\s\S]{0,120}color: #fca5a5 !important;/);
+  assert.match(css, /\[data-theme='dark'\] \.text-green-600,[\s\S]{0,120}color: #6ee7b7 !important;/);
+  assert.match(css, /\[data-theme='dark'\] \.text-yellow-600,[\s\S]{0,120}color: #fbbf24 !important;/);
+  assert.match(css, /\[data-theme='dark'\] \.text-purple-700 \{ color: #d8b4fe !important; \}/);
+  assert.match(css, /\[data-theme='dark'\] \.border-red-200,[\s\S]{0,120}border-color: #713c46 !important;/);
+});
+
+test("icons share one stroke weight and header icon buttons one treatment", async () => {
+  // 1.8 was used by the sidebar and the hub rows while the rest of the app
+  // draws at 2; unify so the same glyph does not change weight per page.
+  for (const file of ["src/components/common/SideNav.vue",
+    "src/components/views/ExtensionsHubPanel.vue", "src/components/views/WorkshopHubPanel.vue"]) {
+    assert.doesNotMatch(await read(file), /stroke-width="1\.8"/, `${file} keeps the 2px stroke`);
+  }
+  // Secondary icon buttons are one neutral block (home header + page headers),
+  // with a dark value instead of the old white card.
+  const css = await read("assets/css/styles.css");
+  assert.match(css, /\.settings-icon-button \{[\s\S]{0,220}background: #f3f4f6;/);
+  assert.match(css, /\[data-theme='dark'\] \.settings-icon-button \{[\s\S]{0,120}background: var\(--d-surface-2\);/);
+  assert.match(css, /\.settings-icon-button:active \{[^}]*scale\(0\.96\)/);
+  const home = await read("src/components/chat/ConversationList.vue");
+  assert.equal((home.match(/class="settings-icon-button"/g) || []).length, 3, "home header uses the shared block");
+});
+
+test("motion and surface tokens drive the shared components", async () => {
+  const css = await read("assets/css/styles.css");
+  assert.match(css, /--motion-fast: 0\.15s;/);
+  assert.match(css, /--motion-base: 0\.22s;/);
+  assert.match(css, /--motion-slow: 0\.32s;/);
+  assert.match(css, /--motion-standard: cubic-bezier\(0\.22, 1, 0\.36, 1\);/);
+  assert.match(css, /\.bottom-tab__slider \{[\s\S]{0,800}transform var\(--motion-base\) var\(--motion-standard\)/);
+  assert.match(css, /grid-template-rows var\(--motion-slow\) var\(--motion-standard\)/);
+  assert.match(css, /animation: fadeIn var\(--motion-slow\) ease-out;/);
+  assert.match(css, /animation: message-in-elegant var\(--motion-slow\)/);
+  // Reduced motion now also stops the message/live animations.
+  assert.match(css, /prefers-reduced-motion: reduce\)[\s\S]{0,1600}\.animate-message-in,[\s\S]{0,500}animation: none !important;/);
+  // One card recipe, no duplicated light/dark values per component.
+  assert.match(css, /--surface-card-bg: #ffffff;/);
+  assert.match(css, /\.settings-group-card \{[\s\S]{0,220}background: var\(--surface-card-bg\)/);
+  assert.match(css, /\.tab-hub-card \{[\s\S]{0,800}background: var\(--surface-card-bg\)/);
+  assert.match(css, /\.tab-hub-row-card \{[\s\S]{0,300}background: var\(--surface-card-bg\)/);
+  assert.doesNotMatch(css, /\[data-theme='dark'\] \.settings-group-card \{/);
+  // Wide screens get one content column.
+  assert.match(css, /\.management-view \{[\s\S]{0,220}max-width: 48rem;[\s\S]{0,120}margin-left: auto;/);
+});
+
+test("detail titles match the navigation names", async () => {
+  assert.match(await read("src/components/views/PresetsPanel.vue"), /<settings-page-header title="预设" @back="goBack">/);
+  assert.match(await read("src/components/views/RegexPanel.vue"), /<settings-page-header title="正则" @back="goBack">/);
+});
+
+test("management page headers stick to the top of the scroll view", async () => {
+  const css = await read("assets/css/styles.css");
+  assert.match(css, /\.settings-page-header,\s*\.management-header \{[\s\S]{0,320}position: sticky;[\s\S]{0,400}top: -1rem;/);
+  assert.match(css, /\[data-theme='dark'\] \.settings-page-header,\s*\[data-theme='dark'\] \.management-header/);
+  for (const file of ["SettingsPanel", "PluginsPanel", "CharacterPanel"]) {
+    assert.match(await read(`src/components/views/${file}.vue`), /class="management-header/, `${file} uses the shared sticky header`);
+  }
 });

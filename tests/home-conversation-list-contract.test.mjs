@@ -112,15 +112,24 @@ test("home screen wiring: landing view, dual pane, back navigation and persisten
     assert.match(app, /const sortedConversations = computed\(\(\) => sortConversations/);
     assert.match(app, /sortedConversations, conversationSummaries/);
 
-    // Rows open the chat; management lives in the home header. The header's
-    // primary action imports a card (.png/.json via importCharacter) instead
-    // of creating a blank one — creation stays in the management view's add menu.
+    // Rows open the chat; management lives in the home header. The header now
+    // offers management, a direct blank-card action and import, in that order
+    // (2026-11-24).
     assert.match(list, /ctx\.selectCharacter\(item\.index\)/);
     assert.match(list, /@click="currentView = 'characters'"/);
+    assert.match(list, /@click="createNewCharacter"/);
     assert.match(list, /@click="importInputRef\?\.click\(\)"/);
     assert.match(list, /accept="\.png,\.json"/);
     assert.match(list, /@change="importCharacter\(\$event\)"/);
-    assert.ok(!list.includes('createNewCharacter'), 'the home header no longer creates blank cards');
+    assert.match(list, /@click="createNewCharacter"[\s\S]{0,320}title="新建角色卡" aria-label="新建角色卡"/);
+    // The manager, new-card and import buttons all use the shared secondary
+    // icon-button block (2026-11-24).
+    const header = list.slice(list.indexOf('<header'), list.indexOf('</header>'));
+    assert.equal((header.match(/class="settings-icon-button"/g) || []).length, 3, 'all three header icon buttons share the block');
+    const order = ["@click=\"currentView = 'characters'\"", '@click="createNewCharacter"', '@click="importInputRef?.click()"']
+      .map((token) => header.indexOf(token));
+    assert.ok(order.every((at) => at >= 0), 'all three header actions exist');
+    assert.deepEqual([...order].sort((a, b) => a - b), order, 'manager → new → import order');
     // A thumbnail is always rendered: card image, gray placeholder, and on a
     // broken image the letter-circle fallback (never a blank white disc).
     assert.match(list, /@error="markAvatarFailed\(item\)"/, 'broken avatars fall back to the letter circle');
