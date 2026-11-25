@@ -701,8 +701,9 @@
         }
 
         [data-theme='dark'] .settings-icon-button.privacy-toggle.is-active {
-            background: rgba(147, 197, 253, 0.18);
-            color: #93c5fd;
+            /* P4 palette: accent + its 18% wash, no literal palette hex. */
+            background: rgb(var(--text-primary-600) / 0.18);
+            color: var(--d-accent);
         }
 
         /* Wide-screen chat keeps the conversation list in its own column. */

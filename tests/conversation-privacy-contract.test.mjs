@@ -114,5 +114,6 @@ test('styles: blur hides the row content, keeps the unread dot and tints the tog
   assert.doesNotMatch(css, /\.is-redacted[^{]*conversation-row__unread/, 'the unread dot stays crisp');
   assert.match(css, /\.conversation-list\.is-private \.conversation-row \{\s*-webkit-touch-callout: none;\s*user-select: none;/);
   assert.match(css, /\.settings-icon-button\.privacy-toggle\.is-active \{\s*background: rgba\(59, 130, 246, 0\.14\);\s*color: #2563eb;/);
-  assert.match(css, /\[data-theme='dark'\] \.settings-icon-button\.privacy-toggle\.is-active \{[\s\S]{0,120}color: #93c5fd;/);
+  // Dark tint reads from the P4 palette (accent + its 18% wash).
+  assert.match(css, /\[data-theme='dark'\] \.settings-icon-button\.privacy-toggle\.is-active \{[\s\S]{0,160}color: var\(--d-accent\);/);
 });
