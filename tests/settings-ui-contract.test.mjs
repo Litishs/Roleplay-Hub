@@ -2,14 +2,15 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-const [html, app, styles, presetManager, settingsState, sideNav, indexHtml] = await Promise.all([
+const [html, app, styles, presetManager, settingsState, sideNav, indexHtml, dataManager] = await Promise.all([
     readFile(new URL('../src/components/views/SettingsPanel.vue', import.meta.url), 'utf8'),
     readFile(new URL('../src/modules/app.mjs', import.meta.url), 'utf8'),
     readFile(new URL('../assets/css/styles.css', import.meta.url), 'utf8'),
     readFile(new URL('../src/components/settings/PresetManager.vue', import.meta.url), 'utf8'),
     readFile(new URL('../src/composables/useSettingsState.mjs', import.meta.url), 'utf8'),
     readFile(new URL('../src/components/common/SideNav.vue', import.meta.url), 'utf8'),
-    readFile(new URL('../index.html', import.meta.url), 'utf8')
+    readFile(new URL('../index.html', import.meta.url), 'utf8'),
+    readFile(new URL('../src/components/settings/DataManager.vue', import.meta.url), 'utf8')
 ]);
 
 const settingsStart = 0;
@@ -78,6 +79,26 @@ test('紧凑用户设置保留人设管理和全部编辑能力', () => {
     assert.match(presetManager, /v-model="user\.description"/);
 });
 
+test('头像徽标用相机图标，角色名输入框内用铅笔图标', () => {
+    // The badge opens the image picker, so a camera says what happens; a pencil
+    // there read as "edit the profile", which was the ambiguity to remove.
+    const badge = presetManager.slice(
+        presetManager.indexOf('user-settings-avatar-edit'),
+        presetManager.indexOf('</span>', presetManager.indexOf('user-settings-avatar-edit'))
+    );
+    assert.ok(badge.includes('<circle'), 'the camera lens is present');
+    assert.ok(!badge.includes('M15.232 5.232'), 'the old pencil path is gone from the badge');
+    assert.match(presetManager, /title="更换头像" aria-label="更换头像"/);
+
+    // The name field gets a pencil inside it, signalling editable text.
+    assert.match(presetManager, /class="settings-form-control settings-form-control--with-icon"/);
+    assert.ok(presetManager.includes('settings-form-control-icon'));
+    // The in-field icon must be decorative: no pointer capture, and the input
+    // reserves room so text never runs under it.
+    assert.match(styles, /\.settings-form-control-icon \{[\s\S]{0,400}pointer-events: none;/);
+    assert.match(styles, /input\.settings-form-control--with-icon \{\s*padding-right: 2\.25rem;/);
+});
+
 test('设置分组卡片包含窄屏布局和低亮度深色覆盖', () => {
     assert.match(styles, /\.settings-stack\s*\{/);
     assert.match(styles, /\.settings-group-caption\s*\{/);
@@ -117,4 +138,24 @@ test('每个可折叠行都保留 aria 与 inert 契约', () => {
     assert.equal((settingsView.match(/:inert="/g) || []).length, 5, 'collapsed panels stay inert');
     // 本机数据 keeps its own value instead of restating the description.
     assert.match(settingsView, /<span class="settings-accordion-value">备份 · 恢复<\/span>/);
+});
+
+test('本机数据 shows 导出备份 / 导入备份 as one blue two-column row', () => {
+    // Wording follows the user's vocabulary (导入/导出), not the old
+    // 完整备份/恢复备份 pair.
+    assert.ok(dataManager.includes('导出备份'));
+    assert.ok(dataManager.includes('导入备份'));
+    assert.ok(!dataManager.includes('完整备份'), 'the old export label is gone');
+    assert.ok(!dataManager.includes('恢复备份'), 'the old restore label is gone');
+    // Both buttons share one row at every width: the old markup was
+    // grid-cols-1 sm:grid-cols-2, which stacked them on phones.
+    assert.ok(dataManager.includes('grid grid-cols-2 gap-3'),
+        'the row is two columns on every viewport');
+    assert.ok(!dataManager.includes('sm:grid-cols-2'), 'no stacked fallback');
+    // Emphasis is the primary blue on both, per AGENTS §2.7 (no green buttons).
+    assert.equal((dataManager.match(/bg-primary-600 hover:bg-primary-700/g) || []).length, 2,
+        'both buttons use the primary emphasis colour');
+    assert.ok(!/bg-emerald-\d{3}/.test(dataManager), 'the emerald export button is gone');
+    assert.ok(!/bg-white hover:bg-gray-50 border/.test(dataManager),
+        'the secondary-looking restore button now matches the export one');
 });

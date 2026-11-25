@@ -149,8 +149,11 @@ test('the generation settings section collapses as an in-page accordion', () => 
         'the section header toggles the accordion');
     assert.match(apiConfigHtml, /gridTemplateRows: genSectionOpen \? '1fr' : '0fr'/,
         'cards stay mounted and animate open/closed via grid-template-rows');
-    assert.match(apiConfigHtml, /class="overflow-hidden min-h-0"/,
-        'collapsing clips the content so the row height animates cleanly');
+    // 2026-11-25: the clip is conditional now. It must be on while collapsed
+    // (so the row height animates cleanly) but off while open, otherwise the
+    // help popovers inside the card get cut off at the card edge.
+    assert.match(apiConfigHtml, /:class="\['min-h-0', genSectionOpen \? '' : 'overflow-hidden'\]"/,
+        'collapsing clips the content, expanding releases it for the help popovers');
 });
 // --- 2026-09-06: removed the "当前绑定" teal summary card ---
 // The card duplicated the quick-settings slot selector (槽位 1/2/3) and the

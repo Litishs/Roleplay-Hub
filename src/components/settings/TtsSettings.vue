@@ -71,14 +71,29 @@
                                                             class="w-full bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-teal-300">
                                                     </div>
                                                     <div>
-                                                        <label class="block text-xs font-medium text-gray-500 mb-1">音色</label>
+                                                        <div class="relative flex items-center mb-1">
+                                                            <label class="text-xs font-medium text-gray-500">音色</label>
+                                                            <button type="button"
+                                                                @click.stop="settingsHelpTopic = settingsHelpTopic === 'ttsVoiceOverride' ? '' : 'ttsVoiceOverride'"
+                                                                class="settings-help-trigger"
+                                                                :class="{ 'is-open': settingsHelpTopic === 'ttsVoiceOverride' }"
+                                                                :aria-expanded="settingsHelpTopic === 'ttsVoiceOverride'"
+                                                                aria-label="查看音色覆盖说明">
+                                                                <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                                        d="M9.1 9a3 3 0 115.8 1.1c-.6 1.1-1.9 1.3-2.5 2.2-.3.4-.4.8-.4 1.2M12 17h.01"></path>
+                                                                </svg>
+                                                            </button>
+                                                            <div v-if="settingsHelpTopic === 'ttsVoiceOverride'" class="settings-help-popover">
+                                                                <span class="settings-help-popover-content">角色设置里的「角色音色」填写相同格式的音色 id，可按角色覆盖这里的默认音色。</span>
+                                                            </div>
+                                                        </div>
                                                         <select v-if="ttsCloudVoiceOptions.length" v-model="settings.ttsCloudVoice"
                                                             class="w-full bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-teal-300">
                                                             <option v-for="voice in ttsCloudVoiceOptions" :key="voice" :value="voice">{{ voice }}</option>
                                                         </select>
                                                         <input v-else type="text" v-model.trim="settings.ttsCloudVoice" placeholder="音色 id，取决于服务商"
                                                             class="w-full bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-teal-300">
-                                                        <div class="text-[10px] text-gray-400 mt-0.5">角色设置里的「角色音色」填写相同格式的音色 id 可按角色覆盖。</div>
                                                     </div>
                                                     <div>
                                                         <div class="flex justify-between items-center mb-1.5">
@@ -88,7 +103,22 @@
                                                         <input type="range" v-model.number="settings.ttsCloudSpeed" min="0.25" max="4" step="0.05"
                                                             class="w-full touch-range cursor-pointer">
                                                     </div>
-                                                    <div class="text-[10px] text-gray-400 leading-relaxed">通过 OpenAI 兼容的 /audio/speech 接口合成，按句分段请求、顺序播放；合成失败自动回落系统语音。</div>
+                                                    <div class="relative">
+                                                        <button type="button"
+                                                            @click.stop="settingsHelpTopic = settingsHelpTopic === 'ttsCloudEngine' ? '' : 'ttsCloudEngine'"
+                                                            class="text-[10px] text-gray-400 hover:text-teal-600 transition-colors flex items-center gap-1 hit-expand [--hit-out:-10px]"
+                                                            :aria-expanded="settingsHelpTopic === 'ttsCloudEngine'"
+                                                            aria-label="查看云端语音引擎说明">
+                                                            <svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                                    d="M9.1 9a3 3 0 115.8 1.1c-.6 1.1-1.9 1.3-2.5 2.2-.3.4-.4.8-.4 1.2M12 17h.01"></path>
+                                                            </svg>
+                                                            云端合成说明
+                                                        </button>
+                                                        <div v-if="settingsHelpTopic === 'ttsCloudEngine'" class="settings-help-popover">
+                                                            <span class="settings-help-popover-content">通过 OpenAI 兼容的 /audio/speech 接口合成，按句分段请求、顺序播放；合成失败自动回落系统语音。</span>
+                                                        </div>
+                                                    </div>
                                                 </div>
                                             </div>
                                             </div>

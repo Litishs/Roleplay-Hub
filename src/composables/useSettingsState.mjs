@@ -44,6 +44,16 @@ export const IMAGE_GEN_CARD_DEFAULTS = Object.freeze({
     imageGenCount: 2
 });
 
+// 余额守卫（2026-11-25）：默认 off——余额缓存必然滞后（充值/多端共用后本地仍是
+// 旧值），默认拦截会让用户「莫名其妙发不出去」。用户显式开启后才提醒/拦截。
+// 'off' = 不提醒不拦截；'warn' = 低于 warnBelow 提醒；'block' = 再低于 blockBelow 拦截。
+export const BALANCE_GUARD_MODES = Object.freeze(['off', 'warn', 'block']);
+export const BALANCE_GUARD_CARD_DEFAULTS = Object.freeze({
+    balanceGuardMode: 'off',
+    balanceWarnBelow: 10,
+    balanceBlockBelow: 2
+});
+
 export function useSettingsState() {
     // --- User persona + profiles ---
     const user = reactive({
@@ -92,6 +102,12 @@ export function useSettingsState() {
         reasoningEffort: '',            // inline panel: '', none, low, medium, high, max
         autoFetchModels: true,
         stream: true,
+        // 余额显示与阈值守卫（2026-11-25）。query 开关控制是否去供应商查余额，
+        // guard 开关控制查到的余额是否参与发送前判断；两者独立。
+        providerBalanceQueryEnabled: true,
+        balanceGuardMode: BALANCE_GUARD_CARD_DEFAULTS.balanceGuardMode,
+        balanceWarnBelow: BALANCE_GUARD_CARD_DEFAULTS.balanceWarnBelow,
+        balanceBlockBelow: BALANCE_GUARD_CARD_DEFAULTS.balanceBlockBelow,
         // 网络超时（秒）：guard 实际使用前经 runtime-policy.resolveRequestTimeouts
         // clamp 在 [10, 1800] 区间，非法/缺失回退默认值，所以这里不需要 normalize。
         requestFirstByteTimeout: CHAT_PARAMS_CARD_DEFAULTS.requestFirstByteTimeout,    // 等待服务器响应头

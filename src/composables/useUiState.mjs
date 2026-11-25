@@ -22,8 +22,8 @@ import { ref, reactive } from 'vue';
 
 export function useUiState() {
     // --- Global confirm modal ---
-    // Button labels are configurable per call (e.g. restore backup shows
-    // 取消恢复/立即恢复); empty strings fall back to the generic labels in
+    // Button labels are configurable per call (e.g. importing a backup shows
+    // 取消/立即导入); empty strings fall back to the generic labels in
     // ConfirmDialog.vue.
     const globalConfirmModal = ref({
         show: false,

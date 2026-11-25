@@ -454,7 +454,9 @@ test('app.mjs wires useApiConfig with single call and site destructuring', () =>
     // destructured at original declaration sites — identifiers keep previous names
     assert.ok(app.includes('const { imageGenProviderOptions, getImageGenProviderById, imageGenUnavailable } = apiConfigState;'));
     assert.ok(app.includes('const { apiProviderOptions } = apiConfigState;'));
-    assert.ok(app.includes('const { apiStatus, apiLatency, imageGenStatus, imageGenLatency } = apiConfigState;'));
+    // 2026-11-25: account-balance display state joined this destructure
+    // (providerBalances / balancesLoading), so the assertion tracks the new list.
+    assert.ok(app.includes('const { apiStatus, apiLatency, imageGenStatus, imageGenLatency, providerBalances, balancesLoading } = apiConfigState;'));
     assert.ok(app.includes('const { apiKeyInput, apiKeyVisible, toggleApiKeyVisibility, ttsProviderOptions, getTtsProviderById } = apiConfigState;'));
     assert.ok(app.includes('const { currentModelMode } = apiConfigState;'));
     // settings-dependent logic and computed stay in app.mjs
@@ -767,7 +769,8 @@ test('useBackupRestore composable holds backup and restore', () => {
     assert.ok(backupRestoreSource.includes('const restoreNativeBackup = async () => {'), 'owns restoreNativeBackup');
     assert.ok(backupRestoreSource.includes('await RPHStorage.exportBackup();'), 'delegates to the native plugin');
     assert.ok(backupRestoreSource.includes('window.location.reload();'), 'restore reloads the webview');
-    assert.ok(backupRestoreSource.includes("showVueConfirmModal('恢复完整备份'"), 'restore asks before replacing data');
+    assert.ok(backupRestoreSource.includes("showVueConfirmModal(\n                    '导入备份',"), 'restore asks before replacing data');
+    assert.ok(backupRestoreSource.includes('此操作无法撤销'), 'the confirm spells out that import is irreversible');
     assert.ok(backupRestoreSource.includes('return { exportNativeBackup, restoreNativeBackup };'));
     assert.ok(!backupRestoreSource.includes('watch('), 'no watchers');
 });
@@ -805,8 +808,9 @@ test('every showVueConfirmModal call site declares its own button labels', () =>
     // plan L3-3) adds a labelled site; the classic-batch retry prompt was
     // removed with the dead startClassicBatchMemoryExtraction. Remaining
     // sites: restore-backup + crash notice (the vector patrol retry prompt
-    // was removed with the embedding stack in v6 L3).
-    assert.equal(callCount, 2, 'exactly two confirm call sites (restore + crash notice)');
+    // was removed with the embedding stack in v6 L3).  2026-11-25: the
+    // account-balance guard adds one labelled site (send anyway?).
+    assert.equal(callCount, 3, 'exactly three confirm call sites (restore + crash notice + balance guard)');
     assert.equal(confirmCount, callCount, 'every call site must pass confirmLabel');
     assert.equal(cancelCount, callCount, 'every call site must pass cancelLabel');
     assert.ok(!combined.includes('取消中断'), 'mistranslated Cancel label must not reappear');

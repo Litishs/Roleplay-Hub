@@ -44,6 +44,8 @@ export function useUiTemplatePipeline(deps) {
         getChatProviderEndpoint,
         recordApiUsage,
         getApiUsagePayload,
+        // account balance guard (template analysis bills the chat provider)
+        confirmBalanceAllowsRequest,
         // template attachment / persistence
         attachUiTemplateBlocksToLastAssistant,
         saveGlobalUiTemplateRuntimeForCharacter,
@@ -190,6 +192,13 @@ export function useUiTemplatePipeline(deps) {
             const url = getChatProviderEndpoint('chat/completions');
 
             try {
+                // Balance guard: template analysis runs on the chat provider, so
+                // it spends the same account balance as the conversation.
+                if (typeof confirmBalanceAllowsRequest === 'function'
+                    && !(await confirmBalanceAllowsRequest(chatProviderForAnalysis.providerId, '模板分析供应商'))) {
+                    markUiTemplateStatus('skipped', '余额低于阈值');
+                    return false;
+                }
                 const updateRun = startUiTemplateUpdateRun();
                 const isCurrentRun = () => isUiTemplateUpdateRunCurrent(updateRun.seq, lockedTargetMessageId);
                 markUiTemplateStatus('running', '分析中', templates.length, lockedTargetMessageId);

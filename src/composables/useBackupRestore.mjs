@@ -34,7 +34,7 @@ export function useBackupRestore(deps) {
                 await saveData();
                 await flushPendingChatHistorySave();
                 await RPHStorage.exportBackup();
-                showToast('完整备份已保存', 'success');
+                showToast('备份已导出', 'success');
             } catch (error) {
                 // 取消时静默是合理的 UX，但不能用文本正则把真实错误一起吞掉：
                 // console.error 移到 if 外，含 "cancel" 字样的真实失败也必须留痕。
@@ -42,7 +42,7 @@ export function useBackupRestore(deps) {
                     console.info('Backup export cancelled by user');
                 } else {
                     console.error('Backup export failed:', error);
-                    showToast('完整备份失败：' + (error?.message || error), 'error', 5000);
+                    showToast('导出备份失败：' + (error?.message || error), 'error', 5000);
                 }
             } finally {
                 backupInProgress.value = false;
@@ -55,7 +55,11 @@ export function useBackupRestore(deps) {
             // 会触发双重恢复。用户取消时在 finally 复位。
             backupInProgress.value = true;
             try {
-                const confirmed = await showVueConfirmModal('恢复完整备份', '恢复将替换当前角色、聊天、记忆、设置和本地图片。API Key 不会从备份恢复。', { confirmLabel: '立即恢复', cancelLabel: '取消恢复' });
+                const confirmed = await showVueConfirmModal(
+                    '导入备份',
+                    '导入将用备份内容替换当前的角色、聊天、记忆、设置和本地图片，此操作无法撤销。API Key 不会从备份恢复，导入后需要重新填写。',
+                    { confirmLabel: '立即导入', cancelLabel: '取消' }
+                );
                 if (!confirmed) return;
                 await RPHStorage.restoreBackup();
                 window.location.reload();
@@ -64,7 +68,7 @@ export function useBackupRestore(deps) {
                     console.info('Backup restore cancelled by user');
                 } else {
                     console.error('Backup restore failed:', error);
-                    showToast('完整恢复失败，当前数据未被替换：' + (error?.message || error), 'error', 6000);
+                    showToast('导入备份失败，当前数据未被替换：' + (error?.message || error), 'error', 6000);
                 }
             } finally {
                 backupInProgress.value = false;
