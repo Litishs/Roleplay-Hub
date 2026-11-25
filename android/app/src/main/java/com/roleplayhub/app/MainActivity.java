@@ -59,7 +59,9 @@ public class MainActivity extends BridgeActivity {
         // 避免 JS 启动前浅色闪烁；JS 启动后由 ThemeBridge 按用户偏好最终修正。
         boolean isDark = (getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK)
                 == Configuration.UI_MODE_NIGHT_YES;
-        int themeColor = isDark ? Color.rgb(17, 24, 39) : Color.rgb(249, 250, 251);
+        // Must match ThemeBridgePlugin's dark color (#121212) and values-night;
+        // the old #111827 (blue-tinted gray) flashed a cold tint before JS ran.
+        int themeColor = isDark ? Color.rgb(18, 18, 18) : Color.rgb(249, 250, 251);
         getWindow().getDecorView().setBackgroundColor(themeColor);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             WindowManager.LayoutParams windowParams = getWindow().getAttributes();

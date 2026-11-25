@@ -1,0 +1,97 @@
+/* ==========================================================================
+ * Design tokens / 设计令牌（主题令牌化 P1，2026-11-25）
+ *
+ * 这是「浅色工具类 + 深色逐条覆盖」转向「令牌 + 深色只换值」的基础设施。
+ * 本文件当前只定义变量，**没有任何非自定义属性**，也不被任何现有规则消费，
+ * 因此引入它对渲染结果零影响（P2 才把 Tailwind 调色板接上来）。
+ *
+ * 三条硬规则：
+ * 1. 颜色一律写 "R G B" 三元组，供 Tailwind 以
+ *    rgb(var(--x) / <alpha-value>) 消费——/50、/70 这类透明度工具类
+ *    才有机会跟随主题翻转（纯 hex 变量做不到）。
+ * 2. 按「背景 / 边框 / 文字」三个命名空间分开定义。同一个 gray-100 在深色下
+ *    背景是 #212121、边框是 #262626（现有覆盖就是这样），共用一个令牌会错。
+ * 3. 只收录「深色行为已经由现有 [data-theme='dark'] 规则确定」的档位；
+ *    没有覆盖过的档位不定义，P2 接线时继续走 Tailwind 默认值，避免凭空
+ *    改色。悬停差异（hover:bg-white 用的是 surface-2 而非 surface）也在
+ *    P2 保留原规则，详见 documents 里的方案 §2。
+ *
+ * 不变量（两套主题下取值相同，深色块里仍然显式重复一遍，便于契约测试断言）：
+ * - --border-white / --text-white：叠在图片、封面上玻璃描边与彩色按钮上的白字，
+ *   翻转后整块会发灰，必须保持白。
+ * - --overlay-white / --overlay-black：图片高光与遮罩。
+ * ========================================================================== */
+
+:root {
+  /* —— 背景角色（对应 Tailwind backgroundColor）—— */
+  --bg-surface: 255 255 255;      /* .bg-white */
+  --bg-gray-50: 249 250 251;      /* .bg-gray-50 */
+  --bg-gray-100: 243 244 246;     /* .bg-gray-100 */
+  --bg-gray-200: 229 231 235;     /* .bg-gray-200 */
+  --bg-gray-300: 209 213 219;     /* .bg-gray-300 */
+  --bg-primary-50: 239 246 255;   /* .bg-primary-50 */
+  --bg-primary-100: 219 234 254;  /* .bg-primary-100 */
+
+  /* —— 边框角色（对应 Tailwind borderColor）—— */
+  --border-white: 255 255 255;    /* 不变量：玻璃描边 */
+  --border-gray-100: 229 231 235; /* .border-gray-100 */
+  --border-gray-200: 229 231 235; /* .border-gray-200 */
+  --border-gray-300: 209 213 219; /* .border-gray-300 */
+
+  /* —— 文字角色（对应 Tailwind textColor）—— */
+  --text-white: 255 255 255;      /* 不变量：彩色底上的白字 */
+  --text-gray-300: 209 213 219;
+  --text-gray-400: 156 163 175;
+  --text-gray-500: 107 114 128;
+  --text-gray-600: 75 85 99;
+  --text-gray-700: 55 65 81;
+  --text-gray-800: 31 41 55;
+  --text-gray-900: 17 24 39;
+  --text-primary-600: 37 99 235;
+  --text-primary-700: 29 78 216;
+
+  /* —— 页面画布（body 底色与默认文字色）——
+     body 实际由 .bg-gray-50 / .text-gray-900 工具类着色（index.html），
+     styles.css 的 body 规则被覆盖；这里取**生效值**，不是被覆盖的声明值。 */
+  --app-canvas: 249 250 251;      /* #f9fafb，.bg-gray-50 */
+  --app-text: 17 24 39;           /* #111827，.text-gray-900 */
+
+  /* —— 叠加层不变量（图片高光 / 遮罩，永不翻转）—— */
+  --overlay-white: 255 255 255;
+  --overlay-black: 0 0 0;
+}
+
+[data-theme='dark'] {
+  /* 中性炭灰（2026-11-24 定案）：页面 #121212 / 卡片面 #1a1a1a。
+     这里的每个值都取自 styles.css 现有深色覆盖里的精确取值。 */
+  --bg-surface: 26 26 26;         /* var(--d-surface) #1a1a1a */
+  --bg-gray-50: 18 18 18;         /* var(--d-bg) #121212 */
+  --bg-gray-100: 33 33 33;        /* var(--d-surface-2) #212121 */
+  --bg-gray-200: 43 43 43;        /* var(--d-surface-3) #2b2b2b */
+  --bg-gray-300: 82 82 82;        /* #525252 */
+  --bg-primary-50: 37 44 73;      /* #252c49 */
+  --bg-primary-100: 48 56 93;     /* #30385d */
+
+  --border-white: 255 255 255;    /* 不变量，显式重复 */
+  --border-gray-100: 38 38 38;    /* var(--d-border-soft) #262626 */
+  --border-gray-200: 48 48 48;    /* var(--d-border) #303030 */
+  --border-gray-300: 82 82 82;    /* #525252 */
+
+  --text-white: 255 255 255;      /* 不变量，显式重复 */
+  --text-gray-300: 82 82 82;      /* #525252 */
+  --text-gray-400: 115 115 115;   /* var(--d-text-5) #737373 */
+  --text-gray-500: 163 163 163;   /* var(--d-text-4) #a3a3a3 */
+  --text-gray-600: 212 212 212;   /* var(--d-text-3) #d4d4d4 */
+  --text-gray-700: 229 229 229;   /* var(--d-text-2) #e5e5e5 */
+  --text-gray-800: 245 245 245;   /* var(--d-text) #f5f5f5 */
+  --text-gray-900: 245 245 245;   /* var(--d-text) #f5f5f5 */
+
+  --text-primary-600: 147 197 253;/* #93c5fd */
+  --text-primary-700: 147 197 253;/* #93c5fd */
+
+  --app-canvas: 18 18 18;         /* #121212 */
+  --app-text: 245 245 245;        /* #f5f5f5 */
+
+  --overlay-white: 255 255 255;   /* 不变量，显式重复 */
+  --overlay-black: 0 0 0;         /* 不变量，显式重复 */
+}
