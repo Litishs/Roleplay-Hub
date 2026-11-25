@@ -46,6 +46,7 @@ import * as RPHMemoryProfile from './memory-profile.mjs';
 import { MIGRATION_NOTICE_KEY, adoptionStats, formatMigrationStatus, hasLegacyContent, scopeMigrationStatus } from './memory-migration.mjs';
 import { VIEW_DEFAULTS, buildMemoryRecall, buildMemoryView } from './memory-view.mjs';
 import { buildMemoryCitationItems, stripMemoryCitations } from './memory-citation.mjs';
+import { getToastIcon } from './toast-icons.mjs';
 import { createMemoryReconciler } from './memory-reconcile.mjs';
 import {
     COMPACT_FANOUT,
@@ -818,6 +819,9 @@ const __app = createApp({
         // [data-theme='dark'] 覆盖规则；同时双写 localStorage 供 head 内联
         // 防闪脚本首屏同步读取，并经 ThemeBridge 联动 Android 状态栏/导航栏。
         const { THEME_MODES, normalizeThemeMode, themeMedia, resolveTheme } = settingsState;
+        // Assigned once the plaza bridge exists (squareUrl is declared later);
+        // applyTheme may run before that during setup.
+        let broadcastSquareTheme = () => {};
         const applyTheme = () => {
             const theme = resolveTheme();
             document.documentElement.dataset.theme = theme;
@@ -826,6 +830,7 @@ const __app = createApp({
             if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.ThemeBridge && window.Capacitor.Plugins.ThemeBridge.setDark) {
                 window.Capacitor.Plugins.ThemeBridge.setDark({ dark: theme === 'dark' }).catch(() => {});
             }
+            broadcastSquareTheme();
         };
         watch(() => settings.themeMode, applyTheme, { immediate: true });
         if (themeMedia) themeMedia.addEventListener('change', () => { if (settings.themeMode === 'system') applyTheme(); });
@@ -1979,6 +1984,35 @@ const __app = createApp({
             if (browser) await browser.open({ url });
             else window.open(url, '_blank', 'noopener,noreferrer');
         };
+
+        // 万相广场嵌入时跟随应用主题（广场页 theme.js 实现了同一协议：加载时发
+        // RPH_FORUM_THEME_REQUEST，收到 RPHUB_THEME 后跟随父页）。只接受来自
+        // 广场 iframe 且 origin 匹配的请求，避免任何页面借消息通道改写主题。
+        const getSquareFrame = () => {
+            let origin = '';
+            try { origin = new URL(squareUrl.value).origin; } catch (_) { return null; }
+            if (!origin) return null;
+            return [...document.querySelectorAll('iframe')].find((frame) => {
+                try { return new URL(frame.src).origin === origin; } catch (_) { return false; }
+            }) || null;
+        };
+        const getResolvedTheme = () => (document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light');
+        const sendSquareTheme = (target = getSquareFrame()?.contentWindow) => {
+            if (!target) return;
+            let origin = '';
+            try { origin = new URL(squareUrl.value).origin; } catch (_) { return; }
+            try { target.postMessage({ type: 'RPHUB_THEME', theme: getResolvedTheme() }, origin); } catch (_) {}
+        };
+        const handleSquareThemeMessage = (event) => {
+            if (event.data?.type !== 'RPH_FORUM_THEME_REQUEST') return;
+            const frame = getSquareFrame();
+            if (!frame || event.source !== frame.contentWindow) return;
+            let origin = '';
+            try { origin = new URL(squareUrl.value).origin; } catch (_) { return; }
+            if (event.origin !== origin) return;
+            sendSquareTheme(event.source);
+        };
+        broadcastSquareTheme = () => sendSquareTheme();
 
         // Novel State ("墨韵·造梦" workshop, ported from the STA1N upstream page)
         const isNovelLoading = ref(true);
@@ -3783,7 +3817,7 @@ const __app = createApp({
         // Toast Notification
         const showToast = (message, type = 'info', duration = 2000, action = null) => {
             const id = `${Date.now()}-${toastIdSeed++}`;
-            toasts.value.push({ id, message, type, action });
+            toasts.value.push({ id, message, type, action, icon: getToastIcon(message) });
             setTimeout(() => {
                 toasts.value = toasts.value.filter(t => t.id !== id);
             }, duration);
@@ -9979,6 +10013,8 @@ const __app = createApp({
             document.addEventListener('click', handleMarkdownSlashClick);
             // --- 消息正文里的 [M12] 记忆引用角标 ---
             document.addEventListener('click', handleMemoryCitationClick);
+            // --- 万相广场主题同步（广场页主动请求，主题变化时主动推送）---
+            window.addEventListener('message', handleSquareThemeMessage);
             document.addEventListener('focusin', handleRootTextFocusIn);
             document.addEventListener('focusout', handleRootTextFocusOut);
 

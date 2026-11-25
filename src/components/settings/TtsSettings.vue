@@ -57,8 +57,8 @@
                                                     </div>
                                                     <div>
                                                         <label class="block text-xs font-medium text-gray-500 mb-1">API Key</label>
-                                                        <input type="password" v-model="settings.ttsCloudApiKey" autocomplete="off" placeholder="sk-...（留空表示无密钥端点）"
-                                                            class="w-full bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-teal-300">
+                                                        <secret-input v-model="settings.ttsCloudApiKey" placeholder="sk-...（留空表示无密钥端点）"
+                                                            input-class="w-full bg-white border border-gray-200 rounded-lg px-2 pr-16 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-teal-300" />
                                                         <div class="text-[10px] text-gray-400 mt-0.5">密钥经系统安全存储加密，不入备份。</div>
                                                     </div>
                                                     <div>
@@ -191,7 +191,9 @@
 
 <script>
 import { inject } from "vue";
+import SecretInput from "../common/SecretInput.vue";
 export default {
+    components: { SecretInput },
     setup() {
         const ctx = inject("appContext");
         return ctx || {};

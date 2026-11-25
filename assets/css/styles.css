@@ -4517,3 +4517,40 @@ opacity: 0;
     outline: 2px solid rgb(var(--text-primary-600));
     outline-offset: 1px;
 }
+
+/* 密钥输入框（SecretInput.vue，2026-11-25）：复制/显隐按钮只在聚焦或指针悬停
+   时出现，避免明文密钥旁边常驻操作按钮；隐藏时禁用指针事件防止误触。 */
+.secret-input__actions {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity var(--motion-fast) var(--motion-standard);
+}
+
+.secret-input:focus-within .secret-input__actions {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .secret-input:hover .secret-input__actions {
+        opacity: 1;
+        pointer-events: auto;
+    }
+}
+
+.secret-input__button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.75rem;
+    height: 1.75rem;
+    border-radius: 0.5rem;
+    color: rgb(var(--text-gray-500));
+    transition: background-color var(--motion-fast) var(--motion-standard),
+        color var(--motion-fast) var(--motion-standard);
+}
+
+.secret-input__button:hover {
+    background-color: rgb(var(--bg-gray-100));
+    color: rgb(var(--text-gray-700));
+}

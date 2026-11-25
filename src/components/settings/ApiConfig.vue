@@ -223,7 +223,7 @@
                         @input="syncApiKeyInput" @change="syncApiKeyInput"
                         @compositionend="syncApiKeyInput" @blur="syncApiKeyInput"
                         autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false"
-                        class="w-full h-12 bg-gray-50/60 border-2 border-gray-100 rounded-xl pl-11 pr-24 py-0 text-gray-800 font-medium focus:bg-white focus:border-teal-500 focus:ring-4 focus:ring-teal-100 focus:outline-none transition-all placeholder-gray-400 font-mono text-sm"
+                        class="w-full h-12 bg-gray-50/60 border-2 border-gray-100 rounded-xl pl-11 pr-40 py-0 text-gray-800 font-medium focus:bg-white focus:border-teal-500 focus:ring-4 focus:ring-teal-100 focus:outline-none transition-all placeholder-gray-400 font-mono text-sm"
                         placeholder="sk-...">
                     <div
                         class="absolute right-1.5 top-0 bottom-0 flex items-center gap-1">
@@ -236,6 +236,15 @@
                                     d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path>
                             </svg>
                             <span class="flex-shrink-0" style="line-height:1">粘贴</span>
+                        </button>
+                        <button type="button" @click="copyApiKeyToClipboard"
+                            title="复制 API Key"
+                            class="w-9 h-9 rounded-lg bg-gray-50 hover:bg-gray-100 text-gray-500 border border-gray-200 flex items-center justify-center transition-all active:scale-95 flex-shrink-0 hit-expand [--hit-out:-4px]">
+                            <svg class="w-4 h-4" style="display:block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M8 7V5a2 2 0 012-2h7a2 2 0 012 2v9a2 2 0 01-2 2h-2M5 9h7a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2v-8a2 2 0 012-2z">
+                                </path>
+                            </svg>
                         </button>
                         <button type="button" @click="toggleApiKeyVisibility"
                             :title="apiKeyVisible ? '隐藏 API Key' : '显示 API Key'"
@@ -648,9 +657,8 @@
                             <button type="button" @click="openExternal('https://cdn.sta1n.cn/keys')"
                                 class="shrink-0 text-teal-600 hover:underline cursor-pointer text-[10px] font-medium hit-expand [--hit-out:-10px]">获取密钥</button>
                         </div>
-                        <input v-model="settings.imageGenKey" type="password"
-                            class="w-full bg-white border border-gray-200 rounded-lg px-3 py-1.5 text-gray-700 text-sm focus:ring-2 focus:ring-teal-100 focus:border-teal-400 focus:outline-none transition-all shadow-sm disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-400"
-                            placeholder="STA1N-...">
+                        <secret-input v-model="settings.imageGenKey" placeholder="STA1N-..."
+                            input-class="w-full bg-white border border-gray-200 rounded-lg pl-3 pr-16 py-1.5 text-gray-700 text-sm focus:ring-2 focus:ring-teal-100 focus:border-teal-400 focus:outline-none transition-all shadow-sm" />
                     </div>
 
                     <!-- Image Model (生图版本) -->
@@ -712,6 +720,7 @@
 <script>
 import { inject, ref, computed } from "vue";
 import { RPHubCustomSelect as CustomSelect } from "../../modules/ui-select.mjs";
+import SecretInput from "../common/SecretInput.vue";
 import { RPHRuntimePolicy } from "../../modules/runtime-policy.mjs";
 import { CHAT_PARAMS_CARD_DEFAULTS, IMAGE_GEN_CARD_DEFAULTS, BALANCE_GUARD_CARD_DEFAULTS } from "../../composables/useSettingsState.mjs";
 import { formatBalance, evaluateBalanceGuard, isBalanceStale } from "../../modules/provider-balance.mjs";
@@ -747,7 +756,7 @@ const normalizeRequestTimeout = (key, settings) => {
 };
 
 export default {
-  components: { CustomSelect },
+  components: { CustomSelect, SecretInput },
     setup() {
         const ctx = inject("appContext");
         const openExternal = async (url) => {
@@ -842,6 +851,25 @@ export default {
             Object.assign(ctx.settings, IMAGE_GEN_CARD_DEFAULTS);
             ctx.showToast?.('生图设置已恢复默认，密钥保留', 'success');
         };
+        // Copy is display-only convenience: the key still lives in settings and
+        // goes through the same secret storage. Never log the value.
+        const copyApiKeyToClipboard = async () => {
+            const value = String(ctx?.settings?.apiKey || '');
+            if (!value) return;
+            try {
+                await navigator.clipboard.writeText(value);
+            } catch {
+                const area = document.createElement('textarea');
+                area.value = value;
+                area.style.position = 'fixed';
+                area.style.opacity = '0';
+                document.body.appendChild(area);
+                area.select();
+                try { document.execCommand('copy'); } catch { /* nothing else to try */ }
+                area.remove();
+            }
+            ctx.showToast?.('已复制 API Key', 'success');
+        };
         return {
             ...(ctx || {}),
             openExternal,
@@ -857,7 +885,8 @@ export default {
             requestTimeoutItems,
             normalizeRequestTimeout: (key) => normalizeRequestTimeout(key, ctx?.settings),
             restoreChatParamsDefaults,
-            restoreImageGenDefaults
+            restoreImageGenDefaults,
+            copyApiKeyToClipboard
         };
     }
 };

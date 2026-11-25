@@ -893,10 +893,8 @@
                         class="max-w-2xl mx-auto bg-white border border-gray-200 rounded-2xl p-5 md:p-6 shadow-sm space-y-5">
                         <div>
                             <label class="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">Tavily API Key</label>
-                            <input v-model.trim="editingActiveTool.data.tavilyApiKey"
-                                type="password"
-                                class="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-800 focus:ring-4 focus:ring-primary-500/10 focus:border-primary-500 focus:outline-none transition-all"
-                                placeholder="tvly-...">
+                            <secret-input v-model.trim="editingActiveTool.data.tavilyApiKey" placeholder="tvly-..."
+                                input-class="w-full bg-white border border-gray-200 rounded-xl px-3 pr-16 py-2 text-sm text-gray-800 focus:ring-4 focus:ring-primary-500/10 focus:border-primary-500 focus:outline-none transition-all" />
                         </div>
                     </div>
                 </div>
@@ -1307,10 +1305,11 @@ import { inject, computed, onMounted } from "vue";
 import SettingsPageHeader from "../common/SettingsPageHeader.vue";
 import { RPHubCustomSelect as CustomSelect } from "../../modules/ui-select.mjs";
 import { UiTemplateFrame } from "../../modules/ui-template-frame.mjs";
+import SecretInput from "../common/SecretInput.vue";
 // 2026-08-28 Phase 1.6: shared components are declared locally now that the
 // app-level global registration workaround has been removed.
 export default {
-  components: { SettingsPageHeader, CustomSelect, UiTemplateFrame },
+  components: { SettingsPageHeader, CustomSelect, UiTemplateFrame, SecretInput },
   setup() {
     const ctx = inject("appContext");
     // Per-character voice candidates: the source switches with the current TTS service (cloud list / system device voices).
