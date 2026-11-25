@@ -980,6 +980,10 @@
 
         .settings-collapse {
             display: grid;
+            /* The rows-only grid leaves an implicit auto column, which sizes to
+               max-content and lets wide content push the whole panel past the
+               card (observed on 360dp phones: 533px inside a 326px card). */
+            grid-template-columns: minmax(0, 1fr);
             grid-template-rows: 0fr;
             opacity: 0;
             pointer-events: none;

@@ -159,3 +159,14 @@ test('本机数据 shows 导出备份 / 导入备份 as one blue two-column row'
     assert.ok(!/bg-white hover:bg-gray-50 border/.test(dataManager),
         'the secondary-looking restore button now matches the export one');
 });
+
+test('settings collapse constrains its implicit grid column', async () => {
+    // The row-only grid (grid-template-rows: 0fr/1fr) leaves an implicit auto
+    // column sized to max-content: a long nowrap diagnostics line pushed the
+    // 本机数据 panel 200px+ past its card on 360dp phones.
+    assert.match(
+        styles,
+        /\.settings-collapse\s*\{[\s\S]{0,400}grid-template-columns:\s*minmax\(0,\s*1fr\);/,
+        'the collapse must constrain the column, not only the rows'
+    );
+});
