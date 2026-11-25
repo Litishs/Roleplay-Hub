@@ -106,9 +106,9 @@ test('设置分组卡片包含窄屏布局和低亮度深色覆盖', () => {
     assert.match(styles, /\.settings-accordion \+ \.settings-accordion\s*\{[^}]*border-top/, 'rows in one group are split by a hairline');
     assert.match(styles, /@media \(max-width: 640px\)/);
     assert.match(styles, /\.settings-group-card\s*\{[\s\S]{0,220}background: var\(--surface-card-bg\)/, 'the card uses the shared surface token');
-    assert.match(styles, /\[data-theme='dark'\] \{[\s\S]{0,800}--surface-card-bg: #1a1a1a;/, 'dark card values come from the shared token');
+    assert.match(styles, /\[data-theme='dark'\] \{[\s\S]{0,1600}--surface-card-bg: #1a1a1a;/, 'dark card values come from the shared token');
     assert.match(styles, /\[data-theme='dark'\] \.settings-panel-body\s*\{/);
-    assert.match(styles, /background: #161616;/);
+    assert.match(styles, /background: var\(--d-sunken\);/);
     // Icons are monochrome: no per-section tinted tiles left behind.
     assert.doesNotMatch(styles, /\.settings-accordion--(api|advanced|voice|local) \.settings-accordion-icon/);
 });

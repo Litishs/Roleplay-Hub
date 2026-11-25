@@ -83,7 +83,8 @@ test('redundant dark overrides are gone but divergent ones stay', async () => {
   assert.match(css, /\[data-theme='dark'\] \.hover\\:bg-white:hover/);
   assert.match(css, /\[data-theme='dark'\] \.md\\:hover\\:bg-white:hover/);
   assert.match(css, /\[data-theme='dark'\] \.bg-gray-50\\\/30/);
-  assert.match(css, /\[data-theme='dark'\] \.bg-gray-50\\\/80\s*\{\s*background-color:\s*rgba\(18,18,18,\.85\)/);
+  // - gray-50/80 is 85% opaque, not 80% (and now reads the palette variable).
+  assert.match(css, /\[data-theme='dark'\] \.bg-gray-50\\\/80\s*\{\s*background-color:\s*rgb\(var\(--bg-gray-50\) \/ \.85\)/);
   assert.match(css, /\[data-theme='dark'\] \.bg-gray-200\\\/50/);
   assert.match(css, /\[data-theme='dark'\] \.border-gray-100\\\/60/);
   assert.match(css, /\[data-theme='dark'\] \.border-gray-400\\\/80/);

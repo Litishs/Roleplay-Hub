@@ -79,7 +79,7 @@ test('styles.css has dark override rules driven by data-theme', async () => {
   assert.match(css, /\[data-theme='dark'\] \.app-sidebar\s*\{[\s\S]*?background:\s*linear-gradient[\s\S]*?!important/);
   // Selected item uses light text on dark blue; avoid inheriting text-primary-700
   // which would drop contrast.
-  assert.match(css, /\[data-theme='dark'\] \.sidebar-nav-button\.bg-primary-50\s*\{[\s\S]*?color:\s*#93c5fd\s*!important/);
+  assert.match(css, /\[data-theme='dark'\] \.sidebar-nav-button\.bg-primary-50\s*\{[\s\S]*?color:\s*var\(--d-accent\)\s*!important/);
   // Input caret color (invisible in dark mode, needs fixing).
   assert.match(css, /\[data-theme='dark'\] \.chat-input-box[\s\S]*?caret-color/);
 
