@@ -14,6 +14,7 @@
 // Pure functions only; the caller owns persistence (AGENTS.md §2.1 pattern).
 
 import { parseCot } from './utils.mjs';
+import { stripMemoryCitations } from './memory-citation.mjs';
 
 export const CONVERSATION_PREVIEW_MAX = 80;
 
@@ -28,7 +29,7 @@ export const buildConversationEntry = (messages, now = Date.now()) => {
         if (!message || (message.role !== 'assistant' && message.role !== 'user')) continue;
         // parseCot drops the <think>/CoT envelope and UI-template payloads, so a
         // reasoning-only turn never becomes the preview.
-        const main = parseCot(String(message.content || ''), true).main || '';
+        const main = stripMemoryCitations(parseCot(String(message.content || ''), true).main || '');
         const text = normaliseText(main);
         if (!text) continue;
         return {

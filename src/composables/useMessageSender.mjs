@@ -27,6 +27,7 @@ import { create as createChatRequestGuard } from '../modules/chat-request-guard.
 import { generateUUID, parseCot, yieldToUi } from '../modules/utils.mjs';
 import { filterBlockedStyleText } from '../modules/style-filter.mjs';
 import { createWorldInfoScanCache } from '../modules/world-info-cache.mjs';
+import { MEMORY_CITATION_INSTRUCTION, stripMemoryCitations } from '../modules/memory-citation.mjs';
 
 export function useMessageSender(deps) {
     const {
@@ -564,16 +565,22 @@ export function useMessageSender(deps) {
             const uiTemplateContextPrompt = buildUiTemplateContextSystemPrompt();
             if (uiTemplateContextPrompt) systemPromptParts.push(uiTemplateContextPrompt);
 
+            // 记忆背景（滚动摘要 + 动态信息卡）：固定注入前缀，不随历史楼层压缩裁剪
+            const timelineDigestText = memorySettings.enabled
+                ? buildMemoryContextForPrompt()
+                : '';
+
+            // [M12] handles only exist when the TOC actually carries one; asking
+            // for citations without visible refs invites the model to invent them.
+            if (timelineDigestText.includes('[M')) {
+                systemPromptParts.push(MEMORY_CITATION_INSTRUCTION);
+            }
+
             const systemPrompt = systemPromptParts.join('\n\n');
             const systemWorldInfo = [
                 ...wiGroups.system_top,
                 ...wiGroups.global_note
             ];
-
-            // 记忆背景（滚动摘要 + 动态信息卡）：固定注入前缀，不随历史楼层压缩裁剪
-            const timelineDigestText = memorySettings.enabled
-                ? buildMemoryContextForPrompt()
-                : '';
 
             // Base Messages
             let messages = [
@@ -688,7 +695,9 @@ export function useMessageSender(deps) {
                     const cleanSourceContent = (source) => {
                         // Remove CoT content from history messages before sending to AI.
                         const parsedData = parseCot(source.content || '');
-                        let content = stripUiTemplateUpdateBlock(stripDisabledImageGenContext(stripUiTemplateContextInjection(parsedData.main)));
+                        // Citations are display-only: history sent back to the
+                        // model must never contain them.
+                        let content = stripMemoryCitations(stripUiTemplateUpdateBlock(stripDisabledImageGenContext(stripUiTemplateContextInjection(parsedData.main))));
                         const cleanSys = stripDisabledImageGenContext(parsedData.sys || '');
                         if (cleanSys && source.role === 'user') {
                             content += '\n\n[系统指令: ' + cleanSys + ']';

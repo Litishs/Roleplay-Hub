@@ -126,7 +126,7 @@ test('TtsSettings.vue renders the cloud engine card and config form', () => {
     assert.match(ttsHtml, /v-model="settings\.ttsCloudProviderId"/);
     assert.match(ttsHtml, /@change="onTtsCloudProviderChange"/);
     assert.match(ttsHtml, /v-model\.trim="settings\.ttsCloudBaseUrl"/);
-    assert.match(ttsHtml, /type="password" v-model="settings\.ttsCloudApiKey"/);
+    assert.match(ttsHtml, /<secret-input v-model="settings\.ttsCloudApiKey"/);
     assert.match(ttsHtml, /v-model\.number="settings\.ttsCloudSpeed" min="0\.25" max="4"/);
     assert.match(ttsHtml, /ttsCloudModelOptions/);
     assert.match(ttsHtml, /ttsCloudVoiceOptions/);

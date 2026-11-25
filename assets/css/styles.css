@@ -645,7 +645,7 @@
         }
 
         [data-theme='dark'] .sidebar-nav-caption {
-            color: #8c8c8c;
+            color: var(--d-text-muted);
         }
 
         /* Conversation list rows. The active row needs its own themed tint:
@@ -661,7 +661,7 @@
         }
 
         [data-theme='dark'] .conversation-row:hover {
-            background: rgba(163, 163, 163, 0.14);
+            background: rgb(var(--text-gray-500) / 0.14);
         }
 
         [data-theme='dark'] .conversation-row.is-active,
@@ -1756,17 +1756,17 @@
         /* Dark theme: the action bar glass and its hover washes are hardcoded
            light values above — neutral dark surfaces here (audit §2.7 rule). */
         [data-theme='dark'] .message-action-bar {
-            background: rgba(26, 26, 26, 0.56);
+            background: rgb(var(--bg-surface) / 0.56);
             box-shadow: 0 5px 14px -10px rgba(0, 0, 0, 0.6);
         }
 
         [data-theme='dark'] .message-action-button {
-            color: rgba(163, 163, 163, 0.85);
+            color: rgb(var(--text-gray-500) / 0.85);
         }
 
         [data-theme='dark'] .message-action-button:hover {
             color: #60a5fa;
-            background: rgba(48, 48, 48, 0.72);
+            background: rgb(var(--border-gray-200) / 0.72);
         }
 
         [data-theme='dark'] .message-action-button--danger:hover {
@@ -1807,7 +1807,7 @@
         }
 
         [data-theme='dark'] input[type="range"].touch-range {
-            --range-track: #303030;
+            --range-track: var(--d-border);
         }
 
         /* Segmented switches: option rows meet the 44px minimum (slim variant
@@ -1866,16 +1866,16 @@
         }
 
         [data-theme='dark'] .message-switcher {
-            background: rgba(26, 26, 26, 0.56);
+            background: rgb(var(--bg-surface) / 0.56);
         }
 
         [data-theme='dark'] .message-switcher-button {
-            color: rgba(163, 163, 163, 0.85);
+            color: rgb(var(--text-gray-500) / 0.85);
         }
 
         [data-theme='dark'] .message-switcher-button:hover {
             color: #60a5fa;
-            background: rgba(48, 48, 48, 0.72);
+            background: rgb(var(--border-gray-200) / 0.72);
         }
 
         /* Candidate counter inside the name-row switcher: mono digits so the
@@ -1891,7 +1891,7 @@
         }
 
         [data-theme='dark'] .message-action-swipe-counter {
-            color: rgba(163, 163, 163, 0.85);
+            color: rgb(var(--text-gray-500) / 0.85);
         }
 
         .settings-page-header {
@@ -2345,7 +2345,7 @@
         [data-theme='dark'] .settings-help-trigger:hover {
             border-color: #3b5b8c;
             background: #1e2a3d;
-            color: #93c5fd;
+            color: var(--d-accent);
         }
 
         [data-theme='dark'] .settings-help-trigger.is-open {
@@ -3444,6 +3444,20 @@ opacity: 0;
             --d-text-3: #d4d4d4;
             --d-text-4: #a3a3a3;
             --d-text-5: #737373;
+            /* Component shades (P4, 2026-11-25): hand-tuned neutrals used by
+               settings/sidebar/message components. Kept here so a palette
+               change never has to hunt through the rule bodies below. */
+            --d-well: #141414;          /* segmented-switch track */
+            --d-sunken: #161616;        /* panel body, sidebar gradient end */
+            --d-field: #1c1c1c;         /* inputs, rows, sidebar gradient start */
+            --d-hover: #232323;         /* hover fills, avatar border */
+            --d-raised: #242424;        /* accordion avatar fill */
+            --d-divider: #2a2a2a;       /* row dividers */
+            --d-border-strong: #3a3a3a; /* focus rings, emphasis borders */
+            --d-text-muted: #8c8c8c;    /* captions */
+            --d-text-label: #9a9a9a;    /* field labels */
+            --d-text-value: #b0b0b0;    /* compact values, badges */
+            --d-accent: #93c5fd;        /* primary text/accents in dark */
             /* Same card recipe, dark values. */
             --surface-card-bg: #1a1a1a;
             --surface-card-border: #303030;
@@ -3451,58 +3465,58 @@ opacity: 0;
         }
 
         [data-theme='dark'] .settings-group-caption {
-            color: #8c8c8c;
+            color: var(--d-text-muted);
         }
 
         [data-theme='dark'] .settings-group-card.is-open {
-            border-color: #3a3a3a;
+            border-color: var(--d-border-strong);
             box-shadow: 0 5px 16px rgba(0, 0, 0, 0.2);
         }
 
         [data-theme='dark'] .settings-accordion + .settings-accordion {
-            border-top-color: #2a2a2a;
+            border-top-color: var(--d-divider);
         }
 
         [data-theme='dark'] .settings-accordion-trigger {
-            color: #d4d4d4;
+            color: var(--d-text-3);
         }
 
         [data-theme='dark'] .settings-accordion-trigger:hover {
-            background: #232323;
+            background: var(--d-hover);
         }
 
         [data-theme='dark'] .settings-accordion-title {
-            color: #e5e5e5;
+            color: var(--d-text-2);
         }
 
         [data-theme='dark'] .settings-accordion-description {
-            color: #8c8c8c;
+            color: var(--d-text-muted);
         }
 
         [data-theme='dark'] .settings-accordion-value,
         [data-theme='dark'] .settings-accordion-summary {
-            color: #b0b0b0;
+            color: var(--d-text-value);
         }
 
         [data-theme='dark'] .settings-accordion-chevron {
-            color: #8c8c8c;
+            color: var(--d-text-muted);
         }
 
         [data-theme='dark'] .settings-accordion-icon {
-            color: #a3a3a3;
+            color: var(--d-text-4);
         }
 
         [data-theme='dark'] .settings-accordion-avatar {
             /* Neutral surface: the avatar should not reintroduce the accent
                colour the rest of the row icons gave up. */
-            border-color: #3a3a3a;
-            background: #242424;
-            color: #d4d4d4;
+            border-color: var(--d-border-strong);
+            background: var(--d-raised);
+            color: var(--d-text-3);
         }
 
         [data-theme='dark'] .settings-accordion-badge {
-            background: rgba(163, 163, 163, 0.18);
-            color: #b0b0b0;
+            background: rgb(var(--text-gray-500) / 0.18);
+            color: var(--d-text-value);
         }
 
         [data-theme='dark'] .settings-accordion-badge--ok {
@@ -3521,83 +3535,83 @@ opacity: 0;
         }
 
         [data-theme='dark'] .settings-panel-body {
-            border-top-color: #2a2a2a;
-            background: #161616;
+            border-top-color: var(--d-divider);
+            background: var(--d-sunken);
         }
 
         [data-theme='dark'] .user-settings-avatar {
-            border-color: #232323;
-            background: #2b2b2b;
+            border-color: var(--d-hover);
+            background: var(--d-surface-3);
             color: #b7c4ff;
-            box-shadow: 0 0 0 1px #3a3a3a, 0 2px 8px rgba(0, 0, 0, 0.28);
+            box-shadow: 0 0 0 1px var(--d-border-strong), 0 2px 8px rgba(0, 0, 0, 0.28);
         }
 
         [data-theme='dark'] .user-settings-avatar-edit {
-            border-color: #232323;
+            border-color: var(--d-hover);
         }
 
         [data-theme='dark'] .user-settings-profile-trigger {
-            border-color: #303030;
-            background: #1c1c1c;
-            color: #d4d4d4;
+            border-color: var(--d-border);
+            background: var(--d-field);
+            color: var(--d-text-3);
         }
 
         [data-theme='dark'] .user-settings-profile-trigger:hover {
-            border-color: #3a3a3a;
-            background: #232323;
+            border-color: var(--d-border-strong);
+            background: var(--d-hover);
         }
 
         [data-theme='dark'] .user-settings-profile-menu {
-            border-color: #303030;
-            background: rgba(26, 26, 26, 0.98);
+            border-color: var(--d-border);
+            background: rgb(var(--bg-surface) / 0.98);
             box-shadow: 0 14px 30px rgba(0, 0, 0, 0.4);
         }
 
         [data-theme='dark'] .user-settings-profile-option {
-            color: #d4d4d4;
+            color: var(--d-text-3);
         }
 
         [data-theme='dark'] .user-settings-profile-option:hover {
-            background: #232323;
+            background: var(--d-hover);
         }
 
         [data-theme='dark'] .user-settings-profile-option.is-active {
-            background: #2b2b2b;
-            color: #93c5fd;
+            background: var(--d-surface-3);
+            color: var(--d-accent);
         }
 
         [data-theme='dark'] .user-settings-profile-option-avatar {
-            background: #2b2b2b;
-            color: #d4d4d4;
+            background: var(--d-surface-3);
+            color: var(--d-text-3);
         }
 
         [data-theme='dark'] .settings-field-label {
-            color: #9a9a9a;
+            color: var(--d-text-label);
         }
 
         [data-theme='dark'] .settings-form-control {
-            border-color: #303030;
-            background: #1c1c1c;
-            color: #e5e5e5;
+            border-color: var(--d-border);
+            background: var(--d-field);
+            color: var(--d-text-2);
         }
 
         [data-theme='dark'] .settings-form-control:focus {
             border-color: #5686bd;
-            background: #232323;
+            background: var(--d-hover);
             box-shadow: 0 0 0 3px rgba(86, 134, 189, 0.16);
         }
 
         [data-theme='dark'] .settings-accordion .segmented-switch {
-            background: #141414;
+            background: var(--d-well);
         }
 
         [data-theme='dark'] .settings-accordion .segmented-switch__indicator {
-            background: #2b2b2b;
-            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 0 0 1px #3a3a3a;
+            background: var(--d-surface-3);
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 0 0 1px var(--d-border-strong);
         }
 
         [data-theme='dark'] .settings-accordion .segmented-switch__option {
-            color: #9a9a9a;
+            color: var(--d-text-label);
         }
 
         [data-theme='dark'] .settings-accordion .segmented-switch__option.is-active {
@@ -3606,21 +3620,21 @@ opacity: 0;
 
         [data-theme='dark'] .settings-accordion .model-setting-row,
         [data-theme='dark'] .settings-accordion .generation-setting-card {
-            border-color: #303030;
-            background: #1c1c1c;
+            border-color: var(--d-border);
+            background: var(--d-field);
             box-shadow: none;
         }
 
         [data-theme='dark'] .settings-accordion .settings-subsection-card {
-            border-color: #2a2a2a;
-            background: #161616;
+            border-color: var(--d-divider);
+            background: var(--d-sunken);
             box-shadow: none;
         }
 
         [data-theme='dark'] .settings-accordion .model-setting-row:hover,
         [data-theme='dark'] .settings-accordion .generation-setting-card:hover {
-            border-color: #3a3a3a;
-            background: #232323;
+            border-color: var(--d-border-strong);
+            background: var(--d-hover);
             box-shadow: none;
         }
 
@@ -3682,53 +3696,21 @@ opacity: 0;
         }
 
         /* —— 背景类（不透明） —— */
-        [data-theme='dark'] .bg-white { background-color: var(--d-surface) !important; }
-        [data-theme='dark'] .bg-gray-50 { background-color: var(--d-bg) !important; }
-        [data-theme='dark'] .bg-gray-100 { background-color: var(--d-surface-2) !important; }
-        [data-theme='dark'] .bg-gray-200 { background-color: var(--d-surface-3) !important; }
-        [data-theme='dark'] .bg-gray-300 { background-color: #525252 !important; }
-
         /* —— 背景类（半透明：浅色面板/卡片层 → 深色半透明） —— */
-        [data-theme='dark'] .bg-white\/40 { background-color: rgba(26,26,26,.4) !important; }
-        [data-theme='dark'] .bg-white\/50 { background-color: rgba(26,26,26,.5) !important; }
-        [data-theme='dark'] .bg-white\/60 { background-color: rgba(26,26,26,.6) !important; }
-        [data-theme='dark'] .bg-white\/70 { background-color: rgba(26,26,26,.7) !important; }
-        [data-theme='dark'] .bg-white\/80 { background-color: rgba(26,26,26,.8) !important; }
-        [data-theme='dark'] .bg-white\/90 { background-color: rgba(26,26,26,.9) !important; }
-        [data-theme='dark'] .bg-white\/95 { background-color: rgba(26,26,26,.95) !important; }
-        [data-theme='dark'] .bg-gray-50\/30 { background-color: rgba(26,26,26,.3) !important; }
-        [data-theme='dark'] .bg-gray-50\/50 { background-color: rgba(26,26,26,.5) !important; }
-        [data-theme='dark'] .bg-gray-50\/55 { background-color: rgba(26,26,26,.55) !important; }
-        [data-theme='dark'] .bg-gray-50\/60 { background-color: rgba(26,26,26,.6) !important; }
-        [data-theme='dark'] .bg-gray-50\/70 { background-color: rgba(26,26,26,.7) !important; }
-        [data-theme='dark'] .bg-gray-50\/80 { background-color: rgba(18,18,18,.85) !important; }
-        [data-theme='dark'] .bg-gray-100\/50 { background-color: rgba(33,33,33,.5) !important; }
-        [data-theme='dark'] .bg-gray-100\/70 { background-color: rgba(33,33,33,.7) !important; }
-        [data-theme='dark'] .bg-gray-200\/50 { background-color: rgba(48,48,48,.5) !important; }
+        [data-theme='dark'] .bg-gray-50\/30 { background-color: rgb(var(--bg-surface) / .3) !important; }
+        [data-theme='dark'] .bg-gray-50\/50 { background-color: rgb(var(--bg-surface) / .5) !important; }
+        [data-theme='dark'] .bg-gray-50\/55 { background-color: rgb(var(--bg-surface) / .55) !important; }
+        [data-theme='dark'] .bg-gray-50\/60 { background-color: rgb(var(--bg-surface) / .6) !important; }
+        [data-theme='dark'] .bg-gray-50\/70 { background-color: rgb(var(--bg-surface) / .7) !important; }
+        [data-theme='dark'] .bg-gray-50\/80 { background-color: rgb(var(--bg-gray-50) / .85) !important; }
+        [data-theme='dark'] .bg-gray-200\/50 { background-color: rgb(var(--border-gray-200) / .5) !important; }
         /* 注：bg-white/10、/20、/30 通常是彩色按钮上的玻璃效果，保留不覆盖 */
 
         /* —— 文本类 —— */
-        [data-theme='dark'] .text-gray-300 { color: #525252 !important; }
-        [data-theme='dark'] .text-gray-400 { color: var(--d-text-5) !important; }
-        [data-theme='dark'] .text-gray-500 { color: var(--d-text-4) !important; }
-        [data-theme='dark'] .text-gray-600 { color: var(--d-text-3) !important; }
-        [data-theme='dark'] .text-gray-700 { color: var(--d-text-2) !important; }
-        [data-theme='dark'] .text-gray-800 { color: #f5f5f5 !important; }
-        [data-theme='dark'] .text-gray-900 { color: var(--d-text) !important; }
-
         /* —— 边框类 —— */
-        [data-theme='dark'] .border-gray-100 { border-color: var(--d-border-soft) !important; }
-        [data-theme='dark'] .border-gray-200 { border-color: var(--d-border) !important; }
-        [data-theme='dark'] .border-gray-300 { border-color: #525252 !important; }
-        [data-theme='dark'] .border-gray-100\/80 { border-color: rgba(48,48,48,.8) !important; }
-        [data-theme='dark'] .border-gray-100\/60 { border-color: rgba(48,48,48,.6) !important; }
-        [data-theme='dark'] .border-gray-200\/50 { border-color: rgba(48,48,48,.5) !important; }
-        [data-theme='dark'] .border-gray-200\/60 { border-color: rgba(48,48,48,.6) !important; }
-        [data-theme='dark'] .border-gray-200\/70 { border-color: rgba(48,48,48,.7) !important; }
-        [data-theme='dark'] .border-gray-200\/80 { border-color: rgba(48,48,48,.8) !important; }
-        [data-theme='dark'] .border-gray-200\/90 { border-color: rgba(48,48,48,.9) !important; }
-        [data-theme='dark'] .border-gray-300\/90 { border-color: rgba(82,82,82,.9) !important; }
-        [data-theme='dark'] .border-gray-400\/80 { border-color: rgba(82,82,82,.8) !important; }
+        [data-theme='dark'] .border-gray-100\/80 { border-color: rgb(var(--border-gray-200) / .8) !important; }
+        [data-theme='dark'] .border-gray-100\/60 { border-color: rgb(var(--border-gray-200) / .6) !important; }
+        [data-theme='dark'] .border-gray-400\/80 { border-color: rgb(var(--bg-gray-300) / .8) !important; }
         /* 注：border-white/* 在彩色按钮上，保留半透明白 */
 
         /* —— 语义浅色块（2026-11-24 全量补齐） ——
@@ -3736,8 +3718,6 @@ opacity: 0;
            近白亮块（实测：primary-50 背景 rgb(239,246,255)、世界书「绑定」徽章
            rgb(254,252,232)）。这里统一映射成深色底 + 浅色字/边，保留色相作为
            语义信号；settings-panel-body 内原有的更具体规则仍然优先。 */
-        [data-theme='dark'] .bg-primary-50 { background-color: #252c49 !important; }
-        [data-theme='dark'] .bg-primary-100 { background-color: #30385d !important; }
         [data-theme='dark'] .bg-blue-50,
         [data-theme='dark'] .bg-blue-50\/80,
         [data-theme='dark'] .bg-blue-50\/85 { background-color: rgba(30,64,175,.42) !important; }
@@ -3775,10 +3755,9 @@ opacity: 0;
         [data-theme='dark'] .border-blue-200\/60 { border-color: #33507a !important; }
 
         [data-theme='dark'] .text-primary-600,
-        [data-theme='dark'] .text-primary-700 { color: #93c5fd !important; }
         [data-theme='dark'] .text-blue-600,
         [data-theme='dark'] .text-blue-700,
-        [data-theme='dark'] .text-blue-800 { color: #93c5fd !important; }
+        [data-theme='dark'] .text-blue-800 { color: var(--d-accent) !important; }
         [data-theme='dark'] .text-red-600,
         [data-theme='dark'] .text-red-700,
         [data-theme='dark'] .text-red-800 { color: #fca5a5 !important; }
@@ -3797,25 +3776,12 @@ opacity: 0;
 
         /* —— hover/focus 变体（深色下 hover 提亮） —— */
         [data-theme='dark'] .hover\:bg-gray-50:hover { background-color: var(--d-surface) !important; }
-        [data-theme='dark'] .hover\:bg-gray-100:hover { background-color: var(--d-surface-2) !important; }
-        [data-theme='dark'] .hover\:bg-gray-200:hover { background-color: var(--d-surface-3) !important; }
         [data-theme='dark'] .hover\:bg-white:hover { background-color: var(--d-surface-2) !important; }
         [data-theme='dark'] .md\:hover\:bg-white:hover { background-color: var(--d-surface-2) !important; }
-        [data-theme='dark'] .hover\:bg-white\/50:hover { background-color: rgba(26,26,26,.5) !important; }
-        [data-theme='dark'] .hover\:bg-gray-100\/50:hover { background-color: rgba(33,33,33,.5) !important; }
-        [data-theme='dark'] .hover\:bg-gray-200\/50:hover { background-color: rgba(48,48,48,.5) !important; }
-        [data-theme='dark'] .focus\:bg-white:focus { background-color: var(--d-surface) !important; }
-        [data-theme='dark'] .hover\:text-gray-600:hover { color: var(--d-text-3) !important; }
-        [data-theme='dark'] .hover\:text-gray-700:hover { color: var(--d-text-2) !important; }
-        [data-theme='dark'] .hover\:text-gray-800:hover { color: #f5f5f5 !important; }
-        [data-theme='dark'] .hover\:text-gray-900:hover { color: var(--d-text) !important; }
-        [data-theme='dark'] .hover\:border-gray-100:hover { border-color: var(--d-border-soft) !important; }
-        [data-theme='dark'] .hover\:border-gray-200:hover { border-color: var(--d-border) !important; }
-        [data-theme='dark'] .hover\:border-gray-300:hover { border-color: #525252 !important; }
-
+        [data-theme='dark'] .hover\:bg-gray-200\/50:hover { background-color: rgb(var(--border-gray-200) / .5) !important; }
         /* —— 关键组件类 —— */
         [data-theme='dark'] .app-sidebar {
-            background: linear-gradient(180deg, #1c1c1c 0%, #161616 100%) !important;
+            background: linear-gradient(180deg, var(--d-field) 0%, var(--d-sunken) 100%) !important;
             border-color: var(--d-border) !important;
             /* Dates from the drawer era (a 72%-white inner ring on the light
                theme read as a seam in dark mode). Kept so wide screens look
@@ -3832,7 +3798,7 @@ opacity: 0;
         }
         [data-theme='dark'] .embedded-back-ball {
             border-color: var(--d-border);
-            background: rgba(26, 26, 26, 0.94);
+            background: rgb(var(--bg-surface) / 0.94);
             color: var(--d-text-3);
         }
         [data-theme='dark'] .embedded-back-ball:active {
@@ -3849,48 +3815,48 @@ opacity: 0;
         }
         [data-theme='dark'] .chat-input-scrollbar:hover,
         [data-theme='dark'] .chat-input-scrollbar:focus {
-            scrollbar-color: rgba(82, 82, 82, 0.86) transparent;
+            scrollbar-color: rgb(var(--bg-gray-300) / 0.86) transparent;
         }
         [data-theme='dark'] .chat-input-scrollbar:hover::-webkit-scrollbar-thumb,
         [data-theme='dark'] .chat-input-scrollbar:focus::-webkit-scrollbar-thumb {
-            background: rgba(82, 82, 82, 0.9);
+            background: rgb(var(--bg-gray-300) / 0.9);
             background-clip: content-box;
         }
         [data-theme='dark'] .sidebar-nav-button.bg-primary-50 {
             background: rgba(59, 130, 246, 0.2);
-            color: #93c5fd !important;
+            color: var(--d-accent) !important;
         }
         [data-theme='dark'] .bottom-tab-bar {
             --tab-bar-bg: var(--d-surface);
             --tab-bar-border: var(--d-border);
             --tab-bar-fg: var(--d-text-4);
-            --tab-bar-active: #93c5fd;
+            --tab-bar-active: var(--d-accent);
             --tab-bar-active-bg: rgba(59, 130, 246, 0.22);
-            --tab-bar-press: rgba(163, 163, 163, 0.18);
+            --tab-bar-press: rgb(var(--text-gray-500) / 0.18);
         }
         [data-theme='dark'] .tab-hub-view {
-            --hub-card-hover: #232323;
+            --hub-card-hover: var(--d-hover);
             --hub-icon-bg: rgba(96, 165, 250, 0.18);
-            --hub-icon-fg: #93c5fd;
-            --hub-status-fg: #e5e5e5;
+            --hub-icon-fg: var(--d-accent);
+            --hub-status-fg: var(--d-text-2);
         }
         [data-theme='dark'] .settings-link-row + .settings-link-row,
         [data-theme='dark'] .settings-accordion + .settings-link-row {
-            border-top-color: #2a2a2a;
+            border-top-color: var(--d-divider);
         }
         [data-theme='dark'] .management-item-controls {
-            border-top-color: rgba(48, 48, 48, 0.9);
+            border-top-color: rgb(var(--border-gray-200) / 0.9);
         }
         [data-theme='dark'] .settings-toggle {
             background: var(--d-surface-3);
         }
         [data-theme='dark'] .settings-toggle::after {
-            border-color: #525252;
+            border-color: rgb(var(--border-gray-300));
             background: var(--d-surface);
         }
         [data-theme='dark'] .editor-modal-header {
             border-bottom-color: var(--d-border);
-            background: rgba(26, 26, 26, 0.85);
+            background: rgb(var(--bg-surface) / 0.85);
         }
         [data-theme='dark'] .modal-close-button {
             color: var(--d-text-4);
@@ -3914,10 +3880,10 @@ opacity: 0;
         }
 
         /* —— 渐变工具类（低频兜底） —— */
-        [data-theme='dark'] .from-gray-50 { --tw-gradient-from: #121212 var(--tw-gradient-from-position); }
-        [data-theme='dark'] .from-gray-100 { --tw-gradient-from: #1a1a1a var(--tw-gradient-from-position); }
-        [data-theme='dark'] .to-gray-100 { --tw-gradient-to: #1a1a1a var(--tw-gradient-to-position); }
-        [data-theme='dark'] .to-gray-200 { --tw-gradient-to: #303030 var(--tw-gradient-to-position); }
+        [data-theme='dark'] .from-gray-50 { --tw-gradient-from: var(--d-bg) var(--tw-gradient-from-position); }
+        [data-theme='dark'] .from-gray-100 { --tw-gradient-from: var(--d-surface) var(--tw-gradient-from-position); }
+        [data-theme='dark'] .to-gray-100 { --tw-gradient-to: var(--d-surface) var(--tw-gradient-to-position); }
+        [data-theme='dark'] .to-gray-200 { --tw-gradient-to: var(--d-border) var(--tw-gradient-to-position); }
 
         .tool-call-detail {
             display: flex;
@@ -4562,7 +4528,79 @@ opacity: 0;
 .rph-style-action { color: #6b7280; font-style: italic; }
 .rph-style-speaker { font-weight: 700; color: #0f766e; }
 .rph-style-inner { color: #7c3aed; }
-[data-theme='dark'] .rph-style-dialogue { color: #93c5fd; }
-[data-theme='dark'] .rph-style-action { color: #a3a3a3; }
+[data-theme='dark'] .rph-style-dialogue { color: var(--d-accent); }
+[data-theme='dark'] .rph-style-action { color: var(--d-text-4); }
 [data-theme='dark'] .rph-style-speaker { color: #5eead4; }
 [data-theme='dark'] .rph-style-inner { color: #c4b5fd; }
+
+/* 记忆引用角标 [M12]（2026-11-25）：正文里由 memory-citation.mjs 生成的按钮。
+   走主题令牌，深浅色自动翻转；不扩热区，保持行内尺寸。 */
+.memory-cite {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.4em;
+    margin: 0 0.12em 0 0.18em;
+    padding: 0 0.32em;
+    border: 1px solid rgb(var(--border-gray-200));
+    border-radius: 0.375rem;
+    background-color: rgb(var(--bg-gray-100));
+    color: rgb(var(--text-primary-600));
+    font-size: 0.72em;
+    font-weight: 700;
+    line-height: 1.6;
+    font-variant-numeric: tabular-nums;
+    vertical-align: 0.12em;
+    cursor: pointer;
+    transition: background-color var(--motion-fast) var(--motion-standard),
+        border-color var(--motion-fast) var(--motion-standard);
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .memory-cite:hover {
+        background-color: rgb(var(--bg-primary-50));
+        border-color: rgb(var(--bg-primary-100));
+    }
+}
+
+.memory-cite:focus-visible {
+    outline: 2px solid rgb(var(--text-primary-600));
+    outline-offset: 1px;
+}
+
+/* 密钥输入框（SecretInput.vue，2026-11-25）：复制/显隐按钮只在聚焦或指针悬停
+   时出现，避免明文密钥旁边常驻操作按钮；隐藏时禁用指针事件防止误触。 */
+.secret-input__actions {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity var(--motion-fast) var(--motion-standard);
+}
+
+.secret-input:focus-within .secret-input__actions {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .secret-input:hover .secret-input__actions {
+        opacity: 1;
+        pointer-events: auto;
+    }
+}
+
+.secret-input__button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.75rem;
+    height: 1.75rem;
+    border-radius: 0.5rem;
+    color: rgb(var(--text-gray-500));
+    transition: background-color var(--motion-fast) var(--motion-standard),
+        color var(--motion-fast) var(--motion-standard);
+}
+
+.secret-input__button:hover {
+    background-color: rgb(var(--bg-gray-100));
+    color: rgb(var(--text-gray-700));
+}

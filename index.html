@@ -88,6 +88,18 @@
                 d="M3 3V13.2C3 14.8802 3 15.7202 3.32698 16.362C3.6146 16.9265 4.07354 17.3854 4.63803 17.673C5.27976 18 6.11984 18 7.8 18H15M15 18C15 19.6569 16.3431 21 18 21C19.6569 21 21 19.6569 21 18C21 16.3431 19.6569 15 18 15C16.3431 15 15 16.3431 15 18ZM3 8L15 8M15 8C15 9.65686 16.3431 11 18 11C19.6569 11 21 9.65685 21 8C21 6.34315 19.6569 5 18 5C16.3431 5 15 6.34315 15 8Z">
             </path>
         </symbol>
+        <symbol id="icon-copy" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V5a2 2 0 012-2h7a2 2 0 012 2v9a2 2 0 01-2 2h-2M5 9h7a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2v-8a2 2 0 012-2z"></path>
+        </symbol>
+        <symbol id="icon-check" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+        </symbol>
+        <symbol id="icon-alert" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+        </symbol>
+        <symbol id="icon-info" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+        </symbol>
     </svg>
     <div class="entry-transition" aria-hidden="true">
         <div class="entry-transition-brand">
@@ -155,8 +167,8 @@
                                     <span class="ml-2 font-medium text-white truncate drop-shadow-md">{{
                                         currentCharacter.name }}</span>
                                     <button
-                                        class="ml-1 p-1.5 text-white/60 hover:text-white hover:bg-white/20 rounded-full transition-all flex-shrink-0 hit-expand [--hit-out:-8px]"
-                                        :class="{'bg-white/20 text-white': showDescriptionPanel}">
+                                        class="ml-1 p-1.5 text-white/60 hover:text-white hover:bg-overlay-white/20 rounded-full transition-all flex-shrink-0 hit-expand [--hit-out:-8px]"
+                                        :class="{'bg-overlay-white/20 text-white': showDescriptionPanel}">
                                         <svg class="w-4 h-4 transition-transform duration-300 ease-out"
                                             :class="{'rotate-180': showDescriptionPanel}" fill="none" stroke="currentColor"
                                             viewBox="0 0 24 24">
@@ -171,14 +183,14 @@
                                 <!-- 世界书快捷入口（2026-11-24，取代无实际用途的全屏按钮）：
                                      直接进入世界书页，角色的「绑定」条目与全局条目都在那一页查看。 -->
                                 <button @click="currentView = 'worldinfo'"
-                                    class="p-2.5 text-white/70 hover:text-white rounded-full hover:bg-white/10 transition-colors"
+                                    class="p-2.5 text-white/70 hover:text-white rounded-full hover:bg-overlay-white/10 transition-colors"
                                     title="世界书" aria-label="查看世界书">
                                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <use href="#icon-book"></use>
                                     </svg>
                                 </button>
                                 <button @click="clearChat"
-                                    class="p-2.5 text-white/70 hover:text-red-400 rounded-full hover:bg-white/10 transition-colors"
+                                    class="p-2.5 text-white/70 hover:text-red-400 rounded-full hover:bg-overlay-white/10 transition-colors"
                                     title="清空聊天">
                                     <svg class="w-5 h-5" fill="none" stroke="currentColor"><use href="#icon-delete"></use></svg>
                                 </button>

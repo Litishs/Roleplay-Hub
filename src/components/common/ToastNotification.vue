@@ -12,6 +12,11 @@
                     'border-yellow-200 text-yellow-800 bg-yellow-50': toast.type === 'warning'
                  }">
                 <div class="mr-3">
+                    <svg v-if="toast.icon" class="w-6 h-6" :class="toastIconClass(toast.type)" fill="none"
+                        stroke="currentColor" aria-hidden="true">
+                        <use :href="'#' + toast.icon"></use>
+                    </svg>
+                    <template v-else>
                     <svg v-if="toast.type === 'success'" class="w-6 h-6 text-green-500" fill="none"
                         stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7">
@@ -33,6 +38,7 @@
                             d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z">
                         </path>
                     </svg>
+                    </template>
                 </div>
                 <div class="flex-1 text-sm">{{ toast.message }}</div>
                 <button v-if="toast.action" type="button"
@@ -52,7 +58,13 @@ export default {
       try { toast.action?.run?.(); } catch (_) { /* action errors are not toast-worthy */ }
       ctx?.dismissToast?.(toast.id);
     };
-    return { ...(ctx || {}), onToastAction };
+    const toastIconClass = (type) => ({
+      'text-green-500': type === 'success',
+      'text-red-500': type === 'error',
+      'text-blue-500': type === 'info',
+      'text-yellow-500': type === 'warning'
+    });
+    return { ...(ctx || {}), onToastAction, toastIconClass };
   }
 };
 </script>

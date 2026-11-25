@@ -159,7 +159,7 @@
                         <div v-if="isBatchDeleteMode"
                             class="absolute inset-0 bg-black/40 flex items-center justify-center z-20">
                             <div class="w-10 h-10 rounded-full border-2 flex items-center justify-center transition-colors"
-                                :class="selectedCharacterIndices.has(char.originalIndex) ? 'bg-red-500 border-red-500' : 'bg-white/20 border-white/50'">
+                                :class="selectedCharacterIndices.has(char.originalIndex) ? 'bg-red-500 border-red-500' : 'bg-overlay-white/20 border-white/50'">
                                 <svg v-if="selectedCharacterIndices.has(char.originalIndex)" class="w-6 h-6 text-white"
                                     fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -182,7 +182,7 @@
                         <!-- Quick Actions (Mobile Top Right) -->
                         <div class="absolute top-3 right-3 flex flex-col gap-2 z-20" v-if="!isBatchDeleteMode">
                             <button @click.stop="editCharacter(char.originalIndex)"
-                                class="p-2 hit-expand bg-white/20 backdrop-blur-md text-white rounded-full border border-white/20 active:bg-white/40 shadow-lg">
+                                class="p-2 hit-expand bg-overlay-white/20 backdrop-blur-md text-white rounded-full border border-white/20 active:bg-overlay-white/40 shadow-lg">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                         d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z">
@@ -190,14 +190,14 @@
                                 </svg>
                             </button>
                             <button @click.stop="openCharacterExportModal(char.originalIndex)"
-                                class="p-2 hit-expand bg-white/20 backdrop-blur-md text-white rounded-full border border-white/20 active:bg-white/40 shadow-lg">
+                                class="p-2 hit-expand bg-overlay-white/20 backdrop-blur-md text-white rounded-full border border-white/20 active:bg-overlay-white/40 shadow-lg">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                         d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
                                 </svg>
                             </button>
                             <button @click.stop="toggleCharacterFavorite(char.originalIndex)"
-                                class="p-2 hit-expand bg-white/20 backdrop-blur-md rounded-full border border-white/20 active:bg-white/40 shadow-lg transition-colors"
+                                class="p-2 hit-expand bg-overlay-white/20 backdrop-blur-md rounded-full border border-white/20 active:bg-overlay-white/40 shadow-lg transition-colors"
                                 :class="isCharacterFavorite(char) ? 'text-amber-300' : 'text-white'"
                                 :title="isCharacterFavorite(char) ? '取消收藏' : '收藏角色'"
                                 :aria-label="isCharacterFavorite(char) ? '取消收藏' : '收藏角色'">
@@ -213,11 +213,11 @@
                             <div class="flex items-center justify-between" v-if="!isBatchDeleteMode">
                                 <div class="flex flex-wrap gap-1">
                                     <span
-                                        class="px-1.5 py-0.5 bg-white/20 backdrop-blur-md text-white text-[8px] rounded border border-white/10">
+                                        class="px-1.5 py-0.5 bg-overlay-white/20 backdrop-blur-md text-white text-[8px] rounded border border-white/10">
                                         {{ getCharacterWICount(char) }} 世界书
                                     </span>
                                     <span
-                                        class="px-1.5 py-0.5 bg-white/20 backdrop-blur-md text-white text-[8px] rounded border border-white/10">
+                                        class="px-1.5 py-0.5 bg-overlay-white/20 backdrop-blur-md text-white text-[8px] rounded border border-white/10">
                                         {{ getCharacterRegexCount(char) }} 正则
                                     </span>
                                 </div>
@@ -302,11 +302,11 @@
                                 </h3>
                                 <div class="flex items-center gap-2">
                                     <span
-                                        class="px-2 py-0.5 bg-white/20 backdrop-blur-md text-white text-[10px] rounded-md border border-white/10">
+                                        class="px-2 py-0.5 bg-overlay-white/20 backdrop-blur-md text-white text-[10px] rounded-md border border-white/10">
                                         {{ getCharacterWICount(char) }} 世界书
                                     </span>
                                     <span
-                                        class="px-2 py-0.5 bg-white/20 backdrop-blur-md text-white text-[10px] rounded-md border border-white/10">
+                                        class="px-2 py-0.5 bg-overlay-white/20 backdrop-blur-md text-white text-[10px] rounded-md border border-white/10">
                                         {{ getCharacterRegexCount(char) }} 正则
                                     </span>
                                 </div>

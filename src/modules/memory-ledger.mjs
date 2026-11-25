@@ -7,6 +7,13 @@
 // message ids + content hashes), never from turn numbers — turn ranges are
 // recomputed from live messages at view time (design doc §3.2 / §5.3).
 //
+// `ref` is the one exception to "no numbers on entries": it is a stable,
+// append-only *display handle* used by the [M12] citations in assistant
+// replies. It never participates in identity (not in covers, not in
+// canonicalMemoryText, not in the hash version), so compaction and GC can
+// drop entries without shifting the refs of the survivors. Allocated once at
+// append time as max(ref)+1; legacy ledgers are backfilled in entry order.
+//
 // Pure module: no storage, no network, no Vue. Contract locks:
 // tests/memory-ledger-contract.test.mjs.
 
@@ -47,6 +54,8 @@ export const normalizeEntry = (rawEntry) => {
     const meta = rawEntry.meta && typeof rawEntry.meta === 'object' ? rawEntry.meta : {};
     return {
         id,
+        // Display-only handle for [Mref] citations; 0 means "legacy, backfill".
+        ref: asCount(rawEntry.ref),
         kind: ENTRY_KINDS.includes(rawEntry.kind) ? rawEntry.kind : 'digest',
         level: asCount(rawEntry.level),
         covers: (Array.isArray(rawEntry.covers) ? rawEntry.covers : []).map(normalizeCover).filter(Boolean),
@@ -100,6 +109,7 @@ export const normalizeLedger = (rawLedger) => {
     rawLedger.hashVersion = HASH_VERSION;
     rawLedger.updatedAt = asCount(rawLedger.updatedAt);
     rawLedger.entries = rawLedger.entries.map(normalizeEntry).filter(Boolean);
+    backfillEntryRefs(rawLedger);
     rawLedger.profileAdopted = rawLedger.profileAdopted === true;
     return rawLedger;
 };
@@ -311,12 +321,33 @@ export const countEnabledPins = (ledger) => (Array.isArray(ledger?.entries)
         && normalizePinText(entry.text)).length
     : 0);
 
+export const nextEntryRef = (ledger) => (Array.isArray(ledger?.entries)
+    ? ledger.entries.reduce((max, entry) => Math.max(max, asCount(entry.ref)), 0) + 1
+    : 1);
+
+// Legacy ledgers (pre-citation) have no refs. Assign them in entry order once;
+// survivors keep their numbers from then on because appendEntry only ever
+// allocates max+1.
+export const backfillEntryRefs = (ledger) => {
+    if (!ledger || !Array.isArray(ledger.entries)) return 0;
+    let next = nextEntryRef(ledger);
+    let changed = 0;
+    for (const entry of ledger.entries) {
+        if (asCount(entry.ref) > 0) continue;
+        entry.ref = next;
+        next += 1;
+        changed += 1;
+    }
+    return changed;
+};
+
 export const appendEntry = (ledger, rawEntry) => {
     const entry = normalizeEntry(rawEntry);
     if (!entry) return null;
     // Append-only: an id that already exists is never rewritten.
     const existing = findEntry(ledger, entry.id);
     if (existing) return existing;
+    if (!entry.ref) entry.ref = nextEntryRef(ledger);
     ledger.entries.push(entry);
     ledger.updatedAt = entry.meta.at || Date.now();
     return entry;

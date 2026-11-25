@@ -411,6 +411,39 @@
         </div>
     </div>
 
+    <!-- Memory citations: "判断依据" for [M12] chips in assistant replies.
+         Clicking the backdrop or the close button just clears the refs. -->
+    <div v-if="memoryCitationItems.length > 0"
+        class="fixed inset-0 z-[90] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fade-in"
+        @click.self="closeMemoryCitation()">
+        <div class="bg-white rounded-xl border border-gray-200 w-full max-w-md flex flex-col shadow-2xl overflow-hidden">
+            <div class="px-5 py-4 border-b border-gray-100 flex items-start justify-between gap-3">
+                <div>
+                    <h3 class="text-lg font-bold text-gray-900">判断依据</h3>
+                    <p class="text-xs text-gray-500 mt-1">AI 写这句话时所参考的记忆</p>
+                </div>
+                <button type="button" @click="closeMemoryCitation()"
+                    class="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+                    aria-label="关闭">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+            <div class="p-4 space-y-2.5 max-h-[min(60vh,30rem)] overflow-y-auto overscroll-contain">
+                <article v-for="item in memoryCitationItems" :key="item.ref"
+                    class="rounded-lg border border-gray-200 bg-gray-50/60 p-3">
+                    <header class="flex items-center gap-2 text-xs text-gray-500">
+                        <b class="text-sm font-bold text-primary-600 tabular-nums">M{{ item.ref }}</b>
+                        <span v-if="item.turnLabel">{{ item.turnLabel }}</span>
+                    </header>
+                    <p v-if="item.missing" class="mt-1.5 text-sm text-gray-400">这条记忆已不存在，可能已被删除、清空或重新整理。</p>
+                    <p v-else class="mt-1.5 text-sm text-gray-700 leading-relaxed whitespace-pre-line break-words">{{ item.text }}</p>
+                </article>
+            </div>
+        </div>
+    </div>
+
     <!-- Author Notice Modal (首次启动致谢) -->
     <div v-if="showAuthorNoticeModal"
         class="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fade-in">
