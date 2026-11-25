@@ -60,14 +60,20 @@ test('styles.css has dark override rules driven by data-theme', async () => {
 
   assert.match(css, /\[data-theme='dark'\]/);
   assert.match(css, /color-scheme: dark/);
-  // High-priority background class override.
-  assert.match(css, /\[data-theme='dark'\] \.bg-white\b/);
-  assert.match(css, /\[data-theme='dark'\] \.bg-gray-50\b/);
-  // Semi-transparent class override (in CSS the slash is escaped as \/).
-  assert.ok(css.includes('.bg-white\\/70'), 'bg-white/70 dark override present');
-  // hover/focus state overrides.
+  // Utility classes flip through the design tokens now (tailwind.main.config.cjs
+  // -> assets/css/tokens.css), so their hand-written overrides must be gone.
+  assert.doesNotMatch(css, /\[data-theme='dark'\] \.bg-white\s*\{/);
+  assert.doesNotMatch(css, /\[data-theme='dark'\] \.bg-gray-50\s*\{/);
+  assert.ok(!css.includes('.bg-white\\/70'), 'bg-white/70 must flip via tokens');
+  assert.ok(!css.includes('.focus\\:bg-white:focus'), 'focus:bg-white must flip via tokens');
+  const tailwind = await readFile(new URL('../tailwind.main.config.cjs', import.meta.url), 'utf8');
+  assert.match(tailwind, /white:\s*token\('bg-surface'\)/);
+  assert.match(tailwind, /700:\s*token\('text-gray-700'\)/);
+  // Values that a single token cannot express stay as explicit overrides:
+  // hover:bg-gray-50 lands on the card surface while bg-gray-50 is the page
+  // canvas, and the translucent gray-50 steps use the surface color too.
   assert.match(css, /\.hover\\:bg-gray-50:hover/);
-  assert.match(css, /\.focus\\:bg-white:focus/);
+  assert.match(css, /\[data-theme='dark'\] \.bg-gray-50\\\/30/);
   // The sidebar carries its own light gradient background; in dark mode it must
   // override the entire shorthand property, not just background-color.
   assert.match(css, /\[data-theme='dark'\] \.app-sidebar\s*\{[\s\S]*?background:\s*linear-gradient[\s\S]*?!important/);

@@ -245,7 +245,15 @@ test("dark theme remaps semantic pale tints globally", async () => {
   // near-white blocks. The settings panels had scoped rules; this pins the
   // global mapping added for the rest of the app (2026-11-24).
   const css = await read("assets/css/styles.css");
-  for (const cls of ["bg-primary-50", "bg-primary-100", "bg-red-50", "bg-yellow-50",
+  // Primary tints flip through the design tokens now (tailwind.main.config.cjs
+  // -> assets/css/tokens.css), not through a hand-written dark rule.
+  const tokens = await read("assets/css/tokens.css");
+  const tailwind = await read("tailwind.main.config.cjs");
+  assert.match(tokens, /--bg-primary-50:\s*239 246 255;/, "primary-50 light token");
+  assert.match(tokens, /\[data-theme='dark'\] \{[\s\S]*--bg-primary-50:\s*37 44 73;/, "primary-50 dark token");
+  assert.match(tailwind, /50:\s*token\('bg-primary-50'\)/, "primary-50 wired to the token");
+  assert.match(tailwind, /100:\s*token\('bg-primary-100'\)/, "primary-100 wired to the token");
+  for (const cls of ["bg-red-50", "bg-yellow-50",
     "bg-green-50", "bg-purple-50", "bg-rose-50"]) {
     assert.ok(css.includes(`[data-theme='dark'] .${cls}`), `${cls} needs a dark value`);
   }

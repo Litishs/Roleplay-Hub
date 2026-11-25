@@ -155,8 +155,8 @@
                                     <span class="ml-2 font-medium text-white truncate drop-shadow-md">{{
                                         currentCharacter.name }}</span>
                                     <button
-                                        class="ml-1 p-1.5 text-white/60 hover:text-white hover:bg-white/20 rounded-full transition-all flex-shrink-0 hit-expand [--hit-out:-8px]"
-                                        :class="{'bg-white/20 text-white': showDescriptionPanel}">
+                                        class="ml-1 p-1.5 text-white/60 hover:text-white hover:bg-overlay-white/20 rounded-full transition-all flex-shrink-0 hit-expand [--hit-out:-8px]"
+                                        :class="{'bg-overlay-white/20 text-white': showDescriptionPanel}">
                                         <svg class="w-4 h-4 transition-transform duration-300 ease-out"
                                             :class="{'rotate-180': showDescriptionPanel}" fill="none" stroke="currentColor"
                                             viewBox="0 0 24 24">
@@ -171,14 +171,14 @@
                                 <!-- 世界书快捷入口（2026-11-24，取代无实际用途的全屏按钮）：
                                      直接进入世界书页，角色的「绑定」条目与全局条目都在那一页查看。 -->
                                 <button @click="currentView = 'worldinfo'"
-                                    class="p-2.5 text-white/70 hover:text-white rounded-full hover:bg-white/10 transition-colors"
+                                    class="p-2.5 text-white/70 hover:text-white rounded-full hover:bg-overlay-white/10 transition-colors"
                                     title="世界书" aria-label="查看世界书">
                                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <use href="#icon-book"></use>
                                     </svg>
                                 </button>
                                 <button @click="clearChat"
-                                    class="p-2.5 text-white/70 hover:text-red-400 rounded-full hover:bg-white/10 transition-colors"
+                                    class="p-2.5 text-white/70 hover:text-red-400 rounded-full hover:bg-overlay-white/10 transition-colors"
                                     title="清空聊天">
                                     <svg class="w-5 h-5" fill="none" stroke="currentColor"><use href="#icon-delete"></use></svg>
                                 </button>
