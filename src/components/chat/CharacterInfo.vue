@@ -2,7 +2,7 @@
                 <!-- Character Background Layer -->
                 <div v-if="settings.useCharacterBackground && currentCharacter && currentCharacter?.avatar"
                     class="absolute -inset-4 bg-cover bg-center bg-no-repeat pointer-events-none transition-opacity duration-500 z-0 blur-[2px] char-bg-blur"
-                    :style="{ backgroundImage: `url(${currentCharacter?.avatar})`, opacity: 0.9 }">
+                    :style="{ backgroundImage: `url(${currentCharacterAvatar})`, opacity: 0.9 }">
                 </div>
 
                 <!-- Blur Overlay for Description Panel -->
@@ -19,7 +19,7 @@
                             <button type="button" @click="editCharacter(currentCharacterIndex)"
                                 class="group flex-shrink-0 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-300"
                                 title="编辑角色">
-                                <img :src="currentCharacter?.avatar"
+                                <img :src="currentCharacterAvatar"
                                     class="w-14 h-14 rounded-xl object-cover border border-white shadow-sm transition-transform duration-200 group-hover:scale-[1.02]">
                             </button>
 

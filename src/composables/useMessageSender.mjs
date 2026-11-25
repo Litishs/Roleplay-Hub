@@ -24,8 +24,9 @@ import { nextTick, reactive } from 'vue';
 import { RPHRequestDiagnostics } from '../modules/request-diagnostics.mjs';
 import { RPHRuntimePolicy, resolveRequestTimeouts } from '../modules/runtime-policy.mjs';
 import { create as createChatRequestGuard } from '../modules/chat-request-guard.mjs';
-import { generateUUID, parseCot } from '../modules/utils.mjs';
+import { generateUUID, parseCot, yieldToUi } from '../modules/utils.mjs';
 import { filterBlockedStyleText } from '../modules/style-filter.mjs';
+import { createWorldInfoScanCache } from '../modules/world-info-cache.mjs';
 
 export function useMessageSender(deps) {
     const {
@@ -305,28 +306,21 @@ export function useMessageSender(deps) {
 
             // --- Advanced World Info Processing ---
 
+            // Let the user bubble paint before the synchronous context assembly
+            // (world-info scan, regex pass, memory/tool injection) blocks the
+            // main thread.
+            await yieldToUi();
+
+            // One cache per generation: the history snapshot is fixed here, so
+            // repeated depths / keys / patterns can be reused instead of
+            // rebuilt for every entry.
+            const worldInfoScanCache = createWorldInfoScanCache();
+
             const evaluatedProbability = new Map(); // Store rolled probabilities to prevent re-rolls
 
             const toNonNegativeNumber = (value, fallback = 0) => {
                 const number = Number(value);
                 return Number.isFinite(number) ? Math.max(0, number) : fallback;
-            };
-
-            const createWorldInfoRegex = (pattern) => {
-                let source = String(pattern || '');
-                let flags = 'i';
-                if (source.startsWith('/') && source.lastIndexOf('/') > 0) {
-                    const lastSlash = source.lastIndexOf('/');
-                    const potentialFlags = source.slice(lastSlash + 1);
-                    if (/^[dgimsuvy]*$/.test(potentialFlags)) {
-                        source = source.slice(1, lastSlash);
-                        flags = potentialFlags;
-                    }
-                }
-                flags = flags.replace(/g/g, '');
-                if (!flags.includes('i')) flags += 'i';
-                if (/\\[pP]\{/.test(source) && !flags.includes('u')) flags += 'u';
-                return new RegExp(source, flags);
             };
 
             const worldInfoKeyMatchesText = (entry, key, text) => {
@@ -335,15 +329,15 @@ export function useMessageSender(deps) {
                 if (!rawKey || !rawText) return false;
 
                 if (entry.useRegex) {
-                    try {
-                        return createWorldInfoRegex(rawKey).test(rawText);
-                    } catch (e) {
+                    const compiled = worldInfoScanCache.regex(rawKey);
+                    if (!compiled) {
                         console.warn(`Invalid world info regex: ${rawKey}`);
                         return false;
                     }
+                    return compiled.test(rawText);
                 }
 
-                return rawText.toLowerCase().includes(rawKey.toLowerCase());
+                return worldInfoScanCache.lower(rawText).includes(worldInfoScanCache.lower(rawKey));
             };
 
             const passesWorldInfoProbability = (entry) => {
@@ -389,6 +383,9 @@ export function useMessageSender(deps) {
             let triggeredEntries = new Map(); // Use Map to store entries and their scores
             const activeWorldInfo = worldInfo.value.filter(e => e.enabled !== false);
             const postprocessedChatHistory = getPostprocessedChatMessages(chatHistory.value, { includeSystem: false });
+            // Contents are immutable for this generation, so the per-depth join
+            // can be shared by every entry that uses the same scan depth.
+            const postprocessedChatContents = postprocessedChatHistory.map(m => m.content);
 
             // 1. Initial Scan (Chat History)
             activeWorldInfo.forEach(entry => {
@@ -402,7 +399,7 @@ export function useMessageSender(deps) {
                 const entryScanDepth = maxScanDepth > 0 ? Math.min(rawScanDepth, maxScanDepth) : rawScanDepth;
                 if (entryScanDepth === 0 || !entry.keys || entry.keys.length === 0) return;
 
-                const scanText = postprocessedChatHistory.slice(-entryScanDepth).map(m => m.content).join('\n');
+                const scanText = worldInfoScanCache.scanText(entryScanDepth, postprocessedChatContents);
 
                 if (entry.keys && entry.keys.length > 0) {
                     const result = checkEntryTrigger(entry, scanText);
@@ -873,89 +870,94 @@ export function useMessageSender(deps) {
                 }).join(', ');
             };
 
-            // Compute message-level World Info injections for Context Viewer
-            let globalInjectedWIs = budgetedEntries.map(entry => ({
-                name: getWorldInfoDisplayName(entry),
-                triggers: getWorldInfoTriggerText(entry)
-            }));
-            lastContextMessages.value = messages.map(m => {
-                let injectedWIsMap = new Map();
+            // Compute message-level World Info injections for Context Viewer.
+            // Deferred one tick: it walks every message and runs highlight
+            // regexes, which must not delay the request the user is waiting on.
+            const buildContextViewerSnapshot = () => {
+                let globalInjectedWIs = budgetedEntries.map(entry => ({
+                    name: getWorldInfoDisplayName(entry),
+                    triggers: getWorldInfoTriggerText(entry)
+                }));
+                lastContextMessages.value = messages.map(m => {
+                    let injectedWIsMap = new Map();
 
-                (Array.isArray(m._worldInfoEntries) ? m._worldInfoEntries : []).forEach(entry => {
-                    if (!entry) return;
-                    injectedWIsMap.set(getWorldInfoDisplayName(entry), getWorldInfoTriggerText(entry));
-                });
+                    (Array.isArray(m._worldInfoEntries) ? m._worldInfoEntries : []).forEach(entry => {
+                        if (!entry) return;
+                        injectedWIsMap.set(getWorldInfoDisplayName(entry), getWorldInfoTriggerText(entry));
+                    });
 
-                const isMemoryMessage = m.role !== 'system' && isRoleMemoryContextContent(m.content);
+                    const isMemoryMessage = m.role !== 'system' && isRoleMemoryContextContent(m.content);
 
-                // Detect Memory injections in this message
-                if (isMemoryMessage) {
-                    const memoryContent = String(m.content || '');
-                    const memoryFragmentTagCount = (memoryContent.match(/<memory_fragment\b/gi) || []).length;
-                    const standardMemoryFragmentCloseCount = (memoryContent.match(/<\/memory_fragment>/gi) || []).length;
-                    const legacyVectorMemoryTags = memoryContent
-                        .split('\n')
-                        .filter(l => /^<第\s*.+?次对话_相似度\s+.+>$/.test(l.trim()));
-                    const vectorMemoryFragmentCount = memoryFragmentTagCount > 0
-                        ? Math.max(1, standardMemoryFragmentCloseCount > 0 ? memoryFragmentTagCount : Math.ceil(memoryFragmentTagCount / 2))
-                        : legacyVectorMemoryTags.length;
-                    const isVectorMemoryMessage = isVectorMemoryRecallContent(memoryContent);
-                    const memoryDisplayName = isVectorMemoryMessage ? '角色记忆（向量召回）' : '角色记忆';
-                    const memoryTriggerText = isVectorMemoryMessage
-                        ? `已注入 ${vectorMemoryFragmentCount} 个向量分片`
-                        : '已注入';
-                    injectedWIsMap.set(memoryDisplayName, memoryTriggerText);
-                    if (!globalInjectedWIs.some(i => i.name === memoryDisplayName)) {
-                        globalInjectedWIs.push({ name: memoryDisplayName, triggers: memoryTriggerText });
+                    // Detect Memory injections in this message
+                    if (isMemoryMessage) {
+                        const memoryContent = String(m.content || '');
+                        const memoryFragmentTagCount = (memoryContent.match(/<memory_fragment\b/gi) || []).length;
+                        const standardMemoryFragmentCloseCount = (memoryContent.match(/<\/memory_fragment>/gi) || []).length;
+                        const legacyVectorMemoryTags = memoryContent
+                            .split('\n')
+                            .filter(l => /^<第\s*.+?次对话_相似度\s+.+>$/.test(l.trim()));
+                        const vectorMemoryFragmentCount = memoryFragmentTagCount > 0
+                            ? Math.max(1, standardMemoryFragmentCloseCount > 0 ? memoryFragmentTagCount : Math.ceil(memoryFragmentTagCount / 2))
+                            : legacyVectorMemoryTags.length;
+                        const isVectorMemoryMessage = isVectorMemoryRecallContent(memoryContent);
+                        const memoryDisplayName = isVectorMemoryMessage ? '角色记忆（向量召回）' : '角色记忆';
+                        const memoryTriggerText = isVectorMemoryMessage
+                            ? `已注入 ${vectorMemoryFragmentCount} 个向量分片`
+                            : '已注入';
+                        injectedWIsMap.set(memoryDisplayName, memoryTriggerText);
+                        if (!globalInjectedWIs.some(i => i.name === memoryDisplayName)) {
+                            globalInjectedWIs.push({ name: memoryDisplayName, triggers: memoryTriggerText });
+                        }
                     }
-                }
 
-                let renderedContent = escapeHtml(m.content);
-                // Sort keys by length descending to match longer phrases first
-                const sortedKeys = Array.from(floorInfo.keys()).sort((a, b) => b.length - a.length);
-                sortedKeys.forEach(k => {
-                    if (k.length < 1) return;
-                    const escapedK = k.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
-                    // Avoid replacing inside html tags like <mark class="...">
-                    const safeRegex = new RegExp(`(${escapedK})(?![^<]*>)`, 'gi');
-                    renderedContent = renderedContent.replace(safeRegex, '<mark class="bg-yellow-200/80 text-yellow-900 border-b border-yellow-400 font-bold px-0.5 mx-px rounded shadow-sm">$1</mark>');
+                    let renderedContent = escapeHtml(m.content);
+                    // Sort keys by length descending to match longer phrases first
+                    const sortedKeys = Array.from(floorInfo.keys()).sort((a, b) => b.length - a.length);
+                    sortedKeys.forEach(k => {
+                        if (k.length < 1) return;
+                        const escapedK = k.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+                        // Avoid replacing inside html tags like <mark class="...">
+                        const safeRegex = new RegExp(`(${escapedK})(?![^<]*>)`, 'gi');
+                        renderedContent = renderedContent.replace(safeRegex, '<mark class="bg-yellow-200/80 text-yellow-900 border-b border-yellow-400 font-bold px-0.5 mx-px rounded shadow-sm">$1</mark>');
+                    });
+
+                    // Highlight memory content with purple
+                    if (isMemoryMessage) {
+                        renderedContent = renderedContent.replace(
+                            /&lt;\/?(?:role_memory_vector_recall|memory_fragment)\b[\s\S]*?&gt;/g,
+                            '<mark class="bg-purple-200/80 text-purple-900 border-b border-purple-400 font-bold px-1 rounded shadow-sm">$&</mark>'
+                        );
+                        renderedContent = renderedContent.replace(
+                            /\[角色记忆[^\]]*\]/g,
+                            '<mark class="bg-purple-200/80 text-purple-900 border-b border-purple-400 font-bold px-1 rounded shadow-sm">$&</mark>'
+                        );
+                        renderedContent = renderedContent.replace(
+                            /\[——[^—]*——\]/g,
+                            '<mark class="bg-purple-100/80 text-purple-700 font-semibold px-0.5 rounded">$&</mark>'
+                        );
+                        renderedContent = renderedContent.replace(
+                            /\[向量召回[^\]]*\]/g,
+                            '<mark class="bg-teal-100/90 text-teal-800 border-b border-teal-300 font-semibold px-0.5 rounded">$&</mark>'
+                        );
+                    }
+
+                    return {
+                        role: m.role,
+                        name: m.name,
+                        content: m.content,
+                        renderedContent: renderedContent,
+                        floor: Number.isFinite(m._contextFloor) ? m._contextFloor : null,
+                        isMemory: isMemoryMessage,
+                        wiTriggers: Array.from(injectedWIsMap.entries()).map(([name, triggers]) => ({
+                            name,
+                            triggers
+                        }))
+                    };
                 });
-
-                // Highlight memory content with purple
-                if (isMemoryMessage) {
-                    renderedContent = renderedContent.replace(
-                        /&lt;\/?(?:role_memory_vector_recall|memory_fragment)\b[\s\S]*?&gt;/g,
-                        '<mark class="bg-purple-200/80 text-purple-900 border-b border-purple-400 font-bold px-1 rounded shadow-sm">$&</mark>'
-                    );
-                    renderedContent = renderedContent.replace(
-                        /\[角色记忆[^\]]*\]/g,
-                        '<mark class="bg-purple-200/80 text-purple-900 border-b border-purple-400 font-bold px-1 rounded shadow-sm">$&</mark>'
-                    );
-                    renderedContent = renderedContent.replace(
-                        /\[——[^—]*——\]/g,
-                        '<mark class="bg-purple-100/80 text-purple-700 font-semibold px-0.5 rounded">$&</mark>'
-                    );
-                    renderedContent = renderedContent.replace(
-                        /\[向量召回[^\]]*\]/g,
-                        '<mark class="bg-teal-100/90 text-teal-800 border-b border-teal-300 font-semibold px-0.5 rounded">$&</mark>'
-                    );
-                }
-
-                return {
-                    role: m.role,
-                    name: m.name,
-                    content: m.content,
-                    renderedContent: renderedContent,
-                    floor: Number.isFinite(m._contextFloor) ? m._contextFloor : null,
-                    isMemory: isMemoryMessage,
-                    wiTriggers: Array.from(injectedWIsMap.entries()).map(([name, triggers]) => ({
-                        name,
-                        triggers
-                    }))
-                };
-            });
-            // Store overall triggered entries based on actual injection order in the prompt
-            lastTriggeredWorldInfos.value = globalInjectedWIs;
+                // Store overall triggered entries based on actual injection order in the prompt
+                lastTriggeredWorldInfos.value = globalInjectedWIs;
+            };
+            setTimeout(buildContextViewerSnapshot, 0);
 
             const apiMessages = messages.map((message) => ({
                 role: message.role,

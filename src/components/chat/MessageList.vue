@@ -85,7 +85,7 @@
                     </div>
                     <div v-else-if="chatHistory.length === 0"
                         class="flex flex-col items-center justify-center h-full text-gray-400 opacity-60">
-                        <img :src="currentCharacter?.avatar" class="w-24 h-24 rounded-full mb-4 opacity-50 grayscale">
+                        <img :src="currentCharacterAvatar" class="w-24 h-24 rounded-full mb-4 opacity-50 grayscale">
                         <p>开始与 {{ currentCharacter.name }} 对话吧</p>
                     </div>
 
@@ -115,7 +115,7 @@
                                         {{ (msg.name || user.name || 'U').charAt(0) }}
                                     </div>
                                 </div>
-                                <img v-else :src="currentCharacter?.avatar"
+                                <img v-else :src="currentCharacterAvatar"
                                     class="w-9 h-9 rounded-full object-cover mr-1.5 border border-gray-200 shadow-sm transition-transform">
                             </div>
 
@@ -496,7 +496,7 @@
                             :class="['flex flex-row', settings.immersiveMode ? 'immersive-message-shell max-w-[99%]' : 'max-w-[99%] md:max-w-[75%] lg:max-w-[70%]']">
                             <div v-show="!settings.immersiveMode" class="flex-shrink-0 animate-message-in"
                                 style="animation-delay: 100ms;">
-                                <img :src="currentCharacter?.avatar"
+                                <img :src="currentCharacterAvatar"
                                     class="w-9 h-9 rounded-full object-cover mr-1.5 border border-gray-200 shadow-sm">
                             </div>
                             <div :class="['flex flex-col min-w-0 items-start', settings.immersiveMode ? 'immersive-message-column' : '']">

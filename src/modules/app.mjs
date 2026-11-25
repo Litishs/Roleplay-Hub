@@ -133,6 +133,7 @@ import { useStoryBranching } from '../composables/useStoryBranching.mjs';
 import { useDataIO } from '../composables/useDataIO.mjs';
 import { useBackupRestore } from '../composables/useBackupRestore.mjs';
 import { EXECUTABLE_FRAME_CHANNEL, buildExecutableHtmlDocument, buildKeywordToolSnippet, bytesToBase64, checkConnectionStatus, cleanActiveToolCallReason, cleanupActiveToolCaptureState, collapseNativeReasoning, debounce, escapeRegexText, escapeXmlAttribute, escapeXmlText, estimateTokens, formatAIResponseForConsole, formatTokenAggregate, formatTokenCount, formatLatestTokenCount, formatTokenUsageTime, getConversationTurnAtIndexFromSnapshot, getTokenUsageCategory, indentXmlText, isDatabaseClosingError, isDesktopSidebarViewport, isEditableElement, isMobileViewport, normalizePresetRole, normalizeTavilyExtractUrl, printAIRequestLogs, readUsageNumber, removeActiveToolCallRawsFromText, requestTavily, resizeChatInputElement, runWithConcurrency, stringifyErrorDetail, stringifyUiSchema, stripActiveToolCallsFromAssistant, stripCodeBlocksForToolDetection, stripUiTemplateContextInjection, throwApiError, yieldToBrowser, yieldToUi } from './utils.mjs';
+import { createAvatarUrlResolver } from './avatar-url.mjs';
 import { extractVectorQueryTerms, getClassicMemoryKey, getTimelineCharCount, normalizeKeepFloors, trimMemoryText } from './memory-utils.mjs';
 import { buildBalanceRequests, evaluateBalanceGuard, formatBalance, isBalanceStale, parseBalanceResponses, resolveBalanceProfile } from './provider-balance.mjs';
 import { createPluginRegistry } from '../plugins/plugin-registry.mjs';
@@ -1193,6 +1194,12 @@ const __app = createApp({
 
         const { characters, showAddCharacterMenu, currentCharacterIndex } = characterState;
         const { currentCharacter } = characterState;
+
+        // Card avatars from imported PNGs can be multi-megabyte data URLs.
+        // Resolve them once per change to a blob URL for rendering (native
+        // builds already hand us file URLs, which pass through untouched).
+        const avatarUrlResolver = createAvatarUrlResolver();
+        const currentCharacterAvatar = computed(() => avatarUrlResolver.resolve(currentCharacter.value?.avatar || ''));
 
         const {
             chatHistory,
@@ -10132,7 +10139,7 @@ const __app = createApp({
             showAuthorNoticeModal, closeAuthorNoticeModal, // Author Notice Modal
             modelsLoading,
             isGenerating, isRemoteGenerating, remoteEstimatedTime, isReceiving, isThinking, hasActiveToolInlineWork, isConversationBusy, activeToolContinuationMessageId, activeToolContinuationHasResponse, userInput, modelSearchQuery, activeModelTag, modelTags, characterSearchQuery, filteredModels, filteredCharacters,
-            user, settings, apiProviderOptions, selectedApiProvider, isCustomApiProvider, customApiProviderOptions, showApiProviderSelector, selectApiProvider, characters, currentCharacter, currentCharacterIndex, chatHistory, sortedConversations, conversationSummaries, displayedChatMessages, chatTopSpacerHeight, chatBottomSpacerHeight, handleChatScroll, presets, presetRoleOptions, fontFamilyOptions, themeModeOptions, imageStyleOptions, imageModelOptions, availableImageStyleOptions, imageSizeOptions, imageGenCountOptions, scopeOptions, uiTemplatePlacementOptions, worldInfoPositionOptions, getPresetRoleLabel, getPresetRoleDisplayLabel, getPresetRoleBadgeClass, regexScripts, worldInfo,
+            user, settings, apiProviderOptions, selectedApiProvider, isCustomApiProvider, customApiProviderOptions, showApiProviderSelector, selectApiProvider, characters, currentCharacter, currentCharacterAvatar, currentCharacterIndex, chatHistory, sortedConversations, conversationSummaries, displayedChatMessages, chatTopSpacerHeight, chatBottomSpacerHeight, handleChatScroll, presets, presetRoleOptions, fontFamilyOptions, themeModeOptions, imageStyleOptions, imageModelOptions, availableImageStyleOptions, imageSizeOptions, imageGenCountOptions, scopeOptions, uiTemplatePlacementOptions, worldInfoPositionOptions, getPresetRoleLabel, getPresetRoleDisplayLabel, getPresetRoleBadgeClass, regexScripts, worldInfo,
             activeTools, activeToolAggressivenessOptions: ACTIVE_TOOL_AGGRESSIVENESS_OPTIONS, editingActiveTool, normalizeActiveTools, isWebActiveTool, getActiveToolDisplayDescription, getActiveToolResultCountMin, getActiveToolResultCountMax,
             getToolCallModeText, hasThinkingOrTools, isMessageThinkingOrRunning, isThinkingSummaryOpen, toggleThinkingSummary, markThinkingSummaryDetailOpened, getTimelineSteps,
             chatRoundStats, conversationBodyLength, summaryCompressedBodyLength,
