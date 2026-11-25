@@ -137,6 +137,13 @@ const getTtsProviderById = (id) => ttsProviderOptions.find(provider => provider.
         return apiProviderOptions.find(provider => normalizeApiProviderUrl(provider.apiUrl) === currentUrl);
     };
 
+    // --- Provider balance display state (2026-11-25) ---
+    // Cached account balances keyed by provider id. Fetch/parse/persist logic
+    // lives in app.mjs (provider-balance.mjs is the pure half); this is display
+    // state only, mirroring how apiStatus/apiLatency are split.
+    const providerBalances = reactive({});
+    const balancesLoading = ref(false);
+
     // --- Model browser state ---
     const modelSearchQuery = ref('');
     const activeModelTag = ref('all');
@@ -169,6 +176,8 @@ const getTtsProviderById = (id) => ttsProviderOptions.find(provider => provider.
         apiKeyInput,
         apiKeyVisible,
         toggleApiKeyVisibility,
+        providerBalances,
+        balancesLoading,
         customApiProviderOption,
         customApiProviderOption2,
         customApiProviderOptions,

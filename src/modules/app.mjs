@@ -134,6 +134,7 @@ import { useDataIO } from '../composables/useDataIO.mjs';
 import { useBackupRestore } from '../composables/useBackupRestore.mjs';
 import { EXECUTABLE_FRAME_CHANNEL, buildExecutableHtmlDocument, buildKeywordToolSnippet, bytesToBase64, checkConnectionStatus, cleanActiveToolCallReason, cleanupActiveToolCaptureState, collapseNativeReasoning, debounce, escapeRegexText, escapeXmlAttribute, escapeXmlText, estimateTokens, formatAIResponseForConsole, formatTokenAggregate, formatTokenCount, formatLatestTokenCount, formatTokenUsageTime, getConversationTurnAtIndexFromSnapshot, getTokenUsageCategory, indentXmlText, isDatabaseClosingError, isDesktopSidebarViewport, isEditableElement, isMobileViewport, normalizePresetRole, normalizeTavilyExtractUrl, printAIRequestLogs, readUsageNumber, removeActiveToolCallRawsFromText, requestTavily, resizeChatInputElement, runWithConcurrency, stringifyErrorDetail, stringifyUiSchema, stripActiveToolCallsFromAssistant, stripCodeBlocksForToolDetection, stripUiTemplateContextInjection, throwApiError, yieldToBrowser, yieldToUi } from './utils.mjs';
 import { extractVectorQueryTerms, getClassicMemoryKey, getTimelineCharCount, normalizeKeepFloors, trimMemoryText } from './memory-utils.mjs';
+import { buildBalanceRequests, evaluateBalanceGuard, formatBalance, isBalanceStale, parseBalanceResponses, resolveBalanceProfile } from './provider-balance.mjs';
 import { createPluginRegistry } from '../plugins/plugin-registry.mjs';
 
 const __app = createApp({
@@ -711,7 +712,7 @@ const __app = createApp({
         };
 
         // Service Status
-        const { apiStatus, apiLatency, imageGenStatus, imageGenLatency } = apiConfigState;
+        const { apiStatus, apiLatency, imageGenStatus, imageGenLatency, providerBalances, balancesLoading } = apiConfigState;
 
         const { user } = settingsState;
         const buildUserInfoPrompt = () => [
@@ -4372,6 +4373,222 @@ const __app = createApp({
             fetchQuota();
         };
 
+        // --- Provider account balance (2026-11-25, documents/API余额与额度池方案.md) ---
+        // Display + threshold guard for the *account* balance each provider
+        // reports (DeepSeek/Moonshot/OpenRouter/SiliconFlow/STA1N relay). The
+        // pure half (endpoints, parsers, verdict, formatter) lives in
+        // provider-balance.mjs; this block owns I/O, caching and persistence.
+        //
+        // Rules that keep this feature from hurting the chat path:
+        // - Queries are single-flight per provider and never retried.
+        // - Failures are silent (status flips to 'error' on the cached entry);
+        //   startup probing must not toast, matching the model-list policy.
+        // - The send-time guard only reads the cache — it never awaits network.
+        const BALANCE_STORAGE_KEY = 'provider_balances';
+        let balanceFlushQueue = Promise.resolve();
+        const saveProviderBalancesNow = () => {
+            const snapshot = JSON.parse(JSON.stringify(providerBalances));
+            const task = async () => {
+                if (!db) await initDB();
+                await setStoredValue(BALANCE_STORAGE_KEY, snapshot, { clone: false });
+            };
+            balanceFlushQueue = balanceFlushQueue.then(task, task);
+            return balanceFlushQueue;
+        };
+        const balanceInflight = new Map();
+
+        // Resolve { providerId, apiUrl, apiKey } for a provider id the same way
+        // getChatProvider does, but for an arbitrary id (the settings page may
+        // be looking at a provider that is not the active chat provider).
+        //
+        // The balance cache can hold ids the provider catalogue never lists — a
+        // provider we support for balance but have not added to the catalogue,
+        // or a custom entry whose host resolves a profile. Such an id has no
+        // catalogue apiUrl, so fall back to the cached one (written alongside
+        // the label) to keep refreshes working.
+        const getProviderConnection = (providerId) => {
+            const id = String(providerId || '').trim();
+            if (!id) return null;
+            let apiUrl = '';
+            if (isCustomApiProviderId(id)) {
+                apiUrl = settings[getCustomApiUrlKey(id)] || '';
+            } else {
+                const provider = getApiProviderById(id);
+                apiUrl = provider ? provider.apiUrl : '';
+            }
+            if (!apiUrl) apiUrl = String(providerBalances[id]?.apiUrl || '');
+            return { providerId: id, apiUrl, apiKey: settings.apiProviderKeys?.[id] || '' };
+        };
+
+        const fetchProviderBalance = async (providerId, options = {}) => {
+            const { silent = true } = options;
+            const connection = getProviderConnection(providerId);
+            if (!connection) return null;
+            const profile = resolveBalanceProfile(connection);
+            if (!profile) {
+                // Unknown host: record the verdict so the UI can say "not
+                // supported" instead of pretending the balance is zero.
+                providerBalances[providerId] = {
+                    status: 'unsupported',
+                    currency: '',
+                    amount: null,
+                    label: getProviderDisplayName(providerId),
+                    fetchedAt: Date.now()
+                };
+                return providerBalances[providerId];
+            }
+            if (!connection.apiKey) {
+                providerBalances[providerId] = {
+                    status: 'no-key',
+                    currency: profile.currency,
+                    amount: null,
+                    label: profile.label,
+                    fetchedAt: Date.now()
+                };
+                return providerBalances[providerId];
+            }
+            const requests = buildBalanceRequests(profile, connection.apiKey);
+            if (!requests.length) return null;
+            const requestKey = `${providerId}:${profile.kind}`;
+            if (balanceInflight.has(requestKey)) return balanceInflight.get(requestKey);
+            const task = (async () => {
+                try {
+                    const responses = {};
+                    for (const request of requests) {
+                        const response = await fetch(request.url, {
+                            method: request.method,
+                            headers: request.headers,
+                            signal: typeof AbortSignal.timeout === 'function'
+                                ? AbortSignal.timeout(15000)
+                                : undefined
+                        });
+                        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                        responses[request.key] = await response.json();
+                    }
+                    const parsed = parseBalanceResponses(profile.kind, responses);
+                    providerBalances[providerId] = {
+                        ...parsed,
+                        status: 'ok',
+                        providerKind: profile.kind,
+                        // The label rides in the cache so the UI can render a row
+                        // without consulting the provider catalogue: a balance can
+                        // exist for a provider the catalogue never listed (custom
+                        // entry pointed at a known host, or a provider we support
+                        // for balance but have not added to the catalogue yet).
+                        label: profile.label,
+                        // apiUrl is kept for the same reason: refreshing an id that
+                        // is not in the catalogue has no other way to recover it.
+                        apiUrl: connection.apiUrl,
+                        fetchedAt: Date.now()
+                    };
+                } catch (error) {
+                    // Keep the previous amount (if any) so the row can show
+                    // "last known value, refresh failed" instead of blanking.
+                    const previous = providerBalances[providerId] || {};
+                    providerBalances[providerId] = {
+                        ...previous,
+                        status: 'error',
+                        currency: previous.currency || profile.currency,
+                        error: String(error?.message || error || ''),
+                        fetchedAt: previous.fetchedAt || 0,
+                        failedAt: Date.now()
+                    };
+                    if (!silent) showToast('余额查询失败：' + (error?.message || '网络不可用'), 'error');
+                }
+                saveProviderBalancesNow().catch(error => console.error('Balance save failed:', error));
+                return providerBalances[providerId];
+            })();
+            balanceInflight.set(requestKey, task);
+            try {
+                return await task;
+            } finally {
+                balanceInflight.delete(requestKey);
+            }
+        };
+
+        // Only providers that have a key are worth querying; the settings page
+        // shows a row per configured provider.
+        // Provider ids worth querying: every catalogue/custom entry with a key,
+        // plus any id already cached (which covers providers supported for
+        // balance that the catalogue does not list — their apiUrl lives in the
+        // cache entry, see getProviderConnection).
+        const getBalanceQueryableProviderIds = () => {
+            const ids = new Set([
+                ...[...apiProviderOptions, ...customApiProviderOptions].map(provider => provider.id),
+                ...Object.keys(providerBalances)
+            ]);
+            return [...ids].filter(id => String(settings.apiProviderKeys?.[id] || '').trim());
+        };
+
+        const refreshAllProviderBalances = async (options = {}) => {
+            if (!settings.providerBalanceQueryEnabled) {
+                if (!options.silent) showToast('已在设置中关闭余额查询', 'info');
+                return;
+            }
+            const ids = getBalanceQueryableProviderIds();
+            if (!ids.length) return;
+            balancesLoading.value = true;
+            try {
+                await Promise.all(ids.map(id => fetchProviderBalance(id, options)));
+            } finally {
+                balancesLoading.value = false;
+            }
+        };
+
+        // Cached verdict for one provider id. The guard deliberately returns
+        // 'unknown' for stale or missing entries: acting on a half-hour-old
+        // balance would block sends after the user topped up.
+        const getProviderBalanceGuard = (providerId) => {
+            const entry = providerBalances[providerId];
+            const base = {
+                mode: settings.balanceGuardMode,
+                warnBelow: settings.balanceWarnBelow,
+                blockBelow: settings.balanceBlockBelow
+            };
+            if (!entry || entry.status !== 'ok' || entry.unlimited || isBalanceStale(entry)) {
+                return { state: base.mode === 'off' ? 'off' : 'unknown', entry: entry || null, ...base };
+            }
+            const verdict = evaluateBalanceGuard({ amount: entry.amount, ...base });
+            return { ...verdict, entry, ...base };
+        };
+
+        // Used by the chat/memory/template/vision entry points. Returns true
+        // when the request may proceed. The block branch always asks once:
+        // a hard refusal would strand the user if the balance reading is wrong.
+        const confirmBalanceAllowsRequest = async (providerId, label = '当前供应商') => {
+            const guard = getProviderBalanceGuard(providerId);
+            if (guard.state === 'blocked') {
+                const shown = formatBalance(guard.entry);
+                const proceed = await showVueConfirmModal(
+                    '余额低于阈值',
+                    `${label}余额 ${shown}，已低于停止阈值 ${formatBalance({ amount: guard.blockBelow, currency: guard.entry?.currency })}。仍要继续这次请求吗？`,
+                    { confirmLabel: '继续请求', cancelLabel: '取消' }
+                );
+                if (!proceed) {
+                    showToast('已取消请求：余额低于阈值', 'info');
+                    return false;
+                }
+                return true;
+            }
+            if (guard.state === 'warn') {
+                showToast(`${label}余额偏低：${formatBalance(guard.entry)}`, 'warning');
+            }
+            return true;
+        };
+
+        const loadProviderBalances = async () => {            try {
+                const saved = await getStoredValue(BALANCE_STORAGE_KEY);
+                if (!saved || typeof saved !== 'object' || Array.isArray(saved)) return;
+                Object.keys(saved).forEach(providerId => {
+                    const entry = saved[providerId];
+                    if (!entry || typeof entry !== 'object') return;
+                    providerBalances[providerId] = entry;
+                });
+            } catch (error) {
+                console.error('Balance load failed:', error);
+            }
+        };
+
         // Chat Logic
         const markActiveToolInlineWorkCancelled = () => {
             let changed = false;
@@ -4466,6 +4683,16 @@ const __app = createApp({
         const recognizeChatImage = async (image) => {
             try {
                 const provider = getChatProvider();
+                // Vision calls bill the chat provider; a vision request can cost
+                // more than a chat turn, so it deserves the same pre-send check.
+                if (!(await confirmBalanceAllowsRequest(provider.providerId, '识图供应商'))) {
+                    const target = pendingChatImages.value.find(item => item.id === image.id);
+                    if (target) {
+                        target.status = 'error';
+                        target.error = '已取消：余额低于阈值';
+                    }
+                    return false;
+                }
                 const response = await fetch(getChatProviderEndpoint('chat/completions'), {
                     method: 'POST',
                     headers: {
@@ -4791,6 +5018,8 @@ const __app = createApp({
             getMaxOutputTokens,
             recordApiUsage,
             getApiUsagePayload,
+            // account balance guard (template analysis bills the chat provider)
+            confirmBalanceAllowsRequest,
             // template attachment / persistence
             attachUiTemplateBlocksToLastAssistant,
             saveGlobalUiTemplateRuntimeForCharacter,
@@ -5731,6 +5960,11 @@ const __app = createApp({
             const memoryProvider = getMemoryProvider();
             if (!memoryProvider.apiUrl || !memoryProvider.apiKey) throw new Error('请先配置记忆供应商的 API 地址和 Key');
             if (!model) throw new Error('请先选择总结模式副模型');
+            // Balance guard: memory calls bill the memory provider, which may be
+            // a different account than the chat provider (P6 decoupling).
+            if (!(await confirmBalanceAllowsRequest(memoryProvider.providerId, '记忆供应商'))) {
+                throw new Error('已取消：记忆供应商余额低于阈值');
+            }
 
             const requestMessages = [{
                 role: 'system',
@@ -6303,6 +6537,9 @@ const __app = createApp({
             const memoryProvider = getMemoryProvider();
             if (!memoryProvider.apiUrl || !memoryProvider.apiKey) throw new Error('请先配置记忆供应商的 API 地址和 Key');
             if (!model) throw new Error('请先选择记忆模型');
+            if (!(await confirmBalanceAllowsRequest(memoryProvider.providerId, '记忆供应商'))) {
+                throw new Error('已取消：记忆供应商余额低于阈值');
+            }
             const response = await fetch(getMemoryApiEndpoint('chat/completions'), {
                 method: 'POST',
                 headers: {
@@ -7878,6 +8115,8 @@ const __app = createApp({
             recordApiUsage,
             abortSafely,
             raceWithTimeout,
+            // account balance guard (pre-send threshold check, cache-only)
+            confirmBalanceAllowsRequest,
             // app.mjs orchestration (persistence / stats / toast / diagnostics scope)
             saveChatHistoryNow,
             startDraftPersistence,
@@ -9640,6 +9879,11 @@ const __app = createApp({
             if (settings.autoFetchModels) {
                 fetchAllConfiguredProviderModels();
             }
+            // Cached balances are restored from storage first (instant paint),
+            // then refreshed in the background; a failed refresh keeps the
+            // last known value and only flips the row's status.
+            await loadProviderBalances();
+            refreshAllProviderBalances().catch(error => console.error('Balance refresh failed:', error));
 
             // Initial Status Check
             checkAllStatuses();
@@ -9899,6 +10143,7 @@ const __app = createApp({
             editorTab, characterDisplayLimit, displayedCharacters, loadMoreCharacters,
             isAutoImageGenEnabled,
             apiStatus, apiLatency, imageGenStatus, imageGenLatency, checkAllStatuses, apiKeyInput, syncApiKeyInput, apiKeyVisible, toggleApiKeyVisibility, pasteApiKeyFromClipboard, // Status Exports
+            providerBalances, balancesLoading, refreshAllProviderBalances, fetchProviderBalance, formatBalance, // Account balance
             imageGenUnavailable,
             toggleAutoImageGen, setWorldInfoEnabled,
             quotaValue, quotaLoading, quotaError,

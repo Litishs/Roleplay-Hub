@@ -70,7 +70,9 @@
     ]);
     const objectKeys = new Set([
         'rp_hub_settings', 'rp_hub_user', 'rp_hub_worldinfo_settings',
-        'rp_hub_memory_settings', 'plugin_marketplace_state', 'novel_settings'
+        'rp_hub_memory_settings', 'plugin_marketplace_state', 'novel_settings',
+        // Cached provider account balances (display-only, never secrets).
+        'rp_hub_provider_balances'
     ]);
     const isObjectRecord = value => value !== null && typeof value === 'object' && !Array.isArray(value);
 
@@ -372,13 +374,13 @@
 
         async exportBackup() {
             const plugin = nativePlugin();
-            if (!plugin) throw new Error('完整备份仅在 Android App 中可用');
+            if (!plugin) throw new Error('导出备份仅在 Android App 中可用');
             return plugin.exportBackup();
         },
 
         async restoreBackup() {
             const plugin = nativePlugin();
-            if (!plugin) throw new Error('完整恢复仅在 Android App 中可用');
+            if (!plugin) throw new Error('导入备份仅在 Android App 中可用');
             return plugin.restoreBackup();
         }
     };

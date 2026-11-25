@@ -308,3 +308,30 @@ test("management page headers stick to the top of the scroll view", async () => 
     assert.match(await read(`src/components/views/${file}.vue`), /class="management-header/, `${file} uses the shared sticky header`);
   }
 });
+
+test("user settings keep 角色名 and 叙事视角 side by side on phones", async () => {
+  const css = await read("assets/css/styles.css");
+  // The mobile block used to force one column, so each single-line control got
+  // its own full-width row (401px of card for three fields). Both controls are
+  // one line tall, so they share a row: 3fr for the free-text name, 2fr for the
+  // fixed two-option switch.
+  assert.match(
+    css,
+    /@media \(max-width: 640px\)[\s\S]*?\.user-settings-form-grid \{\s*grid-template-columns: minmax\(0, 3fr\) minmax\(0, 2fr\);/,
+    "the mobile block lays the two fields out side by side"
+  );
+  assert.doesNotMatch(
+    css,
+    /@media \(max-width: 640px\)[\s\S]{0,4000}\.user-settings-form-grid \{\s*grid-template-columns: minmax\(0, 1fr\);/,
+    "the single-column fallback must not come back"
+  );
+  // Side by side the two columns must stay level, and the switch's options must
+  // keep their 44px touch target — so the row height is set by the switch and
+  // the input is raised to match, never the other way round.
+  assert.match(
+    css,
+    /\.user-settings-form-grid input\.settings-form-control \{\s*min-height: 3rem;/,
+    "the name input is raised to the switch's height, not the switch squeezed"
+  );
+  assert.match(css, /\.user-settings-form-grid \.segmented-switch \{\s*padding: 0\.125rem;/);
+});

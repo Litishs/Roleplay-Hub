@@ -82,6 +82,18 @@ test('styles.css has dark override rules driven by data-theme', async () => {
   assert.match(css, /\[data-theme='dark'\] \.bg-blue-50\\\/85/);
   // Input island: dark mode must not keep .input-island's hardcoded white border.
   assert.match(css, /\[data-theme='dark'\] \.input-island[\s\S]*?border-color/);
+
+  // Circled-question help affordance (2026-11-25): the trigger and popover
+  // hardcode white backgrounds in light mode, so without explicit overrides
+  // they glow as bright blobs on the charcoal surface.
+  assert.match(css, /\[data-theme='dark'\] \.settings-help-trigger\s*\{[\s\S]*?background:\s*var\(--d-surface-2\)/);
+  assert.match(css, /\[data-theme='dark'\] \.settings-help-popover\s*\{[\s\S]*?background:\s*rgba\(30, 30, 30/);
+
+  // An open settings collapse must stop clipping. Its inner wrapper keeps
+  // overflow:hidden for the 0fr→1fr animation, but that also cut off every
+  // absolutely-positioned help popover inside the panel (verified with
+  // elementFromPoint: not a single point of the bubble was hittable).
+  assert.match(css, /\.settings-collapse\.is-open \.settings-collapse__inner\s*\{[\s\S]*?overflow:\s*visible/);
 });
 
 test('Android ThemeBridge plugin and values-night fallback exist', async () => {

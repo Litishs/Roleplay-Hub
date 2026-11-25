@@ -116,6 +116,8 @@ export function useMessageSender(deps) {
         recordApiUsage,
         abortSafely,
         raceWithTimeout,
+        // account balance guard (cache-only threshold check before sending)
+        confirmBalanceAllowsRequest,
         // app.mjs orchestration (persistence / stats / toast / diagnostics scope)
         saveChatHistoryNow,
         startDraftPersistence,
@@ -230,6 +232,17 @@ export function useMessageSender(deps) {
                 : null;
             if (!continuationTargetMessage && activeToolDepth === 0) {
                 resetActiveToolResultContext();
+            }
+
+            // Account-balance guard (2026-11-25): reads the cached balance only —
+            // never awaits the network here, so an offline device cannot stall a
+            // send. Modes are off/warn/block (settings.balanceGuardMode); a block
+            // still asks once instead of refusing outright, because a stale
+            // reading must not strand the user. Tool continuations skip the
+            // check: the user already paid for the turn in flight.
+            if (activeToolDepth === 0 && typeof confirmBalanceAllowsRequest === 'function') {
+                const allowed = await confirmBalanceAllowsRequest(getChatProvider().providerId, '聊天供应商');
+                if (!allowed) return;
             }
 
             isGenerating.value = true;
@@ -1245,6 +1258,12 @@ export function useMessageSender(deps) {
                                 const detailText = formatApiErrorMessage(status, errorDetail);
                                 if (status === 429) {
                                     throw new Error('请求过于频繁（429），请稍后重试' + (detailText ? ': ' + detailText : ''));
+                                }
+                                // Insufficient balance (402, or a 4xx whose body says
+                                // so) is a terminal, self-explanatory condition: retrying
+                                // or showing the raw English provider error helps nobody.
+                                if (status === 402 || /insufficient|余额不足|quota exceeded|credit/i.test(String(detailText || ''))) {
+                                    throw new Error('当前供应商余额不足，请充值后重试' + (detailText ? `（${detailText}）` : ''));
                                 }
                                 throw new Error(detailText);
                             } catch (error) {

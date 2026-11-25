@@ -4,10 +4,13 @@
             title="更换头像" aria-label="更换头像">
             <img v-if="user?.avatar" :src="user.avatar" alt="" class="w-full h-full object-cover">
             <span v-else>{{ (user.name || 'U').charAt(0).toUpperCase() }}</span>
+            <!-- Camera rather than a pencil: the badge opens the image picker, so
+                 the icon should say "take/choose a photo" instead of "edit". -->
             <span class="user-settings-avatar-edit" aria-hidden="true">
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path>
+                        d="M3 9a2 2 0 012-2h1.5l1-1.5h5l1 1.5H19a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path>
+                    <circle cx="12" cy="13" r="3.25" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></circle>
                 </svg>
             </span>
         </button>
@@ -82,8 +85,19 @@
         <div class="user-settings-form-grid">
             <label class="settings-field">
                 <span class="settings-field-label">角色名</span>
-                <input v-model="user.name" type="text" class="settings-form-control"
-                    placeholder="您的名字">
+                <!-- A pencil inside the field signals "this is editable text" the
+                     same way the camera badge signals "this opens the picker".
+                     pointer-events-none so tapping the icon still focuses the
+                     input. -->
+                <span class="relative block">
+                    <input v-model="user.name" type="text" class="settings-form-control settings-form-control--with-icon"
+                        placeholder="您的名字">
+                    <svg class="settings-form-control-icon" fill="none" stroke="currentColor"
+                        viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path>
+                    </svg>
+                </span>
             </label>
             <div class="settings-field">
                 <span class="settings-field-label">叙事视角</span>
