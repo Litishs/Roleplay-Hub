@@ -1,5 +1,7 @@
 
-        const cotPattern = /<(think|cot)>([\s\S]*?)(?:<\/\s*\1\s*>|<\s*\1\s*>|$)/gi;
+        import { stripMemoryCitations } from './memory-citation.mjs';
+
+const cotPattern = /<(think|cot)>([\s\S]*?)(?:<\/\s*\1\s*>|<\s*\1\s*>|$)/gi;
         const sysTailPattern = /\n\n\[系统指令:\s*([\s\S]*?)\]\s*$/;
         const htmlDocPattern = /(<!doctype html>|<html\b[^>]*>)/i;
         const htmlBlockStartPattern = /^\s*<(!doctype|html|head|body|div|span|section|article|aside|header|footer|nav|main|form|fieldset|ul|ol|li|table|style|script|template|button|input|select|textarea|canvas|video|audio|figure|dialog|details|summary|img|svg|p|h[1-6]|hr|blockquote|pre|a)\b/i;
@@ -31,7 +33,7 @@
         };
 
         const stripMarkdown = (text) => {
-            let out = String(text || '');
+            let out = stripMemoryCitations(text);
             out = out.replace(/!\[([^\]]*)\]\([^)]*\)/g, ' ');
             out = out.replace(/\[([^\]]+)\]\([^)]*\)/g, '$1');
             out = out.replace(/^#{1,6}\s+/gm, '');

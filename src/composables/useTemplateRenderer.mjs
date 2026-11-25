@@ -21,6 +21,7 @@
 
 import { RPHRuntimePolicy } from '../modules/runtime-policy.mjs';
 import { parseCot } from '../modules/utils.mjs';
+import { decorateMemoryCitationsHtml, protectCitations, restoreCitations } from '../modules/memory-citation.mjs';
 
 // 历史角色卡用 onclick="triggerSlash('xxx')" 做可交互按钮。sanitizer 收紧 on* 之后这些
 // 卡片会失去交互，所以在丢弃处理器之前先把这一种——也仅此一种——形态提取成 data-slash
@@ -152,9 +153,23 @@ export function useTemplateRenderer(deps) {
             if (cacheable && renderMarkdownCache.has(cacheKey)) return renderMarkdownCache.get(cacheKey);
 
             let processed = text;
+            // [M12] markers are square brackets, which display regexes like to
+            // rewrite (state labels etc.). Park them behind private-use
+            // placeholders while the regex pass runs, then restore before parse.
+            const hasCitationMarkers = role === 'assistant' && processed.includes('[M');
+            if (hasCitationMarkers) processed = protectCitations(processed);
 
             // Apply regex for display (real-time)
             processed = skipRegex ? processed : processRegex(processed, { isDisplay: true, role: role });
+            if (hasCitationMarkers) processed = restoreCitations(processed);
+
+            // Chips are built after sanitization: the model's text must not be
+            // able to inject markup, and DOMPurify would strip our data attr
+            // if we injected buttons before it ran.
+            const finalize = (key, html, cacheableFlag) => {
+                const decorated = role === 'assistant' ? decorateMemoryCitationsHtml(html) : html;
+                return cacheRenderedMarkdown(key, decorated, cacheableFlag);
+            };
             const createIframe = (rawHtml, options = {}) => createExecutableHtmlIframe(
                 rawHtml,
                 'border-t border-gray-200 shadow-sm',
@@ -172,7 +187,7 @@ export function useTemplateRenderer(deps) {
             // 由宿主委托处理，只能触发一条聊天指令，不能执行任意代码。
             const cleanConfig = {
                 ADD_TAGS: ['details', 'summary', 'iframe', 'svg', 'path', 'g', 'circle', 'rect', 'defs', 'linearGradient', 'stop', 'style', 'div', 'span', 'button', 'input'],
-                ADD_ATTR: ['style', 'open', 'srcdoc', 'sandbox', 'frameborder', 'allow', 'allowfullscreen', 'class', 'id', 'viewBox', 'fill', 'stroke', 'stroke-width', 'd', 'stroke-linecap', 'stroke-linejoin', 'x1', 'y1', 'x2', 'y2', 'offset', 'stop-color', 'stop-opacity', 'width', 'height', 'type', 'value', 'checked', 'data-slash'],
+                ADD_ATTR: ['style', 'open', 'srcdoc', 'sandbox', 'frameborder', 'allow', 'allowfullscreen', 'class', 'id', 'viewBox', 'fill', 'stroke', 'stroke-width', 'd', 'stroke-linecap', 'stroke-linejoin', 'x1', 'y1', 'x2', 'y2', 'offset', 'stop-color', 'stop-opacity', 'width', 'height', 'type', 'value', 'checked', 'data-slash', 'data-memory-refs'],
                 FORCE_BODY: true
             };
 
@@ -272,7 +287,7 @@ export function useTemplateRenderer(deps) {
                     resultHtml += sanitizeWithControlledSrcdocFrames(marked.parse(postText));
                 }
 
-                return cacheRenderedMarkdown(cacheKey, resultHtml, cacheable);
+                return finalize(cacheKey, resultHtml, cacheable);
             }
 
             const lowerTrimmed = trimmed.toLowerCase();
@@ -283,7 +298,7 @@ export function useTemplateRenderer(deps) {
             if (startsWithBlockHtml && !trimmed.includes('```')) {
                 // Directly sanitize and return, skipping Markdown parsing
                 const result = sanitizeWithControlledSrcdocFrames(processed);
-                return cacheRenderedMarkdown(cacheKey, result, cacheable);
+                return finalize(cacheKey, result, cacheable);
             }
 
             // For mixed content (Text + HTML widgets like HUDs/Status Bars),
@@ -374,13 +389,13 @@ export function useTemplateRenderer(deps) {
 
                 if (modified) {
                     const result = doc.body.innerHTML;
-                    return cacheRenderedMarkdown(cacheKey, result, cacheable);
+                    return finalize(cacheKey, result, cacheable);
                 }
             } catch (e) {
                 console.error('Error rendering HTML preview:', e);
             }
 
-            return cacheRenderedMarkdown(cacheKey, html, cacheable);
+            return finalize(cacheKey, html, cacheable);
         };
 
     return { renderMarkdown, messageUsesWideLayout, clearRenderCaches };

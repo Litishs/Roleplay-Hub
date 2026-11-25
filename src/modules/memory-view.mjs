@@ -123,6 +123,7 @@ export const buildMemoryView = (ledger, liveTurnIndex, settings = {}) => {
         toc.push({
             label: formatTurnLabel(item.fromTurn, item.toTurn),
             entryId: item.entry.id,
+            ref: Number(item.entry.ref) || 0,
             level: Number(item.entry.level) || 0,
             summary,
             tokens
@@ -309,6 +310,7 @@ export const buildMemoryRecall = (ledger, liveTurnIndex, queryText, settings = {
         usedTokens += tokens;
         picked.push({
             entryId: item.entry.id,
+            ref: Number(item.entry.ref) || 0,
             level: Number(item.entry.level) || 0,
             fromTurn: item.fromTurn,
             toTurn: item.toTurn,

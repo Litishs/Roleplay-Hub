@@ -45,6 +45,7 @@ import * as RPHMemorySummary from './memory-summary.mjs';
 import * as RPHMemoryProfile from './memory-profile.mjs';
 import { MIGRATION_NOTICE_KEY, adoptionStats, formatMigrationStatus, hasLegacyContent, scopeMigrationStatus } from './memory-migration.mjs';
 import { VIEW_DEFAULTS, buildMemoryRecall, buildMemoryView } from './memory-view.mjs';
+import { buildMemoryCitationItems, stripMemoryCitations } from './memory-citation.mjs';
 import { createMemoryReconciler } from './memory-reconcile.mjs';
 import {
     COMPACT_FANOUT,
@@ -3138,6 +3139,47 @@ const __app = createApp({
             handleUiTemplateClick(event);
         };
 
+        // --- Memory citations ([M12] chips in assistant replies) ---------------
+        // Chips are rendered by memory-citation.mjs after sanitization; the refs
+        // travel in data-memory-refs and are resolved against the ledger here.
+        const memoryCitationRefs = ref([]);
+        const memoryCitationItems = computed(() => {
+            const refs = memoryCitationRefs.value;
+            if (!refs.length) return [];
+            const entries = Array.isArray(memoryLedger.value?.entries) ? memoryLedger.value.entries : [];
+            const byRef = new Map();
+            entries.forEach((entry) => {
+                const ref = Number(entry?.ref) || 0;
+                if (ref > 0 && !byRef.has(ref)) byRef.set(ref, entry);
+            });
+            const turnIndex = buildLiveTurnIndex();
+            return buildMemoryCitationItems(refs, entries).map((item) => {
+                if (item.missing) return { ...item, turnLabel: '' };
+                const entry = byRef.get(item.ref);
+                const turns = entry
+                    ? projectEntryTurns(entry, turnIndex).filter(turn => Number.isFinite(turn) && turn > 0)
+                    : [];
+                const from = turns.length ? Math.min(...turns) : 0;
+                const to = turns.length ? Math.max(...turns) : 0;
+                const turnLabel = !turns.length ? '' : (from === to ? `第 ${from} 轮` : `第 ${from}–${to} 轮`);
+                return { ...item, turnLabel };
+            });
+        });
+        const closeMemoryCitation = () => {
+            memoryCitationRefs.value = [];
+        };
+        const handleMemoryCitationClick = (event) => {
+            const chip = event.target?.closest?.('.memory-cite');
+            if (!chip) return;
+            event.preventDefault();
+            event.stopPropagation();
+            const refs = String(chip.dataset.memoryRefs || '')
+                .split(',')
+                .map(value => Number.parseInt(value, 10))
+                .filter(value => Number.isInteger(value) && value > 0);
+            if (refs.length) memoryCitationRefs.value = refs;
+        };
+
         const renderEditingUiTemplatePreview = () => {
             let variableState = editingUiTemplate.data.previewVariableState || {};
             try {
@@ -4936,7 +4978,7 @@ const __app = createApp({
         };
 
         const copyMessage = (content) => {
-            navigator.clipboard.writeText(content).then(() => {
+            navigator.clipboard.writeText(stripMemoryCitations(content)).then(() => {
                 showToast('已复制到剪贴板', 'success');
             }).catch(err => {
                 console.error('Copy failed:', err);
@@ -4953,7 +4995,7 @@ const __app = createApp({
                 const cotMatch = msg.content.match(/<(think|cot)>[\s\S]*?(?:<\/\s*\1\s*>|<\s*\1\s*>|$)/i);
                 msg.originalCot = cotMatch ? cotMatch[0] : '';
                 msg.originalSys = parseCot(msg.content).sys;
-                msg.editMessageContent = parseCot(msg.content).main;
+                msg.editMessageContent = stripMemoryCitations(parseCot(msg.content).main);
                 msg.editMessageHeight = Math.min(0.7 * window.innerHeight, Math.max(88, Math.round(messageHeight || 160)));
             }
         };
@@ -5850,7 +5892,7 @@ const __app = createApp({
                 ? sourceIndexes.map(sourceIndex => chatHistory.value[sourceIndex]).filter(source => source && source.role === message.role)
                 : [message];
             return sourceMessages
-                .map(source => stripVectorMemoryCode(parseCot(source.content || '').main))
+                .map(source => stripMemoryCitations(stripVectorMemoryCode(parseCot(source.content || '').main)))
                 .map(text => text.trim())
                 .filter(Boolean)
                 .join('\n\n');
@@ -6791,8 +6833,9 @@ const __app = createApp({
             if (recall.length > 0) {
                 const lines = recall.map(item => {
                     const turns = item.fromTurn === item.toTurn ? `第 ${item.fromTurn} 轮` : `第 ${item.fromTurn}–${item.toTurn} 轮`;
+                    const refAttr = Number(item.ref) > 0 ? ` ref="M${Number(item.ref)}"` : '';
                     return [
-                        `  <memory_entry entry_id="${item.entryId}" turns="${turns}" level="${item.level}">`,
+                        `  <memory_entry entry_id="${item.entryId}"${refAttr} turns="${turns}" level="${item.level}">`,
                         indentXmlText(item.text, 4),
                         '  </memory_entry>'
                     ].join('\n');
@@ -6803,7 +6846,12 @@ const __app = createApp({
             // dynamic info card, then the TOC the model uses for tool_memory.
             if (profileText) parts.push(profileText);
             if (toc.length > 0) {
-                const tocLines = toc.map(item => `- [${item.label}] ${item.summary}`);
+                // [M12] is the only short handle the model can cite; entry ids
+                // are UUIDs and turn ranges drift when floors are edited.
+                const tocLines = toc.map(item => {
+                    const refTag = Number(item.ref) > 0 ? `[M${Number(item.ref)}] ` : '';
+                    return `- ${refTag}[${item.label}] ${item.summary}`;
+                });
                 parts.push(`<memory_toc>\n${tocLines.join('\n')}\n</memory_toc>`);
             }
             if (parts.length === 0) return '';
@@ -7037,6 +7085,7 @@ const __app = createApp({
                         .filter(turn => Number.isFinite(turn) && turn > 0);
                     return {
                         entryId: entry.id,
+                        ref: Number(entry.ref) || 0,
                         level: Number(entry.level) || 0,
                         turns,
                         fromTurn: turns.length ? Math.min(...turns) : 0,
@@ -7491,8 +7540,9 @@ const __app = createApp({
                     ? (entry.fromTurn === entry.toTurn ? `第 ${entry.fromTurn} 轮` : `第 ${entry.fromTurn}–${entry.toTurn} 轮`)
                     : '历史';
                 const entryText = indentXmlText(entry.text || '', 4);
+                const refAttr = Number(entry.ref) > 0 ? ` ref="M${Number(entry.ref)}"` : '';
                 return [
-                    `  <memory_entry entry_id="${escapeXmlAttribute(entry.entryId || '')}" turns="${escapeXmlAttribute(turns)}" level="${Number(entry.level) || 0}">`,
+                    `  <memory_entry entry_id="${escapeXmlAttribute(entry.entryId || '')}"${refAttr} turns="${escapeXmlAttribute(turns)}" level="${Number(entry.level) || 0}">`,
                     entryText,
                     '  </memory_entry>'
                 ].join('\n');
@@ -9927,6 +9977,8 @@ const __app = createApp({
 
             // --- 消息正文里的 data-slash 按钮 ---
             document.addEventListener('click', handleMarkdownSlashClick);
+            // --- 消息正文里的 [M12] 记忆引用角标 ---
+            document.addEventListener('click', handleMemoryCitationClick);
             document.addEventListener('focusin', handleRootTextFocusIn);
             document.addEventListener('focusout', handleRootTextFocusOut);
 
@@ -10308,6 +10360,9 @@ const __app = createApp({
             showMemoryMigrationNotice,
             closeMemoryMigrationNotice,
             migrateAllMemoryNow,
+            // Memory citations ([M12] chips)
+            memoryCitationItems,
+            closeMemoryCitation,
             currentScopeMigrationStatus,
             migrationStatusLabel: computed(() => {
                 const state = currentScopeMigrationStatus.value;
