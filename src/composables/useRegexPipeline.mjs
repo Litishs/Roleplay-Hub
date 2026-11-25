@@ -13,6 +13,7 @@
 // Contract locks: tests/composables-contract.test.mjs.
 
 import { RPHubCardUtils } from '../modules/card-utils.mjs';
+import { replaceMatched } from '../modules/regex-utils.mjs';
 
 export function useRegexPipeline(deps) {
     const { regexScripts } = deps;
@@ -111,11 +112,11 @@ export function useRegexPipeline(deps) {
                         // Updated to support <think> and erroneous <cot>...<cot> closing
                         result = cardUtils.transformUnprotectedText(
                             result,
-                            part => part.replace(re, replacement)
+                            part => replaceMatched(part, re, replacement)
                         );
                     } else {
                         // 如果正则明确包含 <, > 或 ```，说明用户意图直接操作 HTML 或 Markdown 代码块，因此跳过保护直接替换
-                        result = result.replace(re, replacement);
+                        result = replaceMatched(result, re, replacement);
                     }
                     // --- Protection Logic End ---
 
