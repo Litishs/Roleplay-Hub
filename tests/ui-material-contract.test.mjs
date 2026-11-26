@@ -202,8 +202,7 @@ test('M2 acrylic surfaces are opted in, per-message ones only on wide screens', 
         'src/components/chat/ConversationList.vue': /conversation-list__head rph-glass rph-acrylic/,
         'src/components/common/SettingsPageHeader.vue': /settings-page-header rph-glass rph-acrylic/,
         'src/components/common/ToastNotification.vue': /toast-item rph-glass rph-acrylic/,
-        'src/components/chat/CharacterInfo.vue': /desc-panel rph-glass rph-acrylic-panel/,
-        'src/components/chat/MessageInput.vue': /rph-glass rph-acrylic-panel/
+        'src/components/chat/CharacterInfo.vue': /desc-panel rph-glass rph-acrylic-panel/
     };
     for (const [file, pattern] of Object.entries(acrylic)) {
         assert.match(await read(file), pattern, `${file} opts into acrylic`);
@@ -225,25 +224,30 @@ test('M2 acrylic surfaces are opted in, per-message ones only on wide screens', 
     assert.doesNotMatch(embedded, /class="embedded-back-ball rph-glass/);
 });
 
-test('M3 liquid glass covers exactly the input dock and the tab bar', async () => {
-    // Two surfaces, no more: the refraction budget is 2 lenses (§11) and both
-    // are the floating controls the design doc names.
+test('every floating control uses acrylic, not liquid glass', async () => {
+    // 2026-11-26 review: the liquid-glass recipe (edge refraction + specular rim)
+    // read as fake at phone size, and the one surface where it could shine — the
+    // tab bar — is dominated by a moving highlight that cannot carry a blur.
+    // Every former glass surface now uses the acrylic recipe.
     const bar = await read('src/components/common/BottomTabBar.vue');
-    assert.match(bar, /class="bottom-tab-bar rph-glass rph-glass-bar"/, 'the tab bar is a liquid-glass capsule');
+    assert.match(bar, /class="bottom-tab-bar rph-glass rph-acrylic"/, 'the tab bar is acrylic');
+    assert.doesNotMatch(bar, /rph-glass-bar/, 'no liquid-glass variant is left on the bar');
 
     const input = await read('src/components/chat/MessageInput.vue');
-    assert.match(input, /input-island rph-glass rph-glass-island/, 'the input dock is liquid glass');
-    // The dock's own Tailwind blur must be gone, or it would carry two blurs
-    // and the injected refraction would fight the utility class.
+    assert.match(input, /input-island rph-glass rph-acrylic/, 'the input dock is acrylic');
+    assert.doesNotMatch(input, /rph-glass-island/, 'no liquid-glass variant is left on the dock');
+    // The dock's own Tailwind blur must be gone, or it would carry two blurs.
     assert.doesNotMatch(input, /bg-white\/90 backdrop-blur-xl/);
     assert.match(input, /class="chat-input-box[^"]*"/, 'the textarea itself stays a plain textarea (IME-safe)');
 
-    // No other component opts into the liquid-glass variants.
+    // Nothing opts into the liquid-glass variants any more.
     const files = ['src/components/chat/MessageList.vue', 'src/components/common/ToastNotification.vue',
-        'src/components/chat/ConversationList.vue', 'src/components/common/SettingsPageHeader.vue'];
+        'src/components/chat/ConversationList.vue', 'src/components/common/SettingsPageHeader.vue',
+        'src/components/views/SettingsPanel.vue', 'src/components/views/PluginsPanel.vue',
+        'src/components/views/CharacterPanel.vue'];
     for (const file of files) {
         const source = await read(file);
-        assert.ok(!/rph-glass-island|rph-glass-bar/.test(source), `${file} is not a liquid-glass surface`);
+        assert.ok(!/rph-glass-island|rph-glass-bar/.test(source), `${file} must not use a liquid-glass variant`);
     }
 
     // The slider pill keeps a plain tint: it animates with transform, and a
@@ -253,6 +257,32 @@ test('M3 liquid glass covers exactly the input dock and the tab bar', async () =
     const pillStart = css.search(/^ {8}\.bottom-tab__slider-pill \{/m);
     const pillBlock = css.slice(pillStart, css.indexOf('}', pillStart));
     assert.ok(!pillBlock.includes('backdrop-filter'), 'the slider pill must not blur');
+});
+
+test('the management headers are acrylic too', async () => {
+    // These three render the header inline rather than through
+    // SettingsPageHeader, so they were missed when the component got the recipe
+    // and the settings page kept its flat opaque strip.
+    for (const file of ['SettingsPanel', 'PluginsPanel', 'CharacterPanel']) {
+        const source = await read(`src/components/views/${file}.vue`);
+        assert.match(source, /class="management-header rph-glass rph-acrylic/, `${file} header is acrylic`);
+    }
+    const css = await read('assets/css/styles.css');
+    // The opaque fill skips opted-in headers; only the geometry is unconditional.
+    assert.match(css, /\.management-header:not\(\.rph-glass\)/);
+    assert.match(css, /\.management-header\.rph-glass \{[\s\S]{0,160}position: sticky;/);
+});
+
+test('the chat dock follows the theme instead of pinning dark', async () => {
+    const css = await read('assets/css/styles.css');
+    // Pinning a dark variant broke light themes: the dock stayed dark, and the
+    // white-glyph rules reached the quick-settings popover nested inside it,
+    // which rendered white-on-white.
+    assert.doesNotMatch(css, /\.chat-view-root \.rph-glass\.rph-glass-island \{[\s\S]{0,300}--glass-tint:/,
+        'the dock must not override the tint per theme');
+    assert.doesNotMatch(css, /\.rph-glass-island \.text-gray-/, 'no white-glyph override inside the dock');
+    // It carries a little more body than a page header: the artwork behind is arbitrary.
+    assert.match(css, /\.chat-view-root \.rph-glass\.rph-acrylic \{[\s\S]{0,300}background-color: var\(--mat-tint-text\);/);
 });
 
 test('the refraction pass skips hidden surfaces and rebuilds them when shown', async () => {
@@ -270,25 +300,4 @@ test('the refraction pass skips hidden surfaces and rebuilds them when shown', a
     assert.match(lens, /resetLenses\(\);/, 'resize clears the cached maps');
     // The cache is bounded: a resizing window would otherwise grow the defs.
     assert.match(lens, /FILTER_CACHE_LIMIT/);
-});
-
-test('the chat dock pins the dark glass variant for readability', async () => {
-    const css = await read('assets/css/styles.css');
-    // The dock floats over artwork; iOS vibrancy picks the variant per backdrop,
-    // we pin the dark one because the artwork is dark in practice (§3.2).
-    const scoped = css.slice(css.indexOf('.chat-view-root .rph-glass.rph-glass-island {'));
-    assert.ok(scoped.length > 0, 'the chat-scoped variant must exist');
-    const block = scoped.slice(0, scoped.indexOf('}'));
-    assert.ok(block.includes('--glass-tint:'), 'the dock overrides the tint');
-    // White glyphs inside the dock, scoped so the solid tier keeps its palette.
-    assert.match(css, /\.chat-view-root \.rph-glass\.rph-glass-island \.text-gray-500/);
-    assert.match(css, /\.chat-view-root \.rph-glass\.rph-glass-island \.chat-input-box \{[\s\S]{0,160}color: #f8fafc;/);
-    // The tint has to be heavy enough for a light illustration behind it: the
-    // light glass tint (26% white) left white text at ~3.4:1. Every stop of the
-    // tint gradient must stay above 0.7 alpha (the rim values are separate and
-    // stay low on purpose, so read the tint line only).
-    const tintLine = block.split('\n').find((line) => line.includes('--glass-tint:')) || '';
-    const stops = [...tintLine.matchAll(/rgba\(\s*\d+,\s*\d+,\s*\d+,\s*([0-9.]+)\s*\)/g)].map((m) => Number(m[1]));
-    assert.ok(stops.length >= 3, `expected the tint stops, got ${stops.join(', ')}`);
-    for (const alpha of stops) assert.ok(alpha >= 0.7, `tint stop ${alpha} is too light for white text`);
 });

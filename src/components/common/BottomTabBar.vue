@@ -6,12 +6,10 @@
          it and lets it animate without moving the layout.
          The active highlight is one shared slider (2026-11-24) instead of a
          per-tab background, so switching tabs moves a single element.
-         Liquid glass since 2026-11-26 (M3): the bar is a floating capsule and
-         glass-lens.mjs injects the edge refraction. The slider stays a plain
-         tint on purpose — it animates with transform, and a backdrop-filter on
-         a moving layer is the most expensive combination in the WebView
-         (tab-nav design doc §14.3). -->
-    <nav v-show="isTabRootView && !isRootTextFocused" class="bottom-tab-bar rph-glass rph-glass-bar" aria-label="主导航">
+         Acrylic, not liquid glass (2026-11-26 review): the refraction read as
+         fake at this size and the moving slider cannot carry a blur, so the
+         capsule uses the same frosted recipe as the rest of the chrome. -->
+    <nav v-show="isTabRootView && !isRootTextFocused" class="bottom-tab-bar rph-glass rph-acrylic" aria-label="主导航">
         <span class="bottom-tab__slider" aria-hidden="true"
             :style="{ transform: `translateX(${activeIndex * 100}%)` }">
             <span class="bottom-tab__slider-pill"></span>

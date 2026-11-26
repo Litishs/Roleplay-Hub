@@ -315,7 +315,7 @@ test("management page headers stick to the top of the scroll view", async () => 
   assert.match(css, /\.settings-page-header:not\(\.rph-glass\),\s*\.management-header:not\(\.rph-glass\) \{[\s\S]{0,320}position: sticky;[\s\S]{0,400}top: -1rem;/);
   assert.match(css, /\[data-theme='dark'\] \.settings-page-header:not\(\.rph-glass\),\s*\[data-theme='dark'\] \.management-header:not\(\.rph-glass\)/);
   // A header that opts into the material keeps the same sticky geometry.
-  assert.match(css, /\.settings-page-header\.rph-glass \{[\s\S]{0,240}position: sticky;[\s\S]{0,240}top: -1rem;/);
+  assert.match(css, /\.settings-page-header\.rph-glass,\s*\.management-header\.rph-glass \{[\s\S]{0,240}position: sticky;[\s\S]{0,240}top: -1rem;/);
   for (const file of ["SettingsPanel", "PluginsPanel", "CharacterPanel"]) {
     assert.match(await read(`src/components/views/${file}.vue`), /class="management-header/, `${file} uses the shared sticky header`);
   }

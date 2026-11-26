@@ -158,8 +158,8 @@ test('index.html wraps the views in one box and mounts the tab shell', async () 
 test('the tab bar shows the four tabs in order, only on tab roots', async () => {
   const bar = await read('src/components/common/BottomTabBar.vue');
   assert.match(bar, /v-show="isTabRootView && !isRootTextFocused"/);
-  // Liquid glass since 2026-11-26 (M3): the bar is a floating capsule.
-  assert.match(bar, /class="bottom-tab-bar rph-glass rph-glass-bar" aria-label="主导航"/);
+  // Acrylic since the 2026-11-26 review: liquid glass read as fake at this size.
+  assert.match(bar, /class="bottom-tab-bar rph-glass rph-acrylic" aria-label="主导航"/);
   assert.match(bar, /@click="switchTab\(tab\.id\)"/);
   assert.match(bar, /:aria-current="activeTab === tab\.id \? 'page' : undefined"/);
   assert.match(bar, /import \{ TAB_ORDER \} from "\.\.\/\.\.\/modules\/tab-navigation\.mjs";/);
@@ -285,11 +285,17 @@ test('styles: floating glass capsule with variable colours, dark override and vi
     'transition: transform var(--motion-base) var(--motion-standard);', 'pointer-events: none;']) {
     assert.ok(sliderBlock.includes(declaration), `the slider must declare ${declaration}`);
   }
+  // Centred on the capsule, not on the icon row: the old layout mirrored the
+  // icon+label stack and parked the highlight above the optical centre.
+  assert.ok(sliderBlock.includes('top: 0;'), 'the slider spans the capsule height');
+  assert.ok(sliderBlock.includes('height: 100%;'), 'the slider spans the capsule height');
+  assert.ok(sliderBlock.includes('align-items: center;'), 'the pill is centred vertically');
   assert.match(css, /\.bottom-tab__slider-pill \{[\s\S]{0,160}background: var\(--tab-bar-active-bg\);/);
   // The real icon pill and the sliding highlight share one size token, so they
   // cannot drift apart (enlarged 2026-11-24).
   assert.match(css, /--tab-pill-w: 3\.75rem;\s*--tab-pill-h: 2rem;/);
-  assert.match(css, /\.bottom-tab__slider-pill \{\s*width: var\(--tab-pill-w\);\s*height: var\(--tab-pill-h\);/);
+  // The highlight is taller than the icon pill so it covers icon + label.
+  assert.match(css, /\.bottom-tab__slider-pill \{\s*width: var\(--tab-pill-w\);\s*height: calc\(var\(--tab-pill-h\) \+ 0\.75rem\);/);
   assert.match(css, /\.bottom-tab__pill \{[\s\S]{0,160}width: var\(--tab-pill-w\);[\s\S]{0,80}height: var\(--tab-pill-h\);/);
   assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{[\s\S]{0,700}\.bottom-tab__slider[,\s]/);
   // The active pill is no longer painted per tab: only the slider carries it.

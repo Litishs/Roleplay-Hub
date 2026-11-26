@@ -4,7 +4,7 @@
          wide-screen side column next to the open chat. -->
     <div class="conversation-list flex flex-col h-full min-h-0 bg-gray-50"
         :class="[compact ? 'conversation-list--compact' : '', privacyOn ? 'is-private' : '']">
-        <div class="min-h-0 flex-1 overflow-y-auto custom-scrollbar" :class="compact ? 'px-1.5 pt-1.5' : 'px-2 pt-2'">
+        <div class="min-h-0 flex-1 overflow-y-auto custom-scrollbar" :class="compact ? 'px-1.5' : 'px-2'">
         <!-- The title bar and the search field form one band that scrolls with
              the list and sticks to its top, so rows pass underneath and the
              acrylic actually has something to blur (2026-11-26). Before that the
@@ -96,7 +96,7 @@
         </div>
         </div>
 
-        <div :class="compact ? 'px-1.5 pb-1.5' : 'px-2 pb-2'">
+        <div :class="compact ? 'px-1.5 pb-1.5 pt-1.5' : 'px-2 pb-2 pt-2'">
             <button v-for="item in visibleConversations" :key="rowKey(item)" type="button"
                 @click="openConversation(item)"
                 @pointerdown="startPeek(item, $event)"

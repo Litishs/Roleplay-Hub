@@ -3,7 +3,7 @@
                 <div v-show="!isExternalInputFocused"
                     class="absolute bottom-0 left-0 right-0 w-full p-2 md:p-3 z-30 pointer-events-none flex justify-center flex-shrink-0 transition-all duration-300 input-area-mobile">
                     <div
-                        class="relative w-full max-w-lg pointer-events-auto p-2.5 md:p-3 border border-white/40 shadow-lg rounded-3xl ring-1 ring-black/5 transition-all duration-300 flex flex-col input-island rph-glass rph-glass-island">
+                        class="relative w-full max-w-lg pointer-events-auto p-2.5 md:p-3 border border-white/40 shadow-lg rounded-3xl ring-1 ring-black/5 transition-all duration-300 flex flex-col input-island rph-glass rph-acrylic">
                         <!-- Latest usage bar (inline panel toggle) -->
                         <div v-if="settings.showLatestUsageBar"
                             class="mx-1 mb-1 grid py-0.5 text-xs text-gray-500"
@@ -108,7 +108,7 @@
                                         <div v-if="showInstructionPanel"
                                             class="absolute bottom-full left-0 mb-4 z-50 pointer-events-auto w-[250px] md:w-[320px] transform-gpu origin-bottom-left">
                                             <div
-                                                class="rph-glass rph-acrylic-panel border border-gray-200 shadow-xl rounded-2xl p-3 flex flex-col gap-2 ring-1 ring-black/5">
+                                                class="quick-popover-surface border border-gray-200 shadow-xl rounded-2xl p-3 flex flex-col gap-2 ring-1 ring-black/5">
                                                 <div class="flex justify-between items-center mb-1 px-1">
                                                     <span class="text-xs font-bold text-gray-600 flex items-center">
                                                         <svg class="w-3.5 h-3.5 mr-1 text-primary-500" fill="none"
@@ -168,7 +168,7 @@
                                     <div v-if="showChatModelSelector"
                                         class="absolute bottom-full right-0 mb-14 z-50 pointer-events-auto quick-settings-panel transform-gpu origin-bottom-right">
                                         <div @click.stop
-                                            class="rph-glass rph-acrylic-panel border border-gray-200 shadow-xl rounded-2xl p-3 flex flex-col gap-3 ring-1 ring-black/5">
+                                            class="quick-popover-surface border border-gray-200 shadow-xl rounded-2xl p-3 flex flex-col gap-3 ring-1 ring-black/5">
                                             <!-- Model slots -->
                                             <div class="flex flex-col gap-1.5">
                                                 <button v-for="(slot, slotIndex) in chatModelSlots" :key="slot.mode"

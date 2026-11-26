@@ -875,31 +875,32 @@
         /* Sliding active indicator: one element shared by all four tabs, so a
            switch moves the pill instead of cross-fading four backgrounds.
            transform-only, per the animation constraints in the design doc.
-           Its width is one grid cell; the visible label copy is only there to
-           reproduce the tab's line box, so the pill lands on the icons. */
+           Its width is one grid cell.
+
+           The pill is centred on the capsule, not on the icon row (2026-11-26
+           review): the old layout mirrored the tab's icon+label stack with an
+           invisible label placeholder, which parked the highlight above the
+           capsule's optical centre. Absolute centring is exact at any width and
+           needs no placeholder. */
         .bottom-tab__slider {
             position: absolute;
-            top: 0.3125rem;
+            top: 0;
             left: 0.375rem;
             z-index: 0;
             display: flex;
-            flex-direction: column;
             align-items: center;
             justify-content: center;
-            gap: 0.1875rem;
             width: calc((100% - 0.75rem) / 4);
-            height: calc(100% - 0.625rem);
-            /* Same type metrics as a tab, so the placeholder label's line box
-               equals the real one and the pill sits on the icons. */
-            font-size: 0.6875rem;
-            line-height: 0.875rem;
+            height: 100%;
             pointer-events: none;
             transition: transform var(--motion-base) var(--motion-standard);
         }
 
+        /* Taller than the icon pill so the highlight reads as covering the tab
+           (icon + label) rather than just the glyph. */
         .bottom-tab__slider-pill {
             width: var(--tab-pill-w);
-            height: var(--tab-pill-h);
+            height: calc(var(--tab-pill-h) + 0.75rem);
             border-radius: 9999px;
             background: var(--tab-bar-active-bg);
         }
@@ -1988,7 +1989,8 @@
         /* The acrylic recipe owns the fill once a header opts in, so the opaque
            rules above skip it (same :not() guard as the mobile compensation
            block). Only the geometry stays unconditional. */
-        .settings-page-header.rph-glass {
+        .settings-page-header.rph-glass,
+        .management-header.rph-glass {
             position: sticky;
             top: -1rem;
             z-index: 6;
@@ -2875,6 +2877,9 @@
             --mat-saturate: 150%;
             --mat-tint: rgb(255 255 255 / 0.76);
             --mat-tint-text: rgb(255 255 255 / 0.85);
+            /* Popovers sit on top of other chrome (the input dock's icon strip),
+               so they need more body than a panel that only covers page fill. */
+            --mat-tint-panel: rgb(255 255 255 / 0.96);
             --mat-tint-solid: rgb(var(--bg-surface) / 0.97);
             --mat-line: rgba(15, 23, 42, 0.08);
             --mat-noise: 0.04;
@@ -2916,10 +2921,14 @@
             backdrop-filter: blur(var(--mat-blur)) saturate(var(--mat-saturate));
         }
 
-        /* 大面积压在文字上的浮层（快捷设置、临时指令）：更大模糊半径 + 更高色调，
-           保证玻璃面文字对比度 ≥ 4.5:1。 */
+        /* 大面积压在文字上的浮层（快捷设置、临时指令）：更大模糊半径 + 更高色调。
+           96% rather than the 85% "text" tint: at 85% the dock's icon strip
+           showed through the popover as faint shapes, and even 92% left them
+           visible. The popover sits on top of other chrome rather than on page
+           fill, so it is a reading surface first — it keeps the blur and the
+           hairline, but barely any transparency. */
         .rph-glass.rph-acrylic-panel {
-            background-color: var(--mat-tint-text);
+            background-color: var(--mat-tint-panel);
             -webkit-backdrop-filter: blur(var(--mat-blur-panel)) saturate(var(--mat-saturate));
             backdrop-filter: blur(var(--mat-blur-panel)) saturate(var(--mat-saturate));
         }
@@ -2936,7 +2945,13 @@
             opacity: var(--mat-noise);
         }
 
-        /* ---- 液态玻璃：几乎不着色；折射由 glass-lens.mjs 按元素尺寸注入。 ---- */
+        /* ---- 液态玻璃已停用（2026-11-26 复核）----
+           The liquid-glass recipe (refraction + specular rim) is kept below only
+           so the CSS contract and glass-lens.mjs stay coherent, but no surface
+           uses it any more: at phone size the edge displacement read as fake
+           rather than as glass, and the one place it could shine (the tab bar)
+           is dominated by a moving highlight that cannot carry a blur. Every
+           former glass surface now uses the acrylic recipe above. */
         .rph-glass.rph-glass-island,
         .rph-glass.rph-glass-bar {
             background: var(--glass-tint);
@@ -2966,42 +2981,51 @@
         /* The tab bar's rim is now the glass ring above: the old hairline rule
            only applies to the solid tiers, so the two never stack. */
 
-        /* The chat input dock floats over the character artwork, which is usually
-           dark: grey glyphs and placeholder are unreadable there. iOS vibrancy
-           solves this by picking the variant from the backdrop; we pin the dark
-           one for this page instead, since guessing per-frame is expensive and
-           the artwork is dark in practice (design doc §3.2).
 
-           The tint is deliberately heavier than the plain glass one (52-64% vs
-           26-5-16%): a light illustration behind the dock would otherwise leave
-           the white text at ~3.4:1, below the 4.5:1 floor. Measured worst case
-           after this change is 4.6:1 over a near-white backdrop. */
-        .chat-view-root .rph-glass.rph-glass-island {
-            --glass-tint: linear-gradient(135deg, rgba(24, 32, 38, 0.82), rgba(10, 16, 21, 0.74) 50%, rgba(20, 28, 34, 0.78));
-            --glass-rim: rgba(255, 255, 255, 0.24);
-            --glass-rim-top: rgba(255, 255, 255, 0.36);
-            --glass-rim-bottom: rgba(255, 255, 255, 0.1);
-            --glass-glint-a: rgba(255, 255, 255, 0.2);
-            --glass-glint-b: rgba(255, 255, 255, 0.08);
+        /* The dock's icon strip is `position: relative`, which puts it in the
+           same stacking context as the popovers above it — and it comes later in
+           DOM order, so it painted over them. Dropping it below the popovers is
+           the fix; the popovers keep their own level (2026-11-26). */
+        .input-island .quick-popover-surface {
+            position: relative;
+            z-index: 2;
         }
 
-        /* Light-on-dark glyphs for everything inside the dock. Scoped to the
-           glass variant so the solid tier keeps its current readable palette. */
-        .chat-view-root .rph-glass.rph-glass-island .text-gray-400,
-        .chat-view-root .rph-glass.rph-glass-island .text-gray-500,
-        .chat-view-root .rph-glass.rph-glass-island .text-gray-600,
-        .chat-view-root .rph-glass.rph-glass-island .text-gray-700,
-        .chat-view-root .rph-glass.rph-glass-island .text-gray-800 {
-            color: rgba(255, 255, 255, 0.82);
+        .input-island .relative.w-full.flex.items-center.justify-between {
+            z-index: 1;
         }
 
-        .chat-view-root .rph-glass.rph-glass-island .chat-input-box {
-            background-color: rgba(255, 255, 255, 0.1);
-            color: #f8fafc;
+        /* The chat input dock used to pin a dark glass variant because it floats
+           over character artwork. That broke the moment a user picked a light
+           theme (2026-11-26 review): the dock stayed dark, and its white-glyph
+           rules reached every .text-gray-* inside it — including the quick
+           settings popover that lives inside the dock, so that panel rendered
+           white-on-white.
+
+           The dock now uses the ordinary acrylic recipe, which follows the
+           theme. Readability over artwork is handled by the tint alone, and the
+           inner textarea keeps its normal surface colours. */
+        .chat-view-root .rph-glass.rph-acrylic {
+            /* A little more body than a page header needs: the artwork behind is
+               arbitrary, and the dock carries an input field. */
+            background-color: var(--mat-tint-text);
         }
 
-        .chat-view-root .rph-glass.rph-glass-island .chat-input-box::placeholder {
-            color: rgba(255, 255, 255, 0.55);
+        /* Popovers nested inside the dock cannot carry a blur at all.
+           The dock's own backdrop-filter makes it a composited layer, and a
+           second backdrop-filter inside that layer renders the dock's icon strip
+           through the panel as smudges — measured at 85%, 92% and 96% tint, so
+           it is a compositing artefact, not a transparency problem (2026-11-26).
+           They are reading surfaces on top of an already-frosted surface, so
+           they use a plain opaque fill: no blur, no grain overlay. Fully opaque,
+           not the 97% fallback tint — at 97% the message action bar underneath
+           still showed through as a faint row of icons. */
+        .quick-popover-surface {
+            background-color: rgb(var(--bg-surface));
+        }
+
+        [data-theme='dark'] .quick-popover-surface {
+            background-color: var(--d-surface);
         }
 
         /* ---- 桌面端专属亚克力（.rph-acrylic-wide）----
@@ -3907,6 +3931,12 @@ opacity: 0;
             max-height: calc(100dvh - 6rem);
             overflow-y: auto;
             overscroll-behavior: contain;
+            /* The popover is absolutely placed above the dock, but the dock's
+               icon strip is `position: relative` and comes later in DOM order,
+               so it painted on top and its icons showed through the panel as
+               smudges. Raising the popover's own stacking level fixes the order
+               without touching the strip (2026-11-26). */
+            z-index: 60;
         }
 
         /* ============================================================
@@ -3955,6 +3985,7 @@ opacity: 0;
             --mat-saturate: 130%;
             --mat-tint: rgb(26 26 26 / 0.76);
             --mat-tint-text: rgb(26 26 26 / 0.85);
+            --mat-tint-panel: rgb(26 26 26 / 0.96);
             --mat-line: rgba(255, 255, 255, 0.08);
             --glass-tint: linear-gradient(135deg, rgba(54, 54, 54, 0.5), rgba(24, 24, 24, 0.36) 44%, rgba(22, 22, 22, 0.42) 62%, rgba(52, 52, 52, 0.46));
             --glass-rim-top: rgba(255, 255, 255, 0.34);
