@@ -32,4 +32,6 @@ test('main index.html still boots the Vite app module after vendor globals', asy
 test('character workshop page keeps loading UMD Vue (not Vite-built)', async () => {
   const html = await readFile(new URL('../character/index.html', import.meta.url), 'utf8');
   assert.ok(html.includes('assets/vendor/vue.global.prod.js'), 'character/index.html must keep loading UMD Vue');
+  assert.ok(html.includes('assets/vendor/marked.umd.js'), 'the workshop thinking panel needs the vendored markdown renderer');
+  assert.ok(html.includes('assets/vendor/purify.min.js'), 'the workshop thinking panel needs the vendored sanitizer');
 });
