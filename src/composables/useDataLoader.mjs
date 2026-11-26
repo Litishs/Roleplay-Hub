@@ -36,6 +36,8 @@ export function useDataLoader(deps) {
         presetGroups,
         presetDefinitionsVersionApplied,
         deletedDefaultPresetNames,
+        presetDefinitionsV2VersionApplied,
+        deletedDefaultV2PresetNames,
         globalRegexScripts,
         regexScripts,
         globalWorldInfo,
@@ -90,6 +92,8 @@ export function useDataLoader(deps) {
                     savedPresetGroups,
                     savedPresetVersion,
                     savedDeletedDefaultPresets,
+                    savedPresetV2Version,
+                    savedDeletedDefaultV2Presets,
                     savedGlobalRegex,
                     savedRegex,
                     savedGlobalWI,
@@ -110,6 +114,8 @@ export function useDataLoader(deps) {
                     getStoredValue('preset_groups'),
                     getStoredValue('preset_definitions_version'),
                     getStoredValue('deleted_default_presets'),
+                    getStoredValue('preset_definitions_v2_version'),
+                    getStoredValue('deleted_default_v2_presets'),
                     getStoredValue('global_regex'),
                     getStoredValue('regex'),
                     getStoredValue('global_worldinfo'),
@@ -231,9 +237,9 @@ export function useDataLoader(deps) {
                         .filter(g => g && typeof g.id === 'string' && g.id)
                         .map(g => ({
                             id: g.id,
-                            name: g.name || (g.id === 'default' ? '默认预设' : g.id),
-                            builtin: g.id === 'default' ? true : !!g.builtin,
-                            enabled: g.id === 'default' ? (g.enabled !== false) : (g.enabled === true)
+                            name: g.name || (g.id === 'default' ? '默认预设1' : g.id === 'default2' ? '默认预设2' : g.id),
+                            builtin: (g.id === 'default' || g.id === 'default2') ? true : !!g.builtin,
+                            enabled: (g.id === 'default' || g.id === 'default2') ? (g.enabled !== false) : (g.enabled === true)
                         }));
                 }
 
@@ -243,6 +249,14 @@ export function useDataLoader(deps) {
 
                 if (Array.isArray(savedDeletedDefaultPresets)) {
                     deletedDefaultPresetNames.value = savedDeletedDefaultPresets.filter(name => typeof name === 'string');
+                }
+
+                if (typeof savedPresetV2Version === 'number') {
+                    presetDefinitionsV2VersionApplied.value = savedPresetV2Version;
+                }
+
+                if (Array.isArray(savedDeletedDefaultV2Presets)) {
+                    deletedDefaultV2PresetNames.value = savedDeletedDefaultV2Presets.filter(name => typeof name === 'string');
                 }
 
                 if (savedGlobalRegex) globalRegexScripts.value = savedGlobalRegex.map(script => normalizeRegexScript(script, 'global'));

@@ -64,7 +64,8 @@
     const failedReads = new Set();
     const arrayKeys = new Set([
         'rp_hub_characters', 'rp_hub_presets', 'rp_hub_preset_groups',
-        'rp_hub_deleted_default_presets', 'rp_hub_global_regex', 'rp_hub_regex',
+        'rp_hub_deleted_default_presets', 'rp_hub_deleted_default_v2_presets',
+        'rp_hub_global_regex', 'rp_hub_regex',
         'rp_hub_global_worldinfo', 'rp_hub_worldinfo', 'rp_hub_global_ui_templates',
         'rp_hub_active_tools', 'rp_hub_user_profiles', 'rp_hub_token_usage_history'
     ]);

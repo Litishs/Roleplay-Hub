@@ -492,10 +492,17 @@ export function useMessageSender(deps) {
             // Construct Prompt Parts
             // 分组消费（D5.4）：组级开关是总闸，组内预设开关是分闸——只合并「已启用分组」内
             // enabled 的预设；功能预设（第二/第三人称、COT）不受分组限制，始终按其自身开关参与。
+            // 双内置组（默认预设1/默认预设2）各自带功能预设副本：同名功能预设优先取启用分组内
+            // 的条目，其他分组的副本不再重复注入（顺带修复旧版"基于默认预设新建"副本双注入）。
             const activeGroupId = presetGroups.value.find(g => g.enabled)?.id || 'default';
+            const activeGroupPresetNames = new Set(
+                presets.value.filter(p => p.group === activeGroupId).map(p => p.name)
+            );
             const enabledPresets = presets.value
                 .map(normalizePreset)
-                .filter(p => p.enabled && p.content.trim() && (p.systemManaged || p.name === 'COT' || p.group === activeGroupId));
+                .filter(p => p.enabled && p.content.trim())
+                .filter(p => p.group === activeGroupId
+                    || ((p.systemManaged || p.name === 'COT') && !activeGroupPresetNames.has(p.name)));
             const systemPresets = enabledPresets.filter(p => p.role === 'system');
             const messagePresets = enabledPresets.filter(p => p.role === 'user' || p.role === 'assistant');
             const systemPresetPrompt = systemPresets

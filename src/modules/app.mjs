@@ -34,6 +34,11 @@ const IMAGE_GEN_BASE_URL = 'https://nai.sta1n.cn';
 import { RPHChatPersistence } from './chat-persistence.mjs';
 import { initSwipes, captureActiveCandidate, appendSwipeCandidate, normalizeSwipes, swipeMaxCandidates } from './swipe-candidates.mjs';
 import { DEFAULT_PRESET_DEFINITIONS, DEFAULT_PRESET_DEFINITIONS_VERSION } from './default-presets.mjs';
+import {
+    DEFAULT_PRESET_V2_DEFINITIONS,
+    DEFAULT_PRESET_V2_DEFINITIONS_VERSION,
+    buildCotPresetContentV2
+} from './default-presets-v2.mjs';
 import { buildCotPresetContent } from './cot-builder.mjs';
 import { RPHStorage } from './storage-repository.mjs';
 import { RPHRuntimePolicy } from './runtime-policy.mjs';
@@ -1254,6 +1259,9 @@ const __app = createApp({
         const presetDefinitionsVersionApplied = ref(null);
         // 用户主动删除的内置预设（避免启动时重新播种；第二/第三人称除外）
         const deletedDefaultPresetNames = ref([]);
+        // 默认预设2 组（id:'default2'，上游 STA1N 预设集）的同款状态
+        const presetDefinitionsV2VersionApplied = ref(null);
+        const deletedDefaultV2PresetNames = ref([]);
         const presetRoleOptions = [
             { value: 'system', label: '系统提示词' },
             { value: 'user', label: 'User消息' },
@@ -2540,6 +2548,8 @@ const __app = createApp({
                     ['preset_groups', presetGroups.value],
                     ['preset_definitions_version', presetDefinitionsVersionApplied.value],
                     ['deleted_default_presets', deletedDefaultPresetNames.value],
+                    ['preset_definitions_v2_version', presetDefinitionsV2VersionApplied.value],
+                    ['deleted_default_v2_presets', deletedDefaultV2PresetNames.value],
                     ['regex', regexScripts.value],
                     ['global_regex', globalRegexScripts.value],
                     ['worldinfo', worldInfo.value],
@@ -9113,6 +9123,8 @@ const __app = createApp({
             presetGroups,
             presetDefinitionsVersionApplied,
             deletedDefaultPresetNames,
+            presetDefinitionsV2VersionApplied,
+            deletedDefaultV2PresetNames,
             globalRegexScripts,
             regexScripts,
             globalWorldInfo,
@@ -9389,11 +9401,16 @@ const __app = createApp({
         const deletePreset = (index) => {
             confirmAction('确定要删除这个预设吗？此操作无法撤销。', () => {
                 const preset = presets.value[index];
-                if (preset && Array.isArray(DEFAULT_PRESET_DEFINITIONS)) {
-                    const def = DEFAULT_PRESET_DEFINITIONS.find(d => d.name === preset.name);
-                    // 第二/第三人称是功能预设，不记录删除，启动时仍会重建
-                    if (def && !def.systemManaged && !deletedDefaultPresetNames.value.includes(preset.name)) {
-                        deletedDefaultPresetNames.value.push(preset.name);
+                if (preset) {
+                    // Built-in presets are tombstoned per group so startup seeding does
+                    // not resurrect them; 第二/第三人称 are functional presets and are
+                    // always rebuilt (never tombstoned).
+                    const isV2 = preset.group === 'default2';
+                    const defs = isV2 ? DEFAULT_PRESET_V2_DEFINITIONS : DEFAULT_PRESET_DEFINITIONS;
+                    const tombstones = isV2 ? deletedDefaultV2PresetNames.value : deletedDefaultPresetNames.value;
+                    const def = Array.isArray(defs) ? defs.find(d => d.name === preset.name) : null;
+                    if (def && !def.systemManaged && Array.isArray(tombstones) && !tombstones.includes(preset.name)) {
+                        tombstones.push(preset.name);
                     }
                 }
                 presets.value.splice(index, 1);
@@ -9417,7 +9434,10 @@ const __app = createApp({
             const groupId = `group_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
             presetGroups.value.push({ id: groupId, name: groupName, builtin: false, enabled: false });
             if (seedFromDefault) {
-                const defaultPresets = presets.value.filter(p => p.group === 'default');
+                // Copy the currently enabled built-in group (默认预设1 or 默认预设2);
+                // fall back to the original default group.
+                const seedGroupId = presetGroups.value.find(g => g.builtin && g.enabled)?.id || 'default';
+                const defaultPresets = presets.value.filter(p => p.group === seedGroupId);
                 const copies = defaultPresets.map(p => ({
                     ...p,
                     group: groupId,
@@ -9490,7 +9510,7 @@ const __app = createApp({
                     if (existingIds.has(g.id)) { idMap.set(g.id, g.id); return; }
                     const newId = g.id === 'default' ? 'default' : `group_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
                     idMap.set(g.id, newId);
-                    addedGroups.push({ id: newId, name: g.name || (newId === 'default' ? '默认预设' : newId), builtin: newId === 'default', enabled: false });
+                    addedGroups.push({ id: newId, name: g.name || (newId === 'default' ? '默认预设1' : newId), builtin: newId === 'default' || newId === 'default2', enabled: false });
                     existingIds.add(newId);
                 });
                 presetGroups.value = [...presetGroups.value, ...addedGroups];
@@ -9769,6 +9789,8 @@ const __app = createApp({
 
             const presetDefinitions = Array.isArray(DEFAULT_PRESET_DEFINITIONS) ? DEFAULT_PRESET_DEFINITIONS : [];
             const preludePresetNames = ['破限预注入 · User 1', '破限预注入 · AI 1', '破限预注入 · User 2', '破限预注入 · AI 2'];
+            const presetV2Definitions = Array.isArray(DEFAULT_PRESET_V2_DEFINITIONS) ? DEFAULT_PRESET_V2_DEFINITIONS : [];
+            const default2GroupId = 'default2';
 
             // 1) 首次迁移：旧数据（无 group 字段）→ 归入自定义组；随后播种全新默认组。
             //    名字匹配定义的视为旧内置预设（转自定义并默认关闭，D5.1，避免与新默认组重复注入）；
@@ -9783,9 +9805,18 @@ const __app = createApp({
                 });
             }
 
-            // 2) 确保默认预设组存在（内置、不可删除、不可重命名）
+            // 2) 确保两个内置默认分组存在（内置：不可删除、不可重命名）。
+            //    'default' = 默认预设1（本仓库原内置集）；'default2' = 默认预设2
+            //    （上游 STA1N 预设集，见 default-presets-v2.mjs）。默认预设2 默认
+            //    关闭，存量用户的启用分组保持不变。
             if (!presetGroups.value.some(g => g.id === 'default')) {
-                presetGroups.value.unshift({ id: 'default', name: '默认预设', builtin: true, enabled: true });
+                presetGroups.value.unshift({ id: 'default', name: '默认预设1', builtin: true, enabled: true });
+            }
+            const seededDefaultGroup = presetGroups.value.find(g => g.id === 'default');
+            if (seededDefaultGroup && seededDefaultGroup.name !== '默认预设1') seededDefaultGroup.name = '默认预设1';
+            if (!presetGroups.value.some(g => g.id === default2GroupId)) {
+                const insertAt = presetGroups.value.findIndex(g => g.id === 'default') + 1;
+                presetGroups.value.splice(Math.max(insertAt, 0), 0, { id: default2GroupId, name: '默认预设2', builtin: true, enabled: false });
             }
 
             // 破限预注入的默认启用状态跟随「破限」（默认组内，兼容旧数据迁移）
@@ -9831,43 +9862,92 @@ const __app = createApp({
                 presets.value = presets.value.filter(p => p.group !== 'default' || defNames.has(p.name) || p.systemManaged);
             }
 
-            // 功能预设（第二/第三人称）：开关强制跟随人称设置，内容不覆盖
-            const secondPersonPreset = presets.value.find(p => p.name === '第二人称');
-            if (secondPersonPreset) secondPersonPreset.enabled = user.person !== 'third';
-            const thirdPersonPreset = presets.value.find(p => p.name === '第三人称');
-            if (thirdPersonPreset) thirdPersonPreset.enabled = user.person === 'third';
+            // 3.5) 默认预设2 组播种与版本同步（与上方默认组逻辑互不影响，仅作用于
+            //      group:'default2'；版本号与删除墓碑均为独立状态，见 default-presets-v2.mjs）
+            const v2VersionChanged = presetDefinitionsV2VersionApplied.value !== DEFAULT_PRESET_V2_DEFINITIONS_VERSION;
+            const default2ByName = new Map(presets.value.filter(p => p.group === default2GroupId).map(p => [p.name, p]));
+            const deletedV2Names = new Set(deletedDefaultV2PresetNames.value || []);
+            for (const def of presetV2Definitions) {
+                const existing = default2ByName.get(def.name);
+                // 预注入条目的默认启用状态跟随本组「破限」
+                let enabled = def.defaultEnabled !== false;
+                if (preludePresetNames.includes(def.name)) {
+                    const v2Jailbreak = default2ByName.get('破限');
+                    enabled = v2Jailbreak ? v2Jailbreak.enabled !== false : true;
+                }
+                if (def.name === '第二人称') enabled = user.person !== 'third';
+                if (def.name === '第三人称') enabled = user.person === 'third';
+                if (existing) {
+                    // 版本变化时：强制覆盖 content/role，保留用户 enabled 开关
+                    if (v2VersionChanged) {
+                        existing.content = def.content || '';
+                        existing.role = def.role || 'system';
+                    }
+                    continue;
+                }
+                // 缺失：播种（版本未变时保留"删除后不复活"；版本变化时按定义补齐）
+                if (!v2VersionChanged && deletedV2Names.has(def.name) && !def.systemManaged) continue;
+                presets.value.push({
+                    name: def.name,
+                    role: def.role || 'system',
+                    content: def.content || '',
+                    enabled,
+                    group: default2GroupId,
+                    systemManaged: !!def.systemManaged
+                });
+            }
+            if (v2VersionChanged) {
+                const v2DefNames = new Set(presetV2Definitions.map(d => d.name));
+                presets.value = presets.value.filter(p => p.group !== default2GroupId || v2DefNames.has(p.name) || p.systemManaged);
+            }
 
-            // 4) COT 动态内容（D6/A）：由构建器按记忆/UI模板/模型实时生成，watch 联动
+            // 功能预设（第二/第三人称）：开关强制跟随人称设置，内容不覆盖；
+            // 遍历所有分组，双默认组与自定义组副本都跟随人称设置
+            for (const preset of presets.value) {
+                if (preset.name === '第二人称') preset.enabled = user.person !== 'third';
+                else if (preset.name === '第三人称') preset.enabled = user.person === 'third';
+            }
+
+            // 4) COT 动态内容（D6/A）：由构建器按记忆/UI模板/模型实时生成，watch 联动。
+            //    双默认组各自持有 COT 条目：默认预设1 用原构建器（cot-builder.mjs），
+            //    默认预设2 用上游重构版协议（default-presets-v2.mjs）
             const usesThinkingCotTag = (model) => /(?:deepseek|glm|kimi)/i.test(String(model || ''));
             const isUiTemplateAnalysisEnabled = () => !!(settings.uiTemplateEnabled && settings.uiTemplateMainModelAnalysis && activeUiTemplates.value.length > 0);
+            const cotBuilderTargets = [
+                { groupId: 'default', defs: presetDefinitions, buildCot: buildCotPresetContent },
+                { groupId: default2GroupId, defs: presetV2Definitions, buildCot: buildCotPresetContentV2 }
+            ];
             const syncCotPresetContent = () => {
                 const useThinkingOpening = usesThinkingCotTag(settings.model);
-                const cotContent = buildCotPresetContent({
-                    memoryEnabled: !!memorySettings.enabled,
-                    uiTemplateAnalysisEnabled: isUiTemplateAnalysisEnabled(),
-                    useThinkingOpening
-                });
-                let existingCotPreset = presets.value.find(p => p.name === 'COT' && p.group === 'default');
-                if (!existingCotPreset) {
-                    presets.value.push({ name: 'COT', role: 'system', content: cotContent, enabled: true, group: 'default', systemManaged: true });
-                    existingCotPreset = presets.value.find(p => p.name === 'COT' && p.group === 'default');
-                } else if (existingCotPreset.content !== cotContent) {
-                    existingCotPreset.content = cotContent;
-                }
-                const prefillEnabled = existingCotPreset?.enabled !== false;
-                ['破限预注入 · AI 1', '破限预注入 · AI 2'].forEach((prefillName, index) => {
-                    const prefillPreset = presets.value.find(p => p.name === prefillName && p.group === 'default');
-                    if (!prefillPreset) return;
-                    const baseContent = presetDefinitions.find(d => d.name === prefillName)?.content || '';
-                    prefillPreset.content = buildCotPresetContent({
+                const uiTemplateAnalysisEnabledNow = isUiTemplateAnalysisEnabled();
+                for (const { groupId, defs, buildCot } of cotBuilderTargets) {
+                    const cotContent = buildCot({
                         memoryEnabled: !!memorySettings.enabled,
-                        uiTemplateAnalysisEnabled: isUiTemplateAnalysisEnabled(),
-                        useThinkingOpening,
-                        prefillPhase: index + 1,
-                        prefillEnabled,
-                        prefillBaseContent: baseContent
+                        uiTemplateAnalysisEnabled: uiTemplateAnalysisEnabledNow,
+                        useThinkingOpening
                     });
-                });
+                    let existingCotPreset = presets.value.find(p => p.name === 'COT' && p.group === groupId);
+                    if (!existingCotPreset) {
+                        presets.value.push({ name: 'COT', role: 'system', content: cotContent, enabled: true, group: groupId, systemManaged: true });
+                        existingCotPreset = presets.value.find(p => p.name === 'COT' && p.group === groupId);
+                    } else if (existingCotPreset.content !== cotContent) {
+                        existingCotPreset.content = cotContent;
+                    }
+                    const prefillEnabled = existingCotPreset?.enabled !== false;
+                    ['破限预注入 · AI 1', '破限预注入 · AI 2'].forEach((prefillName, index) => {
+                        const prefillPreset = presets.value.find(p => p.name === prefillName && p.group === groupId);
+                        if (!prefillPreset) return;
+                        const baseContent = defs.find(d => d.name === prefillName)?.content || '';
+                        prefillPreset.content = buildCot({
+                            memoryEnabled: !!memorySettings.enabled,
+                            uiTemplateAnalysisEnabled: uiTemplateAnalysisEnabledNow,
+                            useThinkingOpening,
+                            prefillPhase: index + 1,
+                            prefillEnabled,
+                            prefillBaseContent: baseContent
+                        });
+                    });
+                }
             };
             syncCotPresetContent();
             watch([
@@ -9875,11 +9955,13 @@ const __app = createApp({
                 () => settings.uiTemplateEnabled,
                 () => settings.uiTemplateMainModelAnalysis,
                 () => settings.model,
-                () => presets.value.find(p => p.name === 'COT')?.enabled
+                () => presets.value.find(p => p.name === 'COT' && p.group === 'default')?.enabled,
+                () => presets.value.find(p => p.name === 'COT' && p.group === default2GroupId)?.enabled
             ], syncCotPresetContent);
 
             // 5) 记录已应用版本并保存
             presetDefinitionsVersionApplied.value = DEFAULT_PRESET_DEFINITIONS_VERSION;
+            presetDefinitionsV2VersionApplied.value = DEFAULT_PRESET_V2_DEFINITIONS_VERSION;
             ensureDefaultUserRegex({ prepend: true });
             // Save enforced defaults immediately (仅保存预设/正则等结构性数据)
             saveData();
@@ -10764,16 +10846,10 @@ const __app = createApp({
                 user.description = tempUserSetup.description;
                 user.person = tempUserSetup.person; // 保存偏好
 
-                // 应用人称选择到预设
-                const secondPersonPreset = presets.value.find(p => p.name === '第二人称');
-                const thirdPersonPreset = presets.value.find(p => p.name === '第三人称');
-
-                if (user.person === 'second') {
-                    if (secondPersonPreset) secondPersonPreset.enabled = true;
-                    if (thirdPersonPreset) thirdPersonPreset.enabled = false;
-                } else {
-                    if (secondPersonPreset) secondPersonPreset.enabled = false;
-                    if (thirdPersonPreset) thirdPersonPreset.enabled = true;
+                // 应用人称选择到预设（遍历所有分组副本：双内置组各自持有功能预设）
+                for (const preset of presets.value) {
+                    if (preset.name === '第二人称') preset.enabled = user.person !== 'third';
+                    else if (preset.name === '第三人称') preset.enabled = user.person === 'third';
                 }
 
                 showUserSetupModal.value = false;
@@ -10786,17 +10862,15 @@ const __app = createApp({
             togglePerson: (person) => {
                 user.person = person; // 更新偏好
 
-                // 应用到预设
-                const secondPersonPreset = presets.value.find(p => p.name === '第二人称');
-                const thirdPersonPreset = presets.value.find(p => p.name === '第三人称');
+                // 应用到预设（遍历所有分组副本：双内置组各自持有功能预设）
+                for (const preset of presets.value) {
+                    if (preset.name === '第二人称') preset.enabled = person !== 'third';
+                    else if (preset.name === '第三人称') preset.enabled = person === 'third';
+                }
 
                 if (person === 'second') {
-                    if (secondPersonPreset) secondPersonPreset.enabled = true;
-                    if (thirdPersonPreset) thirdPersonPreset.enabled = false;
                     showToast('已切换至第二人称视角', 'success');
                 } else {
-                    if (secondPersonPreset) secondPersonPreset.enabled = false;
-                    if (thirdPersonPreset) thirdPersonPreset.enabled = true;
                     showToast('已切换至第三人称视角', 'success');
                 }
                 saveData();

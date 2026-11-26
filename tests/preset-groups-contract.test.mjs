@@ -45,8 +45,14 @@ test('app.mjs seeds presets into groups and migrates legacy presets', () => {
     // 首次迁移：旧数据（无 group 字段）归入自定义组；旧内置预设默认关闭（D5.1）
     assert.match(app, /presets\.value\.some\(p => !p\.group\)/, '检测无分组旧数据');
     assert.ok(app.includes("return { ...p, group: 'custom', enabled: isLegacyBuiltin ? false : (p.enabled !== false) };"), '旧内置转自定义并默认关闭');
-    // 默认预设组存在
-    assert.ok(app.includes("presetGroups.value.unshift({ id: 'default', name: '默认预设', builtin: true, enabled: true });"), '播种默认预设组');
+    // 双内置默认组：默认预设1（原内置集）+ 默认预设2（上游 STA1N 集，默认关闭）
+    assert.ok(app.includes("presetGroups.value.unshift({ id: 'default', name: '默认预设1', builtin: true, enabled: true });"), '播种默认预设1组');
+    assert.ok(app.includes("presetGroups.value.splice(Math.max(insertAt, 0), 0, { id: default2GroupId, name: '默认预设2', builtin: true, enabled: false });"), '播种默认预设2组（默认关闭）');
+    assert.ok(app.includes("if (seededDefaultGroup && seededDefaultGroup.name !== '默认预设1') seededDefaultGroup.name = '默认预设1';"), '存量默认组改名 默认预设1');
+    assert.ok(app.includes("import {\n    DEFAULT_PRESET_V2_DEFINITIONS,\n    DEFAULT_PRESET_V2_DEFINITIONS_VERSION,\n    buildCotPresetContentV2\n} from './default-presets-v2.mjs';"), 'app.mjs 导入默认预设2定义与v2构建器');
+    assert.ok(app.includes('const presetDefinitionsV2VersionApplied = ref(null);'), '默认预设2已应用版本状态存在');
+    assert.ok(app.includes('const deletedDefaultV2PresetNames = ref([]);'), '默认预设2删除墓碑状态存在');
+    assert.ok(app.includes('presetDefinitionsV2VersionApplied.value = DEFAULT_PRESET_V2_DEFINITIONS_VERSION;'), '记录默认预设2已应用版本');
 });
 
 test('app.mjs force-syncs the default group on definition version bump', () => {
@@ -57,9 +63,12 @@ test('app.mjs force-syncs the default group on definition version bump', () => {
 
 test('app.mjs syncs COT content dynamically and watches its drivers', () => {
     assert.ok(app.includes('const syncCotPresetContent = () => {'), 'COT 动态同步函数');
-    assert.ok(app.includes('buildCotPresetContent({'), 'COT 内容由构建器生成');
+    // 双构建器：默认预设1 用 cot-builder（原协议），默认预设2 用 default-presets-v2（上游重构协议）
+    assert.ok(app.includes("{ groupId: 'default', defs: presetDefinitions, buildCot: buildCotPresetContent }"), '默认预设1组绑定原COT构建器');
+    assert.ok(app.includes('{ groupId: default2GroupId, defs: presetV2Definitions, buildCot: buildCotPresetContentV2 }'), '默认预设2组绑定上游重构COT构建器');
     assert.ok(app.includes('prefillPhase: index + 1,'), '破限预注入按 prefillPhase 联动');
     assert.ok(app.includes('], syncCotPresetContent);'), 'COT 内容随记忆/UI模板/模型 watch 重算');
+    assert.ok(app.includes("() => presets.value.find(p => p.name === 'COT' && p.group === default2GroupId)?.enabled"), '默认预设2组 COT 开关也触发重算');
 });
 
 test('app.mjs exposes preset group management', () => {
@@ -77,19 +86,28 @@ test('saveData persists preset_groups and the applied definition version', () =>
     const batch = app.slice(from, to);
     assert.ok(batch.includes("['preset_groups', presetGroups.value]"), '持久化 preset_groups');
     assert.ok(batch.includes("['preset_definitions_version', presetDefinitionsVersionApplied.value]"), '持久化已应用版本');
+    assert.ok(batch.includes("['preset_definitions_v2_version', presetDefinitionsV2VersionApplied.value]"), '持久化默认预设2已应用版本');
+    assert.ok(batch.includes("['deleted_default_v2_presets', deletedDefaultV2PresetNames.value]"), '持久化默认预设2删除墓碑');
 });
 
 test('useDataLoader restores preset_groups and the applied version', () => {
     assert.ok(loader.includes('presetGroups,'), '加载器接收 presetGroups 依赖');
     assert.ok(loader.includes('presetDefinitionsVersionApplied,'), '加载器接收版本依赖');
+    assert.ok(loader.includes('presetDefinitionsV2VersionApplied,'), '加载器接收默认预设2版本依赖');
+    assert.ok(loader.includes('deletedDefaultV2PresetNames,'), '加载器接收默认预设2墓碑依赖');
     assert.ok(loader.includes("getStoredValue('preset_groups')"), '读取 preset_groups');
     assert.ok(loader.includes("getStoredValue('preset_definitions_version')"), '读取已应用版本');
+    assert.ok(loader.includes("getStoredValue('preset_definitions_v2_version')"), '读取默认预设2已应用版本');
+    assert.ok(loader.includes("getStoredValue('deleted_default_v2_presets')"), '读取默认预设2删除墓碑');
+    assert.ok(loader.includes("g.id === 'default' ? '默认预设1' : g.id === 'default2' ? '默认预设2' : g.id"), '内置分组名称兜底覆盖双默认组');
 });
 
 test('useMessageSender consumes only the enabled group\u2019s enabled presets', () => {
     assert.ok(sender.includes('presetGroups,'), '发送器接收分组依赖');
     assert.ok(sender.includes("const activeGroupId = presetGroups.value.find(g => g.enabled)?.id || 'default';"), '定位启用分组');
-    assert.match(sender, /p\.systemManaged \|\| p\.name === 'COT' \|\| p\.group === activeGroupId/, '功能预设始终参与，内容预设按启用分组过滤');
+    // 双内置组后，功能预设（systemManaged/COT）优先取启用分组内同名条目，其余分组副本不重复注入
+    assert.match(sender, /const activeGroupPresetNames = new Set\(\s*presets\.value\.filter\(p => p\.group === activeGroupId\)\.map\(p => p\.name\)\s*\);/, '收集启用分组内预设名单');
+    assert.match(sender, /p\.group === activeGroupId\s*\|\| \(\(p\.systemManaged \|\| p\.name === 'COT'\) && !activeGroupPresetNames\.has\(p\.name\)\)/, '功能预设启用组优先、跨组去重回退');
 });
 
 test('PresetsPanel renders groups as accordions with a group-level toggle', () => {
