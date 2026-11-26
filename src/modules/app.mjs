@@ -10491,6 +10491,22 @@ const __app = createApp({
                 // above reports that capped number).
                 return buildMemoryView(ledger, buildLiveTurnIndex(), { tocBudget: Infinity }).toc;
             }),
+            // M2: the panel TOC shows the truncated summary only; clicking a
+            // row needs the entry's full text for the detail overlay. Lookup
+            // stays in app.mjs so the raw ledger keeps living here.
+            getMemoryEntryDetail: (entryId) => {
+                const ledger = memoryLedger.value;
+                const entry = ledger && Array.isArray(ledger.entries)
+                    ? ledger.entries.find((item) => item.id === entryId)
+                    : null;
+                if (!entry) return null;
+                return {
+                    ref: Number(entry.ref) || 0,
+                    kind: entry.kind || 'digest',
+                    text: entry.text || '',
+                    stale: Boolean(entry.meta && entry.meta.stale)
+                };
+            },
             // v6 L4: info card and pins are ledger projections, not separate
             // stores. Freshness is annotated at render time from the live
             // covers projection (§5.4).
