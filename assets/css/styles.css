@@ -2,9 +2,15 @@
             --app-visual-height: 100vh;
             --keyboard-inset: 0px;
             --chat-bg-height: 100vh;
-            /* Height of the narrow-screen tab bar. Tab-root views reserve it
-               (.app-views.has-tab-bar), so it must equal the bar's real height. */
-            --tab-bar-h: 4.25rem;
+            /* Vertical space the narrow-screen tab bar occupies. Tab-root views
+               reserve it (.app-views.has-tab-bar), so it must equal the bar's
+               real footprint: 60px capsule + 8px bottom gap + 8px top air
+               (2026-11-26, floating capsule). */
+            --tab-bar-h: 4.75rem;
+            /* The capsule itself, separate from its footprint. */
+            --tab-bar-capsule-h: 3.75rem;
+            --tab-bar-inset: 0.75rem;
+            --tab-bar-gap: 0.5rem;
             /* Shared motion tokens (2026-11-24): three speeds, one standard
                curve, so new components do not add another 0.18s/.22s variant. */
             --motion-fast: 0.15s;
@@ -693,6 +699,38 @@
             user-select: none;
         }
 
+        /* Home header band (2026-11-26). The title bar and the search field used
+           to sit above the scroller, so nothing ever passed behind them and the
+           acrylic recipe had nothing to blur. They now live inside the scroller
+           and pin to its top, which is what makes the material visible while
+           rows slide underneath.
+
+           The band spans the scroller's full width: the horizontal padding lives
+           on the rows instead, so the tint reaches both edges instead of leaving
+           two bare strips. */
+        .conversation-list__head {
+            position: sticky;
+            top: 0;
+            z-index: 5;
+            margin: 0 -0.5rem;
+        }
+
+        .conversation-list--compact .conversation-list__head {
+            margin: 0 -0.375rem;
+        }
+
+        /* The recipe paints the band; the header's own bg-white/90 would cover
+           it. The opaque tiers keep the header's own fill instead. */
+        .conversation-list__head > header {
+            background-color: transparent;
+            border-bottom-color: var(--mat-line);
+        }
+
+        [data-effects='solid'] .conversation-list__head > header {
+            background-color: rgb(var(--bg-surface) / 0.9);
+            border-bottom-color: rgb(var(--border-gray-200));
+        }
+
         /* The toggle reads as pressed while privacy is on, using the same
            primary tint as the active tab. */
         .settings-icon-button.privacy-toggle.is-active {
@@ -766,11 +804,12 @@
         }
 
         /* Narrow-screen tab bar (2026-11-23). An overlay at the bottom of
-           .app-main; tab-root views reserve its height through
+           .app-main; tab-root views reserve its footprint through
            .app-views.has-tab-bar (mobile section below), which keeps the bar
-           out of the layout so it can animate and let content scroll under it.
-           The colours are variables on purpose: a later reskin (e.g. glass)
-           only changes values, and dark mode overrides the same variables. */
+           out of the layout so content scrolls under it.
+           Floating capsule (2026-11-26, M3): the bar is inset from the edges
+           and lifted off the bottom, so it reads as a lens rather than a
+           full-width strip. The colours stay variables; dark mode swaps values. */
         .bottom-tab-bar {
             --tab-bar-bg: #ffffff;
             --tab-bar-border: #e5e7eb;
@@ -783,16 +822,35 @@
             --tab-pill-w: 3.75rem;
             --tab-pill-h: 2rem;
             position: absolute;
-            left: 0;
-            right: 0;
-            bottom: 0;
+            left: var(--tab-bar-inset);
+            right: var(--tab-bar-inset);
+            bottom: var(--tab-bar-gap);
             z-index: 1;
             display: grid;
             grid-template-columns: repeat(4, minmax(0, 1fr));
-            height: var(--tab-bar-h);
-            padding: 0.375rem 0.375rem 0;
+            height: var(--tab-bar-capsule-h);
+            /* Vertical padding is 5px so the tab's own stack (32px icon pill +
+               3px gap + 14px label line = 49px) fits inside a 60px capsule.
+               Horizontal stays 6px: the slider's width formula counts on the
+               0.75rem total. */
+            padding: 0.3125rem 0.375rem;
+            /* Half the height: a full pill rather than a rounded rectangle. */
+            border-radius: calc(var(--tab-bar-capsule-h) / 2);
             background: var(--tab-bar-bg);
-            border-top: 1px solid var(--tab-bar-border);
+        }
+
+        /* The rim replaces the old top hairline: a floating capsule has no edge
+           to attach a border to. Drawn as an inset ring so it follows the
+           radius without adding layout. The glass recipe draws its own ring on
+           this same pseudo-element, so only the solid tiers use this one. */
+        .bottom-tab-bar:not(.rph-glass)::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            z-index: 2;
+            border-radius: inherit;
+            pointer-events: none;
+            box-shadow: inset 0 0 0 1px var(--tab-bar-border);
         }
 
         /* One tab is a 77x62 target at the narrowest supported width (320px),
@@ -817,31 +875,32 @@
         /* Sliding active indicator: one element shared by all four tabs, so a
            switch moves the pill instead of cross-fading four backgrounds.
            transform-only, per the animation constraints in the design doc.
-           Its width is one grid cell; the visible label copy is only there to
-           reproduce the tab's line box, so the pill lands on the icons. */
+           Its width is one grid cell.
+
+           The pill is centred on the capsule, not on the icon row (2026-11-26
+           review): the old layout mirrored the tab's icon+label stack with an
+           invisible label placeholder, which parked the highlight above the
+           capsule's optical centre. Absolute centring is exact at any width and
+           needs no placeholder. */
         .bottom-tab__slider {
             position: absolute;
-            top: 0.375rem;
+            top: 0;
             left: 0.375rem;
             z-index: 0;
             display: flex;
-            flex-direction: column;
             align-items: center;
             justify-content: center;
-            gap: 0.1875rem;
             width: calc((100% - 0.75rem) / 4);
-            height: calc(100% - 0.375rem);
-            /* Same type metrics as a tab, so the placeholder label's line box
-               equals the real one and the pill sits on the icons. */
-            font-size: 0.6875rem;
-            line-height: 0.875rem;
+            height: 100%;
             pointer-events: none;
             transition: transform var(--motion-base) var(--motion-standard);
         }
 
+        /* Taller than the icon pill so the highlight reads as covering the tab
+           (icon + label) rather than just the glyph. */
         .bottom-tab__slider-pill {
             width: var(--tab-pill-w);
-            height: var(--tab-pill-h);
+            height: calc(var(--tab-pill-h) + 0.75rem);
             border-radius: 9999px;
             background: var(--tab-bar-active-bg);
         }
@@ -1910,8 +1969,8 @@
            home bar's persistent title (2026-11-24). The negative margins cancel
            .management-view padding so the opaque strip covers the full column;
            content scrolls underneath. */
-        .settings-page-header,
-        .management-header {
+        .settings-page-header:not(.rph-glass),
+        .management-header:not(.rph-glass) {
             position: sticky;
             /* Negative so the header pins to the view's top edge: the sticky
                containing box starts at the management-view padding (1rem). */
@@ -1922,9 +1981,21 @@
             background: #f9fafb;
         }
 
-        [data-theme='dark'] .settings-page-header,
-        [data-theme='dark'] .management-header {
-            background: var(--d-bg);
+        [data-theme='dark'] .settings-page-header:not(.rph-glass),
+        [data-theme='dark'] .management-header:not(.rph-glass) {
+            background-color: var(--d-bg);
+        }
+
+        /* The acrylic recipe owns the fill once a header opts in, so the opaque
+           rules above skip it (same :not() guard as the mobile compensation
+           block). Only the geometry stays unconditional. */
+        .settings-page-header.rph-glass,
+        .management-header.rph-glass {
+            position: sticky;
+            top: -1rem;
+            z-index: 6;
+            margin: -1rem -1rem 0;
+            padding: 1rem;
         }
 
         .management-view {
@@ -2119,10 +2190,6 @@
 
         .settings-toggle-input:checked + .settings-toggle--compact {
             background: linear-gradient(to right, #3b82f6, #2563eb);
-        }
-
-        .settings-toggle-input:checked + .settings-toggle--indigo {
-            background: #6366f1;
         }
 
         .settings-toggle-input:checked + .settings-toggle--solid {
@@ -2651,10 +2718,15 @@
         .markdown-body p { color: inherit; }
         .markdown-body ul { list-style-type: disc; margin-left: 1.5em; color: inherit; }
         .markdown-body ol { list-style-type: decimal; margin-left: 1.5em; color: inherit; }
-        .markdown-body code { background-color: #f1f5f9; padding: 0.2em 0.45em; border-radius: 0.5em; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; color: #2563eb; font-size: 0.9em; }
-        .markdown-body pre { background-color: #f8fafc; padding: 1.25em; border-radius: 1rem; overflow-x: auto; border: 1px solid #e2e8f0; margin-left: 0.5rem; margin-right: 0.5rem; box-shadow: 0 1px 2px rgba(0,0,0,0.03); }
-        .markdown-body pre code { background-color: transparent; padding: 0; color: #1f2937; border-radius: 0; }
-        .markdown-body blockquote { border-left: 4px solid #e5e7eb; padding-left: 1em; color: #6b7280; margin-left: 0.5rem; margin-right: 0.5rem; border-radius: 0 0.5rem 0.5rem 0; }
+        /* Markdown 元素配色走令牌（2026-11-26）。这里原本全是硬编码浅色（#f1f5f9 /
+           #f8fafc / #f9fafb / #e5e7eb / #1f2937），深色模式下没有对写，于是代码块、
+           表头、引用块都变成浅色块压在近白文字上——实测 pre 与 th 的对比度只有
+           1.04:1。改用 tokens.css 的三命名空间（bg-* / border-* / text-*）后，
+           深色只换值即可，不需要再逐条写 [data-theme='dark'] 覆盖。 */
+        .markdown-body code { background-color: rgb(var(--bg-gray-100)); padding: 0.2em 0.45em; border-radius: 0.5em; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; color: rgb(var(--text-primary-600)); font-size: 0.9em; }
+        .markdown-body pre { background-color: rgb(var(--bg-gray-50)); padding: 1.25em; border-radius: 1rem; overflow-x: auto; border: 1px solid rgb(var(--border-gray-200)); margin-left: 0.5rem; margin-right: 0.5rem; box-shadow: 0 1px 2px rgba(0,0,0,0.03); }
+        .markdown-body pre code { background-color: transparent; padding: 0; color: rgb(var(--text-gray-800)); border-radius: 0; }
+        .markdown-body blockquote { border-left: 4px solid rgb(var(--border-gray-200)); padding-left: 1em; color: rgb(var(--text-gray-500)); margin-left: 0.5rem; margin-right: 0.5rem; border-radius: 0 0.5rem 0.5rem 0; }
 
         /* Enhanced Markdown Styles */
         .markdown-body strong { font-weight: 700; color: inherit; }
@@ -2663,20 +2735,26 @@
         .markdown-body h2 { font-size: 1.25em; font-weight: 600; margin-top: 1em; margin-bottom: 0.5em; line-height: 1.25; color: inherit; }
         .markdown-body h3 { font-size: 1.1em; font-weight: 600; margin-top: 1em; margin-bottom: 0.5em; line-height: 1.3; color: inherit; }
         .markdown-body h4 { font-weight: 600; margin-top: 1em; margin-bottom: 0.5em; color: inherit; }
-        .markdown-body a { color: #2563eb; text-decoration: underline; text-underline-offset: 2px; overflow-wrap: anywhere; word-break: break-word; }
-        .markdown-body a:hover { color: #1d4ed8; }
-        .markdown-body hr { border: 0; border-top: 1px solid #e5e7eb; margin: 1.5em 0.5rem; height: 1px; }
+        .markdown-body a { color: rgb(var(--text-primary-600)); text-decoration: underline; text-underline-offset: 2px; overflow-wrap: anywhere; word-break: break-word; }
+        .markdown-body a:hover { color: rgb(var(--text-primary-700)); }
+        .markdown-body hr { border: 0; border-top: 1px solid rgb(var(--border-gray-200)); margin: 1.5em 0.5rem; height: 1px; }
         .markdown-body table { width: auto; border-collapse: collapse; margin: 0 0.5rem 1em 0.5rem; display: block; overflow-x: auto; }
-        .markdown-body th, .markdown-body td { border: 1px solid #e5e7eb; padding: 0.5em 0.75em; text-align: left; }
-        .markdown-body th { background-color: #f9fafb; font-weight: 600; }
+        .markdown-body th, .markdown-body td { border: 1px solid rgb(var(--border-gray-200)); padding: 0.5em 0.75em; text-align: left; }
+        .markdown-body th { background-color: rgb(var(--bg-gray-50)); font-weight: 600; }
         .markdown-body del { text-decoration: line-through; color: inherit; opacity: 0.7; }
 
         .markdown-body .response-error-text {
+            /* 深色下 #dc2626 压在 #1a1a1a 气泡上只有约 3.6:1，达不到 4.5:1；
+               与 .text-red-* 的深色映射取同一个值。 */
             color: #dc2626;
             font-weight: 700;
             white-space: pre-wrap;
             overflow-wrap: anywhere;
             word-break: break-word;
+        }
+
+        [data-theme='dark'] .markdown-body .response-error-text {
+            color: #fca5a5;
         }
 
         /* Specific fix for immersive container from regex */
@@ -2708,8 +2786,17 @@
 
 
 
+        /* 消息气泡底色（2026-11-26）。
+           这条规则原本在 @media (max-width: 768px) 的「补偿毛玻璃」块里，只负责
+           手机端：那里全局关掉了 backdrop-filter，气泡的半透明底失去模糊支撑，
+           于是强制抬到 88% 白底保证可读性。后来它漂移到了全局作用域，于是变成
+           一条无条件覆盖：桌面端也被强制白底，而深色模式下没有对写，实测气泡是
+           白底 + #f5f5f5 文字（对比度 1.09:1，几乎不可读）。
+           现在改为走令牌：浅色仍是接近原来的 88% 白，深色自动换成深色面。不再用
+           !important —— 气泡模板上的 bg-white/70、bg-blue-50/85 等类同样走令牌，
+           深色下本来就正确，这一条只是把「半透明底 + 无模糊」抬到可读的不透明度。 */
         .msg-bubble-glass {
-            background-color: rgba(255, 255, 255, 0.88) !important;
+            background-color: rgb(var(--bg-surface) / 0.88);
         }
 
 
@@ -2757,6 +2844,363 @@
                 max-width: 100%;
             }
 
+        }
+
+        /* ============================================================
+         * 界面材质（M1 骨架，2026-11-26）
+         *
+         * 两套配方：亚克力（backdrop blur + 半透明色调，形状不变）与液态玻璃
+         * （几乎不着色，边缘折射 + 高光边）。设计决策记录见
+         * documents/界面材质与页面底图工程方案.md。
+         *
+         * 只有显式携带 .rph-glass 的元素才会拿到材质：
+         * - 手机端 @media 块里的全局 backdrop-filter 关闭规则是
+         *   `*:not(.rph-glass)`，即白名单制；没带类的元素（含模板里游离的
+         *   Tailwind backdrop-blur-*）维持实色，观感与今天一致。
+         * - 补偿块里的 !important 实色规则同样带 :not(.rph-glass)，否则会把
+         *   刚铺上的玻璃面拍回实色。
+         *
+         * 档位由 glass-lens.mjs 写到 documentElement.dataset.effects：
+         *   glass   支持 backdrop-filter: url()，可做真折射
+         *   acrylic 只支持 blur()，退回磨砂
+         *   solid   不支持 / 用户关闭 / 系统要求减少透明，取现行实色观感
+         * 配方本身只写 acrylic 档的取值，solid 档在下面统一覆盖。
+         * ============================================================ */
+        :root {
+            /* —— 亚克力 —— */
+            --mat-blur: 20px;
+            --mat-blur-panel: 24px;
+            --mat-saturate: 150%;
+            --mat-tint: rgb(255 255 255 / 0.76);
+            --mat-tint-text: rgb(255 255 255 / 0.85);
+            /* Popovers sit on top of other chrome (the input dock's icon strip),
+               so they need more body than a panel that only covers page fill. */
+            --mat-tint-panel: rgb(255 255 255 / 0.96);
+            --mat-tint-solid: rgb(var(--bg-surface) / 0.97);
+            --mat-line: rgba(15, 23, 42, 0.08);
+            --mat-noise: 0.04;
+            /* 160px 分形噪点，给磨砂面一点颗粒感（否则纯高斯模糊看起来像塑料）。 */
+            --mat-noise-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .5 0 0 0 0 .5 0 0 0 0 .5 0 0 0 1 0'/></filter><rect width='160' height='160' filter='url(%23n)'/></svg>");
+
+            /* —— 液态玻璃 —— */
+            --glass-blur: 12px;
+            --glass-blur-tight: 3px;
+            --glass-blur-panel: 24px;
+            --glass-saturate: 165%;
+            --glass-tint: linear-gradient(135deg, rgba(255, 255, 255, 0.26), rgba(255, 255, 255, 0.05) 44%, rgba(255, 255, 255, 0.04) 62%, rgba(255, 255, 255, 0.16));
+            --glass-tint-solid: rgb(var(--bg-surface) / 0.9);
+            --glass-rim-top: rgba(255, 255, 255, 0.7);
+            --glass-rim: rgba(255, 255, 255, 0.42);
+            --glass-rim-bottom: rgba(255, 255, 255, 0.2);
+            --glass-glint-a: rgba(255, 255, 255, 0.36);
+            --glass-glint-b: rgba(255, 255, 255, 0.18);
+            /* 边缘折射：band = 折射带宽度，refract = 带内最大位移像素。
+               JS 的位移图按这两个值生成，feDisplacementMap 的 scale 必须为 255
+               （位移 = scale × (色值/255 − 0.5)，scale=1 等于没有折射）。 */
+            --glass-refract: 26px;
+            --glass-band: 16px;
+        }
+
+        /* Dark values for both recipes live in the main [data-theme='dark']
+           palette block further down, so every dark value stays in one place. */
+
+        /* Zero specificity so it never fights a surface's own positioning
+           (tab bar, sticky page heads and popovers are all placed already). */
+        :where(.rph-glass) {
+            position: relative;
+        }
+
+        /* ---- 亚克力：模糊 + 色调。形状不变，不加高光边。 ---- */
+        .rph-glass.rph-acrylic {
+            background-color: var(--mat-tint);
+            -webkit-backdrop-filter: blur(var(--mat-blur)) saturate(var(--mat-saturate));
+            backdrop-filter: blur(var(--mat-blur)) saturate(var(--mat-saturate));
+        }
+
+        /* 大面积压在文字上的浮层（快捷设置、临时指令）：更大模糊半径 + 更高色调。
+           96% rather than the 85% "text" tint: at 85% the dock's icon strip
+           showed through the popover as faint shapes, and even 92% left them
+           visible. The popover sits on top of other chrome rather than on page
+           fill, so it is a reading surface first — it keeps the blur and the
+           hairline, but barely any transparency. */
+        .rph-glass.rph-acrylic-panel {
+            background-color: var(--mat-tint-panel);
+            -webkit-backdrop-filter: blur(var(--mat-blur-panel)) saturate(var(--mat-saturate));
+            backdrop-filter: blur(var(--mat-blur-panel)) saturate(var(--mat-saturate));
+        }
+
+        .rph-glass.rph-acrylic::before,
+        .rph-glass.rph-acrylic-panel::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            z-index: 2;
+            border-radius: inherit;
+            pointer-events: none;
+            background-image: var(--mat-noise-image);
+            opacity: var(--mat-noise);
+        }
+
+        /* ---- 液态玻璃已停用（2026-11-26 复核）----
+           The liquid-glass recipe (refraction + specular rim) is kept below only
+           so the CSS contract and glass-lens.mjs stay coherent, but no surface
+           uses it any more: at phone size the edge displacement read as fake
+           rather than as glass, and the one place it could shine (the tab bar)
+           is dominated by a moving highlight that cannot carry a blur. Every
+           former glass surface now uses the acrylic recipe above. */
+        .rph-glass.rph-glass-island,
+        .rph-glass.rph-glass-bar {
+            background: var(--glass-tint);
+            -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+            backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+        }
+
+        /* Specular edge: an inset ring plus a brighter top line and a dimmer
+           bottom one, so the capsule reads as a lens with thickness instead of a
+           flat translucent fill. Drawn as inset shadows so it follows the radius
+           and never adds layout. The glint is a diagonal highlight band. */
+        .rph-glass.rph-glass-island::after,
+        .rph-glass.rph-glass-bar::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            z-index: 3;
+            border-radius: inherit;
+            pointer-events: none;
+            background-image: linear-gradient(135deg, var(--glass-glint-a), transparent 38%, transparent 62%, var(--glass-glint-b));
+            box-shadow:
+                inset 0 0 0 1px var(--glass-rim),
+                inset 0 1px 1px var(--glass-rim-top),
+                inset 0 -1px 1px var(--glass-rim-bottom);
+        }
+
+        /* The tab bar's rim is now the glass ring above: the old hairline rule
+           only applies to the solid tiers, so the two never stack. */
+
+
+        /* The dock's icon strip is `position: relative`, which puts it in the
+           same stacking context as the popovers above it — and it comes later in
+           DOM order, so it painted over them. Dropping it below the popovers is
+           the fix; the popovers keep their own level (2026-11-26). */
+        .input-island .quick-popover-surface {
+            position: relative;
+            z-index: 2;
+        }
+
+        .input-island .relative.w-full.flex.items-center.justify-between {
+            z-index: 1;
+        }
+
+        /* The chat input dock used to pin a dark glass variant because it floats
+           over character artwork. That broke the moment a user picked a light
+           theme (2026-11-26 review): the dock stayed dark, and its white-glyph
+           rules reached every .text-gray-* inside it — including the quick
+           settings popover that lives inside the dock, so that panel rendered
+           white-on-white.
+
+           The dock now uses the ordinary acrylic recipe, which follows the
+           theme. Readability over artwork is handled by the tint alone, and the
+           inner textarea keeps its normal surface colours. */
+        .chat-view-root .rph-glass.rph-acrylic {
+            /* A little more body than a page header needs: the artwork behind is
+               arbitrary, and the dock carries an input field. */
+            background-color: var(--mat-tint-text);
+        }
+
+        /* Popovers nested inside the dock cannot carry a blur at all.
+           The dock's own backdrop-filter makes it a composited layer, and a
+           second backdrop-filter inside that layer renders the dock's icon strip
+           through the panel as smudges — measured at 85%, 92% and 96% tint, so
+           it is a compositing artefact, not a transparency problem (2026-11-26).
+           They are reading surfaces on top of an already-frosted surface, so
+           they use a plain opaque fill: no blur, no grain overlay. Fully opaque,
+           not the 97% fallback tint — at 97% the message action bar underneath
+           still showed through as a faint row of icons. */
+        .quick-popover-surface {
+            background-color: rgb(var(--bg-surface));
+        }
+
+        [data-theme='dark'] .quick-popover-surface {
+            background-color: var(--d-surface);
+        }
+
+        /* ---- 桌面端专属亚克力（.rph-acrylic-wide）----
+           Per-message surfaces (action bar, name tag) exist once per message, so a
+           long chat can show 6–10 of them at once and blow the ≤6 backdrop-filter
+           budget in §11. Phones keep their solid look; wide screens get the
+           material, where these surfaces already carried a stray blur anyway.
+
+           This variant deliberately does NOT carry .rph-glass: on phones that
+           class is the whitelist that lets a backdrop-filter through, and these
+           surfaces must stay solid there. Without it the mobile kill-switch and
+           the solid compensation rules both keep working untouched. */
+        @media (min-width: 769px) {
+            .rph-acrylic-wide {
+                position: relative;
+                background-color: var(--mat-tint);
+                -webkit-backdrop-filter: blur(var(--mat-blur)) saturate(var(--mat-saturate));
+                backdrop-filter: blur(var(--mat-blur)) saturate(var(--mat-saturate));
+            }
+
+            .rph-acrylic-wide::before {
+                content: '';
+                position: absolute;
+                inset: 0;
+                z-index: 2;
+                border-radius: inherit;
+                pointer-events: none;
+                background-image: var(--mat-noise-image);
+                opacity: var(--mat-noise);
+            }
+        }
+
+        /* ---- solid 档：现行实色观感（设备不支持 / 用户关闭 / 系统减少透明）。 ---- */
+        [data-effects='solid'] .rph-glass.rph-acrylic,
+        [data-effects='solid'] .rph-glass.rph-acrylic-panel,
+        [data-effects='solid'] .rph-glass.rph-glass-island,
+        [data-effects='solid'] .rph-glass.rph-glass-bar {
+            -webkit-backdrop-filter: none;
+            backdrop-filter: none;
+        }
+
+        [data-effects='solid'] .rph-glass.rph-acrylic,
+        [data-effects='solid'] .rph-glass.rph-acrylic-panel {
+            background: var(--mat-tint-solid);
+        }
+
+        /* The page header had its own opaque values before the material layer;
+           the generic --mat-tint-solid would shift them (#f9fafb -> white/97),
+           so solid restores the original pair exactly. */
+        [data-effects='solid'] .settings-page-header.rph-glass {
+            background-color: #f9fafb;
+        }
+
+        [data-effects='solid'][data-theme='dark'] .settings-page-header.rph-glass {
+            background-color: var(--d-bg);
+        }
+
+        [data-effects='solid'] .rph-glass.rph-glass-island,
+        [data-effects='solid'] .rph-glass.rph-glass-bar {
+            background: var(--glass-tint-solid);
+        }
+
+        /* Solid restores the pre-material look, geometry included: the tab bar
+           goes back to the full-width strip at the bottom edge, because a
+           floating capsule is a property of the glass design, not of the
+           layout. The view reservation shrinks with it so no gap is left over. */
+        [data-effects='solid'] .bottom-tab-bar.rph-glass {
+            left: 0;
+            right: 0;
+            bottom: 0;
+            height: 4.25rem;
+            padding: 0.375rem 0.375rem 0;
+            border-radius: 0;
+            background: var(--tab-bar-bg);
+            border-top: 1px solid var(--tab-bar-border);
+        }
+
+        /* The reservation follows the bar, so shrink the footprint variable in
+           the same tier: 68px strip with no gap (the pre-material value). */
+        [data-effects='solid'] {
+            --tab-bar-h: 4.25rem;
+        }
+
+        [data-effects='solid'] .bottom-tab-bar.rph-glass::after {
+            display: none;
+        }
+
+        [data-effects='solid'] .bottom-tab__slider {
+            top: 0.375rem;
+            height: calc(100% - 0.375rem);
+        }
+
+        /* The desktop-only variant has its own solid form and only above 769px:
+           below that it was never active, so forcing a fill here would change
+           the phone look instead of restoring it. */
+        @media (min-width: 769px) {
+            [data-effects='solid'] .rph-acrylic-wide {
+                -webkit-backdrop-filter: none;
+                backdrop-filter: none;
+                background: var(--mat-tint-solid);
+            }
+        }
+
+        [data-effects='solid'] .rph-glass.rph-acrylic::before,
+        [data-effects='solid'] .rph-glass.rph-acrylic-panel::before {
+            display: none;
+        }
+
+        @media (min-width: 769px) {
+            [data-effects='solid'] .rph-acrylic-wide::before {
+                display: none;
+            }
+        }
+
+        /* ---- 页面底图（M4，2026-11-26）----
+           A single fixed layer behind every view. `cover` keeps the artwork's
+           aspect without cropping the subject on tall phones, and `fixed`
+           attachment stops it from scrolling with a list (the layer is already
+           outside the scrollers, this is belt-and-braces for nested ones).
+
+           The overlay is the contrast floor: a user photo is arbitrary, so a
+           scrim keeps the glass tints and the text on them predictable. Light
+           themes get a white wash, dark themes a heavier black one. Built-in
+           presets are already low-contrast, so they get a weaker scrim. */
+        .page-bg {
+            position: absolute;
+            inset: 0;
+            z-index: 0;
+            pointer-events: none;
+            opacity: 0;
+            background-position: center;
+            background-size: cover;
+            background-repeat: no-repeat;
+            transition: opacity var(--motion-base) var(--motion-standard);
+        }
+
+        .page-bg.is-on {
+            opacity: 1;
+        }
+
+        .page-bg::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        [data-theme='dark'] .page-bg::after {
+            background: rgba(0, 0, 0, 0.5);
+        }
+
+        /* Presets ship theme-matched artwork, so they need less help than a
+           user photo does. */
+        .page-bg.is-preset::after {
+            background: rgba(255, 255, 255, 0.06);
+        }
+
+        [data-theme='dark'] .page-bg.is-preset::after {
+            background: rgba(0, 0, 0, 0.24);
+        }
+
+        /* The views must paint above the background layer. They already create
+           their own stacking contexts; this only guarantees the order. */
+        .app-views {
+            z-index: 1;
+        }
+
+        /* The page fill and the list/view shells are opaque, so they would hide
+           the artwork completely. With a background on, those fills step aside —
+           the scrim on .page-bg::after is what keeps contrast predictable, not
+           an opaque layer above it. Scoped to [data-page-bg] so the "off" state
+           is byte-identical to the pre-M4 rendering. */
+        [data-page-bg='on'] .app-main,
+        [data-page-bg='on'] .conversation-list,
+        [data-page-bg='on'] .home-view,
+        [data-page-bg='on'] .management-view,
+        [data-page-bg='on'] .tab-hub-view,
+        [data-page-bg='on'] .chat-view-root {
+            background-color: transparent !important;
         }
 
         /* Mobile optimizations */
@@ -2810,13 +3254,24 @@
                 height: 0 !important;
             }
 
-            /* Hide scrollbar for IE, Edge and Firefox + Global kill-switch for backdrop-filter on mobile */
+            /* Hide scrollbar for IE, Edge and Firefox. Kept on a bare * selector:
+               adding :not() would raise its specificity from 0,0,0 to 0,1,0 and
+               could change which !important declaration wins elsewhere. */
             * {
                 -ms-overflow-style: none !important;  /* IE and Edge */
                 scrollbar-width: none !important;  /* Firefox */
+                -webkit-overflow-scrolling: touch !important;
+            }
+
+            /* Kill-switch for backdrop-filter on mobile, as an opt-in whitelist
+               (2026-11-26): only elements that explicitly carry .rph-glass get a
+               backdrop-filter on phones, so the material layer can be rolled out
+               surface by surface without any stray Tailwind backdrop-blur-* class
+               starting to blur on its own. Everything else keeps today's solid
+               look, which is why the compensation rules below also skip glass. */
+            *:not(.rph-glass) {
                 backdrop-filter: none !important;
                 -webkit-backdrop-filter: none !important;
-                -webkit-overflow-scrolling: touch !important;
             }
 
             /* Disable Tailwind blur-* classes (filter: blur) on mobile, except .char-bg-blur */
@@ -2830,52 +3285,57 @@
                 filter: blur(2px) !important;
             }
 
-            /* ===== Compensate: Replace blur with solid/high-opacity backgrounds ===== */
+            /* ===== Compensate: Replace blur with solid/high-opacity backgrounds =====
+               Every rule here carries :not(.rph-glass) (2026-11-26). These are
+               !important and sit later in the file than the material recipes, so
+               without the guard a surface that opts into .rph-glass would be
+               flattened back to a solid fill. Surfaces that have not opted in
+               keep exactly today's look. */
 
             /* Toast notifications */
-            .toast-item {
+            .toast-item:not(.rph-glass) {
                 background-color: rgba(255, 255, 255, 0.97) !important;
             }
 
             /* Description panel overlay */
-            .desc-panel-overlay {
+            .desc-panel-overlay:not(.rph-glass) {
                 background-color: rgba(0, 0, 0, 0.12) !important;
             }
 
             /* Description panel itself */
-            .desc-panel {
+            .desc-panel:not(.rph-glass) {
                 background-color: rgba(255, 255, 255, 0.97) !important;
             }
 
             /* Close button in description panel */
-            .desc-close-btn:hover {
+            .desc-close-btn:not(.rph-glass):hover {
                 background-color: rgba(255, 255, 255, 0.75) !important;
             }
 
             /* Message name tags */
-            .msg-name-tag {
+            .msg-name-tag:not(.rph-glass) {
                 background-color: rgba(255, 255, 255, 0.7) !important;
             }
 
             /* Typing indicator bubble */
-            .typing-bubble {
+            .typing-bubble:not(.rph-glass) {
                 background-color: rgba(255, 255, 255, 0.88) !important;
             }
 
             /* Typing indicator timer badge */
-            .typing-timer-badge {
+            .typing-timer-badge:not(.rph-glass) {
                 background-color: rgba(255, 255, 255, 0.7) !important;
             }
 
             /* Input area container (mobile bottom bar) */
-            .input-area-mobile {
+            .input-area-mobile:not(.rph-glass) {
                 bottom: var(--keyboard-inset, 0px) !important;
                 background-color: transparent !important;
                 border-top: none !important;
             }
 
             /* Input area inner island */
-            .input-island {
+            .input-island:not(.rph-glass) {
                 background-color: rgba(255, 255, 255, 0.9) !important;
                 border: 1px solid rgba(255, 255, 255, 0.45) !important;
                 border-radius: 1.5rem !important;
@@ -2888,54 +3348,56 @@
             }
 
             /* Sinan HUD */
-            .sinan-hud {
+            .sinan-hud:not(.rph-glass) {
                 backdrop-filter: none !important;
                 -webkit-backdrop-filter: none !important;
                 background: linear-gradient(to bottom right, rgba(255,255,255,0.95), rgba(255,255,255,0.88)) !important;
             }
 
             /* World Info Footer */
-            .wi-footer {
+            .wi-footer:not(.rph-glass) {
                 background-color: rgba(249, 250, 251, 0.95) !important;
             }
 
             /* Dark counterparts (2026-11-25). The light !important block above is
                mobile-only polish from before the token layer; without these the
                panels stayed white in dark mode on phones because !important wins
-               over the token-mapped utilities. */
-            [data-theme='dark'] .desc-panel {
+               over the token-mapped utilities. They need the same :not(.rph-glass)
+               guard as their light twins, or a glass surface would go opaque the
+               moment the theme flips. */
+            [data-theme='dark'] .desc-panel:not(.rph-glass) {
                 background-color: rgb(var(--bg-surface) / 0.97) !important;
             }
 
-            [data-theme='dark'] .desc-close-btn:hover {
+            [data-theme='dark'] .desc-close-btn:not(.rph-glass):hover {
                 background-color: rgb(var(--overlay-white) / 0.08) !important;
             }
 
-            [data-theme='dark'] .msg-name-tag {
+            [data-theme='dark'] .msg-name-tag:not(.rph-glass) {
                 background-color: rgb(var(--bg-surface) / 0.7) !important;
             }
 
-            [data-theme='dark'] .typing-bubble {
+            [data-theme='dark'] .typing-bubble:not(.rph-glass) {
                 background-color: rgb(var(--bg-surface) / 0.88) !important;
             }
 
-            [data-theme='dark'] .typing-timer-badge {
+            [data-theme='dark'] .typing-timer-badge:not(.rph-glass) {
                 background-color: rgb(var(--bg-surface) / 0.7) !important;
             }
 
-            [data-theme='dark'] .input-island {
+            [data-theme='dark'] .input-island:not(.rph-glass) {
                 background-color: rgb(var(--bg-surface) / 0.9) !important;
             }
 
-            [data-theme='dark'] .sinan-hud {
+            [data-theme='dark'] .sinan-hud:not(.rph-glass) {
                 background: linear-gradient(to bottom right, rgb(var(--bg-surface) / 0.95), rgb(var(--bg-surface) / 0.88)) !important;
             }
 
-            [data-theme='dark'] .wi-footer {
+            [data-theme='dark'] .wi-footer:not(.rph-glass) {
                 background-color: rgb(var(--bg-gray-50) / 0.95) !important;
             }
 
-            [data-theme='dark'] .toast-item {
+            [data-theme='dark'] .toast-item:not(.rph-glass) {
                 background-color: rgb(var(--bg-surface) / 0.97) !important;
             }
         }
@@ -3465,6 +3927,12 @@ opacity: 0;
             max-height: calc(100dvh - 6rem);
             overflow-y: auto;
             overscroll-behavior: contain;
+            /* The popover is absolutely placed above the dock, but the dock's
+               icon strip is `position: relative` and comes later in DOM order,
+               so it painted on top and its icons showed through the panel as
+               smudges. Raising the popover's own stacking level fixes the order
+               without touching the strip (2026-11-26). */
+            z-index: 60;
         }
 
         /* ============================================================
@@ -3507,6 +3975,20 @@ opacity: 0;
             --surface-card-bg: #1a1a1a;
             --surface-card-border: #303030;
             --surface-card-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+            /* Interface material, dark values (2026-11-26). Light values are in
+               the material block above; the recipes themselves only reference
+               these variables, so a theme flip is a value swap. */
+            --mat-saturate: 130%;
+            --mat-tint: rgb(26 26 26 / 0.76);
+            --mat-tint-text: rgb(26 26 26 / 0.85);
+            --mat-tint-panel: rgb(26 26 26 / 0.96);
+            --mat-line: rgba(255, 255, 255, 0.08);
+            --glass-tint: linear-gradient(135deg, rgba(54, 54, 54, 0.5), rgba(24, 24, 24, 0.36) 44%, rgba(22, 22, 22, 0.42) 62%, rgba(52, 52, 52, 0.46));
+            --glass-rim-top: rgba(255, 255, 255, 0.34);
+            --glass-rim: rgba(255, 255, 255, 0.2);
+            --glass-rim-bottom: rgba(255, 255, 255, 0.08);
+            --glass-glint-a: rgba(255, 255, 255, 0.16);
+            --glass-glint-b: rgba(255, 255, 255, 0.08);
         }
 
         [data-theme='dark'] .settings-group-caption {
@@ -3929,6 +4411,17 @@ opacity: 0;
         [data-theme='dark'] .from-gray-100 { --tw-gradient-from: var(--d-surface) var(--tw-gradient-from-position); }
         [data-theme='dark'] .to-gray-100 { --tw-gradient-to: var(--d-surface) var(--tw-gradient-to-position); }
         [data-theme='dark'] .to-gray-200 { --tw-gradient-to: var(--d-border) var(--tw-gradient-to-position); }
+        /* 浅色渐变头部（2026-11-26）：弹窗/面板的 title bar 常用
+           bg-gradient-to-r from-primary-50 to-blue-50|purple-50。这些停止色在深色下
+           原本没有覆盖，渐变整块保持近白，而标题文字 text-gray-900 已被翻成白色，
+           于是变成白底白字（自动生图弹窗的标题实测完全不可见）。这里统一映射到
+           深色语义底，与 .bg-blue-50 / .bg-primary-50 的深色取值同一套色相。
+           hover:from-* 也一并覆盖，否则悬停时会跳回浅色。 */
+        [data-theme='dark'] .from-primary-50,
+        [data-theme='dark'] .hover\:from-primary-100:hover { --tw-gradient-from: #252c49 var(--tw-gradient-from-position); }
+        [data-theme='dark'] .to-blue-50,
+        [data-theme='dark'] .hover\:to-blue-100:hover { --tw-gradient-to: #1e3a5f var(--tw-gradient-to-position); }
+        [data-theme='dark'] .to-purple-50 { --tw-gradient-to: #2b2340 var(--tw-gradient-to-position); }
 
         .tool-call-detail {
             display: flex;

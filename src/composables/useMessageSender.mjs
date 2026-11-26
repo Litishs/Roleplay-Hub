@@ -927,6 +927,12 @@ export function useMessageSender(deps) {
                     }
 
                     let renderedContent = escapeHtml(m.content);
+                    // M2: memory citation handles ([M12], possibly chained) show
+                    // highlighted in the context viewer wherever they appear.
+                    renderedContent = renderedContent.replace(
+                        /\[M\d{1,6}\]/g,
+                        '<mark class="bg-purple-200/80 text-purple-900 border-b border-purple-400 font-bold font-mono px-0.5 rounded shadow-sm">$&</mark>'
+                    );
                     // Sort keys by length descending to match longer phrases first
                     const sortedKeys = Array.from(floorInfo.keys()).sort((a, b) => b.length - a.length);
                     sortedKeys.forEach(k => {

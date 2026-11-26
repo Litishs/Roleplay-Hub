@@ -49,10 +49,32 @@ try {
     } else {
         Join-Path (Get-Location) 'gradlew.bat'
     }
-    & $gradleCommand assembleRelease
+    # --console=plain keeps the log readable (no ANSI progress rewriting).
+    & $gradleCommand assembleRelease "--console=plain"
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 } finally {
     Pop-Location
+}
+
+# Stop the daemon before returning (2026-11-26). The Gradle daemon is a detached
+# JVM that inherits this process's stdout/stderr handles; Node waits for those
+# pipes to close, so `npm run android:release` would hang after a successful
+# build. Same fix as the debug script.
+$gradleForStop = $null
+if ($localGradle) {
+    $gradleForStop = Join-Path $localGradle.FullName 'bin\gradle.bat'
+} elseif (Test-Path -LiteralPath (Join-Path $projectRoot 'android\gradlew.bat')) {
+    $gradleForStop = Join-Path $projectRoot 'android\gradlew.bat'
+}
+if ($gradleForStop) {
+    Push-Location (Join-Path $projectRoot 'android')
+    try {
+        & $gradleForStop --stop 2>&1 | Out-Null
+    } catch {
+        Write-Host "Gradle daemon stop failed (harmless): $($_.Exception.Message)"
+    } finally {
+        Pop-Location
+    }
 }
 
 $builtApk = Join-Path $projectRoot 'android\app\build\outputs\apk\release\app-release.apk'

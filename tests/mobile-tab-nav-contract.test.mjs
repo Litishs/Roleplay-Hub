@@ -158,7 +158,8 @@ test('index.html wraps the views in one box and mounts the tab shell', async () 
 test('the tab bar shows the four tabs in order, only on tab roots', async () => {
   const bar = await read('src/components/common/BottomTabBar.vue');
   assert.match(bar, /v-show="isTabRootView && !isRootTextFocused"/);
-  assert.match(bar, /class="bottom-tab-bar" aria-label="主导航"/);
+  // Acrylic since the 2026-11-26 review: liquid glass read as fake at this size.
+  assert.match(bar, /class="bottom-tab-bar rph-glass rph-acrylic" aria-label="主导航"/);
   assert.match(bar, /@click="switchTab\(tab\.id\)"/);
   assert.match(bar, /:aria-current="activeTab === tab\.id \? 'page' : undefined"/);
   assert.match(bar, /import \{ TAB_ORDER \} from "\.\.\/\.\.\/modules\/tab-navigation\.mjs";/);
@@ -246,22 +247,34 @@ test('SettingsPageHeader leads detail pages with a Back arrow and can drop it on
   assert.match(header, /emits: \['back'\]/);
 });
 
-test('styles: overlay tab bar with variable colours, dark override and view reservation', async () => {
+test('styles: floating glass capsule with variable colours, dark override and view reservation', async () => {
   const css = await read('assets/css/styles.css');
-  assert.match(css, /:root \{[^}]*--tab-bar-h: 4\.25rem;/);
+  // Footprint = capsule (3.75rem) + bottom gap (0.5rem) + top air (0.5rem).
+  assert.match(css, /:root \{[^}]*--tab-bar-h: 4\.75rem;/);
+  assert.match(css, /:root \{[^}]*--tab-bar-capsule-h: 3\.75rem;/);
   // The base rule starts its own line; the fullscreen and dark rules also end
   // with this selector and must not be picked up instead.
   const barStart = css.search(/^ {8}\.bottom-tab-bar \{/m);
   assert.ok(barStart > 0, 'the tab bar rule must exist');
   const barBlock = css.slice(barStart, css.indexOf('}', barStart));
-  for (const declaration of ['position: absolute;', 'bottom: 0;', 'height: var(--tab-bar-h);',
+  // Floating capsule (2026-11-26): inset from the edges, lifted off the bottom,
+  // full pill radius, no top hairline (the rim is drawn as an inset ring).
+  for (const declaration of ['position: absolute;', 'left: var(--tab-bar-inset);',
+    'right: var(--tab-bar-inset);', 'bottom: var(--tab-bar-gap);',
+    'height: var(--tab-bar-capsule-h);', 'border-radius: calc(var(--tab-bar-capsule-h) / 2);',
     'background: var(--tab-bar-bg);', '--tab-bar-active: #2563eb;']) {
     assert.ok(barBlock.includes(declaration), `the tab bar must declare ${declaration}`);
   }
+  assert.ok(!barBlock.includes('border-top:'), 'the capsule has no top hairline');
   assert.match(css, /\[data-theme='dark'\] \.bottom-tab-bar \{[\s\S]{0,300}--tab-bar-active: var\(--d-accent\);/);
   assert.match(css, /@media \(max-width: 767\.98px\) \{\s*\.app-views\.has-tab-bar \{\s*padding-bottom: var\(--tab-bar-h\);\s*\}\s*\}/);
   assert.match(css, /@media \(min-width: 768px\) \{\s*\.bottom-tab-bar \{\s*display: none !important;/);
   assert.match(css, /\.app-native-fullscreen \.bottom-tab-bar,/);
+
+  // Solid tier restores the pre-material strip: full width, 68px, no radius,
+  // and the reservation shrinks with it so no dead gap is left.
+  assert.match(css, /\[data-effects='solid'\] \.bottom-tab-bar\.rph-glass \{[\s\S]{0,240}left: 0;[\s\S]{0,240}height: 4\.25rem;/);
+  assert.match(css, /\[data-effects='solid'\] \{\s*--tab-bar-h: 4\.25rem;\s*\}/);
 
   // Sliding highlight: one cell-wide element, moved with transform only, and
   // respecting prefers-reduced-motion.
@@ -272,11 +285,17 @@ test('styles: overlay tab bar with variable colours, dark override and view rese
     'transition: transform var(--motion-base) var(--motion-standard);', 'pointer-events: none;']) {
     assert.ok(sliderBlock.includes(declaration), `the slider must declare ${declaration}`);
   }
+  // Centred on the capsule, not on the icon row: the old layout mirrored the
+  // icon+label stack and parked the highlight above the optical centre.
+  assert.ok(sliderBlock.includes('top: 0;'), 'the slider spans the capsule height');
+  assert.ok(sliderBlock.includes('height: 100%;'), 'the slider spans the capsule height');
+  assert.ok(sliderBlock.includes('align-items: center;'), 'the pill is centred vertically');
   assert.match(css, /\.bottom-tab__slider-pill \{[\s\S]{0,160}background: var\(--tab-bar-active-bg\);/);
   // The real icon pill and the sliding highlight share one size token, so they
   // cannot drift apart (enlarged 2026-11-24).
   assert.match(css, /--tab-pill-w: 3\.75rem;\s*--tab-pill-h: 2rem;/);
-  assert.match(css, /\.bottom-tab__slider-pill \{\s*width: var\(--tab-pill-w\);\s*height: var\(--tab-pill-h\);/);
+  // The highlight is taller than the icon pill so it covers icon + label.
+  assert.match(css, /\.bottom-tab__slider-pill \{\s*width: var\(--tab-pill-w\);\s*height: calc\(var\(--tab-pill-h\) \+ 0\.75rem\);/);
   assert.match(css, /\.bottom-tab__pill \{[\s\S]{0,160}width: var\(--tab-pill-w\);[\s\S]{0,80}height: var\(--tab-pill-h\);/);
   assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{[\s\S]{0,700}\.bottom-tab__slider[,\s]/);
   // The active pill is no longer painted per tab: only the slider carries it.

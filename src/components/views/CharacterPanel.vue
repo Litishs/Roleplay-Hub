@@ -1,6 +1,6 @@
 <template>
             <div v-if="currentView === 'characters'" class="management-view">
-                <div class="management-header flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
+                <div class="management-header rph-glass rph-acrylic flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
                     <div class="flex items-center justify-between w-full md:w-auto">
                         <div class="flex items-center">
                             <button @click="goBack"

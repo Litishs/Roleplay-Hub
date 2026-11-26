@@ -65,9 +65,24 @@ test('runtime limits match the APK performance contract', async () => {
         totalMs: 600000
       },
       requestTimeoutMinSeconds: 10,
-      requestTimeoutMaxSeconds: 1800
+      requestTimeoutMaxSeconds: 1800,
+      backdropSurfaces: 6,
+      refractionLenses: 2
     }
   );
+});
+
+test('material tier is a measurement, not a policy limit', async () => {
+  const context = await loadScript('src/modules/runtime-policy.mjs');
+  const policy = context.window.RPHRuntimePolicy;
+
+  assert.equal(policy.materialEffects.tier, 'solid', 'defaults to the safe tier');
+  assert.equal(policy.setMaterialTier('glass'), 'glass');
+  assert.equal(policy.materialEffects.tier, 'glass');
+  // Anything unrecognised degrades to solid rather than to an undefined value.
+  assert.equal(policy.setMaterialTier('nonsense'), 'solid');
+  assert.equal(policy.materialEffects.tier, 'solid');
+  assert.ok(Object.isFrozen(policy.limits), 'limits stay frozen: the tier is not a limit');
 });
 
 test('resolveRequestTimeouts: defaults, clamping and legal passthrough', async () => {

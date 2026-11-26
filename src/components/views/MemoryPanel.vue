@@ -418,12 +418,16 @@
                                 </div>
                                 <div v-else class="space-y-1.5 max-h-80 overflow-y-auto pr-1">
                                     <div v-for="item in memoryTocEntries" :key="item.entryId"
-                                        class="rounded-xl border border-gray-100 bg-white px-3 py-2 shadow-sm">
+                                        class="rounded-xl border border-gray-100 bg-white px-3 py-2 shadow-sm cursor-pointer hover:border-gray-200 hover:shadow transition-all"
+                                        title="点击查看记忆原文"
+                                        @click="openMemoryEntryDetail(item.entryId)">
                                         <div class="flex items-center gap-2 flex-wrap mb-1">
+                                            <span v-if="item.ref"
+                                                class="text-[10px] font-mono font-bold text-primary-700 bg-primary-50 border border-primary-100 rounded-md px-1.5 py-0.5">M{{ item.ref }}</span>
                                             <span class="text-[10px] font-mono text-primary-700 bg-primary-50 border border-primary-100 rounded-md px-2 py-0.5">{{ item.label }}</span>
                                             <span v-if="item.level > 0" class="text-[10px] font-mono text-gray-500 bg-gray-100 border border-gray-200 rounded-md px-1.5 py-0.5">L{{ item.level }}</span>
                                             <span class="text-[10px] font-mono text-gray-400">{{ item.tokens }} tok</span>
-                                            <button v-if="item.level > 0" type="button" @click="toggleFoldSources(item.entryId)"
+                                            <button v-if="item.level > 0" type="button" @click.stop="toggleFoldSources(item.entryId)"
                                                 class="text-[10px] font-bold text-primary-700 active:scale-95 transition-all">
                                                 {{ foldedSourcesOpen[item.entryId] ? '收起来源' : '折叠来源' }}
                                             </button>
@@ -679,6 +683,32 @@
             </div>
 
             <!-- World Info View -->
+
+            <!-- M2: full text of a ledger entry, opened by clicking a TOC row. -->
+            <div v-if="memoryEntryDetail"
+                class="fixed inset-0 z-[90] flex items-center justify-center bg-gray-900/40 backdrop-blur-sm p-4"
+                @click.self="memoryEntryDetail = null">
+                <div
+                    class="bg-white rounded-2xl shadow-2xl w-full max-w-lg border border-gray-200 max-h-[80vh] flex flex-col overflow-hidden">
+                    <div class="px-5 py-3.5 border-b border-gray-100 flex items-center justify-between gap-3 flex-shrink-0">
+                        <div class="flex items-center gap-2 flex-wrap">
+                            <span v-if="memoryEntryDetail.ref"
+                                class="text-xs font-mono font-bold text-primary-700 bg-primary-50 border border-primary-100 rounded-md px-2 py-0.5">M{{ memoryEntryDetail.ref }}</span>
+                            <span class="text-sm font-bold text-gray-800">记忆原文</span>
+                            <span v-if="memoryEntryDetail.stale" class="text-[10px] text-amber-600">已失效</span>
+                        </div>
+                        <button type="button" @click="memoryEntryDetail = null"
+                            class="text-gray-400 hover:text-gray-700 transition-colors p-1.5 rounded-full hover:bg-gray-100">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12">
+                                </path>
+                            </svg>
+                        </button>
+                    </div>
+                    <p class="px-5 py-3 text-xs text-gray-500 whitespace-pre-line leading-relaxed overflow-y-auto custom-scrollbar flex-1">{{
+                        memoryEntryDetail.text }}</p>
+                </div>
+            </div>
 </template>
 
 <script>
@@ -814,9 +844,19 @@ export default {
     const removePin = (pin) => ctx.deleteMemoryPin?.(pin.entryId);
     const togglePin = (pin) => ctx.toggleMemoryPinEnabled?.(pin.entryId);
 
+    // M2: clicking a TOC row opens the entry's full text (the directory only
+    // shows the truncated summary). Detail state is panel-local; the ledger
+    // lookup itself lives in app.mjs.
+    const memoryEntryDetail = ref(null);
+    const openMemoryEntryDetail = (entryId) => {
+      memoryEntryDetail.value = ctx.getMemoryEntryDetail?.(entryId) || null;
+    };
+
     return {
       ...ctx,
       memoryLedgerTab,
+      memoryEntryDetail,
+      openMemoryEntryDetail,
       pinDraft,
       factDraft,
       memoryBudgetRows,

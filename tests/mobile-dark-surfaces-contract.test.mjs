@@ -4,6 +4,10 @@
 // force near-white backgrounds with !important. Since !important beats the
 // token-mapped utilities, every one of them needs an explicit dark
 // counterpart or phones show white panels in dark mode.
+//
+// Both halves also carry :not(.rph-glass) since 2026-11-26: surfaces that opt
+// into the material layer must not be flattened back to a solid fill. The
+// assertions below pin that guard as well as the dark twin.
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
@@ -27,7 +31,10 @@ function mobileBlock(css) {
 
 test('every forced-light mobile surface has a dark counterpart', async () => {
     const css = await read('assets/css/styles.css');
-    const block = mobileBlock(css);
+    // The material guard sits at different positions in different selectors
+    // (`.a:not(.rph-glass):hover` vs `.a:not(.rph-glass)`), so drop it before
+    // matching and assert the pairing on the bare selector.
+    const block = mobileBlock(css).replace(/:not\(\.rph-glass\)/g, '');
 
     const surfaces = {
         '.desc-panel': 'rgb(var(--bg-surface) / 0.97)',
@@ -49,7 +56,10 @@ test('every forced-light mobile surface has a dark counterpart', async () => {
 
 test('the light mobile rules and their dark counterparts are balanced', async () => {
     const css = await read('assets/css/styles.css');
-    const block = mobileBlock(css);
+    // Comments mention .rph-glass too; strip them so only real selectors are scanned.
+    const block = mobileBlock(css)
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .replace(/:not\(\.rph-glass\)/g, '');
     // Any mobile rule that forces a white-ish value with !important must have a
     // dark twin; this catches a new light panel added without one.
     const names = new Set();
@@ -66,4 +76,18 @@ test('the light mobile rules and their dark counterparts are balanced', async ()
             `.${name} is forced light but has no dark counterpart`
         );
     }
+});
+
+test('both halves of every compensation rule skip material surfaces', async () => {
+    const css = await read('assets/css/styles.css');
+    const block = mobileBlock(css);
+    // A compensation rule without the guard would override the material recipe
+    // (its !important beats the recipe's plain declarations), so a surface that
+    // opted in would silently stay solid.
+    const guarded = [...block.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+        .filter(([, selector, body]) => body.includes('!important') && /background/.test(body))
+        .map(([, selector]) => selector);
+    const offenders = guarded.filter((selector) => selector.includes('.rph-glass') === false
+        && /\.(toast-item|desc-panel|desc-panel-overlay|desc-close-btn|msg-name-tag|typing-bubble|typing-timer-badge|input-island|input-area-mobile|sinan-hud|wi-footer)/.test(selector));
+    assert.deepEqual(offenders, [], 'compensation rules must carry :not(.rph-glass)');
 });

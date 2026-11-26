@@ -7,7 +7,7 @@
                                             </div>
                                             <label class="relative inline-flex items-center cursor-pointer">
                                                 <input type="checkbox" v-model="settings.ttsEnabled" class="settings-toggle-input sr-only">
-                                                <div class="settings-toggle settings-toggle--indigo"></div>
+                                                <div class="settings-toggle"></div>
                                             </label>
                                         </div>
     
@@ -133,7 +133,7 @@
                                                     </div>
                                                     <label class="relative inline-flex items-center cursor-pointer">
                                                         <input type="checkbox" v-model="settings.ttsAutoPlay" class="settings-toggle-input sr-only">
-                                                        <div class="settings-toggle settings-toggle--indigo"></div>
+                                                        <div class="settings-toggle"></div>
                                                     </label>
                                                 </div>
                                                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">

@@ -184,3 +184,31 @@ test('Android cold-start dark background uses the charcoal color', async () => {
   assert.doesNotMatch(main, /Color\.rgb\(17, 24, 39\)/,
     'the blue-tinted #111827 fallback must not come back');
 });
+test('the standalone workshop pages resolve neutral utilities through the shared tokens', async () => {
+  // P3 (2026-11-26): character/novel Tailwind configs point their color
+  // families at the same tokens.css triplets as the main app, so the palette
+  // cannot fork again. Both pages are light-only by decision — neither may
+  // activate [data-theme='dark'] (on the character page that attribute name
+  // would also flip daisyui's own theme).
+  const { pathToFileURL } = await import('node:url');
+  const characterConfig = await read('tailwind.character.config.cjs');
+  const novelConfig = await read('tailwind.novel.config.cjs');
+  const tokens = await read('assets/css/tokens.css');
+
+  for (const [name, config] of [['character', characterConfig], ['novel', novelConfig]]) {
+    for (const family of ['backgroundColor', 'borderColor', 'textColor']) {
+      assert.ok(config.includes(`${family}: {`), `${name} config wires ${family}`);
+    }
+    assert.match(config, /white: token\('bg-surface'\)/, `${name} maps bg-white to the surface token`);
+    assert.match(config, /900: token\('text-gray-900'\)/, `${name} maps text-gray-900`);
+    // Every token() reference must exist in tokens.css.
+    const refs = [...config.matchAll(/token\('([a-z0-9-]+)'\)/g)].map((m) => m[1]);
+    assert.ok(refs.length > 0, `${name} config actually references tokens`);
+    for (const ref of refs) {
+      assert.ok(tokens.includes(`--${ref}:`), `${name} config references undefined token --${ref}`);
+    }
+  }
+
+  assert.match(characterConfig, /require\('daisyui'\)/, 'the character page keeps daisyui');
+  assert.doesNotMatch(novelConfig, /require\('daisyui'\)/, 'the novel page stays daisyui-free');
+});

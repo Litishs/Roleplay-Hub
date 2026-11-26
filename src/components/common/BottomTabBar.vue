@@ -1,12 +1,15 @@
 <template>
     <!-- Narrow-screen root navigation (2026-11-23). Wide screens keep the left
          sidebar and detail pages use the whole screen, so the bar only shows on
-         the four tab roots. It is an overlay: tab-root views reserve its height
-         through .app-views.has-tab-bar, which lets content sit under it later
-         (glass) and lets it animate without moving the layout.
+         the four tab roots. It is an overlay: tab-root views reserve its
+         footprint through .app-views.has-tab-bar, which lets content sit under
+         it and lets it animate without moving the layout.
          The active highlight is one shared slider (2026-11-24) instead of a
-         per-tab background, so switching tabs moves a single element. -->
-    <nav v-show="isTabRootView && !isRootTextFocused" class="bottom-tab-bar" aria-label="主导航">
+         per-tab background, so switching tabs moves a single element.
+         Acrylic, not liquid glass (2026-11-26 review): the refraction read as
+         fake at this size and the moving slider cannot carry a blur, so the
+         capsule uses the same frosted recipe as the rest of the chrome. -->
+    <nav v-show="isTabRootView && !isRootTextFocused" class="bottom-tab-bar rph-glass rph-acrylic" aria-label="主导航">
         <span class="bottom-tab__slider" aria-hidden="true"
             :style="{ transform: `translateX(${activeIndex * 100}%)` }">
             <span class="bottom-tab__slider-pill"></span>

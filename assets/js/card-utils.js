@@ -68,6 +68,65 @@ year 2025, textless version, {{petite,loli}}, Petite figure, no text, The image 
         return '';
     };
 
+    // W3: merge native reasoning with inline <think>/<cot> blocks. Mirrors
+    // src/modules/utils.mjs parseCot (kept self-contained: the UMD shim build
+    // rejects module imports, so the workshop bundle carries its own copy —
+    // same precedent as extractNativeReasoning above). Streaming calls pass
+    // cacheable=false to use the single volatile slot instead of the cache.
+    let volatileParseCotKey = null;
+    let volatileParseCotValue = null;
+    const parseCotCache = new Map();
+    const PARSE_COT_CACHE_MAX = 32;
+
+    const parseCot = (text, cacheable = true) => {
+        if (!text) return { cot: '', main: '', sys: '', isFinished: false };
+        if (cacheable) {
+            if (parseCotCache.has(text)) return parseCotCache.get(text);
+        } else if (volatileParseCotKey === text) {
+            return volatileParseCotValue;
+        }
+
+        const cotPattern = /<(think|cot)>([\s\S]*?)(?:<\/\s*\1\s*>|<\s*\1\s*>|$)/gi;
+        let cotContent = '';
+        let mainContent = text;
+        let isFinished = false;
+
+        mainContent = mainContent.replace(cotPattern, (match, tag, content) => {
+            // Escape < inside CoT text (outside code blocks) so DOMPurify keeps
+            // constructs like <动作> instead of swallowing them as tags.
+            const parts = content.split(/(```[\s\S]*?```|`[^`]+`)/);
+            const escapedContent = parts.map((part, i) => {
+                if (i % 2 === 1) return part;
+                return part.replace(/</g, '&lt;');
+            }).join('');
+
+            cotContent += escapedContent;
+            if (match.includes('</') || (match.match(new RegExp('<' + tag + '>', 'gi')) || []).length > 1) {
+                isFinished = true;
+            }
+            return '';
+        });
+
+        let sys = '';
+        const sysMatch = mainContent.match(/\n\n\[系统指令:\s*([\s\S]*?)\]\s*$/);
+        if (sysMatch) {
+            sys = sysMatch[1];
+            mainContent = mainContent.slice(0, sysMatch.index).trim();
+        }
+
+        const result = { cot: cotContent.trim(), main: mainContent.trim(), sys, isFinished };
+        if (cacheable) {
+            if (parseCotCache.size >= PARSE_COT_CACHE_MAX) {
+                parseCotCache.delete(parseCotCache.keys().next().value);
+            }
+            parseCotCache.set(text, result);
+        } else {
+            volatileParseCotKey = text;
+            volatileParseCotValue = result;
+        }
+        return result;
+    };
+
     const normalizeRegexModifiers = (pattern, flags = 'g') => {
         let normalizedPattern = pattern;
         let normalizedFlags = flags;
@@ -761,6 +820,7 @@ year 2025, textless version, {{petite,loli}}, Petite figure, no text, The image 
         downloadBlob,
         encodeBase64Utf8,
         extractNativeReasoning,
+        parseCot,
         findPngCharacterPayload,
         getImageStyleArtists,
         imageUrlToPngBytes,

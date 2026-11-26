@@ -52,6 +52,14 @@ import { MIGRATION_NOTICE_KEY, adoptionStats, formatMigrationStatus, hasLegacyCo
 import { VIEW_DEFAULTS, buildMemoryRecall, buildMemoryView } from './memory-view.mjs';
 import { buildMemoryCitationItems, stripMemoryCitations } from './memory-citation.mjs';
 import { getToastIcon } from './toast-icons.mjs';
+import { initGlassLens } from './glass-lens.mjs';
+import {
+    applyCustomBackground,
+    normalizeChoice as normalizePageBackground,
+    presetUrl,
+    removeCustomBackground,
+    resolveBackgroundUrl
+} from './page-background.mjs';
 import { createMemoryReconciler } from './memory-reconcile.mjs';
 import {
     COMPACT_FANOUT,
@@ -839,6 +847,99 @@ const __app = createApp({
         };
         watch(() => settings.themeMode, applyTheme, { immediate: true });
         if (themeMedia) themeMedia.addEventListener('change', () => { if (settings.themeMode === 'system') applyTheme(); });
+
+        // 界面材质档位（M1，2026-11-26）：glass / acrylic / solid 由 glass-lens.mjs
+        // 按能力检测决定，写到 documentElement.dataset.effects 供 styles.css 选配方。
+        // settings.uiGlassEffects 关闭时直接落 solid 档（等于材质上线前的观感）；
+        // 档位同时记进 RPHRuntimePolicy，供诊断日志与后续设置行展示。
+        // 注意：这里只是「谁可以带材质」，具体哪些面带 .rph-glass 由 M2/M3 铺开。
+        const materialEffectsTier = ref('solid');
+        const recordMaterialTier = (tier) => {
+            RPHRuntimePolicy.setMaterialTier(tier);
+            materialEffectsTier.value = RPHRuntimePolicy.materialEffects.tier;
+        };
+        // The getter is re-read on every resize / OS transparency change, so a
+        // stale snapshot cannot resurrect effects the user switched off.
+        const glassLens = initGlassLens(() => ({
+            enabled: settings.uiGlassEffects,
+            onTier: recordMaterialTier
+        }));
+        watch(() => settings.uiGlassEffects, glassLens.apply);
+
+        // 页面底图（M4，2026-11-26）：settings.pageBackground 只存「选择」
+        // （off / aurora / dune / custom），图片本体不经过 settings——自定义图
+        // 写在应用私有目录 media/page-background.jpg，随备份一起打包（备份就是
+        // 用来保存个性化数据的），所以这里只负责把选择解析成可渲染的 URL。
+        // 内置图按主题各一张，切主题时无需重读文件。
+        const pageBackgroundUrl = ref('');
+        const pageBackgroundIsPreset = ref(false);
+        let pageBackgroundEpoch = 0;
+        // The view shells are opaque, so they must step aside for the artwork to
+        // show at all. Driving that from an attribute keeps the "off" state
+        // byte-identical to the pre-M4 rendering.
+        const syncPageBackgroundAttribute = () => {
+            const root = document.documentElement;
+            if (!root) return;
+            if (pageBackgroundUrl.value) root.dataset.pageBg = 'on';
+            else delete root.dataset.pageBg;
+        };
+        const applyPageBackground = async () => {
+            const choice = normalizePageBackground(settings.pageBackground);
+            const epoch = ++pageBackgroundEpoch;
+            if (choice === 'off') {
+                pageBackgroundUrl.value = '';
+                pageBackgroundIsPreset.value = false;
+                syncPageBackgroundAttribute();
+                return;
+            }
+            if (choice === 'custom') {
+                const url = await resolveBackgroundUrl('custom');
+                // A slower earlier resolution must not overwrite a newer choice.
+                if (epoch !== pageBackgroundEpoch) return;
+                pageBackgroundUrl.value = url;
+                pageBackgroundIsPreset.value = false;
+                syncPageBackgroundAttribute();
+                // The file is missing (fresh install with a restored settings
+                // blob, or a failed write): fall back to off rather than paint
+                // nothing while the row still claims a custom image.
+                if (!url) {
+                    settings.pageBackground = 'off';
+                    showToast('底图文件已丢失，已切回关闭', 'warning');
+                }
+                return;
+            }
+            pageBackgroundUrl.value = presetUrl(choice, resolveTheme());
+            pageBackgroundIsPreset.value = true;
+            syncPageBackgroundAttribute();
+        };
+        watch(() => settings.pageBackground, applyPageBackground, { immediate: true });
+        // Presets are per-theme files, so a theme change swaps the artwork.
+        watch(() => resolveTheme(), () => {
+            if (pageBackgroundIsPreset.value) applyPageBackground();
+        });
+
+        // Settings row handler: compress → store → apply. Kept here (not in the
+        // settings component) because it owns the toast and the settings write.
+        const selectCustomPageBackground = async (file) => {
+            try {
+                const result = await applyCustomBackground(file);
+                settings.pageBackground = 'custom';
+                // 'custom' → 'custom' would not trigger the watcher; paint directly.
+                pageBackgroundUrl.value = result.url;
+                pageBackgroundIsPreset.value = false;
+                syncPageBackgroundAttribute();
+                showToast(`底图已更新（${Math.max(1, Math.round(result.bytes / 1024))} KB）`, 'success');
+            } catch (error) {
+                showToast(error?.message || '底图保存失败', 'error');
+            }
+        };
+        const clearPageBackground = async () => {
+            settings.pageBackground = 'off';
+            pageBackgroundUrl.value = '';
+            pageBackgroundIsPreset.value = false;
+            syncPageBackgroundAttribute();
+            await removeCustomBackground();
+        };
 
         const {
             showApiProviderSelector,
@@ -3059,7 +3160,12 @@ const __app = createApp({
             const fixedHeight = hasFixedHeight && Number.isFinite(requestedHeight)
                 ? Math.min(1200, Math.max(240, requestedHeight))
                 : null;
-            iframe.className = `w-full bg-white block executable-html-frame ${extraClass}`.trim();
+            // 卡片外壳必须保持白色，不能用 bg-white：P2 令牌化（34442a7）之后
+            // bg-white 走 --bg-surface，深色模式下会变成 #1a1a1a，而卡片文档本身
+            // 是作者按浅色主题写的独立沙箱（body 无背景、文字多为深色），于是深底
+            // 深字不可读。用内联白色把这个外壳钉死，卡片文档的浅色基线才成立。
+            iframe.className = `w-full block executable-html-frame ${extraClass}`.trim();
+            iframe.style.backgroundColor = '#ffffff';
             iframe.style.height = fixedHeight ? `${fixedHeight}px` : 'auto';
             iframe.style.overflow = 'hidden';
             iframe.style.transition = 'height 0.2s ease-out';
@@ -10120,7 +10226,7 @@ const __app = createApp({
         onBeforeUnmount(() => {
             nativeAppStateListener?.remove();
             nativeBackButtonListener?.remove();
-            document.removeEventListener('fullscreenchange', syncChatFullscreenState);
+            glassLens.dispose();            document.removeEventListener('fullscreenchange', syncChatFullscreenState);
             document.removeEventListener('webkitfullscreenchange', syncChatFullscreenState);
             document.removeEventListener('focusin', handleRootTextFocusIn);
             document.removeEventListener('focusout', handleRootTextFocusOut);
@@ -10310,6 +10416,8 @@ const __app = createApp({
             modelsLoading,
             isGenerating, isRemoteGenerating, remoteEstimatedTime, isReceiving, isThinking, hasActiveToolInlineWork, isConversationBusy, activeToolContinuationMessageId, activeToolContinuationHasResponse, userInput, modelSearchQuery, activeModelTag, modelTags, characterSearchQuery, filteredModels, filteredCharacters,
             user, settings, apiProviderOptions, selectedApiProvider, isCustomApiProvider, customApiProviderOptions, showApiProviderSelector, selectApiProvider, characters, currentCharacter, currentCharacterAvatar, currentCharacterIndex, chatHistory, sortedConversations, conversationSummaries, displayedChatMessages, chatTopSpacerHeight, chatBottomSpacerHeight, handleChatScroll, presets, presetRoleOptions, fontFamilyOptions, themeModeOptions, imageStyleOptions, imageModelOptions, availableImageStyleOptions, imageSizeOptions, imageGenCountOptions, scopeOptions, uiTemplatePlacementOptions, worldInfoPositionOptions, getPresetRoleLabel, getPresetRoleDisplayLabel, getPresetRoleBadgeClass, regexScripts, worldInfo,
+            materialEffectsTier,
+            pageBackgroundUrl, pageBackgroundIsPreset, selectCustomPageBackground, clearPageBackground,
             activeTools, activeToolAggressivenessOptions: ACTIVE_TOOL_AGGRESSIVENESS_OPTIONS, editingActiveTool, normalizeActiveTools, isWebActiveTool, getActiveToolDisplayDescription, getActiveToolResultCountMin, getActiveToolResultCountMax,
             getToolCallModeText, hasThinkingOrTools, isMessageThinkingOrRunning, isThinkingSummaryOpen, toggleThinkingSummary, markThinkingSummaryDetailOpened, getTimelineSteps,
             chatRoundStats, conversationBodyLength, summaryCompressedBodyLength,
@@ -10383,6 +10491,22 @@ const __app = createApp({
                 // above reports that capped number).
                 return buildMemoryView(ledger, buildLiveTurnIndex(), { tocBudget: Infinity }).toc;
             }),
+            // M2: the panel TOC shows the truncated summary only; clicking a
+            // row needs the entry's full text for the detail overlay. Lookup
+            // stays in app.mjs so the raw ledger keeps living here.
+            getMemoryEntryDetail: (entryId) => {
+                const ledger = memoryLedger.value;
+                const entry = ledger && Array.isArray(ledger.entries)
+                    ? ledger.entries.find((item) => item.id === entryId)
+                    : null;
+                if (!entry) return null;
+                return {
+                    ref: Number(entry.ref) || 0,
+                    kind: entry.kind || 'digest',
+                    text: entry.text || '',
+                    stale: Boolean(entry.meta && entry.meta.stale)
+                };
+            },
             // v6 L4: info card and pins are ledger projections, not separate
             // stores. Freshness is annotated at render time from the live
             // covers projection (§5.4).

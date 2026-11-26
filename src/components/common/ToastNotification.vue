@@ -4,12 +4,12 @@
         class="fixed top-6 left-1/2 transform -translate-x-1/2 z-[100] flex flex-col gap-2 pointer-events-none items-center">
         <transition-group name="list" tag="div" class="toast-stack flex flex-col items-center gap-2">
             <div v-for="toast in toasts" :key="toast.id"
-                class="pointer-events-auto flex items-center px-6 py-3 rounded-full shadow-lg border bg-white text-gray-800 min-w-[300px] transform backdrop-blur-sm bg-opacity-95 toast-item"
+                class="pointer-events-auto flex items-center px-6 py-3 rounded-full shadow-lg border text-gray-800 min-w-[300px] transform toast-item rph-glass rph-acrylic"
                 :class="{
-                    'border-green-200 text-green-800 bg-green-50': toast.type === 'success',
-                    'border-red-200 text-red-800 bg-red-50': toast.type === 'error',
-                    'border-blue-200 text-blue-800 bg-blue-50': toast.type === 'info',
-                    'border-yellow-200 text-yellow-800 bg-yellow-50': toast.type === 'warning'
+                    'border-green-200 text-green-800': toast.type === 'success',
+                    'border-red-200 text-red-800': toast.type === 'error',
+                    'border-blue-200 text-blue-800': toast.type === 'info',
+                    'border-yellow-200 text-yellow-800': toast.type === 'warning'
                  }">
                 <div class="mr-3">
                     <svg v-if="toast.icon" class="w-6 h-6" :class="toastIconClass(toast.type)" fill="none"

@@ -184,3 +184,27 @@ test('the 判断依据 modal is mounted and fed from the ledger', async () => {
     assert.match(app, /document\.addEventListener\('click', handleMemoryCitationClick\)/);
     assert.match(app, /memoryCitationItems,\s*\n\s*closeMemoryCitation,/);
 });
+test('M2: the memory panel shows refs and opens the full entry text', async () => {
+    const panel = await read('src/components/views/MemoryPanel.vue');
+    assert.match(panel, /M\{\{ item\.ref \}\}/, 'the TOC row carries the ref badge');
+    assert.match(panel, /@click="openMemoryEntryDetail\(item\.entryId\)"/, 'rows open the detail overlay');
+    assert.match(panel, /@click.stop="toggleFoldSources/, 'the fold button must not trigger the row click');
+    assert.match(panel, /memoryEntryDetail/, 'the detail overlay state exists');
+    assert.match(panel, /记忆原文/, 'the overlay is labelled');
+
+    const app = await read('src/modules/app.mjs');
+    assert.match(app, /getMemoryEntryDetail: \(entryId\) => \{/, 'the ledger lookup lives in app.mjs');
+    const ctx = app.slice(app.indexOf('const __ctx = {'));
+    // The memory block sits deep in the context object; window covers it.
+    assert.ok(ctx.slice(0, 12000).includes('getMemoryEntryDetail'), 'the lookup travels through __ctx');
+});
+
+test('M2: the context viewer highlights citation markers', async () => {
+    const sender = await read('src/composables/useMessageSender.mjs');
+    // The highlight runs on the ESCAPED content right after escapeHtml, so the
+    // inserted <mark> cannot inherit user content.
+    const escapeAt = sender.indexOf('let renderedContent = escapeHtml(m.content);');
+    assert.ok(escapeAt > 0, 'the viewer escape must exist');
+    const highlight = sender.slice(escapeAt).match(/renderedContent\.replace\(\s*\/\\\[M\\d\{1,6\}\\\]\/g/);
+    assert.ok(highlight, 'citation highlighting runs after escaping');
+});

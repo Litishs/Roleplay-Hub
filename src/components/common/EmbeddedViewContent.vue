@@ -4,6 +4,9 @@
        starts at the right edge, vertically centred, and can be dragged anywhere
        inside the page. A tap (or keyboard activation) goes back; a drag only
        moves it. -->
+  <!-- Deliberately solid, not .rph-glass: the ball floats over an iframe, and a
+       backdrop-filter there forces cross-document composition every frame
+       (design doc §3.3 note / §14.3). -->
   <button type="button" ref="ball" aria-label="返回"
     class="embedded-back-ball"
     :class="{ 'is-positioned': dragPosition, 'is-dragging': dragging }"

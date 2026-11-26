@@ -14,8 +14,8 @@
                 <!-- Character Description Panel -->
                 <transition name="dropdown">
                     <div v-if="showDescriptionPanel && currentCharacter"
-                        class="absolute top-14 left-3 right-3 md:w-[420px] md:left-[60px] md:right-auto md:top-[60px] md:ml-0 max-h-[calc(100dvh-5rem)] md:max-h-[calc(100dvh-7rem)] bg-white border border-gray-200/90 shadow-[0_18px_48px_-26px_rgba(15,23,42,0.5)] rounded-2xl z-40 overflow-hidden ring-1 ring-black/5 origin-top-left transform-gpu flex flex-col desc-panel">
-                        <div class="flex items-center gap-3 p-3.5 pr-12 border-b border-gray-100/80 bg-white flex-shrink-0">
+                        class="absolute top-14 left-3 right-3 md:w-[420px] md:left-[60px] md:right-auto md:top-[60px] md:ml-0 max-h-[calc(100dvh-5rem)] md:max-h-[calc(100dvh-7rem)] bg-white border border-gray-200/90 shadow-[0_18px_48px_-26px_rgba(15,23,42,0.5)] rounded-2xl z-40 overflow-hidden ring-1 ring-black/5 origin-top-left transform-gpu flex flex-col desc-panel rph-glass rph-acrylic-panel">
+                        <div class="flex items-center gap-3 p-3.5 pr-12 border-b border-gray-100/80 flex-shrink-0 desc-panel-head">
                             <button type="button" @click="editCharacter(currentCharacterIndex)"
                                 class="group flex-shrink-0 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-300"
                                 title="编辑角色">

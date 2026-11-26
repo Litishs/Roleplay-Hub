@@ -1,5 +1,5 @@
 <template>
-  <div class="settings-page-header">
+  <div class="settings-page-header rph-glass rph-acrylic">
     <div class="flex items-center">
       <!-- Narrow screens get a Back arrow instead of the old menu button: these
            pages are detail views now (tab-navigation.mjs). Hidden on wide
