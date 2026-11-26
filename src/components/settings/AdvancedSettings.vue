@@ -1,44 +1,43 @@
 <template>
     <div class="settings-panel-content space-y-6">
-        <!-- Settings Toggles Grid -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <!-- Settings Toggles Grid: always two columns; label left, switch right. -->
+        <div class="grid grid-cols-2 gap-3">
             <label
                 class="flex items-center p-3 rounded-xl border-2 border-transparent hover:border-gray-100 hover:bg-gray-50 transition-all cursor-pointer group">
-                <div class="relative inline-flex items-center mr-2.5">
+                <span
+                    class="flex-1 min-w-0 text-sm font-medium text-gray-600 group-hover:text-gray-900 transition-colors">自动获取模型</span>
+                <div class="relative inline-flex items-center">
                     <input type="checkbox" v-model="settings.autoFetchModels" class="settings-toggle-input sr-only">
-                    <div class="settings-toggle settings-toggle--indigo"></div>
+                    <div class="settings-toggle"></div>
                 </div>
-                <span
-                    class="text-sm font-medium text-gray-600 group-hover:text-gray-900 transition-colors">自动获取模型</span>
             </label>
             <label
                 class="flex items-center p-3 rounded-xl border-2 border-transparent hover:border-gray-100 hover:bg-gray-50 transition-all cursor-pointer group">
-                <div class="relative inline-flex items-center mr-2.5">
+                <span
+                    class="flex-1 min-w-0 text-sm font-medium text-gray-600 group-hover:text-gray-900 transition-colors">流式输出</span>
+                <div class="relative inline-flex items-center">
                     <input type="checkbox" v-model="settings.stream" class="settings-toggle-input sr-only">
-                    <div class="settings-toggle settings-toggle--indigo"></div>
+                    <div class="settings-toggle"></div>
                 </div>
-                <span
-                    class="text-sm font-medium text-gray-600 group-hover:text-gray-900 transition-colors">流式输出
-                </span>
             </label>
             <label
                 class="flex items-center p-3 rounded-xl border-2 border-transparent hover:border-gray-100 hover:bg-gray-50 transition-all cursor-pointer group">
-                <div class="relative inline-flex items-center mr-2.5">
+                <span
+                    class="flex-1 min-w-0 text-sm font-medium text-gray-600 group-hover:text-gray-900 transition-colors">使用封面背景</span>
+                <div class="relative inline-flex items-center">
                     <input type="checkbox" v-model="settings.useCharacterBackground"
                         class="settings-toggle-input sr-only">
-                    <div class="settings-toggle settings-toggle--indigo"></div>
+                    <div class="settings-toggle"></div>
                 </div>
-                <span
-                    class="text-sm font-medium text-gray-600 group-hover:text-gray-900 transition-colors">使用封面背景</span>
             </label>
             <label
                 class="flex items-center p-3 rounded-xl border-2 border-transparent hover:border-gray-100 hover:bg-gray-50 transition-all cursor-pointer group">
-                <div class="relative inline-flex items-center mr-2.5">
-                    <input type="checkbox" v-model="settings.immersiveMode" class="settings-toggle-input sr-only">
-                    <div class="settings-toggle settings-toggle--indigo"></div>
-                </div>
                 <span
-                    class="text-sm font-medium text-gray-600 group-hover:text-gray-900 transition-colors">沉浸模式</span>
+                    class="flex-1 min-w-0 text-sm font-medium text-gray-600 group-hover:text-gray-900 transition-colors">沉浸模式</span>
+                <div class="relative inline-flex items-center">
+                    <input type="checkbox" v-model="settings.immersiveMode" class="settings-toggle-input sr-only">
+                    <div class="settings-toggle"></div>
+                </div>
             </label>
         </div>
 
@@ -53,7 +52,7 @@
                 </svg>
                 高级参数
             </h4>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="grid grid-cols-2 gap-4">
                 <!-- Font Family Setting -->
                 <div
                     class="bg-gray-50/60 p-4 rounded-xl border border-gray-100 hover:bg-white hover:border-gray-200 hover:shadow-sm transition-all duration-200">
@@ -75,15 +74,17 @@
                         menu-class="text-sm">
                     </custom-select>
                 </div>
+            </div>
 
+            <div class="grid grid-cols-2 gap-4 mt-4">
                 <!-- Font Size Setting -->
                 <div
                     class="bg-gray-50/60 p-4 rounded-xl border border-gray-100 hover:bg-white hover:border-gray-200 hover:shadow-sm transition-all duration-200">
-                    <div class="flex justify-between items-center mb-3">
+                    <div class="flex flex-wrap items-center justify-between gap-y-1 mb-3">
                         <label
-                            class="text-xs font-bold text-gray-500 uppercase tracking-wider">对话字体大小</label>
+                            class="text-xs font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap">对话字体大小</label>
                         <span
-                            class="text-xs font-mono text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-100 whitespace-nowrap">{{
+                            class="text-xs font-mono text-primary-600 bg-primary-50 px-1.5 py-0.5 rounded border border-indigo-100 whitespace-nowrap">{{
                             settings.fontSize }}px</span>
                     </div>
                     <input type="range" v-model.number="settings.fontSize" min="12" max="24"
@@ -92,11 +93,12 @@
                 </div>
 
                 <!-- Page background (2026-11-26). Only the choice is stored; a
-                     custom image is compressed to a file in the app's private
-                     media directory, which the native backup packs with the rest
+                     custom image is kept verbatim in the app's private media
+                     directory (no size limit) and painted fill-first
+                     (cover), which the native backup packs with the rest
                      of the user's data. -->
                 <div
-                    class="bg-gray-50/60 p-4 rounded-xl border border-gray-100 hover:bg-white hover:border-gray-200 hover:shadow-sm transition-all duration-200 md:col-span-2">
+                    class="bg-gray-50/60 p-4 rounded-xl border border-gray-100 hover:bg-white hover:border-gray-200 hover:shadow-sm transition-all duration-200">
                     <div class="flex justify-between items-center mb-3">
                         <label
                             class="text-xs font-bold text-gray-500 uppercase tracking-wider">界面底图</label>
@@ -106,7 +108,7 @@
                         button-class="rounded-lg px-3 py-1.5 text-sm text-gray-700 focus:border-indigo-400 focus:ring-indigo-100"
                         menu-class="text-sm">
                     </custom-select>
-                    <div class="mt-3 flex items-center gap-2">
+                    <div class="mt-3 flex flex-wrap items-center gap-2">
                         <button type="button" @click="pageBackgroundInput?.click()"
                             class="rounded-lg bg-primary-600 px-3 py-1.5 text-xs font-bold text-white shadow-sm transition-colors hover:bg-primary-700">
                             {{ settings.pageBackground === 'custom' ? '更换图片' : '选择相册图片' }}
@@ -116,7 +118,7 @@
                             class="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-50">
                             移除
                         </button>
-                        <span class="text-[11px] text-gray-400">长边不超过 1080px，自动压缩</span>
+                        <span class="text-[11px] text-gray-400">不限尺寸，自动填充铺满</span>
                     </div>
                     <input ref="pageBackgroundInput" type="file" accept="image/*" class="hidden"
                         @change="handlePageBackgroundSelection">

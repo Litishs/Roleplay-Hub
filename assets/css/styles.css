@@ -2192,10 +2192,6 @@
             background: linear-gradient(to right, #3b82f6, #2563eb);
         }
 
-        .settings-toggle-input:checked + .settings-toggle--indigo {
-            background: #6366f1;
-        }
-
         .settings-toggle-input:checked + .settings-toggle--solid {
             background: #2563eb;
         }
