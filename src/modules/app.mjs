@@ -53,6 +53,13 @@ import { VIEW_DEFAULTS, buildMemoryRecall, buildMemoryView } from './memory-view
 import { buildMemoryCitationItems, stripMemoryCitations } from './memory-citation.mjs';
 import { getToastIcon } from './toast-icons.mjs';
 import { initGlassLens } from './glass-lens.mjs';
+import {
+    applyCustomBackground,
+    normalizeChoice as normalizePageBackground,
+    presetUrl,
+    removeCustomBackground,
+    resolveBackgroundUrl
+} from './page-background.mjs';
 import { createMemoryReconciler } from './memory-reconcile.mjs';
 import {
     COMPACT_FANOUT,
@@ -858,6 +865,81 @@ const __app = createApp({
             onTier: recordMaterialTier
         }));
         watch(() => settings.uiGlassEffects, glassLens.apply);
+
+        // 页面底图（M4，2026-11-26）：settings.pageBackground 只存「选择」
+        // （off / aurora / dune / custom），图片本体不经过 settings——自定义图
+        // 写在应用私有目录 media/page-background.jpg，随备份一起打包（备份就是
+        // 用来保存个性化数据的），所以这里只负责把选择解析成可渲染的 URL。
+        // 内置图按主题各一张，切主题时无需重读文件。
+        const pageBackgroundUrl = ref('');
+        const pageBackgroundIsPreset = ref(false);
+        let pageBackgroundEpoch = 0;
+        // The view shells are opaque, so they must step aside for the artwork to
+        // show at all. Driving that from an attribute keeps the "off" state
+        // byte-identical to the pre-M4 rendering.
+        const syncPageBackgroundAttribute = () => {
+            const root = document.documentElement;
+            if (!root) return;
+            if (pageBackgroundUrl.value) root.dataset.pageBg = 'on';
+            else delete root.dataset.pageBg;
+        };
+        const applyPageBackground = async () => {
+            const choice = normalizePageBackground(settings.pageBackground);
+            const epoch = ++pageBackgroundEpoch;
+            if (choice === 'off') {
+                pageBackgroundUrl.value = '';
+                pageBackgroundIsPreset.value = false;
+                syncPageBackgroundAttribute();
+                return;
+            }
+            if (choice === 'custom') {
+                const url = await resolveBackgroundUrl('custom');
+                // A slower earlier resolution must not overwrite a newer choice.
+                if (epoch !== pageBackgroundEpoch) return;
+                pageBackgroundUrl.value = url;
+                pageBackgroundIsPreset.value = false;
+                syncPageBackgroundAttribute();
+                // The file is missing (fresh install with a restored settings
+                // blob, or a failed write): fall back to off rather than paint
+                // nothing while the row still claims a custom image.
+                if (!url) {
+                    settings.pageBackground = 'off';
+                    showToast('底图文件已丢失，已切回关闭', 'warning');
+                }
+                return;
+            }
+            pageBackgroundUrl.value = presetUrl(choice, resolveTheme());
+            pageBackgroundIsPreset.value = true;
+            syncPageBackgroundAttribute();
+        };
+        watch(() => settings.pageBackground, applyPageBackground, { immediate: true });
+        // Presets are per-theme files, so a theme change swaps the artwork.
+        watch(() => resolveTheme(), () => {
+            if (pageBackgroundIsPreset.value) applyPageBackground();
+        });
+
+        // Settings row handler: compress → store → apply. Kept here (not in the
+        // settings component) because it owns the toast and the settings write.
+        const selectCustomPageBackground = async (file) => {
+            try {
+                const result = await applyCustomBackground(file);
+                settings.pageBackground = 'custom';
+                // 'custom' → 'custom' would not trigger the watcher; paint directly.
+                pageBackgroundUrl.value = result.url;
+                pageBackgroundIsPreset.value = false;
+                syncPageBackgroundAttribute();
+                showToast(`底图已更新（${Math.max(1, Math.round(result.bytes / 1024))} KB）`, 'success');
+            } catch (error) {
+                showToast(error?.message || '底图保存失败', 'error');
+            }
+        };
+        const clearPageBackground = async () => {
+            settings.pageBackground = 'off';
+            pageBackgroundUrl.value = '';
+            pageBackgroundIsPreset.value = false;
+            syncPageBackgroundAttribute();
+            await removeCustomBackground();
+        };
 
         const {
             showApiProviderSelector,
@@ -10335,6 +10417,7 @@ const __app = createApp({
             isGenerating, isRemoteGenerating, remoteEstimatedTime, isReceiving, isThinking, hasActiveToolInlineWork, isConversationBusy, activeToolContinuationMessageId, activeToolContinuationHasResponse, userInput, modelSearchQuery, activeModelTag, modelTags, characterSearchQuery, filteredModels, filteredCharacters,
             user, settings, apiProviderOptions, selectedApiProvider, isCustomApiProvider, customApiProviderOptions, showApiProviderSelector, selectApiProvider, characters, currentCharacter, currentCharacterAvatar, currentCharacterIndex, chatHistory, sortedConversations, conversationSummaries, displayedChatMessages, chatTopSpacerHeight, chatBottomSpacerHeight, handleChatScroll, presets, presetRoleOptions, fontFamilyOptions, themeModeOptions, imageStyleOptions, imageModelOptions, availableImageStyleOptions, imageSizeOptions, imageGenCountOptions, scopeOptions, uiTemplatePlacementOptions, worldInfoPositionOptions, getPresetRoleLabel, getPresetRoleDisplayLabel, getPresetRoleBadgeClass, regexScripts, worldInfo,
             materialEffectsTier,
+            pageBackgroundUrl, pageBackgroundIsPreset, selectCustomPageBackground, clearPageBackground,
             activeTools, activeToolAggressivenessOptions: ACTIVE_TOOL_AGGRESSIVENESS_OPTIONS, editingActiveTool, normalizeActiveTools, isWebActiveTool, getActiveToolDisplayDescription, getActiveToolResultCountMin, getActiveToolResultCountMax,
             getToolCallModeText, hasThinkingOrTools, isMessageThinkingOrRunning, isThinkingSummaryOpen, toggleThinkingSummary, markThinkingSummaryDetailOpened, getTimelineSteps,
             chatRoundStats, conversationBodyLength, summaryCompressedBodyLength,

@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 750 1600" preserveAspectRatio="xMidYMid slice" role="img" aria-label="极光">
+  <!-- 内置界面底图 · 极光（浅色）
+       低对比场景图：只负责给玻璃面提供一层有纵深的背景，不抢正文。
+       峰值亮度压在 ~92%，与白色玻璃色调叠加后仍能保证文字对比度。 -->
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0.25" y2="1">
+      <stop offset="0" stop-color="#eef4fb"/>
+      <stop offset="0.45" stop-color="#f3f7fc"/>
+      <stop offset="1" stop-color="#fafcfe"/>
+    </linearGradient>
+    <linearGradient id="auroraA" x1="0" y1="0" x2="0.6" y2="1">
+      <stop offset="0" stop-color="#bfe3d0" stop-opacity="0.85"/>
+      <stop offset="0.55" stop-color="#cfe8dd" stop-opacity="0.5"/>
+      <stop offset="1" stop-color="#e6f2ec" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="auroraB" x1="0.2" y1="0" x2="0.9" y2="1">
+      <stop offset="0" stop-color="#c9d8f2" stop-opacity="0.8"/>
+      <stop offset="0.5" stop-color="#dbe5f7" stop-opacity="0.45"/>
+      <stop offset="1" stop-color="#eef3fb" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="auroraC" x1="0" y1="0" x2="0.8" y2="1">
+      <stop offset="0" stop-color="#d6cdee" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#ece7f7" stop-opacity="0"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.7" cy="0.12" r="0.55">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.95"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="soft" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="38"/>
+    </filter>
+    <filter id="softer" x="-25%" y="-25%" width="150%" height="150%">
+      <feGaussianBlur stdDeviation="64"/>
+    </filter>
+  </defs>
+
+  <rect width="750" height="1600" fill="url(#sky)"/>
+
+  <!-- 极光带：三条不同色相的柔和曲线，叠出纵深感 -->
+  <g filter="url(#softer)" opacity="0.9">
+    <path d="M-60 300 C 160 180, 320 420, 520 260 S 780 340, 820 240 L 820 520 C 760 620, 560 470, 380 600 S 120 520, -60 620 Z" fill="url(#auroraA)"/>
+    <path d="M-60 470 C 180 360, 300 600, 500 440 S 760 520, 820 420 L 820 700 C 740 800, 540 640, 360 780 S 100 700, -60 800 Z" fill="url(#auroraB)"/>
+  </g>
+  <g filter="url(#soft)" opacity="0.75">
+    <path d="M-60 640 C 200 560, 340 760, 540 620 S 780 700, 820 610 L 820 830 C 720 900, 520 780, 340 900 S 90 830, -60 920 Z" fill="url(#auroraC)"/>
+  </g>
+
+  <!-- 顶部微光，让状态栏区域不显空 -->
+  <rect width="750" height="1600" fill="url(#glow)"/>
+
+  <!-- 地平线：一条极淡的分界 + 下方渐暗，给页面一个「地面」 -->
+  <path d="M0 1180 C 150 1140, 300 1200, 450 1165 S 660 1195, 750 1160 L 750 1600 L 0 1600 Z" fill="#e9eff7" opacity="0.75"/>
+  <path d="M0 1330 C 180 1300, 340 1350, 520 1320 S 700 1345, 750 1320 L 750 1600 L 0 1600 Z" fill="#dfe8f3" opacity="0.6"/>
+</svg>

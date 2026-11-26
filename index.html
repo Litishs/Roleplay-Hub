@@ -130,6 +130,16 @@
 
         <div class="app-main flex-1 flex flex-col h-full overflow-hidden bg-gray-50 relative">
 
+            <!-- Page background (2026-11-26). Sits under .app-views and above the
+                 page fill, so tab views and the chat show it through. The chat's
+                 own character-artwork layer stacks on top of this one; with that
+                 switch off the chat shows the background, which is the same slot
+                 the plain grey fill used to occupy. Content cards and bubbles stay
+                 opaque on purpose (design doc §3.3), so only the frames and
+                 floating controls actually sit on the artwork. -->
+            <div class="page-bg" :class="{ 'is-on': pageBackgroundUrl, 'is-preset': pageBackgroundIsPreset }" aria-hidden="true"
+                :style="pageBackgroundUrl ? { backgroundImage: `url(&quot;${pageBackgroundUrl}&quot;)` } : null"></div>
+
             <!-- Views share one box that reserves the tab bar's height on narrow
                  screens (.app-views.has-tab-bar); the bar itself is an overlay. -->
             <div class="app-views flex-1 min-h-0 flex flex-col relative" :class="{ 'has-tab-bar': isTabRootView }">

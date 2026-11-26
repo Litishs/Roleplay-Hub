@@ -3116,6 +3116,73 @@
             }
         }
 
+        /* ---- 页面底图（M4，2026-11-26）----
+           A single fixed layer behind every view. `cover` keeps the artwork's
+           aspect without cropping the subject on tall phones, and `fixed`
+           attachment stops it from scrolling with a list (the layer is already
+           outside the scrollers, this is belt-and-braces for nested ones).
+
+           The overlay is the contrast floor: a user photo is arbitrary, so a
+           scrim keeps the glass tints and the text on them predictable. Light
+           themes get a white wash, dark themes a heavier black one. Built-in
+           presets are already low-contrast, so they get a weaker scrim. */
+        .page-bg {
+            position: absolute;
+            inset: 0;
+            z-index: 0;
+            pointer-events: none;
+            opacity: 0;
+            background-position: center;
+            background-size: cover;
+            background-repeat: no-repeat;
+            transition: opacity var(--motion-base) var(--motion-standard);
+        }
+
+        .page-bg.is-on {
+            opacity: 1;
+        }
+
+        .page-bg::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        [data-theme='dark'] .page-bg::after {
+            background: rgba(0, 0, 0, 0.5);
+        }
+
+        /* Presets ship theme-matched artwork, so they need less help than a
+           user photo does. */
+        .page-bg.is-preset::after {
+            background: rgba(255, 255, 255, 0.06);
+        }
+
+        [data-theme='dark'] .page-bg.is-preset::after {
+            background: rgba(0, 0, 0, 0.24);
+        }
+
+        /* The views must paint above the background layer. They already create
+           their own stacking contexts; this only guarantees the order. */
+        .app-views {
+            z-index: 1;
+        }
+
+        /* The page fill and the list/view shells are opaque, so they would hide
+           the artwork completely. With a background on, those fills step aside —
+           the scrim on .page-bg::after is what keeps contrast predictable, not
+           an opaque layer above it. Scoped to [data-page-bg] so the "off" state
+           is byte-identical to the pre-M4 rendering. */
+        [data-page-bg='on'] .app-main,
+        [data-page-bg='on'] .conversation-list,
+        [data-page-bg='on'] .home-view,
+        [data-page-bg='on'] .management-view,
+        [data-page-bg='on'] .tab-hub-view,
+        [data-page-bg='on'] .chat-view-root {
+            background-color: transparent !important;
+        }
+
         /* Mobile optimizations */
         @media (max-width: 768px) {
             html,
