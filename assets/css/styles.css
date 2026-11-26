@@ -2651,10 +2651,15 @@
         .markdown-body p { color: inherit; }
         .markdown-body ul { list-style-type: disc; margin-left: 1.5em; color: inherit; }
         .markdown-body ol { list-style-type: decimal; margin-left: 1.5em; color: inherit; }
-        .markdown-body code { background-color: #f1f5f9; padding: 0.2em 0.45em; border-radius: 0.5em; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; color: #2563eb; font-size: 0.9em; }
-        .markdown-body pre { background-color: #f8fafc; padding: 1.25em; border-radius: 1rem; overflow-x: auto; border: 1px solid #e2e8f0; margin-left: 0.5rem; margin-right: 0.5rem; box-shadow: 0 1px 2px rgba(0,0,0,0.03); }
-        .markdown-body pre code { background-color: transparent; padding: 0; color: #1f2937; border-radius: 0; }
-        .markdown-body blockquote { border-left: 4px solid #e5e7eb; padding-left: 1em; color: #6b7280; margin-left: 0.5rem; margin-right: 0.5rem; border-radius: 0 0.5rem 0.5rem 0; }
+        /* Markdown 元素配色走令牌（2026-11-26）。这里原本全是硬编码浅色（#f1f5f9 /
+           #f8fafc / #f9fafb / #e5e7eb / #1f2937），深色模式下没有对写，于是代码块、
+           表头、引用块都变成浅色块压在近白文字上——实测 pre 与 th 的对比度只有
+           1.04:1。改用 tokens.css 的三命名空间（bg-* / border-* / text-*）后，
+           深色只换值即可，不需要再逐条写 [data-theme='dark'] 覆盖。 */
+        .markdown-body code { background-color: rgb(var(--bg-gray-100)); padding: 0.2em 0.45em; border-radius: 0.5em; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; color: rgb(var(--text-primary-600)); font-size: 0.9em; }
+        .markdown-body pre { background-color: rgb(var(--bg-gray-50)); padding: 1.25em; border-radius: 1rem; overflow-x: auto; border: 1px solid rgb(var(--border-gray-200)); margin-left: 0.5rem; margin-right: 0.5rem; box-shadow: 0 1px 2px rgba(0,0,0,0.03); }
+        .markdown-body pre code { background-color: transparent; padding: 0; color: rgb(var(--text-gray-800)); border-radius: 0; }
+        .markdown-body blockquote { border-left: 4px solid rgb(var(--border-gray-200)); padding-left: 1em; color: rgb(var(--text-gray-500)); margin-left: 0.5rem; margin-right: 0.5rem; border-radius: 0 0.5rem 0.5rem 0; }
 
         /* Enhanced Markdown Styles */
         .markdown-body strong { font-weight: 700; color: inherit; }
@@ -2663,12 +2668,12 @@
         .markdown-body h2 { font-size: 1.25em; font-weight: 600; margin-top: 1em; margin-bottom: 0.5em; line-height: 1.25; color: inherit; }
         .markdown-body h3 { font-size: 1.1em; font-weight: 600; margin-top: 1em; margin-bottom: 0.5em; line-height: 1.3; color: inherit; }
         .markdown-body h4 { font-weight: 600; margin-top: 1em; margin-bottom: 0.5em; color: inherit; }
-        .markdown-body a { color: #2563eb; text-decoration: underline; text-underline-offset: 2px; overflow-wrap: anywhere; word-break: break-word; }
-        .markdown-body a:hover { color: #1d4ed8; }
-        .markdown-body hr { border: 0; border-top: 1px solid #e5e7eb; margin: 1.5em 0.5rem; height: 1px; }
+        .markdown-body a { color: rgb(var(--text-primary-600)); text-decoration: underline; text-underline-offset: 2px; overflow-wrap: anywhere; word-break: break-word; }
+        .markdown-body a:hover { color: rgb(var(--text-primary-700)); }
+        .markdown-body hr { border: 0; border-top: 1px solid rgb(var(--border-gray-200)); margin: 1.5em 0.5rem; height: 1px; }
         .markdown-body table { width: auto; border-collapse: collapse; margin: 0 0.5rem 1em 0.5rem; display: block; overflow-x: auto; }
-        .markdown-body th, .markdown-body td { border: 1px solid #e5e7eb; padding: 0.5em 0.75em; text-align: left; }
-        .markdown-body th { background-color: #f9fafb; font-weight: 600; }
+        .markdown-body th, .markdown-body td { border: 1px solid rgb(var(--border-gray-200)); padding: 0.5em 0.75em; text-align: left; }
+        .markdown-body th { background-color: rgb(var(--bg-gray-50)); font-weight: 600; }
         .markdown-body del { text-decoration: line-through; color: inherit; opacity: 0.7; }
 
         .markdown-body .response-error-text {
@@ -2708,8 +2713,17 @@
 
 
 
+        /* 消息气泡底色（2026-11-26）。
+           这条规则原本在 @media (max-width: 768px) 的「补偿毛玻璃」块里，只负责
+           手机端：那里全局关掉了 backdrop-filter，气泡的半透明底失去模糊支撑，
+           于是强制抬到 88% 白底保证可读性。后来它漂移到了全局作用域，于是变成
+           一条无条件覆盖：桌面端也被强制白底，而深色模式下没有对写，实测气泡是
+           白底 + #f5f5f5 文字（对比度 1.09:1，几乎不可读）。
+           现在改为走令牌：浅色仍是接近原来的 88% 白，深色自动换成深色面。不再用
+           !important —— 气泡模板上的 bg-white/70、bg-blue-50/85 等类同样走令牌，
+           深色下本来就正确，这一条只是把「半透明底 + 无模糊」抬到可读的不透明度。 */
         .msg-bubble-glass {
-            background-color: rgba(255, 255, 255, 0.88) !important;
+            background-color: rgb(var(--bg-surface) / 0.88);
         }
 
 

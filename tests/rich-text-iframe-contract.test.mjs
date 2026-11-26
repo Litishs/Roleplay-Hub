@@ -20,7 +20,12 @@ test('regex-generated srcdoc frames are rebuilt as controlled executable frames'
 test('controlled frames retain the app sandbox and lifecycle class', async () => {
   const source = await readFile(new URL('../src/modules/app.mjs', import.meta.url), 'utf8');
 
-  assert.match(source, /iframe\.className = `w-full bg-white block executable-html-frame/);
+  assert.match(source, /iframe\.className = `w-full block executable-html-frame \$\{extraClass\}`/);
+  // The shell must stay literally white: bg-white resolves through --bg-surface
+  // since the theme-token wiring, which turns the frame dark and leaves the
+  // author's light-themed card body unreadable (dark text on a dark frame).
+  assert.match(source, /iframe\.style\.backgroundColor = '#ffffff'/);
+  assert.doesNotMatch(source, /iframe\.className = `w-full bg-white/, 'the frame shell must not follow the theme');
   assert.match(source, /iframe\.setAttribute\('sandbox', htmlIframeSandbox\)/);
   assert.match(source, /iframe\.srcdoc = buildExecutableHtmlDocument\(rawHtml\)/);
   assert.match(source, /Math\.min\(1200, Math\.max\(240, requestedHeight\)\)/);

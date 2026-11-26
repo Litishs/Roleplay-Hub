@@ -3078,7 +3078,12 @@ const __app = createApp({
             const fixedHeight = hasFixedHeight && Number.isFinite(requestedHeight)
                 ? Math.min(1200, Math.max(240, requestedHeight))
                 : null;
-            iframe.className = `w-full bg-white block executable-html-frame ${extraClass}`.trim();
+            // 卡片外壳必须保持白色，不能用 bg-white：P2 令牌化（34442a7）之后
+            // bg-white 走 --bg-surface，深色模式下会变成 #1a1a1a，而卡片文档本身
+            // 是作者按浅色主题写的独立沙箱（body 无背景、文字多为深色），于是深底
+            // 深字不可读。用内联白色把这个外壳钉死，卡片文档的浅色基线才成立。
+            iframe.className = `w-full block executable-html-frame ${extraClass}`.trim();
+            iframe.style.backgroundColor = '#ffffff';
             iframe.style.height = fixedHeight ? `${fixedHeight}px` : 'auto';
             iframe.style.overflow = 'hidden';
             iframe.style.transition = 'height 0.2s ease-out';
