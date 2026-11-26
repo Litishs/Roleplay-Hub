@@ -482,7 +482,7 @@ test('useApiConfig returns live reactive state (runtime)', async () => {
     const other = useApiConfig();
     assert.notEqual(state.availableModels, other.availableModels, 'independent instances per call');
 
-    assert.equal(state.apiProviderOptions.length, 6);
+    assert.equal(state.apiProviderOptions.length, 7); // sta1n/deepseek/openrouter/siliconflow/bailian/zhipu/grok
     assert.ok(state.apiProviderOptions.every(p => 'id' in p && 'name' in p && 'apiUrl' in p));
     assert.equal(state.apiProviderOptions[0].id, 'sta1n');
     assert.equal(state.apiProviderOptions[0].name, 'STA1N API');

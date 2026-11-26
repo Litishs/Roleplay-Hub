@@ -34,6 +34,7 @@ const IMAGE_GEN_BASE_URL = 'https://nai.sta1n.cn';
 import { RPHChatPersistence } from './chat-persistence.mjs';
 import { initSwipes, captureActiveCandidate, appendSwipeCandidate, normalizeSwipes, swipeMaxCandidates } from './swipe-candidates.mjs';
 import { DEFAULT_PRESET_DEFINITIONS, DEFAULT_PRESET_DEFINITIONS_VERSION } from './default-presets.mjs';
+import { TWO_PRESET_DEFINITIONS, TWO_PRESET_DEFINITIONS_VERSION } from './two-presets.mjs';
 import { buildCotPresetContent } from './cot-builder.mjs';
 import { RPHStorage } from './storage-repository.mjs';
 import { RPHRuntimePolicy } from './runtime-policy.mjs';
@@ -9456,6 +9457,40 @@ const __app = createApp({
             // 2) 确保默认预设组存在（内置、不可删除、不可重命名）
             if (!presetGroups.value.some(g => g.id === 'default')) {
                 presetGroups.value.unshift({ id: 'default', name: '默认预设', builtin: true, enabled: true });
+            }
+
+            // 2b) 确保内置预设组「two」（中英混合）存在，并按名字播种缺失条目。
+            //     与默认组并列的第二套内置预设；组间互斥启用，用户在预设面板
+            //     切换生效组。组对象上携带 twoVersion 标记（随 preset_groups 持久
+            //     化）：定义版本变化时强制覆盖同名条目的内容/角色（保留用户的
+            //     开关状态），未变化时只播种缺失条目、绝不碰用户改过的内容。
+            const twoGroup = presetGroups.value.find(g => g.id === 'two');
+            const twoVersionChanged = !twoGroup || Number(twoGroup.twoVersion) !== TWO_PRESET_DEFINITIONS_VERSION;
+            if (!twoGroup) {
+                const defaultGroupIndex = presetGroups.value.findIndex(g => g.id === 'default');
+                presetGroups.value.splice(defaultGroupIndex + 1, 0, { id: 'two', name: 'two（中英混合）', builtin: true, enabled: false, twoVersion: TWO_PRESET_DEFINITIONS_VERSION });
+            } else if (twoVersionChanged) {
+                twoGroup.twoVersion = TWO_PRESET_DEFINITIONS_VERSION;
+            }
+            if (Array.isArray(TWO_PRESET_DEFINITIONS)) {
+                const twoByName = new Map(presets.value.filter(p => p.group === 'two').map(p => [p.name, p]));
+                for (const def of TWO_PRESET_DEFINITIONS) {
+                    const existing = twoByName.get(def.name);
+                    if (existing) {
+                        if (twoVersionChanged) {
+                            existing.content = String(def.content || '');
+                            existing.role = def.role || 'system';
+                        }
+                        continue;
+                    }
+                    presets.value.push({
+                        name: def.name,
+                        role: def.role || 'system',
+                        content: String(def.content || ''),
+                        enabled: true,
+                        group: 'two'
+                    });
+                }
             }
 
             // 破限预注入的默认启用状态跟随「破限」（默认组内，兼容旧数据迁移）
