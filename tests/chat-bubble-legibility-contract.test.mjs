@@ -143,3 +143,21 @@ test('HTML cards get a light baseline because they cannot see the app theme', as
     assert.match(app, /iframe\.style\.backgroundColor = '#ffffff'/);
     assert.doesNotMatch(app, /bg-white block executable-html-frame/, 'the shell must not use the theme-mapped utility');
 });
+
+test('light gradient stops used as panel headers flip in dark mode', async () => {
+    // Same failure family as the bubble: a light-only value with no dark twin.
+    // `bg-gradient-to-r from-primary-50 to-blue-50` keeps the header near-white
+    // while the title's text-gray-900 turns white, so the heading disappears.
+    // Measured on the auto-image-gen modal before the fix.
+    const css = await read('assets/css/styles.css');
+
+    for (const stop of ['from-primary-50', 'to-blue-50', 'to-purple-50']) {
+        // The rules are grouped selector lists, so match the selector anywhere
+        // inside a [data-theme='dark'] rule that sets a gradient stop.
+        assert.match(css, new RegExp(`\\[data-theme='dark'\\] \\.${stop}[^{]*\\{[^}]*--tw-gradient`),
+            `.${stop} needs a dark gradient stop`);
+    }
+    // Hover variants must flip too, or hovering snaps the panel back to light.
+    assert.match(css, /\[data-theme='dark'\] \.hover\\:from-primary-100:hover/);
+    assert.match(css, /\[data-theme='dark'\] \.hover\\:to-blue-100:hover/);
+});

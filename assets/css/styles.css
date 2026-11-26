@@ -4100,6 +4100,17 @@ opacity: 0;
         [data-theme='dark'] .from-gray-100 { --tw-gradient-from: var(--d-surface) var(--tw-gradient-from-position); }
         [data-theme='dark'] .to-gray-100 { --tw-gradient-to: var(--d-surface) var(--tw-gradient-to-position); }
         [data-theme='dark'] .to-gray-200 { --tw-gradient-to: var(--d-border) var(--tw-gradient-to-position); }
+        /* 浅色渐变头部（2026-11-26）：弹窗/面板的 title bar 常用
+           bg-gradient-to-r from-primary-50 to-blue-50|purple-50。这些停止色在深色下
+           原本没有覆盖，渐变整块保持近白，而标题文字 text-gray-900 已被翻成白色，
+           于是变成白底白字（自动生图弹窗的标题实测完全不可见）。这里统一映射到
+           深色语义底，与 .bg-blue-50 / .bg-primary-50 的深色取值同一套色相。
+           hover:from-* 也一并覆盖，否则悬停时会跳回浅色。 */
+        [data-theme='dark'] .from-primary-50,
+        [data-theme='dark'] .hover\:from-primary-100:hover { --tw-gradient-from: #252c49 var(--tw-gradient-from-position); }
+        [data-theme='dark'] .to-blue-50,
+        [data-theme='dark'] .hover\:to-blue-100:hover { --tw-gradient-to: #1e3a5f var(--tw-gradient-to-position); }
+        [data-theme='dark'] .to-purple-50 { --tw-gradient-to: #2b2340 var(--tw-gradient-to-position); }
 
         .tool-call-detail {
             display: flex;
