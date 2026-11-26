@@ -463,8 +463,48 @@ const __app = createApp({
                     threshold: 0,
                     rootMargin: '50px 0px 50px 0px'
                 });
+                // 注册兜底：observe() 后 IO 的初始回调在实践中可能不达（尤其新消息
+                // 在挂载帧内插入时），这里对已在视口内的元素直接点亮，其余交给 IO。
+                scrollRevealObserver.revealIfVisible = (el) => {
+                    try {
+                        const r = el.getBoundingClientRect();
+                        if (r.top < window.innerHeight + 50 && r.bottom > -50) {
+                            el.classList.add('reveal-active');
+                            return true;
+                        }
+                    } catch (error) { /* 布局未就绪，交给 IO */ }
+                    return false;
+                };
+                // 兜底扫描：滚动（capture 捕获内部滚动容器）+ 低频轮询，对未点亮且
+                // 已进入视口的行直接点亮。纯几何检查，不依赖 IO 回调（后者在本环境
+                // 的挂载帧上实测不触发，导致消息停在透明态——点击无响应的直接原因）。
+                const revealScan = () => {
+                    document.querySelectorAll('.scroll-reveal-container:not(.reveal-active)').forEach(el => {
+                        try { scrollRevealObserver.revealIfVisible(el); } catch (error) { /* 忽略 */ }
+                    });
+                };
+                window.addEventListener('scroll', revealScan, { passive: true, capture: true });
+                setInterval(revealScan, 800);
+                // MutationObserver 网：任何新插入的 scroll-reveal-container 都注册
+                // （不依赖 Vue 的模板 ref deep watch——它对 DOM 元素数组不可靠）。
+                const revealNet = new MutationObserver(records => {
+                    records.forEach(record => record.addedNodes.forEach(node => {
+                        if (!(node instanceof HTMLElement)) return;
+                        const targets = node.classList?.contains('scroll-reveal-container')
+                            ? [node]
+                            : [...(node.querySelectorAll?.('.scroll-reveal-container') || [])];
+                        targets.forEach(el => {
+                            if (el.classList.contains('reveal-active')) return;
+                            if (!(scrollRevealObserver.revealIfVisible(el))) scrollRevealObserver.observe(el);
+                        });
+                    }));
+                });
+                revealNet.observe(document.body, { childList: true, subtree: true });
             }
         };
+        // 立即安装：兜底网不能依赖 messageElements 的 deep watch（它正是不可靠的
+        // 一环）。观察器与网装好后，后续插入聊天的消息行都会被注册。
+        initScrollReveal();
 
         // Watch for changes in the message list to observe new bubbles
         watch(messageElements, (newEls) => {
@@ -3013,7 +3053,7 @@ const __app = createApp({
             iframe.style.transition = 'height 0.2s ease-out';
             iframe.style.margin = '0';
             iframe.style.padding = '0';
-            iframe.setAttribute('scrolling', 'no');
+            iframe.setAttribute('scrolling', 'auto');
             iframe.setAttribute('sandbox', htmlIframeSandbox);
             iframe.setAttribute('allow', 'clipboard-read; clipboard-write; fullscreen; autoplay; encrypted-media; picture-in-picture');
             if (fixedHeight) iframe.setAttribute('data-rph-fixed-height', String(fixedHeight));
@@ -3076,11 +3116,17 @@ const __app = createApp({
             if (!frame) return;
 
             if (data.type === 'height') {
-                // 固定高度的卡片由宿主说了算，忽略其自报高度。
-                if (frame.hasAttribute('data-rph-fixed-height')) return;
                 const height = Number(data.value);
                 if (!Number.isFinite(height) || height <= 0) return;
-                frame.style.height = `${Math.min(EXECUTABLE_FRAME_MAX_HEIGHT, Math.round(height))}px`;
+                let target = Math.round(height);
+                // 声明高度（data-rph-fixed-height）只当下限：卡片实测内容更高时让
+                // iframe 长高（上限内），保证长卡完整显示——此前直接忽略实测高度，
+                // 固定高度卡片超出部分物理不可达（用户报告的显示不全）。
+                if (frame.hasAttribute('data-rph-fixed-height')) {
+                    const declared = Number(frame.getAttribute('data-rph-fixed-height'));
+                    if (Number.isFinite(declared)) target = Math.max(declared, target);
+                }
+                frame.style.height = `${Math.min(EXECUTABLE_FRAME_MAX_HEIGHT, target)}px`;
                 return;
             }
 
