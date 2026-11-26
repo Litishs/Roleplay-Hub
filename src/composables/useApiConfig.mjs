@@ -100,6 +100,12 @@ const getTtsProviderById = (id) => ttsProviderOptions.find(provider => provider.
             name: '智谱',
             apiUrl: 'https://open.bigmodel.cn/api/paas/v4',
             icon: ''
+        },
+        {
+            id: 'grok',
+            name: 'Grok (xAI)',
+            apiUrl: 'https://api.x.ai/v1',
+            icon: ''
         }
     ];
 
