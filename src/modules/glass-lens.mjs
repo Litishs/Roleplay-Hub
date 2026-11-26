@@ -270,8 +270,14 @@ const refreshLenses = (options = {}) => {
     elements.forEach((element) => {
         const width = Math.round(element.offsetWidth);
         const height = Math.round(element.offsetHeight);
-        // Not laid out yet (hidden view): it gets its filter once shown.
-        if (!width || !height) return;
+        // Not laid out (hidden view, or v-show'd away): skip it AND drop any
+        // filter it still carries. A display:none surface is not composited, so
+        // keeping an inline backdrop-filter on it would only hold a texture
+        // alive; the visibility observer rebuilds the map when it comes back.
+        if (!width || !height) {
+            clearLens(element);
+            return;
+        }
         const mode = element.dataset.lens === 'bottom' ? 'bottom' : 'all';
         const radius = Math.min(
             parseFloat(getComputedStyle(element).borderTopLeftRadius) || 0,
@@ -307,6 +313,30 @@ const applyMaterialEffects = (options = {}) => {
     return tier;
 };
 
+// A glass surface inside a hidden view (the tab bar on a detail page) has no
+// geometry, so refreshLenses skips it. When the view comes back its size may
+// have changed meanwhile (rotation, keyboard), so the surface needs a fresh map
+// at the moment it becomes visible. One shared observer: surfaces are created
+// and destroyed by v-show, not re-created, so this is a small fixed set.
+let visibilityObserver = null;
+
+const observeLensSurfaces = (onVisible) => {
+    if (typeof IntersectionObserver === 'undefined' || typeof document === 'undefined') return null;
+    if (!visibilityObserver) {
+        visibilityObserver = new IntersectionObserver((entries) => {
+            for (const entry of entries) {
+                if (!entry.isIntersecting) continue;
+                // The map is baked from offsetWidth/Height, which are only valid
+                // once layout has run for the now-visible element.
+                onVisible();
+                return;
+            }
+        }, { threshold: 0 });
+    }
+    document.querySelectorAll(LENS_SELECTOR).forEach((element) => visibilityObserver.observe(element));
+    return visibilityObserver;
+};
+
 // One entry point for app.mjs: re-applies on effect-toggle changes and keeps the
 // lens geometry in step with the viewport. `options` may be a plain object or a
 // function returning one — the resize and OS-setting paths re-read it, so a
@@ -332,7 +362,12 @@ const initGlassLens = (options = {}) => {
     // Templates mount after setup(), so the first pass usually sees no surfaces.
     // One frame later they exist: refresh so a statically classed surface gets
     // its refraction without waiting for a resize.
-    if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => apply());
+    if (typeof requestAnimationFrame === 'function') {
+        requestAnimationFrame(() => {
+            apply();
+            observeLensSurfaces(() => apply());
+        });
+    }
 
     let resizeTimer = 0;
     const onResize = () => {
@@ -357,6 +392,10 @@ const initGlassLens = (options = {}) => {
     const dispose = () => {
         clearTimeout(resizeTimer);
         window.removeEventListener('resize', onResize);
+        if (visibilityObserver) {
+            visibilityObserver.disconnect();
+            visibilityObserver = null;
+        }
         try {
             if (transparencyQuery && transparencyQuery.removeEventListener) {
                 transparencyQuery.removeEventListener('change', onTransparencyChange);

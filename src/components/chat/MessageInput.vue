@@ -3,7 +3,7 @@
                 <div v-show="!isExternalInputFocused"
                     class="absolute bottom-0 left-0 right-0 w-full p-2 md:p-3 z-30 pointer-events-none flex justify-center flex-shrink-0 transition-all duration-300 input-area-mobile">
                     <div
-                        class="relative w-full max-w-lg pointer-events-auto p-2.5 md:p-3 bg-white/90 backdrop-blur-xl border border-white/40 shadow-lg rounded-3xl ring-1 ring-black/5 transition-all duration-300 flex flex-col input-island">
+                        class="relative w-full max-w-lg pointer-events-auto p-2.5 md:p-3 border border-white/40 shadow-lg rounded-3xl ring-1 ring-black/5 transition-all duration-300 flex flex-col input-island rph-glass rph-glass-island">
                         <!-- Latest usage bar (inline panel toggle) -->
                         <div v-if="settings.showLatestUsageBar"
                             class="mx-1 mb-1 grid py-0.5 text-xs text-gray-500"

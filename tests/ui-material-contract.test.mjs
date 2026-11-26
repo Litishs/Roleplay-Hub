@@ -225,13 +225,70 @@ test('M2 acrylic surfaces are opted in, per-message ones only on wide screens', 
     assert.doesNotMatch(embedded, /class="embedded-back-ball rph-glass/);
 });
 
-test('no liquid-glass surface ships before M3', async () => {
-    // Liquid glass (input dock, tab bar) is M3: it needs the refraction pass and
-    // the geometry work reviewed together, so the two components must still be
-    // untouched here.
-    for (const file of ['src/components/common/BottomTabBar.vue']) {
-        assert.ok(!/rph-glass/.test(await read(file)), `${file} is M3, not M2`);
-    }
+test('M3 liquid glass covers exactly the input dock and the tab bar', async () => {
+    // Two surfaces, no more: the refraction budget is 2 lenses (§11) and both
+    // are the floating controls the design doc names.
+    const bar = await read('src/components/common/BottomTabBar.vue');
+    assert.match(bar, /class="bottom-tab-bar rph-glass rph-glass-bar"/, 'the tab bar is a liquid-glass capsule');
+
     const input = await read('src/components/chat/MessageInput.vue');
-    assert.ok(!/rph-glass-island/.test(input), 'the input dock stays M3');
+    assert.match(input, /input-island rph-glass rph-glass-island/, 'the input dock is liquid glass');
+    // The dock's own Tailwind blur must be gone, or it would carry two blurs
+    // and the injected refraction would fight the utility class.
+    assert.doesNotMatch(input, /bg-white\/90 backdrop-blur-xl/);
+    assert.match(input, /class="chat-input-box[^"]*"/, 'the textarea itself stays a plain textarea (IME-safe)');
+
+    // No other component opts into the liquid-glass variants.
+    const files = ['src/components/chat/MessageList.vue', 'src/components/common/ToastNotification.vue',
+        'src/components/chat/ConversationList.vue', 'src/components/common/SettingsPageHeader.vue'];
+    for (const file of files) {
+        const source = await read(file);
+        assert.ok(!/rph-glass-island|rph-glass-bar/.test(source), `${file} is not a liquid-glass surface`);
+    }
+
+    // The slider pill keeps a plain tint: it animates with transform, and a
+    // backdrop-filter on a moving layer is the costliest pair in the WebView.
+    assert.match(bar, /bottom-tab__slider-pill/, 'the slider pill exists');
+    const css = await read('assets/css/styles.css');
+    const pillStart = css.search(/^ {8}\.bottom-tab__slider-pill \{/m);
+    const pillBlock = css.slice(pillStart, css.indexOf('}', pillStart));
+    assert.ok(!pillBlock.includes('backdrop-filter'), 'the slider pill must not blur');
+});
+
+test('the refraction pass skips hidden surfaces and rebuilds them when shown', async () => {
+    const lens = await read('src/modules/glass-lens.mjs');
+    // A surface inside a hidden view has no geometry, so the pass must skip it
+    // (and drop any filter it still carries) rather than bake a 0x0 map.
+    assert.match(lens, /if \(!width \|\| !height\) \{[\s\S]{0,120}clearLens\(element\);/, 'zero-size surfaces are skipped and cleared');
+    // ...and it must get a fresh map the moment it becomes visible again,
+    // because its size may have changed while hidden (rotation, keyboard).
+    assert.match(lens, /IntersectionObserver/, 'visibility is observed');
+    assert.match(lens, /observeLensSurfaces\(/, 'surfaces are registered for observation');
+    assert.match(lens, /visibilityObserver\.disconnect\(\)/, 'the observer is torn down');
+    // Geometry is baked into the map, so a resize has to drop the cached filters.
+    assert.match(lens, /RESIZE_DEBOUNCE_MS = 180/);
+    assert.match(lens, /resetLenses\(\);/, 'resize clears the cached maps');
+    // The cache is bounded: a resizing window would otherwise grow the defs.
+    assert.match(lens, /FILTER_CACHE_LIMIT/);
+});
+
+test('the chat dock pins the dark glass variant for readability', async () => {
+    const css = await read('assets/css/styles.css');
+    // The dock floats over artwork; iOS vibrancy picks the variant per backdrop,
+    // we pin the dark one because the artwork is dark in practice (§3.2).
+    const scoped = css.slice(css.indexOf('.chat-view-root .rph-glass.rph-glass-island {'));
+    assert.ok(scoped.length > 0, 'the chat-scoped variant must exist');
+    const block = scoped.slice(0, scoped.indexOf('}'));
+    assert.ok(block.includes('--glass-tint:'), 'the dock overrides the tint');
+    // White glyphs inside the dock, scoped so the solid tier keeps its palette.
+    assert.match(css, /\.chat-view-root \.rph-glass\.rph-glass-island \.text-gray-500/);
+    assert.match(css, /\.chat-view-root \.rph-glass\.rph-glass-island \.chat-input-box \{[\s\S]{0,160}color: #f8fafc;/);
+    // The tint has to be heavy enough for a light illustration behind it: the
+    // light glass tint (26% white) left white text at ~3.4:1. Every stop of the
+    // tint gradient must stay above 0.7 alpha (the rim values are separate and
+    // stay low on purpose, so read the tint line only).
+    const tintLine = block.split('\n').find((line) => line.includes('--glass-tint:')) || '';
+    const stops = [...tintLine.matchAll(/rgba\(\s*\d+,\s*\d+,\s*\d+,\s*([0-9.]+)\s*\)/g)].map((m) => Number(m[1]));
+    assert.ok(stops.length >= 3, `expected the tint stops, got ${stops.join(', ')}`);
+    for (const alpha of stops) assert.ok(alpha >= 0.7, `tint stop ${alpha} is too light for white text`);
 });

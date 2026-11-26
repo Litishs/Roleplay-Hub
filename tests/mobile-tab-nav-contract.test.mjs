@@ -158,7 +158,8 @@ test('index.html wraps the views in one box and mounts the tab shell', async () 
 test('the tab bar shows the four tabs in order, only on tab roots', async () => {
   const bar = await read('src/components/common/BottomTabBar.vue');
   assert.match(bar, /v-show="isTabRootView && !isRootTextFocused"/);
-  assert.match(bar, /class="bottom-tab-bar" aria-label="主导航"/);
+  // Liquid glass since 2026-11-26 (M3): the bar is a floating capsule.
+  assert.match(bar, /class="bottom-tab-bar rph-glass rph-glass-bar" aria-label="主导航"/);
   assert.match(bar, /@click="switchTab\(tab\.id\)"/);
   assert.match(bar, /:aria-current="activeTab === tab\.id \? 'page' : undefined"/);
   assert.match(bar, /import \{ TAB_ORDER \} from "\.\.\/\.\.\/modules\/tab-navigation\.mjs";/);
@@ -246,22 +247,34 @@ test('SettingsPageHeader leads detail pages with a Back arrow and can drop it on
   assert.match(header, /emits: \['back'\]/);
 });
 
-test('styles: overlay tab bar with variable colours, dark override and view reservation', async () => {
+test('styles: floating glass capsule with variable colours, dark override and view reservation', async () => {
   const css = await read('assets/css/styles.css');
-  assert.match(css, /:root \{[^}]*--tab-bar-h: 4\.25rem;/);
+  // Footprint = capsule (3.75rem) + bottom gap (0.5rem) + top air (0.5rem).
+  assert.match(css, /:root \{[^}]*--tab-bar-h: 4\.75rem;/);
+  assert.match(css, /:root \{[^}]*--tab-bar-capsule-h: 3\.75rem;/);
   // The base rule starts its own line; the fullscreen and dark rules also end
   // with this selector and must not be picked up instead.
   const barStart = css.search(/^ {8}\.bottom-tab-bar \{/m);
   assert.ok(barStart > 0, 'the tab bar rule must exist');
   const barBlock = css.slice(barStart, css.indexOf('}', barStart));
-  for (const declaration of ['position: absolute;', 'bottom: 0;', 'height: var(--tab-bar-h);',
+  // Floating capsule (2026-11-26): inset from the edges, lifted off the bottom,
+  // full pill radius, no top hairline (the rim is drawn as an inset ring).
+  for (const declaration of ['position: absolute;', 'left: var(--tab-bar-inset);',
+    'right: var(--tab-bar-inset);', 'bottom: var(--tab-bar-gap);',
+    'height: var(--tab-bar-capsule-h);', 'border-radius: calc(var(--tab-bar-capsule-h) / 2);',
     'background: var(--tab-bar-bg);', '--tab-bar-active: #2563eb;']) {
     assert.ok(barBlock.includes(declaration), `the tab bar must declare ${declaration}`);
   }
+  assert.ok(!barBlock.includes('border-top:'), 'the capsule has no top hairline');
   assert.match(css, /\[data-theme='dark'\] \.bottom-tab-bar \{[\s\S]{0,300}--tab-bar-active: var\(--d-accent\);/);
   assert.match(css, /@media \(max-width: 767\.98px\) \{\s*\.app-views\.has-tab-bar \{\s*padding-bottom: var\(--tab-bar-h\);\s*\}\s*\}/);
   assert.match(css, /@media \(min-width: 768px\) \{\s*\.bottom-tab-bar \{\s*display: none !important;/);
   assert.match(css, /\.app-native-fullscreen \.bottom-tab-bar,/);
+
+  // Solid tier restores the pre-material strip: full width, 68px, no radius,
+  // and the reservation shrinks with it so no dead gap is left.
+  assert.match(css, /\[data-effects='solid'\] \.bottom-tab-bar\.rph-glass \{[\s\S]{0,240}left: 0;[\s\S]{0,240}height: 4\.25rem;/);
+  assert.match(css, /\[data-effects='solid'\] \{\s*--tab-bar-h: 4\.25rem;\s*\}/);
 
   // Sliding highlight: one cell-wide element, moved with transform only, and
   // respecting prefers-reduced-motion.

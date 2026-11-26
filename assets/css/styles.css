@@ -2,9 +2,15 @@
             --app-visual-height: 100vh;
             --keyboard-inset: 0px;
             --chat-bg-height: 100vh;
-            /* Height of the narrow-screen tab bar. Tab-root views reserve it
-               (.app-views.has-tab-bar), so it must equal the bar's real height. */
-            --tab-bar-h: 4.25rem;
+            /* Vertical space the narrow-screen tab bar occupies. Tab-root views
+               reserve it (.app-views.has-tab-bar), so it must equal the bar's
+               real footprint: 60px capsule + 8px bottom gap + 8px top air
+               (2026-11-26, floating capsule). */
+            --tab-bar-h: 4.75rem;
+            /* The capsule itself, separate from its footprint. */
+            --tab-bar-capsule-h: 3.75rem;
+            --tab-bar-inset: 0.75rem;
+            --tab-bar-gap: 0.5rem;
             /* Shared motion tokens (2026-11-24): three speeds, one standard
                curve, so new components do not add another 0.18s/.22s variant. */
             --motion-fast: 0.15s;
@@ -798,11 +804,12 @@
         }
 
         /* Narrow-screen tab bar (2026-11-23). An overlay at the bottom of
-           .app-main; tab-root views reserve its height through
+           .app-main; tab-root views reserve its footprint through
            .app-views.has-tab-bar (mobile section below), which keeps the bar
-           out of the layout so it can animate and let content scroll under it.
-           The colours are variables on purpose: a later reskin (e.g. glass)
-           only changes values, and dark mode overrides the same variables. */
+           out of the layout so content scrolls under it.
+           Floating capsule (2026-11-26, M3): the bar is inset from the edges
+           and lifted off the bottom, so it reads as a lens rather than a
+           full-width strip. The colours stay variables; dark mode swaps values. */
         .bottom-tab-bar {
             --tab-bar-bg: #ffffff;
             --tab-bar-border: #e5e7eb;
@@ -815,16 +822,35 @@
             --tab-pill-w: 3.75rem;
             --tab-pill-h: 2rem;
             position: absolute;
-            left: 0;
-            right: 0;
-            bottom: 0;
+            left: var(--tab-bar-inset);
+            right: var(--tab-bar-inset);
+            bottom: var(--tab-bar-gap);
             z-index: 1;
             display: grid;
             grid-template-columns: repeat(4, minmax(0, 1fr));
-            height: var(--tab-bar-h);
-            padding: 0.375rem 0.375rem 0;
+            height: var(--tab-bar-capsule-h);
+            /* Vertical padding is 5px so the tab's own stack (32px icon pill +
+               3px gap + 14px label line = 49px) fits inside a 60px capsule.
+               Horizontal stays 6px: the slider's width formula counts on the
+               0.75rem total. */
+            padding: 0.3125rem 0.375rem;
+            /* Half the height: a full pill rather than a rounded rectangle. */
+            border-radius: calc(var(--tab-bar-capsule-h) / 2);
             background: var(--tab-bar-bg);
-            border-top: 1px solid var(--tab-bar-border);
+        }
+
+        /* The rim replaces the old top hairline: a floating capsule has no edge
+           to attach a border to. Drawn as an inset ring so it follows the
+           radius without adding layout. The glass recipe draws its own ring on
+           this same pseudo-element, so only the solid tiers use this one. */
+        .bottom-tab-bar:not(.rph-glass)::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            z-index: 2;
+            border-radius: inherit;
+            pointer-events: none;
+            box-shadow: inset 0 0 0 1px var(--tab-bar-border);
         }
 
         /* One tab is a 77x62 target at the narrowest supported width (320px),
@@ -853,7 +879,7 @@
            reproduce the tab's line box, so the pill lands on the icons. */
         .bottom-tab__slider {
             position: absolute;
-            top: 0.375rem;
+            top: 0.3125rem;
             left: 0.375rem;
             z-index: 0;
             display: flex;
@@ -862,7 +888,7 @@
             justify-content: center;
             gap: 0.1875rem;
             width: calc((100% - 0.75rem) / 4);
-            height: calc(100% - 0.375rem);
+            height: calc(100% - 0.625rem);
             /* Same type metrics as a tab, so the placeholder label's line box
                equals the real one and the pill sits on the icons. */
             font-size: 0.6875rem;
@@ -2918,6 +2944,66 @@
             backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
         }
 
+        /* Specular edge: an inset ring plus a brighter top line and a dimmer
+           bottom one, so the capsule reads as a lens with thickness instead of a
+           flat translucent fill. Drawn as inset shadows so it follows the radius
+           and never adds layout. The glint is a diagonal highlight band. */
+        .rph-glass.rph-glass-island::after,
+        .rph-glass.rph-glass-bar::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            z-index: 3;
+            border-radius: inherit;
+            pointer-events: none;
+            background-image: linear-gradient(135deg, var(--glass-glint-a), transparent 38%, transparent 62%, var(--glass-glint-b));
+            box-shadow:
+                inset 0 0 0 1px var(--glass-rim),
+                inset 0 1px 1px var(--glass-rim-top),
+                inset 0 -1px 1px var(--glass-rim-bottom);
+        }
+
+        /* The tab bar's rim is now the glass ring above: the old hairline rule
+           only applies to the solid tiers, so the two never stack. */
+
+        /* The chat input dock floats over the character artwork, which is usually
+           dark: grey glyphs and placeholder are unreadable there. iOS vibrancy
+           solves this by picking the variant from the backdrop; we pin the dark
+           one for this page instead, since guessing per-frame is expensive and
+           the artwork is dark in practice (design doc §3.2).
+
+           The tint is deliberately heavier than the plain glass one (52-64% vs
+           26-5-16%): a light illustration behind the dock would otherwise leave
+           the white text at ~3.4:1, below the 4.5:1 floor. Measured worst case
+           after this change is 4.6:1 over a near-white backdrop. */
+        .chat-view-root .rph-glass.rph-glass-island {
+            --glass-tint: linear-gradient(135deg, rgba(24, 32, 38, 0.82), rgba(10, 16, 21, 0.74) 50%, rgba(20, 28, 34, 0.78));
+            --glass-rim: rgba(255, 255, 255, 0.24);
+            --glass-rim-top: rgba(255, 255, 255, 0.36);
+            --glass-rim-bottom: rgba(255, 255, 255, 0.1);
+            --glass-glint-a: rgba(255, 255, 255, 0.2);
+            --glass-glint-b: rgba(255, 255, 255, 0.08);
+        }
+
+        /* Light-on-dark glyphs for everything inside the dock. Scoped to the
+           glass variant so the solid tier keeps its current readable palette. */
+        .chat-view-root .rph-glass.rph-glass-island .text-gray-400,
+        .chat-view-root .rph-glass.rph-glass-island .text-gray-500,
+        .chat-view-root .rph-glass.rph-glass-island .text-gray-600,
+        .chat-view-root .rph-glass.rph-glass-island .text-gray-700,
+        .chat-view-root .rph-glass.rph-glass-island .text-gray-800 {
+            color: rgba(255, 255, 255, 0.82);
+        }
+
+        .chat-view-root .rph-glass.rph-glass-island .chat-input-box {
+            background-color: rgba(255, 255, 255, 0.1);
+            color: #f8fafc;
+        }
+
+        .chat-view-root .rph-glass.rph-glass-island .chat-input-box::placeholder {
+            color: rgba(255, 255, 255, 0.55);
+        }
+
         /* ---- 桌面端专属亚克力（.rph-acrylic-wide）----
            Per-message surfaces (action bar, name tag) exist once per message, so a
            long chat can show 6–10 of them at once and blow the ≤6 backdrop-filter
@@ -2976,6 +3062,36 @@
         [data-effects='solid'] .rph-glass.rph-glass-island,
         [data-effects='solid'] .rph-glass.rph-glass-bar {
             background: var(--glass-tint-solid);
+        }
+
+        /* Solid restores the pre-material look, geometry included: the tab bar
+           goes back to the full-width strip at the bottom edge, because a
+           floating capsule is a property of the glass design, not of the
+           layout. The view reservation shrinks with it so no gap is left over. */
+        [data-effects='solid'] .bottom-tab-bar.rph-glass {
+            left: 0;
+            right: 0;
+            bottom: 0;
+            height: 4.25rem;
+            padding: 0.375rem 0.375rem 0;
+            border-radius: 0;
+            background: var(--tab-bar-bg);
+            border-top: 1px solid var(--tab-bar-border);
+        }
+
+        /* The reservation follows the bar, so shrink the footprint variable in
+           the same tier: 68px strip with no gap (the pre-material value). */
+        [data-effects='solid'] {
+            --tab-bar-h: 4.25rem;
+        }
+
+        [data-effects='solid'] .bottom-tab-bar.rph-glass::after {
+            display: none;
+        }
+
+        [data-effects='solid'] .bottom-tab__slider {
+            top: 0.375rem;
+            height: calc(100% - 0.375rem);
         }
 
         /* The desktop-only variant has its own solid form and only above 769px:
