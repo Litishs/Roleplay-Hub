@@ -2677,11 +2677,17 @@
         .markdown-body del { text-decoration: line-through; color: inherit; opacity: 0.7; }
 
         .markdown-body .response-error-text {
+            /* 深色下 #dc2626 压在 #1a1a1a 气泡上只有约 3.6:1，达不到 4.5:1；
+               与 .text-red-* 的深色映射取同一个值。 */
             color: #dc2626;
             font-weight: 700;
             white-space: pre-wrap;
             overflow-wrap: anywhere;
             word-break: break-word;
+        }
+
+        [data-theme='dark'] .markdown-body .response-error-text {
+            color: #fca5a5;
         }
 
         /* Specific fix for immersive container from regex */
