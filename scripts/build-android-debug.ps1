@@ -80,10 +80,37 @@ try {
     } else {
         Join-Path (Get-Location) 'gradlew.bat'
     }
-    & $gradleCommand assembleDebug "-PrphVersionCode=$nextVersionCode" "-PrphVersionName=$nextVersionName"
+    # --console=plain keeps the log readable (no ANSI progress rewriting).
+    & $gradleCommand assembleDebug "--console=plain" "-PrphVersionCode=$nextVersionCode" "-PrphVersionName=$nextVersionName"
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 } finally {
     Pop-Location
+}
+
+# Stop the daemon before returning (2026-11-26).
+#
+# Symptom this fixes: `npm run android:debug` appeared to hang, but the APK was
+# already sitting in debug_apk/ with a fresh timestamp - the build had finished.
+# Cause: the Gradle daemon is a detached JVM that inherits this process's
+# stdout/stderr handles. Node waits for those pipes to close, and they only
+# close when the daemon exits, so npm blocked forever *after* a successful
+# build. Stopping the daemon releases the handles; the next build pays a JVM
+# warm-up, which is far cheaper than a hang.
+$gradleForStop = $null
+if ($localGradle) {
+    $gradleForStop = Join-Path $localGradle.FullName 'bin\gradle.bat'
+} elseif (Test-Path -LiteralPath (Join-Path $projectRoot 'android\gradlew.bat')) {
+    $gradleForStop = Join-Path $projectRoot 'android\gradlew.bat'
+}
+if ($gradleForStop) {
+    Push-Location (Join-Path $projectRoot 'android')
+    try {
+        & $gradleForStop --stop 2>&1 | Out-Null
+    } catch {
+        Write-Host "Gradle daemon stop failed (harmless): $($_.Exception.Message)"
+    } finally {
+        Pop-Location
+    }
 }
 
 $builtApk = Join-Path $projectRoot 'android\app\build\outputs\apk\debug\app-debug.apk'
