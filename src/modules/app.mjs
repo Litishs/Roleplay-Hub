@@ -52,6 +52,7 @@ import { MIGRATION_NOTICE_KEY, adoptionStats, formatMigrationStatus, hasLegacyCo
 import { VIEW_DEFAULTS, buildMemoryRecall, buildMemoryView } from './memory-view.mjs';
 import { buildMemoryCitationItems, stripMemoryCitations } from './memory-citation.mjs';
 import { getToastIcon } from './toast-icons.mjs';
+import { initGlassLens } from './glass-lens.mjs';
 import { createMemoryReconciler } from './memory-reconcile.mjs';
 import {
     COMPACT_FANOUT,
@@ -839,6 +840,24 @@ const __app = createApp({
         };
         watch(() => settings.themeMode, applyTheme, { immediate: true });
         if (themeMedia) themeMedia.addEventListener('change', () => { if (settings.themeMode === 'system') applyTheme(); });
+
+        // 界面材质档位（M1，2026-11-26）：glass / acrylic / solid 由 glass-lens.mjs
+        // 按能力检测决定，写到 documentElement.dataset.effects 供 styles.css 选配方。
+        // settings.uiGlassEffects 关闭时直接落 solid 档（等于材质上线前的观感）；
+        // 档位同时记进 RPHRuntimePolicy，供诊断日志与后续设置行展示。
+        // 注意：这里只是「谁可以带材质」，具体哪些面带 .rph-glass 由 M2/M3 铺开。
+        const materialEffectsTier = ref('solid');
+        const recordMaterialTier = (tier) => {
+            RPHRuntimePolicy.setMaterialTier(tier);
+            materialEffectsTier.value = RPHRuntimePolicy.materialEffects.tier;
+        };
+        // The getter is re-read on every resize / OS transparency change, so a
+        // stale snapshot cannot resurrect effects the user switched off.
+        const glassLens = initGlassLens(() => ({
+            enabled: settings.uiGlassEffects,
+            onTier: recordMaterialTier
+        }));
+        watch(() => settings.uiGlassEffects, glassLens.apply);
 
         const {
             showApiProviderSelector,
@@ -10120,7 +10139,7 @@ const __app = createApp({
         onBeforeUnmount(() => {
             nativeAppStateListener?.remove();
             nativeBackButtonListener?.remove();
-            document.removeEventListener('fullscreenchange', syncChatFullscreenState);
+            glassLens.dispose();            document.removeEventListener('fullscreenchange', syncChatFullscreenState);
             document.removeEventListener('webkitfullscreenchange', syncChatFullscreenState);
             document.removeEventListener('focusin', handleRootTextFocusIn);
             document.removeEventListener('focusout', handleRootTextFocusOut);
@@ -10310,6 +10329,7 @@ const __app = createApp({
             modelsLoading,
             isGenerating, isRemoteGenerating, remoteEstimatedTime, isReceiving, isThinking, hasActiveToolInlineWork, isConversationBusy, activeToolContinuationMessageId, activeToolContinuationHasResponse, userInput, modelSearchQuery, activeModelTag, modelTags, characterSearchQuery, filteredModels, filteredCharacters,
             user, settings, apiProviderOptions, selectedApiProvider, isCustomApiProvider, customApiProviderOptions, showApiProviderSelector, selectApiProvider, characters, currentCharacter, currentCharacterAvatar, currentCharacterIndex, chatHistory, sortedConversations, conversationSummaries, displayedChatMessages, chatTopSpacerHeight, chatBottomSpacerHeight, handleChatScroll, presets, presetRoleOptions, fontFamilyOptions, themeModeOptions, imageStyleOptions, imageModelOptions, availableImageStyleOptions, imageSizeOptions, imageGenCountOptions, scopeOptions, uiTemplatePlacementOptions, worldInfoPositionOptions, getPresetRoleLabel, getPresetRoleDisplayLabel, getPresetRoleBadgeClass, regexScripts, worldInfo,
+            materialEffectsTier,
             activeTools, activeToolAggressivenessOptions: ACTIVE_TOOL_AGGRESSIVENESS_OPTIONS, editingActiveTool, normalizeActiveTools, isWebActiveTool, getActiveToolDisplayDescription, getActiveToolResultCountMin, getActiveToolResultCountMax,
             getToolCallModeText, hasThinkingOrTools, isMessageThinkingOrRunning, isThinkingSummaryOpen, toggleThinkingSummary, markThinkingSummaryDetailOpened, getTimelineSteps,
             chatRoundStats, conversationBodyLength, summaryCompressedBodyLength,

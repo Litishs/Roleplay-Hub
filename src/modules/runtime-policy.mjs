@@ -29,8 +29,25 @@
             totalMs: 600000
         },
         requestTimeoutMinSeconds: 10,
-        requestTimeoutMaxSeconds: 1800
+        requestTimeoutMaxSeconds: 1800,
+        // Interface material budget (2026-11-26). backdrop-filter surfaces are
+        // expensive on phone GPUs: page head + tab bar + input dock + one overlay
+        // + message action bar, with one slot to spare. Content layers stay at 0.
+        // Refraction lenses (liquid glass only) are capped separately at 2 —
+        // input dock + tab bar, nothing else.
+        backdropSurfaces: 6,
+        refractionLenses: 2
     });
+
+    // Detected material tier ('glass' | 'acrylic' | 'solid'), written once by
+    // glass-lens.mjs. Kept outside the frozen limits object because it is a
+    // measurement rather than policy: diagnostics and the settings row read it.
+    const materialEffects = { tier: 'solid' };
+
+    const setMaterialTier = (tier) => {
+        materialEffects.tier = tier === 'glass' || tier === 'acrylic' ? tier : 'solid';
+        return materialEffects.tier;
+    };
 
     // 把 settings 里的秒为单位的超时配置解析为 guard 用的毫秒组。
     // 缺失/非法字段回退默认值，全部值 clamp 在 [min, max] 区间。
@@ -99,7 +116,7 @@
         return { start, end: Math.min(safeTotal, start + safeLimit), limit: safeLimit };
     };
 
-    const RPHRuntimePolicy = { limits, LruCache, getChatWindow, resolveRequestTimeouts };
+    const RPHRuntimePolicy = { limits, materialEffects, setMaterialTier, LruCache, getChatWindow, resolveRequestTimeouts };
 
 
 export { RPHRuntimePolicy, resolveRequestTimeouts };

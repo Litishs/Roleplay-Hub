@@ -122,6 +122,12 @@
 
         <side-nav></side-nav>
 
+        <!-- Liquid-glass refraction filters (glass-lens.mjs appends one <filter>
+             per element geometry into the <defs> below). Hidden and inert: an SVG
+             filter only runs when some backdrop-filter references it by id. -->
+        <svg width="0" height="0" aria-hidden="true" focusable="false"
+            style="position: absolute; width: 0; height: 0; overflow: hidden"><defs id="rph-lens-defs"></defs></svg>
+
         <div class="app-main flex-1 flex flex-col h-full overflow-hidden bg-gray-50 relative">
 
             <!-- Views share one box that reserves the tab bar's height on narrow

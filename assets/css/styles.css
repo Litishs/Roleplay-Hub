@@ -2759,6 +2759,126 @@
 
         }
 
+        /* ============================================================
+         * 界面材质（M1 骨架，2026-11-26）
+         *
+         * 两套配方：亚克力（backdrop blur + 半透明色调，形状不变）与液态玻璃
+         * （几乎不着色，边缘折射 + 高光边）。设计决策记录见
+         * documents/界面材质与页面底图工程方案.md。
+         *
+         * 只有显式携带 .rph-glass 的元素才会拿到材质：
+         * - 手机端 @media 块里的全局 backdrop-filter 关闭规则是
+         *   `*:not(.rph-glass)`，即白名单制；没带类的元素（含模板里游离的
+         *   Tailwind backdrop-blur-*）维持实色，观感与今天一致。
+         * - 补偿块里的 !important 实色规则同样带 :not(.rph-glass)，否则会把
+         *   刚铺上的玻璃面拍回实色。
+         *
+         * 档位由 glass-lens.mjs 写到 documentElement.dataset.effects：
+         *   glass   支持 backdrop-filter: url()，可做真折射
+         *   acrylic 只支持 blur()，退回磨砂
+         *   solid   不支持 / 用户关闭 / 系统要求减少透明，取现行实色观感
+         * 配方本身只写 acrylic 档的取值，solid 档在下面统一覆盖。
+         * ============================================================ */
+        :root {
+            /* —— 亚克力 —— */
+            --mat-blur: 20px;
+            --mat-blur-panel: 24px;
+            --mat-saturate: 150%;
+            --mat-tint: rgb(255 255 255 / 0.76);
+            --mat-tint-text: rgb(255 255 255 / 0.85);
+            --mat-tint-solid: rgb(var(--bg-surface) / 0.97);
+            --mat-line: rgba(15, 23, 42, 0.08);
+            --mat-noise: 0.04;
+            /* 160px 分形噪点，给磨砂面一点颗粒感（否则纯高斯模糊看起来像塑料）。 */
+            --mat-noise-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .5 0 0 0 0 .5 0 0 0 0 .5 0 0 0 1 0'/></filter><rect width='160' height='160' filter='url(%23n)'/></svg>");
+
+            /* —— 液态玻璃 —— */
+            --glass-blur: 12px;
+            --glass-blur-tight: 3px;
+            --glass-blur-panel: 24px;
+            --glass-saturate: 165%;
+            --glass-tint: linear-gradient(135deg, rgba(255, 255, 255, 0.26), rgba(255, 255, 255, 0.05) 44%, rgba(255, 255, 255, 0.04) 62%, rgba(255, 255, 255, 0.16));
+            --glass-tint-solid: rgb(var(--bg-surface) / 0.9);
+            --glass-rim-top: rgba(255, 255, 255, 0.7);
+            --glass-rim: rgba(255, 255, 255, 0.42);
+            --glass-rim-bottom: rgba(255, 255, 255, 0.2);
+            --glass-glint-a: rgba(255, 255, 255, 0.36);
+            --glass-glint-b: rgba(255, 255, 255, 0.18);
+            /* 边缘折射：band = 折射带宽度，refract = 带内最大位移像素。
+               JS 的位移图按这两个值生成，feDisplacementMap 的 scale 必须为 255
+               （位移 = scale × (色值/255 − 0.5)，scale=1 等于没有折射）。 */
+            --glass-refract: 26px;
+            --glass-band: 16px;
+        }
+
+        /* Dark values for both recipes live in the main [data-theme='dark']
+           palette block further down, so every dark value stays in one place. */
+
+        /* Zero specificity so it never fights a surface's own positioning
+           (tab bar, sticky page heads and popovers are all placed already). */
+        :where(.rph-glass) {
+            position: relative;
+        }
+
+        /* ---- 亚克力：模糊 + 色调。形状不变，不加高光边。 ---- */
+        .rph-glass.rph-acrylic {
+            background-color: var(--mat-tint);
+            -webkit-backdrop-filter: blur(var(--mat-blur)) saturate(var(--mat-saturate));
+            backdrop-filter: blur(var(--mat-blur)) saturate(var(--mat-saturate));
+        }
+
+        /* 大面积压在文字上的浮层（快捷设置、临时指令）：更大模糊半径 + 更高色调，
+           保证玻璃面文字对比度 ≥ 4.5:1。 */
+        .rph-glass.rph-acrylic-panel {
+            background-color: var(--mat-tint-text);
+            -webkit-backdrop-filter: blur(var(--mat-blur-panel)) saturate(var(--mat-saturate));
+            backdrop-filter: blur(var(--mat-blur-panel)) saturate(var(--mat-saturate));
+        }
+
+        .rph-glass.rph-acrylic::before,
+        .rph-glass.rph-acrylic-panel::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            z-index: 2;
+            border-radius: inherit;
+            pointer-events: none;
+            background-image: var(--mat-noise-image);
+            opacity: var(--mat-noise);
+        }
+
+        /* ---- 液态玻璃：几乎不着色；折射由 glass-lens.mjs 按元素尺寸注入。 ---- */
+        .rph-glass.rph-glass-island,
+        .rph-glass.rph-glass-bar {
+            background: var(--glass-tint);
+            -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+            backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+        }
+
+        /* ---- solid 档：现行实色观感（设备不支持 / 用户关闭 / 系统减少透明）。 ---- */
+        [data-effects='solid'] .rph-glass.rph-acrylic,
+        [data-effects='solid'] .rph-glass.rph-acrylic-panel,
+        [data-effects='solid'] .rph-glass.rph-glass-island,
+        [data-effects='solid'] .rph-glass.rph-glass-bar {
+            -webkit-backdrop-filter: none;
+            backdrop-filter: none;
+        }
+
+        [data-effects='solid'] .rph-glass.rph-acrylic,
+        [data-effects='solid'] .rph-glass.rph-acrylic-panel {
+            background: var(--mat-tint-solid);
+        }
+
+        [data-effects='solid'] .rph-glass.rph-glass-island,
+        [data-effects='solid'] .rph-glass.rph-glass-bar {
+            background: var(--glass-tint-solid);
+        }
+
+        [data-effects='solid'] .rph-glass.rph-acrylic::before,
+        [data-effects='solid'] .rph-glass.rph-acrylic-panel::before {
+            display: none;
+        }
+
         /* Mobile optimizations */
         @media (max-width: 768px) {
             html,
@@ -2810,13 +2930,24 @@
                 height: 0 !important;
             }
 
-            /* Hide scrollbar for IE, Edge and Firefox + Global kill-switch for backdrop-filter on mobile */
+            /* Hide scrollbar for IE, Edge and Firefox. Kept on a bare * selector:
+               adding :not() would raise its specificity from 0,0,0 to 0,1,0 and
+               could change which !important declaration wins elsewhere. */
             * {
                 -ms-overflow-style: none !important;  /* IE and Edge */
                 scrollbar-width: none !important;  /* Firefox */
+                -webkit-overflow-scrolling: touch !important;
+            }
+
+            /* Kill-switch for backdrop-filter on mobile, as an opt-in whitelist
+               (2026-11-26): only elements that explicitly carry .rph-glass get a
+               backdrop-filter on phones, so the material layer can be rolled out
+               surface by surface without any stray Tailwind backdrop-blur-* class
+               starting to blur on its own. Everything else keeps today's solid
+               look, which is why the compensation rules below also skip glass. */
+            *:not(.rph-glass) {
                 backdrop-filter: none !important;
                 -webkit-backdrop-filter: none !important;
-                -webkit-overflow-scrolling: touch !important;
             }
 
             /* Disable Tailwind blur-* classes (filter: blur) on mobile, except .char-bg-blur */
@@ -2830,52 +2961,57 @@
                 filter: blur(2px) !important;
             }
 
-            /* ===== Compensate: Replace blur with solid/high-opacity backgrounds ===== */
+            /* ===== Compensate: Replace blur with solid/high-opacity backgrounds =====
+               Every rule here carries :not(.rph-glass) (2026-11-26). These are
+               !important and sit later in the file than the material recipes, so
+               without the guard a surface that opts into .rph-glass would be
+               flattened back to a solid fill. Surfaces that have not opted in
+               keep exactly today's look. */
 
             /* Toast notifications */
-            .toast-item {
+            .toast-item:not(.rph-glass) {
                 background-color: rgba(255, 255, 255, 0.97) !important;
             }
 
             /* Description panel overlay */
-            .desc-panel-overlay {
+            .desc-panel-overlay:not(.rph-glass) {
                 background-color: rgba(0, 0, 0, 0.12) !important;
             }
 
             /* Description panel itself */
-            .desc-panel {
+            .desc-panel:not(.rph-glass) {
                 background-color: rgba(255, 255, 255, 0.97) !important;
             }
 
             /* Close button in description panel */
-            .desc-close-btn:hover {
+            .desc-close-btn:not(.rph-glass):hover {
                 background-color: rgba(255, 255, 255, 0.75) !important;
             }
 
             /* Message name tags */
-            .msg-name-tag {
+            .msg-name-tag:not(.rph-glass) {
                 background-color: rgba(255, 255, 255, 0.7) !important;
             }
 
             /* Typing indicator bubble */
-            .typing-bubble {
+            .typing-bubble:not(.rph-glass) {
                 background-color: rgba(255, 255, 255, 0.88) !important;
             }
 
             /* Typing indicator timer badge */
-            .typing-timer-badge {
+            .typing-timer-badge:not(.rph-glass) {
                 background-color: rgba(255, 255, 255, 0.7) !important;
             }
 
             /* Input area container (mobile bottom bar) */
-            .input-area-mobile {
+            .input-area-mobile:not(.rph-glass) {
                 bottom: var(--keyboard-inset, 0px) !important;
                 background-color: transparent !important;
                 border-top: none !important;
             }
 
             /* Input area inner island */
-            .input-island {
+            .input-island:not(.rph-glass) {
                 background-color: rgba(255, 255, 255, 0.9) !important;
                 border: 1px solid rgba(255, 255, 255, 0.45) !important;
                 border-radius: 1.5rem !important;
@@ -2888,54 +3024,56 @@
             }
 
             /* Sinan HUD */
-            .sinan-hud {
+            .sinan-hud:not(.rph-glass) {
                 backdrop-filter: none !important;
                 -webkit-backdrop-filter: none !important;
                 background: linear-gradient(to bottom right, rgba(255,255,255,0.95), rgba(255,255,255,0.88)) !important;
             }
 
             /* World Info Footer */
-            .wi-footer {
+            .wi-footer:not(.rph-glass) {
                 background-color: rgba(249, 250, 251, 0.95) !important;
             }
 
             /* Dark counterparts (2026-11-25). The light !important block above is
                mobile-only polish from before the token layer; without these the
                panels stayed white in dark mode on phones because !important wins
-               over the token-mapped utilities. */
-            [data-theme='dark'] .desc-panel {
+               over the token-mapped utilities. They need the same :not(.rph-glass)
+               guard as their light twins, or a glass surface would go opaque the
+               moment the theme flips. */
+            [data-theme='dark'] .desc-panel:not(.rph-glass) {
                 background-color: rgb(var(--bg-surface) / 0.97) !important;
             }
 
-            [data-theme='dark'] .desc-close-btn:hover {
+            [data-theme='dark'] .desc-close-btn:not(.rph-glass):hover {
                 background-color: rgb(var(--overlay-white) / 0.08) !important;
             }
 
-            [data-theme='dark'] .msg-name-tag {
+            [data-theme='dark'] .msg-name-tag:not(.rph-glass) {
                 background-color: rgb(var(--bg-surface) / 0.7) !important;
             }
 
-            [data-theme='dark'] .typing-bubble {
+            [data-theme='dark'] .typing-bubble:not(.rph-glass) {
                 background-color: rgb(var(--bg-surface) / 0.88) !important;
             }
 
-            [data-theme='dark'] .typing-timer-badge {
+            [data-theme='dark'] .typing-timer-badge:not(.rph-glass) {
                 background-color: rgb(var(--bg-surface) / 0.7) !important;
             }
 
-            [data-theme='dark'] .input-island {
+            [data-theme='dark'] .input-island:not(.rph-glass) {
                 background-color: rgb(var(--bg-surface) / 0.9) !important;
             }
 
-            [data-theme='dark'] .sinan-hud {
+            [data-theme='dark'] .sinan-hud:not(.rph-glass) {
                 background: linear-gradient(to bottom right, rgb(var(--bg-surface) / 0.95), rgb(var(--bg-surface) / 0.88)) !important;
             }
 
-            [data-theme='dark'] .wi-footer {
+            [data-theme='dark'] .wi-footer:not(.rph-glass) {
                 background-color: rgb(var(--bg-gray-50) / 0.95) !important;
             }
 
-            [data-theme='dark'] .toast-item {
+            [data-theme='dark'] .toast-item:not(.rph-glass) {
                 background-color: rgb(var(--bg-surface) / 0.97) !important;
             }
         }
@@ -3507,6 +3645,19 @@ opacity: 0;
             --surface-card-bg: #1a1a1a;
             --surface-card-border: #303030;
             --surface-card-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+            /* Interface material, dark values (2026-11-26). Light values are in
+               the material block above; the recipes themselves only reference
+               these variables, so a theme flip is a value swap. */
+            --mat-saturate: 130%;
+            --mat-tint: rgb(26 26 26 / 0.76);
+            --mat-tint-text: rgb(26 26 26 / 0.85);
+            --mat-line: rgba(255, 255, 255, 0.08);
+            --glass-tint: linear-gradient(135deg, rgba(54, 54, 54, 0.5), rgba(24, 24, 24, 0.36) 44%, rgba(22, 22, 22, 0.42) 62%, rgba(52, 52, 52, 0.46));
+            --glass-rim-top: rgba(255, 255, 255, 0.34);
+            --glass-rim: rgba(255, 255, 255, 0.2);
+            --glass-rim-bottom: rgba(255, 255, 255, 0.08);
+            --glass-glint-a: rgba(255, 255, 255, 0.16);
+            --glass-glint-b: rgba(255, 255, 255, 0.08);
         }
 
         [data-theme='dark'] .settings-group-caption {

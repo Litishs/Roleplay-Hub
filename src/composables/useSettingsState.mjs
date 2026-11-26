@@ -137,6 +137,11 @@ export function useSettingsState() {
         // previews and times in both conversation lists; a long press peeks at
         // one row. Persisted with the rest of settings, so it survives restarts.
         privacyMode: false,
+        // Interface material (2026-11-26): acrylic frames plus a liquid-glass
+        // input dock and tab bar. Off = the solid pre-material look. The tier is
+        // still auto-detected (glass → acrylic → solid); this only lets a user
+        // opt out on a device that can do it but is too slow for it.
+        uiGlassEffects: true,
         imageGenKey: '',
         imageModel: IMAGE_GEN_CARD_DEFAULTS.imageModel,   // 生图版本（NAI model id，-1/-5 为每次生成扣点）
         imageGenProviderId: 'sta1n',
