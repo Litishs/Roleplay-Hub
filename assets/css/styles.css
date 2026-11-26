@@ -2516,6 +2516,24 @@
         .markdown-body pre code { background-color: transparent; padding: 0; color: #1f2937; border-radius: 0; }
         .markdown-body blockquote { border-left: 4px solid #e5e7eb; padding-left: 1em; color: #6b7280; margin-left: 0.5rem; margin-right: 0.5rem; border-radius: 0 0.5rem 0.5rem 0; }
 
+        /* HTML 卡嵌套内容宽度钳制：卡片 HTML 自带的 width/min-width 内联样式
+           （如 width:480px 的布局容器）会逐层把消息气泡撑出屏幕——右侧截断、
+           互动按钮落到屏幕外不可点。全覆盖：* 级 max-width 同时压 min-width
+           （min-width 优先级高于 max-width，只钳 max 会被 min 反杀）；再在内容
+           容器与消息行上硬裁剪（overflow-x: clip），任何来源的横向溢出都不会
+           超出屏幕。 */
+        .markdown-body * {
+            min-width: 0;
+            max-width: 100%;
+        }
+        .message-content-wrapper,
+        .markdown-body {
+            overflow-x: clip;
+        }
+        .scroll-reveal-container {
+            overflow-x: clip;
+        }
+
         /* Enhanced Markdown Styles */
         .markdown-body strong { font-weight: 700; color: inherit; }
         .markdown-body em { font-style: italic; }
@@ -4102,8 +4120,10 @@ opacity: 0;
         display: none;
     }
 }
+        /* 软挂起的卡片：内容保留（状态不丢），仅停止绘制。只在卡片远离视口
+           2400px 之外触发，正常滚动阅读看不到这个状态。 */
         .html-frame-suspended {
-            background: rgba(249, 250, 251, 0.85);
+            visibility: hidden;
             contain: strict;
         }
 

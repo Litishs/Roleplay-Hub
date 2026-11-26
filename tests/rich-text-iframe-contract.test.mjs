@@ -71,10 +71,11 @@ test('host validates every card frame message against a real frame window', asyn
   assert.match(app, /const frame = findExecutableFrameByWindow\(event\.source\);\s*if \(!frame\) return;/);
   assert.match(app, /window\.addEventListener\('message', handleExecutableFrameMessage\)/);
 
-  // 自报高度和注入指令都是不可信输入，必须封顶。
-  assert.match(app, /Math\.min\(EXECUTABLE_FRAME_MAX_HEIGHT, Math\.round\(height\)\)/);
+  // 自报高度和注入指令都是不可信输入，必须封顶。声明高度（data-rph-fixed-height）
+  // 只当下限：实测内容更高时卡片长高，长卡不再被固定高度截断。
+  assert.match(app, /Math\.min\(EXECUTABLE_FRAME_MAX_HEIGHT, target\)/);
+  assert.match(app, /target = Math\.max\(declared, target\)/);
   assert.match(app, /\.slice\(0, EXECUTABLE_FRAME_MAX_SLASH_LENGTH\)/);
-  assert.match(app, /if \(frame\.hasAttribute\('data-rph-fixed-height'\)\) return;/);
 });
 
 test('the full app context is not published to window in release builds', async () => {

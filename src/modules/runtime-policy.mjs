@@ -11,7 +11,13 @@
         draftSaveMs: 2000,
         // 角色卡 iframe 自报高度的上限。卡片跨源之后高度由卡片自己 postMessage 上报，
         // 属于不可信输入：不封顶的话一张卡片就能把聊天流撑成几万像素。
-        frameMaxHeight: 4000,
+        // 30000：长 HTML 卡（长剧本/长状态页）此前在 4000px 被截断且卡片文档
+        // overflow:hidden 无法内滚，超出部分物理不可达；放宽到 30000 让宿主聊天流
+        // 自然滚动承接长卡片，超长防御仍在。
+        frameMaxHeight: 30000,
+        // 卡片 iframe 软挂起时保留内容的上限（见 html-frame-lifecycle.mjs）：超出后
+        // 对最远的不可见卡片做硬清空释放内存。保留内容 = 卡内 JS 状态不丢失。
+        keptIframes: 16,
         // 卡片经 triggerSlash 注入的指令长度上限，同样是不可信输入。
         frameSlashMaxLength: 2000,
         // parseCot 已完成文本的 LRU 上限。生成中的前缀不进这里（见 utils.mjs 的
