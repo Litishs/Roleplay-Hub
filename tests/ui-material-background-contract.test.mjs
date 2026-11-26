@@ -136,3 +136,11 @@ test('the background choice and its URL travel through the app context', async (
     // Presets are per-theme, so a theme change has to re-resolve the artwork.
     assert.match(app, /watch\(\(\) => resolveTheme\(\), \(\) => \{[\s\S]{0,120}if \(pageBackgroundIsPreset\.value\) applyPageBackground\(\);/);
 });
+
+test('the packaging step copies the preset images into dist', async () => {
+    // They are referenced by URL, not imported, so Vite never emits them. The
+    // dev server serves the tree directly, which hides the bug: the presets work
+    // in the browser and 404 only in the packaged app.
+    const script = await read('scripts/build-web.mjs');
+    assert.match(script, /await copyToDist\('assets\/img'\)/, 'assets/img must be copied into dist');
+});

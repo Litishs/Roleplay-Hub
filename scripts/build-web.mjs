@@ -28,6 +28,12 @@ await copyToDist('assets/js');
 await copyToDist('assets/css');
 await copyToDist('assets/generated');
 
+// Copy images (built-in page backgrounds). They are referenced by URL from
+// page-background.mjs, so Vite never sees them as imports and would not emit
+// them: without this the presets 404 in the packaged app while working fine in
+// the dev server, which serves the tree directly.
+await copyToDist('assets/img');
+
 // Copy character workshop page (separate entry, not processed by Vite)
 const charSrc = path.join(root, 'character');
 const charDst = path.join(output, 'character');
