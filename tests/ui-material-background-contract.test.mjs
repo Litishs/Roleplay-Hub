@@ -67,24 +67,22 @@ test('built-in presets ship one file per theme', async () => {
     }
 });
 
-test('the custom background is compressed to a bounded JPEG', async () => {
+test('the custom background is stored verbatim, with no size limit', async () => {
     const module = await read('src/modules/page-background.mjs');
-    // Longest edge, not width: a portrait photo would otherwise stay huge.
-    assert.match(module, /MAX_EDGE = 1080/);
-    assert.match(module, /MAX_BYTES = 500 \* 1024/);
-    assert.match(module, /const fitWithin = /);
-    assert.match(module, /const longest = Math\.max\(safeWidth, safeHeight\);/);
-    assert.match(module, /if \(longest <= maxEdge\) return/, 'small images are never upscaled');
-    // Re-encoding as JPEG is what actually shrinks the file.
-    assert.match(module, /toDataURL\('image\/jpeg'/);
-    assert.match(module, /\[JPEG_QUALITY, 0\.65, 0\.5\]/, 'quality steps down when the cap is missed');
+    // 2026-11-26 review: no resize, no re-encode, no byte cap — the display
+    // layer paints fill-first (cover), so any picture works as it is.
+    assert.doesNotMatch(module, /MAX_EDGE|MAX_BYTES|JPEG_QUALITY/, 'the compression constants are gone');
+    assert.doesNotMatch(module, /fitWithin|compressToJpeg/, 'the compression helpers are gone');
+    assert.doesNotMatch(module, /createElement\('canvas'\)|toDataURL\(/, 'the image is never re-encoded');
 
-    // Pure geometry, testable without a DOM.
-    const { fitWithin } = await import('../src/modules/page-background.mjs');
-    assert.deepEqual(fitWithin(4000, 3000), { width: 1080, height: 810 });
-    assert.deepEqual(fitWithin(3000, 4000), { width: 810, height: 1080 }, 'portrait scales on the long edge');
-    assert.deepEqual(fitWithin(800, 600), { width: 800, height: 600 }, 'small images are never upscaled');
-    assert.deepEqual(fitWithin(1080, 5000), { width: 233, height: 1080 });
+    // The pipeline is a plain verbatim copy: read the file, write it, resolve it.
+    assert.match(module, /const applyCustomBackground = async \(file\) => \{\s*if \(!file\) throw new Error\('没有选择图片'\);/);
+    assert.match(module, /startsWith\('image\/'\)/, 'non-image files are still rejected');
+    assert.match(module, /const dataUrl = await readAsDataUrl\(file\);\s*await writeCustomBackground\(dataUrl\);/);
+
+    // The stored file keeps a fixed image name so the native webserver serves
+    // an image/* mime; decoders sniff the real format from the magic bytes.
+    assert.match(module, /BACKGROUND_FILE = 'page-background\.jpg'/);
 });
 
 test('the custom background is a file, and it travels with the backup', async () => {

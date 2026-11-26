@@ -17,13 +17,6 @@ const DIRECTORY_DATA = 'DATA';
 const BACKGROUND_DIRECTORY = 'media';
 const BACKGROUND_FILE = 'page-background.jpg';
 
-// Longest edge. A phone screenshot is ~1170px wide; 1080 keeps the image crisp
-// behind glass while staying well under the size cap.
-const MAX_EDGE = 1080;
-// JPEG quality and the hard byte ceiling from the design doc.
-const JPEG_QUALITY = 0.8;
-const MAX_BYTES = 500 * 1024;
-
 const BACKGROUND_CHOICES = Object.freeze(['off', 'aurora', 'dune', 'custom']);
 
 // Built-in presets, one file per theme so the artwork itself matches the theme
@@ -57,61 +50,16 @@ const toDisplayUrl = (uri) => {
 
 // ---- image preparation -----------------------------------------------------------
 
-// Reads a File into a data URL. Kept separate from the resize step so the pure
-// geometry helpers below stay testable without a DOM.
+// Reads a File into a data URL. The image is never decoded or re-encoded here:
+// since the 2026-11-26 review the picture is stored verbatim — no resize, no
+// quality ladder, no byte cap — because the display layer paints it fill-first
+// (cover), so any aspect ratio or resolution just works.
 const readAsDataUrl = (file) => new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result || ''));
     reader.onerror = () => reject(new Error('图片读取失败'));
     reader.readAsDataURL(file);
 });
-
-// Fit inside a square of `maxEdge` without ever upscaling.
-const fitWithin = (width, height, maxEdge = MAX_EDGE) => {
-    const safeWidth = Math.max(1, Math.round(Number(width) || 0));
-    const safeHeight = Math.max(1, Math.round(Number(height) || 0));
-    const longest = Math.max(safeWidth, safeHeight);
-    if (longest <= maxEdge) return { width: safeWidth, height: safeHeight };
-    const scale = maxEdge / longest;
-    return {
-        width: Math.max(1, Math.round(safeWidth * scale)),
-        height: Math.max(1, Math.round(safeHeight * scale))
-    };
-};
-
-// Decode → downscale → re-encode as JPEG. Re-encoding is what actually shrinks
-// a photo: a 4 MB camera JPEG at 1080px lands around 150-250 KB at q0.8.
-// The quality steps down if the first attempt still overshoots the byte cap.
-const compressToJpeg = async (source, options = {}) => {
-    const maxEdge = options.maxEdge || MAX_EDGE;
-    const maxBytes = options.maxBytes || MAX_BYTES;
-    const qualities = options.qualities || [JPEG_QUALITY, 0.65, 0.5];
-    if (typeof document === 'undefined') throw new Error('图片压缩需要浏览器环境');
-
-    const image = await new Promise((resolve, reject) => {
-        const element = new Image();
-        element.onload = () => resolve(element);
-        element.onerror = () => reject(new Error('图片格式无法识别'));
-        element.src = source;
-    });
-
-    const { width, height } = fitWithin(image.naturalWidth || image.width, image.naturalHeight || image.height, maxEdge);
-    const canvas = document.createElement('canvas');
-    canvas.width = width;
-    canvas.height = height;
-    const context = canvas.getContext('2d');
-    if (!context) throw new Error('图片压缩失败');
-    context.drawImage(image, 0, 0, width, height);
-
-    let dataUrl = '';
-    for (const quality of qualities) {
-        dataUrl = canvas.toDataURL('image/jpeg', quality);
-        if (dataUrl.length <= maxBytes * 1.37) break; // base64 is ~4/3 of the bytes
-    }
-    // A data URL that never came back under the cap is still usable; the caller
-    // decides whether to warn. Report the real size for that decision.
-    return { dataUrl, width, height, bytes: Math.round((dataUrl.length - dataUrl.indexOf(',') - 1) * 0.75) };
-};
 
 // ---- storage ---------------------------------------------------------------------
 
@@ -160,17 +108,21 @@ const resolveBackgroundUrl = async (choice) => {
     }
 };
 
-// Full pipeline behind the settings row: read → compress → store → hand back the
-// display URL. Throws with a user-facing message so the caller can toast it.
+// Full pipeline behind the settings row: read → store verbatim → hand back the
+// display URL. The file name keeps the .jpg suffix so the native webserver
+// serves an image/* mime; decoders sniff the real format from the magic bytes,
+// so PNG/WEBP content under this name still paints. Throws with a user-facing
+// message so the caller can toast it.
 const applyCustomBackground = async (file) => {
     if (!file) throw new Error('没有选择图片');
     if (file.type && !file.type.startsWith('image/')) throw new Error('请选择图片文件');
-    const raw = await readAsDataUrl(file);
-    const compressed = await compressToJpeg(raw);
-    await writeCustomBackground(compressed.dataUrl);
+    const dataUrl = await readAsDataUrl(file);
+    await writeCustomBackground(dataUrl);
     const url = await resolveBackgroundUrl('custom');
     if (!url) throw new Error('底图保存失败');
-    return { url, bytes: compressed.bytes, width: compressed.width, height: compressed.height };
+    // Report the stored size for the success toast. base64 is ~4/3 of the bytes.
+    const bytes = Math.round((dataUrl.length - dataUrl.indexOf(',') - 1) * 0.75);
+    return { url, bytes };
 };
 
 const presetUrl = (choice, theme) => {
@@ -182,12 +134,8 @@ const presetUrl = (choice, theme) => {
 const RPHPageBackground = {
     BACKGROUND_CHOICES,
     PRESET_FILES,
-    MAX_EDGE,
-    MAX_BYTES,
     normalizeChoice,
     isCustom,
-    fitWithin,
-    compressToJpeg,
     resolveBackgroundUrl,
     applyCustomBackground,
     removeCustomBackground,
@@ -198,12 +146,8 @@ const RPHPageBackground = {
 export {
     BACKGROUND_CHOICES,
     PRESET_FILES,
-    MAX_EDGE,
-    MAX_BYTES,
     normalizeChoice,
     isCustom,
-    fitWithin,
-    compressToJpeg,
     resolveBackgroundUrl,
     applyCustomBackground,
     removeCustomBackground,
