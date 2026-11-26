@@ -21,7 +21,11 @@ test('MessageInput hosts the inline quick-settings panel bound to existing setti
   // Popover panel anchored above-right of the trigger, clearing the input row
   assert.match(messageInput, /v-if="showChatModelSelector"/);
   assert.match(messageInput, /absolute bottom-full right-0 mb-14 z-50 pointer-events-auto quick-settings-panel/);
-  assert.match(messageInput, /@click\.stop\s+class="bg-white\/95 backdrop-blur-xl/);
+  // The panel's own blur moved into the material layer (2026-11-26): the recipe
+  // owns the fill and the backdrop-filter, so the Tailwind pair must be gone or
+  // the panel would carry two blurs.
+  assert.match(messageInput, /@click\.stop\s+class="rph-glass rph-acrylic-panel /);
+  assert.doesNotMatch(messageInput, /bg-white\/95 backdrop-blur-xl/);
   // Sizing (2026-11-24): one-row textarea = 44px, same as the send key; the
   // popover width is a real class because Tailwind did not emit the old
   // w-[min(22rem,calc(100vw_-_3rem))] arbitrary value.

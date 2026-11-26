@@ -129,7 +129,7 @@
                                 <div v-if="!settings.immersiveMode || (msg.role === 'assistant' && index === chatHistory.length - 1 && msg.swipes && msg.swipes.length > 1 && !isConversationBusy)"
                                     :class="['flex items-center gap-2 mb-1 select-none', settings.immersiveMode ? 'w-fit' : 'w-full', msg.isSelf ? 'flex-row-reverse' : '']">
                                     <div v-show="!settings.immersiveMode"
-                                        :class="['text-[10px] font-bold text-gray-600 px-1.5 py-0.5 rounded-md bg-white/50 backdrop-blur-sm border border-white/20 w-fit shadow-sm truncate max-w-[150px] md:max-w-[250px] msg-name-tag', msg.shouldAnimate ? 'animate-message-fade-in' : '']">
+                                        :class="['text-[10px] font-bold text-gray-600 px-1.5 py-0.5 rounded-md bg-white/50 backdrop-blur-sm border border-white/20 w-fit shadow-sm truncate max-w-[150px] md:max-w-[250px] msg-name-tag rph-acrylic-wide', msg.shouldAnimate ? 'animate-message-fade-in' : '']">
                                         {{ msg.name || (msg.role === 'user' ? user.name : (currentCharacter?.name || 'Unknown')) }}
                                     </div>
                                     <div v-if="msg.role === 'assistant' && index === chatHistory.length - 1 && msg.swipes && msg.swipes.length > 1 && !isConversationBusy"
@@ -408,7 +408,7 @@
 
                                     <!-- Message Actions -->
                                     <div v-if="!msg.isEditing_Message && !isMessageThinkingOrRunning(msg) && !(index === chatHistory.length - 1 && !msg.isSelf && (isGenerating || isRemoteGenerating)) && !(msg.isSelf && isConversationBusy && !chatHistory.slice(index + 1).some(m => m.isSelf))"
-                                        :class="['message-action-bar absolute bottom-0 -mb-11 md:-mb-12 flex flex-nowrap items-center opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-200', msg.isSelf ? 'right-0' : 'left-0']">
+                                        :class="['message-action-bar absolute bottom-0 -mb-11 md:-mb-12 flex flex-nowrap items-center opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-200 rph-acrylic-wide', msg.isSelf ? 'right-0' : 'left-0']">
                                         <button v-if="index === chatHistory.length - 1"
                                             @click="regenerateMessage(index)"
                                             class="message-action-button"
@@ -501,11 +501,11 @@
                             </div>
                             <div :class="['flex flex-col min-w-0 items-start', settings.immersiveMode ? 'immersive-message-column' : '']">
                                 <div v-show="!settings.immersiveMode"
-                                    class="text-[10px] font-bold text-gray-600 mb-1 select-none px-1.5 py-0.5 rounded-md bg-white/50 backdrop-blur-sm border border-white/20 w-fit shadow-sm mr-auto ml-1 truncate max-w-[150px] md:max-w-[250px] msg-name-tag animate-message-in"
+                                    class="text-[10px] font-bold text-gray-600 mb-1 select-none px-1.5 py-0.5 rounded-md bg-white/50 backdrop-blur-sm border border-white/20 w-fit shadow-sm mr-auto ml-1 truncate max-w-[150px] md:max-w-[250px] msg-name-tag rph-acrylic-wide animate-message-in"
                                     style="animation-delay: 100ms;">
                                     {{ currentCharacter.name }}
                                 </div>
-                                <div :class="['min-w-[150px] min-h-[4.5rem] px-6 py-4 rounded-2xl bg-white/70 backdrop-blur-md glass-stabilize border border-white/40 shadow-card flex flex-col items-center justify-center gap-2 transition-all duration-500 typing-bubble animate-message-in', settings.immersiveMode ? '' : 'rounded-tl-none']"
+                                <div :class="['min-w-[150px] min-h-[4.5rem] px-6 py-4 rounded-2xl bg-white/70 backdrop-blur-md glass-stabilize border border-white/40 shadow-card flex flex-col items-center justify-center gap-2 transition-all duration-500 typing-bubble rph-glass rph-acrylic animate-message-in', settings.immersiveMode ? '' : 'rounded-tl-none']"
                                     style="animation-delay: 100ms;">
                                     <div class="typing-indicator scale-125">
                                         <span></span><span></span><span></span>

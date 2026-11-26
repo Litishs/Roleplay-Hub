@@ -4,11 +4,20 @@
          wide-screen side column next to the open chat. -->
     <div class="conversation-list flex flex-col h-full min-h-0 bg-gray-50"
         :class="[compact ? 'conversation-list--compact' : '', privacyOn ? 'is-private' : '']">
-        <!-- bg-white/90, not /85: the dark-theme override in styles.css covers
-             the 10-step opacity scale (40/50/60/70/80/90/95) only, so a stray
-             /85 stayed white in dark mode and lit up this whole bar. -->
-        <header class="flex items-center gap-2 flex-shrink-0 border-b border-gray-200 bg-white/90 px-4"
-            :class="compact ? 'h-12' : 'h-14'">
+        <div class="min-h-0 flex-1 overflow-y-auto custom-scrollbar" :class="compact ? 'px-1.5 pt-1.5' : 'px-2 pt-2'">
+        <!-- The title bar and the search field form one band that scrolls with
+             the list and sticks to its top, so rows pass underneath and the
+             acrylic actually has something to blur (2026-11-26). Before that the
+             header sat outside the scroll container and never had content behind
+             it. .rph-glass is the opt-in marker the mobile backdrop-filter
+             whitelist keys on; the recipe owns the fill. -->
+        <div class="conversation-list__head rph-glass rph-acrylic"
+            :class="compact ? 'is-compact' : ''">
+            <!-- bg-white/90, not /85: the dark-theme override in styles.css covers
+                 the 10-step opacity scale (40/50/60/70/80/90/95) only, so a stray
+                 /85 stayed white in dark mode and lit up this whole bar. -->
+            <header class="flex items-center gap-2 border-b border-gray-200 bg-white/90 px-4"
+                :class="compact ? 'h-12' : 'h-14'">
             <!-- Same title spec as the other tab roots (2026-11-24): 20px/24px on
                  phones, 24px/28 on wide screens, 24px primary glyph. The compact
                  side column stays icon-free and text-sm to keep its density. -->
@@ -74,7 +83,7 @@
             </div>
         </header>
 
-        <div v-if="!compact" class="flex-shrink-0 px-4 pt-3">
+        <div v-if="!compact" class="flex-shrink-0 px-4 pt-3 pb-2">
             <div class="relative">
                 <input v-model="query" type="text" inputmode="search" placeholder="搜索角色卡..."
                     class="w-full rounded-xl border border-gray-200 bg-white py-2 pl-9 pr-3 text-sm text-gray-700 placeholder:text-gray-400 focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-500/20" />
@@ -85,8 +94,9 @@
                 </svg>
             </div>
         </div>
+        </div>
 
-        <div class="min-h-0 flex-1 overflow-y-auto custom-scrollbar" :class="compact ? 'px-1.5 py-1.5' : 'px-2 py-2'">
+        <div :class="compact ? 'px-1.5 pb-1.5' : 'px-2 pb-2'">
             <button v-for="item in visibleConversations" :key="rowKey(item)" type="button"
                 @click="openConversation(item)"
                 @pointerdown="startPeek(item, $event)"
@@ -143,6 +153,7 @@
                     去角色卡管理
                 </button>
             </div>
+        </div>
         </div>
     </div>
 </template>

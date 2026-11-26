@@ -108,7 +108,7 @@
                                         <div v-if="showInstructionPanel"
                                             class="absolute bottom-full left-0 mb-4 z-50 pointer-events-auto w-[250px] md:w-[320px] transform-gpu origin-bottom-left">
                                             <div
-                                                class="bg-white/95 backdrop-blur-xl border border-gray-200 shadow-xl rounded-2xl p-3 flex flex-col gap-2 ring-1 ring-black/5">
+                                                class="rph-glass rph-acrylic-panel border border-gray-200 shadow-xl rounded-2xl p-3 flex flex-col gap-2 ring-1 ring-black/5">
                                                 <div class="flex justify-between items-center mb-1 px-1">
                                                     <span class="text-xs font-bold text-gray-600 flex items-center">
                                                         <svg class="w-3.5 h-3.5 mr-1 text-primary-500" fill="none"
@@ -168,7 +168,7 @@
                                     <div v-if="showChatModelSelector"
                                         class="absolute bottom-full right-0 mb-14 z-50 pointer-events-auto quick-settings-panel transform-gpu origin-bottom-right">
                                         <div @click.stop
-                                            class="bg-white/95 backdrop-blur-xl border border-gray-200 shadow-xl rounded-2xl p-3 flex flex-col gap-3 ring-1 ring-black/5">
+                                            class="rph-glass rph-acrylic-panel border border-gray-200 shadow-xl rounded-2xl p-3 flex flex-col gap-3 ring-1 ring-black/5">
                                             <!-- Model slots -->
                                             <div class="flex flex-col gap-1.5">
                                                 <button v-for="(slot, slotIndex) in chatModelSlots" :key="slot.mode"

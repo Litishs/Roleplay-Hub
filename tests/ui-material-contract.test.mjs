@@ -194,12 +194,44 @@ test('the material budget is part of the performance contract', async () => {
     assert.ok(Object.isFrozen(RPHRuntimePolicy.limits));
 });
 
-test('no component opts into the material layer yet (M1 is inert)', async () => {
-    // M1 ships the plumbing only. If a component starts carrying .rph-glass
-    // before M2/M3 review this test should fail and force the visual review.
-    const files = ['src/components/common/BottomTabBar.vue', 'src/components/chat/MessageInput.vue'];
-    for (const file of files) {
-        const source = await read(file);
-        assert.ok(!/rph-glass/.test(source), `${file} must not opt in during M1`);
+test('M2 acrylic surfaces are opted in, per-message ones only on wide screens', async () => {
+    // M2 (2026-11-26) turns the acrylic frames on. The per-message surfaces are
+    // the exception: they exist once per message, so phones would blow the ≤6
+    // backdrop-filter budget and they use the desktop-only variant instead.
+    const acrylic = {
+        'src/components/chat/ConversationList.vue': /conversation-list__head rph-glass rph-acrylic/,
+        'src/components/common/SettingsPageHeader.vue': /settings-page-header rph-glass rph-acrylic/,
+        'src/components/common/ToastNotification.vue': /toast-item rph-glass rph-acrylic/,
+        'src/components/chat/CharacterInfo.vue': /desc-panel rph-glass rph-acrylic-panel/,
+        'src/components/chat/MessageInput.vue': /rph-glass rph-acrylic-panel/
+    };
+    for (const [file, pattern] of Object.entries(acrylic)) {
+        assert.match(await read(file), pattern, `${file} opts into acrylic`);
     }
+
+    const messageList = await read('src/components/chat/MessageList.vue');
+    assert.match(messageList, /message-action-bar[^']*rph-acrylic-wide/, 'action bar is desktop-only acrylic');
+    assert.equal((messageList.match(/msg-name-tag rph-acrylic-wide/g) || []).length, 2, 'both name tags are desktop-only');
+    // The typing bubble is at most one per screen, so it keeps the material on phones.
+    assert.match(messageList, /typing-bubble rph-glass rph-acrylic/);
+
+    // The desktop-only variant must not carry .rph-glass: on phones that class is
+    // the whitelist that lets a backdrop-filter through, and these stay solid.
+    assert.doesNotMatch(messageList, /rph-glass rph-acrylic-wide|rph-acrylic-wide rph-glass/);
+
+    // The workshop Back ball floats over an iframe: cross-document composition
+    // per frame is exactly what §14.3 rules out, so it stays solid.
+    const embedded = await read('src/components/common/EmbeddedViewContent.vue');
+    assert.doesNotMatch(embedded, /class="embedded-back-ball rph-glass/);
+});
+
+test('no liquid-glass surface ships before M3', async () => {
+    // Liquid glass (input dock, tab bar) is M3: it needs the refraction pass and
+    // the geometry work reviewed together, so the two components must still be
+    // untouched here.
+    for (const file of ['src/components/common/BottomTabBar.vue']) {
+        assert.ok(!/rph-glass/.test(await read(file)), `${file} is M3, not M2`);
+    }
+    const input = await read('src/components/chat/MessageInput.vue');
+    assert.ok(!/rph-glass-island/.test(input), 'the input dock stays M3');
 });

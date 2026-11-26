@@ -693,6 +693,38 @@
             user-select: none;
         }
 
+        /* Home header band (2026-11-26). The title bar and the search field used
+           to sit above the scroller, so nothing ever passed behind them and the
+           acrylic recipe had nothing to blur. They now live inside the scroller
+           and pin to its top, which is what makes the material visible while
+           rows slide underneath.
+
+           The band spans the scroller's full width: the horizontal padding lives
+           on the rows instead, so the tint reaches both edges instead of leaving
+           two bare strips. */
+        .conversation-list__head {
+            position: sticky;
+            top: 0;
+            z-index: 5;
+            margin: 0 -0.5rem;
+        }
+
+        .conversation-list--compact .conversation-list__head {
+            margin: 0 -0.375rem;
+        }
+
+        /* The recipe paints the band; the header's own bg-white/90 would cover
+           it. The opaque tiers keep the header's own fill instead. */
+        .conversation-list__head > header {
+            background-color: transparent;
+            border-bottom-color: var(--mat-line);
+        }
+
+        [data-effects='solid'] .conversation-list__head > header {
+            background-color: rgb(var(--bg-surface) / 0.9);
+            border-bottom-color: rgb(var(--border-gray-200));
+        }
+
         /* The toggle reads as pressed while privacy is on, using the same
            primary tint as the active tab. */
         .settings-icon-button.privacy-toggle.is-active {
@@ -1910,8 +1942,8 @@
            home bar's persistent title (2026-11-24). The negative margins cancel
            .management-view padding so the opaque strip covers the full column;
            content scrolls underneath. */
-        .settings-page-header,
-        .management-header {
+        .settings-page-header:not(.rph-glass),
+        .management-header:not(.rph-glass) {
             position: sticky;
             /* Negative so the header pins to the view's top edge: the sticky
                containing box starts at the management-view padding (1rem). */
@@ -1922,9 +1954,20 @@
             background: #f9fafb;
         }
 
-        [data-theme='dark'] .settings-page-header,
-        [data-theme='dark'] .management-header {
-            background: var(--d-bg);
+        [data-theme='dark'] .settings-page-header:not(.rph-glass),
+        [data-theme='dark'] .management-header:not(.rph-glass) {
+            background-color: var(--d-bg);
+        }
+
+        /* The acrylic recipe owns the fill once a header opts in, so the opaque
+           rules above skip it (same :not() guard as the mobile compensation
+           block). Only the geometry stays unconditional. */
+        .settings-page-header.rph-glass {
+            position: sticky;
+            top: -1rem;
+            z-index: 6;
+            margin: -1rem -1rem 0;
+            padding: 1rem;
         }
 
         .management-view {
@@ -2875,6 +2918,36 @@
             backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
         }
 
+        /* ---- 桌面端专属亚克力（.rph-acrylic-wide）----
+           Per-message surfaces (action bar, name tag) exist once per message, so a
+           long chat can show 6–10 of them at once and blow the ≤6 backdrop-filter
+           budget in §11. Phones keep their solid look; wide screens get the
+           material, where these surfaces already carried a stray blur anyway.
+
+           This variant deliberately does NOT carry .rph-glass: on phones that
+           class is the whitelist that lets a backdrop-filter through, and these
+           surfaces must stay solid there. Without it the mobile kill-switch and
+           the solid compensation rules both keep working untouched. */
+        @media (min-width: 769px) {
+            .rph-acrylic-wide {
+                position: relative;
+                background-color: var(--mat-tint);
+                -webkit-backdrop-filter: blur(var(--mat-blur)) saturate(var(--mat-saturate));
+                backdrop-filter: blur(var(--mat-blur)) saturate(var(--mat-saturate));
+            }
+
+            .rph-acrylic-wide::before {
+                content: '';
+                position: absolute;
+                inset: 0;
+                z-index: 2;
+                border-radius: inherit;
+                pointer-events: none;
+                background-image: var(--mat-noise-image);
+                opacity: var(--mat-noise);
+            }
+        }
+
         /* ---- solid 档：现行实色观感（设备不支持 / 用户关闭 / 系统减少透明）。 ---- */
         [data-effects='solid'] .rph-glass.rph-acrylic,
         [data-effects='solid'] .rph-glass.rph-acrylic-panel,
@@ -2889,14 +2962,42 @@
             background: var(--mat-tint-solid);
         }
 
+        /* The page header had its own opaque values before the material layer;
+           the generic --mat-tint-solid would shift them (#f9fafb -> white/97),
+           so solid restores the original pair exactly. */
+        [data-effects='solid'] .settings-page-header.rph-glass {
+            background-color: #f9fafb;
+        }
+
+        [data-effects='solid'][data-theme='dark'] .settings-page-header.rph-glass {
+            background-color: var(--d-bg);
+        }
+
         [data-effects='solid'] .rph-glass.rph-glass-island,
         [data-effects='solid'] .rph-glass.rph-glass-bar {
             background: var(--glass-tint-solid);
         }
 
+        /* The desktop-only variant has its own solid form and only above 769px:
+           below that it was never active, so forcing a fill here would change
+           the phone look instead of restoring it. */
+        @media (min-width: 769px) {
+            [data-effects='solid'] .rph-acrylic-wide {
+                -webkit-backdrop-filter: none;
+                backdrop-filter: none;
+                background: var(--mat-tint-solid);
+            }
+        }
+
         [data-effects='solid'] .rph-glass.rph-acrylic::before,
         [data-effects='solid'] .rph-glass.rph-acrylic-panel::before {
             display: none;
+        }
+
+        @media (min-width: 769px) {
+            [data-effects='solid'] .rph-acrylic-wide::before {
+                display: none;
+            }
         }
 
         /* Mobile optimizations */
