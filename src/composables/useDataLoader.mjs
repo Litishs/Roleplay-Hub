@@ -36,6 +36,7 @@ export function useDataLoader(deps) {
         presetGroups,
         presetDefinitionsVersionApplied,
         deletedDefaultPresetNames,
+        deletedTwoPresetNames,
         globalRegexScripts,
         regexScripts,
         globalWorldInfo,
@@ -90,6 +91,7 @@ export function useDataLoader(deps) {
                     savedPresetGroups,
                     savedPresetVersion,
                     savedDeletedDefaultPresets,
+                    savedDeletedTwoPresets,
                     savedGlobalRegex,
                     savedRegex,
                     savedGlobalWI,
@@ -110,6 +112,7 @@ export function useDataLoader(deps) {
                     getStoredValue('preset_groups'),
                     getStoredValue('preset_definitions_version'),
                     getStoredValue('deleted_default_presets'),
+                    getStoredValue('deleted_two_presets'),
                     getStoredValue('global_regex'),
                     getStoredValue('regex'),
                     getStoredValue('global_worldinfo'),
@@ -243,6 +246,10 @@ export function useDataLoader(deps) {
 
                 if (Array.isArray(savedDeletedDefaultPresets)) {
                     deletedDefaultPresetNames.value = savedDeletedDefaultPresets.filter(name => typeof name === 'string');
+                }
+
+                if (Array.isArray(savedDeletedTwoPresets)) {
+                    deletedTwoPresetNames.value = savedDeletedTwoPresets.filter(name => typeof name === 'string');
                 }
 
                 if (savedGlobalRegex) globalRegexScripts.value = savedGlobalRegex.map(script => normalizeRegexScript(script, 'global'));

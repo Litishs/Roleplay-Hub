@@ -1241,6 +1241,10 @@ const __app = createApp({
         const presetDefinitionsVersionApplied = ref(null);
         // 用户主动删除的内置预设（避免启动时重新播种；第二/第三人称除外）
         const deletedDefaultPresetNames = ref([]);
+        // two 组（中英混合）的同语义删除墓碑
+        const deletedTwoPresetNames = ref([]);
+        // two 组（中英混合）的同语义删除墓碑
+        const deletedTwoPresetNames = ref([]);
         const presetRoleOptions = [
             { value: 'system', label: '系统提示词' },
             { value: 'user', label: 'User消息' },
@@ -2498,6 +2502,8 @@ const __app = createApp({
                     ['preset_groups', presetGroups.value],
                     ['preset_definitions_version', presetDefinitionsVersionApplied.value],
                     ['deleted_default_presets', deletedDefaultPresetNames.value],
+                    ['deleted_two_presets', deletedTwoPresetNames.value],
+                    ['deleted_two_presets', deletedTwoPresetNames.value],
                     ['regex', regexScripts.value],
                     ['global_regex', globalRegexScripts.value],
                     ['worldinfo', worldInfo.value],
@@ -8784,6 +8790,7 @@ const __app = createApp({
             presetGroups,
             presetDefinitionsVersionApplied,
             deletedDefaultPresetNames,
+            deletedTwoPresetNames,
             globalRegexScripts,
             regexScripts,
             globalWorldInfo,
@@ -9066,6 +9073,10 @@ const __app = createApp({
                     if (def && !def.systemManaged && !deletedDefaultPresetNames.value.includes(preset.name)) {
                         deletedDefaultPresetNames.value.push(preset.name);
                     }
+                }
+                // two 组预设的删除墓碑（同默认组语义：版本未变时不复活）
+                if (preset && preset.group === 'two' && !deletedTwoPresetNames.value.includes(preset.name)) {
+                    deletedTwoPresetNames.value.push(preset.name);
                 }
                 presets.value.splice(index, 1);
                 showToast('预设已删除', 'success');
@@ -9459,11 +9470,11 @@ const __app = createApp({
                 presetGroups.value.unshift({ id: 'default', name: '默认预设', builtin: true, enabled: true });
             }
 
-            // 2b) 确保内置预设组「two」（中英混合）存在，并按名字播种缺失条目。
-            //     与默认组并列的第二套内置预设；组间互斥启用，用户在预设面板
-            //     切换生效组。组对象上携带 twoVersion 标记（随 preset_groups 持久
-            //     化）：定义版本变化时强制覆盖同名条目的内容/角色（保留用户的
-            //     开关状态），未变化时只播种缺失条目、绝不碰用户改过的内容。
+            // 2b) 确保内置预设组「two」（中英混合）存在，播种语义与默认组对齐：
+            //     - 删除墓碑：版本未变时用户删除过的条目不复活（deleted_two_presets）
+            //     - 预注入对默认开关跟随本组「破限框架」（与默认组预注入对跟随「破限」一致）
+            //     - 版本变化时强制覆盖同名条目内容/角色（保留用户开关），并按定义集
+            //       移除已下架的旧条目；未变化时绝不触碰用户改过的内容
             const twoGroup = presetGroups.value.find(g => g.id === 'two');
             const twoVersionChanged = !twoGroup || Number(twoGroup.twoVersion) !== TWO_PRESET_DEFINITIONS_VERSION;
             if (!twoGroup) {
@@ -9474,6 +9485,11 @@ const __app = createApp({
             }
             if (Array.isArray(TWO_PRESET_DEFINITIONS)) {
                 const twoByName = new Map(presets.value.filter(p => p.group === 'two').map(p => [p.name, p]));
+                const deletedTwoNames = new Set(deletedTwoPresetNames.value || []);
+                // 预注入对跟随本组「破限框架」的开关状态（兼容旧数据：取现存条目的开关）
+                const existingFictionLock = presets.value.find(p => p.name === 'Fiction Mode Lock｜破限框架' && p.group === 'two');
+                const fallbackFictionEnabled = existingFictionLock ? existingFictionLock.enabled !== false : true;
+                const twoPreludeNames = ['Pre-inject U｜破限确认', 'Pre-inject A｜破限回应', 'Pre-inject U｜任务锁定', 'Pre-inject A｜状态确认'];
                 for (const def of TWO_PRESET_DEFINITIONS) {
                     const existing = twoByName.get(def.name);
                     if (existing) {
@@ -9483,13 +9499,20 @@ const __app = createApp({
                         }
                         continue;
                     }
+                    // 版本未变时保留删除墓碑；版本变化按定义补齐（与默认组一致）
+                    if (!twoVersionChanged && deletedTwoNames.has(def.name)) continue;
                     presets.value.push({
                         name: def.name,
                         role: def.role || 'system',
                         content: String(def.content || ''),
-                        enabled: true,
+                        enabled: twoPreludeNames.includes(def.name) ? fallbackFictionEnabled : true,
                         group: 'two'
                     });
+                }
+                // 版本变化时移除已下架的 two 组条目（定义中已不存在者）
+                if (twoVersionChanged) {
+                    const twoDefNames = new Set(TWO_PRESET_DEFINITIONS.map(d => d.name));
+                    presets.value = presets.value.filter(p => p.group !== 'two' || twoDefNames.has(p.name));
                 }
             }
 

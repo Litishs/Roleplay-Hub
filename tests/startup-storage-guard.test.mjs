@@ -24,7 +24,7 @@ function fixture() {
         db: null, MAX_CONTEXT_SIZE: 1000000,
         characters: ref([]), settings: reactive({ model: '', apiProviderKeys: {} }),
         presets: ref([]), presetGroups: ref([]), presetDefinitionsVersionApplied: ref(0),
-        deletedDefaultPresetNames: ref([]), regexScripts: ref([]), globalRegexScripts: ref([]),
+        deletedDefaultPresetNames: ref([]), deletedTwoPresetNames: ref([]), regexScripts: ref([]), globalRegexScripts: ref([]),
         worldInfo: ref([]), globalWorldInfo: ref([]), globalUiTemplates: ref([]),
         activeTools: ref([]), user: reactive({ name: 'default' }), userProfiles: ref([]),
         activeProfileId: ref(null), recentGenerationTimes: ref([]),
