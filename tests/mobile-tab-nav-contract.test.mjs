@@ -257,17 +257,22 @@ test('styles: floating glass capsule with variable colours, dark override and vi
   const barStart = css.search(/^ {8}\.bottom-tab-bar \{/m);
   assert.ok(barStart > 0, 'the tab bar rule must exist');
   const barBlock = css.slice(barStart, css.indexOf('}', barStart));
-  // Floating capsule (2026-11-26): inset from the edges, lifted off the bottom,
-  // full pill radius, no top hairline (the rim is drawn as an inset ring).
+  // Floating dock island (2026-11-26 inset, 2026-11-27 outline): inset from the
+  // edges, lifted off the bottom, 24px island corners and the dock's white
+  // border + shadow, no top hairline.
   for (const declaration of ['position: absolute;', 'left: var(--tab-bar-inset);',
     'right: var(--tab-bar-inset);', 'bottom: var(--tab-bar-gap);',
-    'height: var(--tab-bar-capsule-h);', 'border-radius: calc(var(--tab-bar-capsule-h) / 2);',
+    'height: var(--tab-bar-capsule-h);', 'border-radius: 1.5rem;',
+    'border: 1px solid rgba(255, 255, 255, 0.4);',
     'background: var(--tab-bar-bg);', '--tab-bar-active: #2563eb;']) {
     assert.ok(barBlock.includes(declaration), `the tab bar must declare ${declaration}`);
   }
   assert.ok(!barBlock.includes('border-top:'), 'the capsule has no top hairline');
   assert.match(css, /\[data-theme='dark'\] \.bottom-tab-bar \{[\s\S]{0,300}--tab-bar-active: var\(--d-accent\);/);
-  assert.match(css, /@media \(max-width: 767\.98px\) \{\s*\.app-views\.has-tab-bar \{\s*padding-bottom: var\(--tab-bar-h\);\s*\}\s*\}/);
+  // The clearance lives INSIDE the scroll containers (2026-11-27): entries
+  // slide under the floating bar and are frosted by it, like the input dock.
+  assert.match(css, /\.has-tab-bar \.conversation-list__scroll,\s*\.has-tab-bar \.management-view \{\s*padding-bottom: calc\(var\(--tab-bar-h\) \+ 0\.75rem\);\s*\}/);
+  assert.doesNotMatch(css, /\.app-views\.has-tab-bar \{\s*padding-bottom/, 'the box-level reservation is gone');
   assert.match(css, /@media \(min-width: 768px\) \{\s*\.bottom-tab-bar \{\s*display: none !important;/);
   assert.match(css, /\.app-native-fullscreen \.bottom-tab-bar,/);
 
