@@ -913,11 +913,14 @@
         }
 
         /* Taller than the icon pill so the highlight reads as covering the tab
-           (icon + label) rather than just the glyph. */
+           (icon + label) rather than just the glyph. The corner is a rounded
+           rectangle one step down from the island's 24px (2026-11-27), so the
+           highlight shares the dock island's corner language instead of
+           dropping a full stadium on top of it. */
         .bottom-tab__slider-pill {
             width: var(--tab-pill-w);
             height: calc(var(--tab-pill-h) + 0.75rem);
-            border-radius: 9999px;
+            border-radius: 0.875rem;
             background: var(--tab-bar-active-bg);
         }
 
@@ -926,7 +929,8 @@
             place-items: center;
             width: var(--tab-pill-w);
             height: var(--tab-pill-h);
-            border-radius: 9999px;
+            /* Same corner language as the sliding highlight above. */
+            border-radius: 0.875rem;
             transition: background-color 0.2s ease;
         }
 
