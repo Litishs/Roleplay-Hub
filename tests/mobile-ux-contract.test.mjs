@@ -287,7 +287,10 @@ test("motion and surface tokens drive the shared components", async () => {
   assert.match(css, /--motion-base: 0\.22s;/);
   assert.match(css, /--motion-slow: 0\.32s;/);
   assert.match(css, /--motion-standard: cubic-bezier\(0\.22, 1, 0\.36, 1\);/);
-  assert.match(css, /\.bottom-tab__slider \{[\s\S]{0,800}transform var\(--motion-base\) var\(--motion-standard\)/);
+  // The tab bar's active-state transition joined the token system when the
+  // sliding highlight was removed (2026-11-27).
+  assert.match(css, /\.bottom-tab \{[^}]*transition: color var\(--motion-fast\) var\(--motion-standard\);/);
+  assert.match(css, /\.bottom-tab__pill \{[^}]*transition: background-color var\(--motion-fast\) var\(--motion-standard\);/);
   assert.match(css, /grid-template-rows var\(--motion-slow\) var\(--motion-standard\)/);
   assert.match(css, /animation: fadeIn var\(--motion-slow\) ease-out;/);
   assert.match(css, /animation: message-in-elegant var\(--motion-slow\)/);

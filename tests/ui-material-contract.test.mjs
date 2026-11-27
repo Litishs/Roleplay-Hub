@@ -250,13 +250,10 @@ test('every floating control uses acrylic, not liquid glass', async () => {
         assert.ok(!/rph-glass-island|rph-glass-bar/.test(source), `${file} must not use a liquid-glass variant`);
     }
 
-    // The slider pill keeps a plain tint: it animates with transform, and a
-    // backdrop-filter on a moving layer is the costliest pair in the WebView.
-    assert.match(bar, /bottom-tab__slider-pill/, 'the slider pill exists');
-    const css = await read('assets/css/styles.css');
-    const pillStart = css.search(/^ {8}\.bottom-tab__slider-pill \{/m);
-    const pillBlock = css.slice(pillStart, css.indexOf('}', pillStart));
-    assert.ok(!pillBlock.includes('backdrop-filter'), 'the slider pill must not blur');
+    // The sliding highlight was removed on 2026-11-27 (the active tab fills
+    // its icon instead), so there is no transform-animated pill left to keep
+    // a backdrop-filter off.
+    assert.doesNotMatch(bar, /bottom-tab__slider/, 'no slider pill is left');
 });
 
 test('the management headers are acrylic too', async () => {

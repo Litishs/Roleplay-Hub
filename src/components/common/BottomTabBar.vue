@@ -4,18 +4,13 @@
          the four tab roots. It is an overlay: the tab roots' scroll containers
          carry its footprint as inner bottom clearance, which lets content
          scroll under it and lets it animate without moving the layout.
-         The active highlight is one shared slider (2026-11-24) instead of a
-         per-tab background, so switching tabs moves a single element.
+         The active state lives in the icon itself (2026-11-27): the active
+         tab's stroked outline fills with the accent colour and its label goes
+         bold — there is no highlight block behind it any more.
          Acrylic, not liquid glass (2026-11-26 review): the refraction read as
          fake at this size and the moving slider cannot carry a blur, so the
          capsule uses the same frosted recipe as the rest of the chrome. -->
     <nav v-show="isTabRootView && !isRootTextFocused" class="bottom-tab-bar rph-glass rph-acrylic" aria-label="主导航">
-        <span class="bottom-tab__slider" aria-hidden="true"
-            :style="{ transform: `translateX(${activeIndex * 100}%)` }">
-            <span class="bottom-tab__slider-pill"></span>
-            <!-- Mirrors the tab label's line box so the pill lands on the icons. -->
-            <span class="bottom-tab__label">&nbsp;</span>
-        </span>
         <button v-for="tab in tabs" :key="tab.id" type="button" class="bottom-tab"
             :class="{ 'is-active': activeTab === tab.id }"
             :aria-current="activeTab === tab.id ? 'page' : undefined" :aria-label="tab.label"
@@ -33,7 +28,7 @@
 </template>
 
 <script>
-import { computed, inject } from "vue";
+import { inject } from "vue";
 import { TAB_ORDER } from "../../modules/tab-navigation.mjs";
 
 // Labels and icon paths mirror the sidebar's (SideNav.vue) so a destination
@@ -60,18 +55,10 @@ const TAB_META = {
 // Plain data: the tabs never change at runtime, so this need not be reactive.
 const tabs = TAB_ORDER.map(id => ({ id, ...TAB_META[id] }));
 
-// Tab order and the active id are the only inputs the slider needs.
-const readRef = (value) => (value && typeof value === "object" && "value" in value ? value.value : value);
-
 export default {
   setup() {
-    const ctx = inject("appContext");
-    const app = ctx || {};
-    const activeIndex = computed(() => {
-      const index = TAB_ORDER.indexOf(readRef(app.activeTab));
-      return index < 0 ? 0 : index;
-    });
-    return { ...app, tabs, activeIndex };
+    const app = inject("appContext") || {};
+    return { ...app, tabs };
   }
 };
 </script>
