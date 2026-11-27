@@ -28,9 +28,13 @@ class FakeFrame extends FakeElement {
 
 test('HTML card lifecycle keeps at most three iframes active', async () => {
   const frames = Array.from({ length: 6 }, (_, index) => new FakeFrame(`<p>${index}</p>`));
-  let intersectionCallback;
+  const callbacks = [];
   class FakeIntersectionObserver {
-    constructor(callback) { intersectionCallback = callback; }
+    // 双观察器：激活带（160px）与软挂起带（2400px）。按 rootMargin 区分驱动。
+    constructor(callback, options) {
+      callbacks.push({ callback, rootMargin: options?.rootMargin || '' });
+      this.rootMargin = options?.rootMargin || '';
+    }
     observe() {}
   }
   class FakeMutationObserver { observe() {} }
@@ -56,13 +60,16 @@ test('HTML card lifecycle keeps at most three iframes active', async () => {
     vm.runInContext(cleanSource, context, { filename: path });
   }
 
-  for (const frame of frames) intersectionCallback([{ target: frame, isIntersecting: true }]);
+  const activation = callbacks.find(c => c.rootMargin === '160px 0px');
+  if (!activation) throw new Error('激活带观察器（160px）未注册');
+
+  for (const frame of frames) activation.callback([{ target: frame, isIntersecting: true }]);
   assert.equal(window.RPHFrameLifecycle.getActiveCount(), 3);
   assert.equal(window.RPHFrameLifecycle.maxActiveFrames, 3);
 
-  intersectionCallback([{ target: frames[5], isIntersecting: false }]);
+  activation.callback([{ target: frames[5], isIntersecting: false }]);
   assert.equal(window.RPHFrameLifecycle.getActiveCount(), 2);
-  intersectionCallback([{ target: frames[0], isIntersecting: true }]);
+  activation.callback([{ target: frames[0], isIntersecting: true }]);
   assert.equal(frames[0].srcdoc, frames[0].originalSource);
   assert.ok(window.RPHFrameLifecycle.getActiveCount() <= 3);
 });

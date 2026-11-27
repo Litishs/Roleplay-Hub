@@ -251,7 +251,6 @@ export function useDataLoader(deps) {
                 if (Array.isArray(savedDeletedTwoPresets)) {
                     deletedTwoPresetNames.value = savedDeletedTwoPresets.filter(name => typeof name === 'string');
                 }
-
                 if (savedGlobalRegex) globalRegexScripts.value = savedGlobalRegex.map(script => normalizeRegexScript(script, 'global'));
 
                 if (savedGlobalRegex) {

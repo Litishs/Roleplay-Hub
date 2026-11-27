@@ -18,7 +18,7 @@
              the WebView. This is a system-drawn bar, invisible to web debugging tools. -->
         <meta-data
             android:name="hwc-theme"
-            android:value="false" />
+            android:value="hs_plash" />
 
         <activity
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation"

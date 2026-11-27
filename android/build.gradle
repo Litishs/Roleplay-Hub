@@ -1,10 +1,15 @@
 // Top-level build file where you can add configuration options common to all sub-projects/modules.
 
 buildscript {
-    
+
     repositories {
+        // 国内镜像追加在官方源之后：CI（海外机房）优先命中官方源零风险；
+        // 国内网络对官方源超时后会落到镜像加速，镜像同步滞后不会成为权威源。
         google()
         mavenCentral()
+        maven { url 'https://maven.aliyun.com/repository/google' }
+        maven { url 'https://maven.aliyun.com/repository/central' }
+        maven { url 'https://maven.aliyun.com/repository/gradle-plugin' }
     }
     dependencies {
         classpath 'com.android.tools.build:gradle:8.7.2'
@@ -21,6 +26,8 @@ allprojects {
     repositories {
         google()
         mavenCentral()
+        maven { url 'https://maven.aliyun.com/repository/google' }
+        maven { url 'https://maven.aliyun.com/repository/central' }
     }
 }
 
