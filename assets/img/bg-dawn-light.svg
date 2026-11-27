@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 750 1600" preserveAspectRatio="xMidYMid slice" role="img" aria-label="霞暮">
+  <!-- Built-in page background: Dawn (light).
+       Five-hue soft mesh (rose / peach / lilac / sky / mint), the successor of
+       the old aurora preset: more hues and more chroma at the same high
+       luminance, so white acrylic panels and body text keep their contrast
+       while the artwork itself finally reads as a picture. -->
+  <defs>
+    <linearGradient id="base" x1="0" y1="0" x2="0.15" y2="1">
+      <stop offset="0" stop-color="#f7f3fa"/>
+      <stop offset="0.5" stop-color="#fcf6f2"/>
+      <stop offset="1" stop-color="#fefbf7"/>
+    </linearGradient>
+    <radialGradient id="rose"><stop offset="0" stop-color="#f4b9cf" stop-opacity="0.78"/><stop offset="0.55" stop-color="#f4b9cf" stop-opacity="0.4"/><stop offset="1" stop-color="#f4b9cf" stop-opacity="0"/></radialGradient>
+    <radialGradient id="peach"><stop offset="0" stop-color="#fbd3a8" stop-opacity="0.7"/><stop offset="0.55" stop-color="#fbd3a8" stop-opacity="0.36"/><stop offset="1" stop-color="#fbd3a8" stop-opacity="0"/></radialGradient>
+    <radialGradient id="lilac"><stop offset="0" stop-color="#ccb6f0" stop-opacity="0.6"/><stop offset="0.55" stop-color="#ccb6f0" stop-opacity="0.3"/><stop offset="1" stop-color="#ccb6f0" stop-opacity="0"/></radialGradient>
+    <radialGradient id="sky"><stop offset="0" stop-color="#b3d6f2" stop-opacity="0.55"/><stop offset="0.55" stop-color="#b3d6f2" stop-opacity="0.28"/><stop offset="1" stop-color="#b3d6f2" stop-opacity="0"/></radialGradient>
+    <radialGradient id="mint"><stop offset="0" stop-color="#bcead2" stop-opacity="0.55"/><stop offset="0.55" stop-color="#bcead2" stop-opacity="0.28"/><stop offset="1" stop-color="#bcead2" stop-opacity="0"/></radialGradient>
+    <linearGradient id="rib" x1="0" y1="0" x2="1" y2="0.3">
+      <stop offset="0" stop-color="#e9c0da" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#c2cdf2" stop-opacity="0.5"/>
+    </linearGradient>
+    <radialGradient id="glow"><stop offset="0" stop-color="#ffffff" stop-opacity="0.85"/><stop offset="1" stop-color="#ffffff" stop-opacity="0"/></radialGradient>
+    <filter id="soft" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="42"/></filter>
+  </defs>
+
+  <rect width="750" height="1600" fill="url(#base)"/>
+  <g filter="url(#soft)">
+    <ellipse cx="110" cy="210" rx="430" ry="470" fill="url(#rose)"/>
+    <ellipse cx="650" cy="140" rx="380" ry="420" fill="url(#peach)"/>
+  </g>
+  <ellipse cx="470" cy="600" rx="430" ry="460" fill="url(#lilac)"/>
+  <ellipse cx="120" cy="980" rx="430" ry="470" fill="url(#sky)"/>
+  <ellipse cx="660" cy="1180" rx="400" ry="450" fill="url(#mint)"/>
+  <g filter="url(#soft)" opacity="0.55">
+    <path d="M-60 700 C 160 600, 340 790, 540 660 S 780 740, 820 660 L 820 900 C 720 980, 520 840, 340 960 S 90 880, -60 980 Z" fill="url(#rib)"/>
+  </g>
+  <rect width="750" height="1600" fill="url(#glow)" opacity="0.7"/>
+</svg>

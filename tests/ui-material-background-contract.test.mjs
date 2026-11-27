@@ -58,13 +58,29 @@ test('built-in presets ship one file per theme', async () => {
     const module = await read('src/modules/page-background.mjs');
     // A single light artwork would need a heavy overlay to survive dark mode;
     // two files let the artwork itself match the theme.
-    assert.match(module, /aurora: \{ light: 'assets\/img\/bg-aurora-light\.svg', dark: 'assets\/img\/bg-aurora-dark\.svg' \}/);
-    assert.match(module, /dune: \{ light: 'assets\/img\/bg-dune-light\.svg', dark: 'assets\/img\/bg-dune-dark\.svg' \}/);
-    for (const file of ['bg-aurora-light', 'bg-aurora-dark', 'bg-dune-light', 'bg-dune-dark']) {
+    assert.match(module, /dawn: \{ light: 'assets\/img\/bg-dawn-light\.svg', dark: 'assets\/img\/bg-dawn-dark\.svg' \}/);
+    assert.match(module, /sea: \{ light: 'assets\/img\/bg-sea-light\.svg', dark: 'assets\/img\/bg-sea-dark\.svg' \}/);
+    for (const file of ['bg-dawn-light', 'bg-dawn-dark', 'bg-sea-light', 'bg-sea-dark']) {
         const svg = await read(`assets/img/${file}.svg`);
         assert.match(svg, /^<svg xmlns="http:\/\/www\.w3\.org\/2000\/svg"/, `${file} is an SVG`);
         assert.ok(svg.length < 40 * 1024, `${file} stays small (${svg.length} bytes)`);
     }
+});
+
+test('legacy preset choices keep resolving after the 2026-11-27 rework', async () => {
+    const module = await read('src/modules/page-background.mjs');
+    // aurora/dune were replaced by dawn/sea; a choice persisted by an older
+    // build must map to its successor instead of degrading to 'off'.
+    assert.match(module, /const LEGACY_CHOICE_MAP = Object\.freeze\(\{ aurora: 'dawn', dune: 'sea' \}\);/);
+    assert.match(module, /return LEGACY_CHOICE_MAP\[value\] \|\| 'off';/);
+    assert.doesNotMatch(module, /'aurora', 'dune'/, 'the old ids are no longer advertised choices');
+});
+
+test('the settings row offers the reworked presets', async () => {
+    const panel = await read('src/components/settings/AdvancedSettings.vue');
+    assert.match(panel, /value: 'dawn', label: '霞暮'/);
+    assert.match(panel, /value: 'sea', label: '幽澜'/);
+    assert.doesNotMatch(panel, /value: 'aurora'|value: 'dune'/, 'the old option rows are gone');
 });
 
 test('the custom background is stored verbatim, with no size limit', async () => {

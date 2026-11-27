@@ -9,7 +9,7 @@
 // for. Keeping it out of the DB also means the backup carries it as a plain
 // file instead of a multi-megabyte base64 column.
 //
-// settings.pageBackground stores only the *choice* ('off' | 'aurora' | 'dune' |
+// settings.pageBackground stores only the *choice* ('off' | 'dawn' | 'sea' |
 // 'custom'), never image data: the settings object is persisted key-by-key and
 // would otherwise drag the whole picture through every autosave.
 
@@ -17,16 +17,26 @@ const DIRECTORY_DATA = 'DATA';
 const BACKGROUND_DIRECTORY = 'media';
 const BACKGROUND_FILE = 'page-background.jpg';
 
-const BACKGROUND_CHOICES = Object.freeze(['off', 'aurora', 'dune', 'custom']);
+const BACKGROUND_CHOICES = Object.freeze(['off', 'dawn', 'sea', 'custom']);
 
 // Built-in presets, one file per theme so the artwork itself matches the theme
 // instead of relying on an overlay to rescue a light image in dark mode.
+// 2026-11-27 rework: the aurora/dune artwork was replaced by the richer
+// dawn (霞暮) and sea (幽澜) mesh gradients.
 const PRESET_FILES = Object.freeze({
-    aurora: { light: 'assets/img/bg-aurora-light.svg', dark: 'assets/img/bg-aurora-dark.svg' },
-    dune: { light: 'assets/img/bg-dune-light.svg', dark: 'assets/img/bg-dune-dark.svg' }
+    dawn: { light: 'assets/img/bg-dawn-light.svg', dark: 'assets/img/bg-dawn-dark.svg' },
+    sea: { light: 'assets/img/bg-sea-light.svg', dark: 'assets/img/bg-sea-dark.svg' }
 });
 
-const normalizeChoice = (value) => (BACKGROUND_CHOICES.includes(value) ? value : 'off');
+// Choices persisted by builds older than the 2026-11-27 rework still say
+// 'aurora' / 'dune'; map them to their successors so those users keep a
+// background instead of silently degrading to 'off'.
+const LEGACY_CHOICE_MAP = Object.freeze({ aurora: 'dawn', dune: 'sea' });
+
+const normalizeChoice = (value) => {
+    if (BACKGROUND_CHOICES.includes(value)) return value;
+    return LEGACY_CHOICE_MAP[value] || 'off';
+};
 
 const isCustom = (value) => normalizeChoice(value) === 'custom';
 

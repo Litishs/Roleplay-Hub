@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 750 1600" preserveAspectRatio="xMidYMid slice" role="img" aria-label="幽澜">
+  <!-- Built-in page background: Sea (light).
+       Cool aqua / periwinkle / seafoam mesh with one small coral accent, so
+       the field stays fresh instead of going flat-cold. Luminance stays high
+       for the white acrylic panels. -->
+  <defs>
+    <linearGradient id="base" x1="0" y1="0" x2="0.1" y2="1">
+      <stop offset="0" stop-color="#edf5fa"/>
+      <stop offset="0.5" stop-color="#f1f7f9"/>
+      <stop offset="1" stop-color="#f5f9f8"/>
+    </linearGradient>
+    <radialGradient id="aqua"><stop offset="0" stop-color="#9cd9e6" stop-opacity="0.8"/><stop offset="0.55" stop-color="#9cd9e6" stop-opacity="0.4"/><stop offset="1" stop-color="#9cd9e6" stop-opacity="0"/></radialGradient>
+    <radialGradient id="peri"><stop offset="0" stop-color="#aebef0" stop-opacity="0.72"/><stop offset="0.55" stop-color="#aebef0" stop-opacity="0.36"/><stop offset="1" stop-color="#aebef0" stop-opacity="0"/></radialGradient>
+    <radialGradient id="foam"><stop offset="0" stop-color="#a0e3d0" stop-opacity="0.7"/><stop offset="0.55" stop-color="#a0e3d0" stop-opacity="0.35"/><stop offset="1" stop-color="#a0e3d0" stop-opacity="0"/></radialGradient>
+    <radialGradient id="coral"><stop offset="0" stop-color="#f5c9b4" stop-opacity="0.55"/><stop offset="1" stop-color="#f5c9b4" stop-opacity="0"/></radialGradient>
+    <radialGradient id="deep"><stop offset="0" stop-color="#b3bfec" stop-opacity="0.65"/><stop offset="0.55" stop-color="#b3bfec" stop-opacity="0.32"/><stop offset="1" stop-color="#b3bfec" stop-opacity="0"/></radialGradient>
+    <radialGradient id="glow"><stop offset="0" stop-color="#ffffff" stop-opacity="0.8"/><stop offset="1" stop-color="#ffffff" stop-opacity="0"/></radialGradient>
+    <filter id="soft" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="42"/></filter>
+  </defs>
+
+  <rect width="750" height="1600" fill="url(#base)"/>
+  <g filter="url(#soft)">
+    <ellipse cx="90" cy="170" rx="430" ry="460" fill="url(#aqua)"/>
+    <ellipse cx="630" cy="120" rx="300" ry="320" fill="url(#coral)"/>
+  </g>
+  <ellipse cx="660" cy="560" rx="440" ry="470" fill="url(#peri)"/>
+  <ellipse cx="110" cy="1150" rx="430" ry="470" fill="url(#foam)"/>
+  <ellipse cx="520" cy="1450" rx="420" ry="380" fill="url(#deep)"/>
+  <rect width="750" height="1600" fill="url(#glow)" opacity="0.45"/>
+</svg>

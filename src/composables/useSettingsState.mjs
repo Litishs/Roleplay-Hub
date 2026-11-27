@@ -142,7 +142,7 @@ export function useSettingsState() {
         // still auto-detected (glass → acrylic → solid); this only lets a user
         // opt out on a device that can do it but is too slow for it.
         uiGlassEffects: true,
-        // Page background (2026-11-26): 'off' | 'aurora' | 'dune' | 'custom'.
+        // Page background (2026-11-26): 'off' | 'dawn' | 'sea' | 'custom'.
         // Only the choice is persisted — a custom image lives as a file in the
         // app's private media directory, which the native backup packs wholesale.
         pageBackground: 'off',

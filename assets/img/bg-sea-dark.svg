@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 750 1600" preserveAspectRatio="xMidYMid slice" role="img" aria-label="幽澜">
+  <!-- Built-in page background: Sea (dark).
+       Near-black deep-sea base with luminous teal / indigo / violet glows and
+       a small moon highlight — the dark mode is where this preset shines.
+       Grain hides gradient banding on OLED panels. -->
+  <defs>
+    <linearGradient id="base" x1="0" y1="0" x2="0.1" y2="1">
+      <stop offset="0" stop-color="#0c1220"/>
+      <stop offset="0.5" stop-color="#0d1119"/>
+      <stop offset="1" stop-color="#0e1317"/>
+    </linearGradient>
+    <radialGradient id="teal"><stop offset="0" stop-color="#0f4d58" stop-opacity="0.65"/><stop offset="0.55" stop-color="#0f4d58" stop-opacity="0.32"/><stop offset="1" stop-color="#0f4d58" stop-opacity="0"/></radialGradient>
+    <radialGradient id="blue"><stop offset="0" stop-color="#1a2f6e" stop-opacity="0.6"/><stop offset="0.55" stop-color="#1a2f6e" stop-opacity="0.3"/><stop offset="1" stop-color="#1a2f6e" stop-opacity="0"/></radialGradient>
+    <radialGradient id="violet"><stop offset="0" stop-color="#2c1e5e" stop-opacity="0.55"/><stop offset="0.55" stop-color="#2c1e5e" stop-opacity="0.28"/><stop offset="1" stop-color="#2c1e5e" stop-opacity="0"/></radialGradient>
+    <radialGradient id="cyan"><stop offset="0" stop-color="#16636e" stop-opacity="0.58"/><stop offset="0.55" stop-color="#16636e" stop-opacity="0.29"/><stop offset="1" stop-color="#16636e" stop-opacity="0"/></radialGradient>
+    <radialGradient id="moon"><stop offset="0" stop-color="#52749e" stop-opacity="0.4"/><stop offset="1" stop-color="#52749e" stop-opacity="0"/></radialGradient>
+    <filter id="grain" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" stitchTiles="stitch"/><feColorMatrix type="saturate" values="0"/></filter>
+  </defs>
+
+  <rect width="750" height="1600" fill="url(#base)"/>
+  <ellipse cx="640" cy="220" rx="430" ry="470" fill="url(#teal)"/>
+  <ellipse cx="90" cy="560" rx="440" ry="480" fill="url(#blue)"/>
+  <ellipse cx="620" cy="1000" rx="420" ry="450" fill="url(#violet)"/>
+  <ellipse cx="140" cy="1330" rx="400" ry="430" fill="url(#cyan)"/>
+  <ellipse cx="560" cy="90" rx="240" ry="240" fill="url(#moon)"/>
+  <rect width="750" height="1600" filter="url(#grain)" opacity="0.05"/>
+</svg>

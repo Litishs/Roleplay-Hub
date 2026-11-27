@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 750 1600" preserveAspectRatio="xMidYMid slice" role="img" aria-label="霞暮">
+  <!-- Built-in page background: Dawn (dark).
+       Same composition as the light file. The base is a plum-tinted charcoal
+       (not neutral gray) and the blobs are low-luminance / high-chroma glows,
+       which is what keeps the dark mode from reading muddy. The faint grain
+       layer hides gradient banding on OLED panels. -->
+  <defs>
+    <linearGradient id="base" x1="0" y1="0" x2="0.15" y2="1">
+      <stop offset="0" stop-color="#151120"/>
+      <stop offset="0.5" stop-color="#14121d"/>
+      <stop offset="1" stop-color="#16131f"/>
+    </linearGradient>
+    <radialGradient id="rose"><stop offset="0" stop-color="#5d2a47" stop-opacity="0.65"/><stop offset="0.55" stop-color="#5d2a47" stop-opacity="0.32"/><stop offset="1" stop-color="#5d2a47" stop-opacity="0"/></radialGradient>
+    <radialGradient id="violet"><stop offset="0" stop-color="#41296e" stop-opacity="0.6"/><stop offset="0.55" stop-color="#41296e" stop-opacity="0.3"/><stop offset="1" stop-color="#41296e" stop-opacity="0"/></radialGradient>
+    <radialGradient id="indigo"><stop offset="0" stop-color="#223468" stop-opacity="0.62"/><stop offset="0.55" stop-color="#223468" stop-opacity="0.31"/><stop offset="1" stop-color="#223468" stop-opacity="0"/></radialGradient>
+    <radialGradient id="teal"><stop offset="0" stop-color="#175054" stop-opacity="0.58"/><stop offset="0.55" stop-color="#175054" stop-opacity="0.29"/><stop offset="1" stop-color="#175054" stop-opacity="0"/></radialGradient>
+    <radialGradient id="ember"><stop offset="0" stop-color="#66401f" stop-opacity="0.4"/><stop offset="1" stop-color="#66401f" stop-opacity="0"/></radialGradient>
+    <radialGradient id="glow"><stop offset="0" stop-color="#7d68b8" stop-opacity="0.32"/><stop offset="1" stop-color="#7d68b8" stop-opacity="0"/></radialGradient>
+    <filter id="grain" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" stitchTiles="stitch"/><feColorMatrix type="saturate" values="0"/></filter>
+  </defs>
+
+  <rect width="750" height="1600" fill="url(#base)"/>
+  <ellipse cx="100" cy="230" rx="420" ry="480" fill="url(#rose)"/>
+  <ellipse cx="640" cy="430" rx="420" ry="460" fill="url(#violet)"/>
+  <ellipse cx="130" cy="950" rx="430" ry="480" fill="url(#indigo)"/>
+  <ellipse cx="670" cy="1150" rx="400" ry="440" fill="url(#teal)"/>
+  <ellipse cx="600" cy="90" rx="260" ry="260" fill="url(#ember)"/>
+  <rect width="750" height="1600" fill="url(#glow)"/>
+  <rect width="750" height="1600" filter="url(#grain)" opacity="0.05"/>
+</svg>

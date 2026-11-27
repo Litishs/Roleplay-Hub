@@ -168,11 +168,9 @@ test('the tab bar shows the four tabs in order, only on tab roots', async () => 
   // above), so every tab id needs a label and icon there.
   const labels = [...bar.matchAll(/^ {4}(home|workshop|ext|settings): \{\n\s+label: '([^']+)'/gm)].map((match) => `${match[1]}=${match[2]}`);
   assert.deepEqual(labels, ['home=会话', 'workshop=工坊', 'ext=扩展', 'settings=设置']);
-  // One shared highlight slider, moved by transform (not four painted pills).
-  assert.match(bar, /<span class="bottom-tab__slider" aria-hidden="true"/);
-  assert.ok(bar.includes('translateX(${activeIndex * 100}%)'), 'the slider follows the active index');
-  assert.match(bar, /const activeIndex = computed\(\(\) => \{/);
-  assert.ok(bar.includes('TAB_ORDER.indexOf(readRef(app.activeTab))'));
+  // No highlight block since 2026-11-27: the active tab fills its icon
+  // instead, so there is no slider element and no position tracker.
+  assert.doesNotMatch(bar, /bottom-tab__slider|activeIndex/, 'the sliding highlight is gone');
 });
 
 const entryOrder = (source) => [...source.matchAll(/view: '([a-z]+)', label: '([^']+)'/g)].map((match) => match[1]);
@@ -257,17 +255,22 @@ test('styles: floating glass capsule with variable colours, dark override and vi
   const barStart = css.search(/^ {8}\.bottom-tab-bar \{/m);
   assert.ok(barStart > 0, 'the tab bar rule must exist');
   const barBlock = css.slice(barStart, css.indexOf('}', barStart));
-  // Floating capsule (2026-11-26): inset from the edges, lifted off the bottom,
-  // full pill radius, no top hairline (the rim is drawn as an inset ring).
+  // Floating dock island (2026-11-26 inset, 2026-11-27 outline): inset from the
+  // edges, lifted off the bottom, 24px island corners and the dock's white
+  // border + shadow, no top hairline.
   for (const declaration of ['position: absolute;', 'left: var(--tab-bar-inset);',
     'right: var(--tab-bar-inset);', 'bottom: var(--tab-bar-gap);',
-    'height: var(--tab-bar-capsule-h);', 'border-radius: calc(var(--tab-bar-capsule-h) / 2);',
+    'height: var(--tab-bar-capsule-h);', 'border-radius: 1.5rem;',
+    'border: 1px solid rgba(255, 255, 255, 0.4);',
     'background: var(--tab-bar-bg);', '--tab-bar-active: #2563eb;']) {
     assert.ok(barBlock.includes(declaration), `the tab bar must declare ${declaration}`);
   }
   assert.ok(!barBlock.includes('border-top:'), 'the capsule has no top hairline');
   assert.match(css, /\[data-theme='dark'\] \.bottom-tab-bar \{[\s\S]{0,300}--tab-bar-active: var\(--d-accent\);/);
-  assert.match(css, /@media \(max-width: 767\.98px\) \{\s*\.app-views\.has-tab-bar \{\s*padding-bottom: var\(--tab-bar-h\);\s*\}\s*\}/);
+  // The clearance lives INSIDE the scroll containers (2026-11-27): entries
+  // slide under the floating bar and are frosted by it, like the input dock.
+  assert.match(css, /\.has-tab-bar \.conversation-list__scroll,\s*\.has-tab-bar \.management-view \{\s*padding-bottom: calc\(var\(--tab-bar-h\) \+ 0\.75rem\);\s*\}/);
+  assert.doesNotMatch(css, /\.app-views\.has-tab-bar \{\s*padding-bottom/, 'the box-level reservation is gone');
   assert.match(css, /@media \(min-width: 768px\) \{\s*\.bottom-tab-bar \{\s*display: none !important;/);
   assert.match(css, /\.app-native-fullscreen \.bottom-tab-bar,/);
 
@@ -276,29 +279,17 @@ test('styles: floating glass capsule with variable colours, dark override and vi
   assert.match(css, /\[data-effects='solid'\] \.bottom-tab-bar\.rph-glass \{[\s\S]{0,240}left: 0;[\s\S]{0,240}height: 4\.25rem;/);
   assert.match(css, /\[data-effects='solid'\] \{\s*--tab-bar-h: 4\.25rem;\s*\}/);
 
-  // Sliding highlight: one cell-wide element, moved with transform only, and
-  // respecting prefers-reduced-motion.
-  const sliderStart = css.search(/^ {8}\.bottom-tab__slider \{/m);
-  assert.ok(sliderStart > 0, 'the slider rule must exist');
-  const sliderBlock = css.slice(sliderStart, css.indexOf('}', sliderStart));
-  for (const declaration of ['position: absolute;', 'width: calc((100% - 0.75rem) / 4);',
-    'transition: transform var(--motion-base) var(--motion-standard);', 'pointer-events: none;']) {
-    assert.ok(sliderBlock.includes(declaration), `the slider must declare ${declaration}`);
-  }
-  // Centred on the capsule, not on the icon row: the old layout mirrored the
-  // icon+label stack and parked the highlight above the optical centre.
-  assert.ok(sliderBlock.includes('top: 0;'), 'the slider spans the capsule height');
-  assert.ok(sliderBlock.includes('height: 100%;'), 'the slider spans the capsule height');
-  assert.ok(sliderBlock.includes('align-items: center;'), 'the pill is centred vertically');
-  assert.match(css, /\.bottom-tab__slider-pill \{[\s\S]{0,160}background: var\(--tab-bar-active-bg\);/);
-  // The real icon pill and the sliding highlight share one size token, so they
-  // cannot drift apart (enlarged 2026-11-24).
+  // The highlight block is gone (2026-11-27): the active tab fills its icon,
+  // so there is no slider element and no block colour left anywhere.
+  assert.doesNotMatch(css, /bottom-tab__slider/);
+  assert.doesNotMatch(css, /--tab-bar-active-bg/);
+  assert.match(css, /\.bottom-tab\.is-active \.bottom-tab__pill svg \{\s*fill: currentColor;\s*fill-rule: evenodd;/,
+      'the active icon fills with the accent colour');
+  // The real icon pill keeps its size token (it carries the press feedback).
   assert.match(css, /--tab-pill-w: 3\.75rem;\s*--tab-pill-h: 2rem;/);
-  // The highlight is taller than the icon pill so it covers icon + label.
-  assert.match(css, /\.bottom-tab__slider-pill \{\s*width: var\(--tab-pill-w\);\s*height: calc\(var\(--tab-pill-h\) \+ 0\.75rem\);/);
   assert.match(css, /\.bottom-tab__pill \{[\s\S]{0,160}width: var\(--tab-pill-w\);[\s\S]{0,80}height: var\(--tab-pill-h\);/);
-  assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{[\s\S]{0,700}\.bottom-tab__slider[,\s]/);
-  // The active pill is no longer painted per tab: only the slider carries it.
+  assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{[\s\S]{0,700}\.bottom-tab \{/);
+  // The active pill is still not painted per tab.
   assert.doesNotMatch(css, /\.bottom-tab\.is-active \.bottom-tab__pill \{/);
 });
 
