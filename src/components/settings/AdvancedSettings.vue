@@ -145,8 +145,8 @@ export default {
         const pageBackgroundInput = ref(null);
         const pageBackgroundOptions = [
             { value: 'off', label: '关闭' },
-            { value: 'aurora', label: '极光' },
-            { value: 'dune', label: '沙丘' },
+            { value: 'dawn', label: '霞暮' },
+            { value: 'sea', label: '幽澜' },
             { value: 'custom', label: '自定义图片' }
         ];
         const pageBackgroundLabel = computed(() => {

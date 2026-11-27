@@ -867,7 +867,7 @@ const __app = createApp({
         watch(() => settings.uiGlassEffects, glassLens.apply);
 
         // 页面底图（M4，2026-11-26）：settings.pageBackground 只存「选择」
-        // （off / aurora / dune / custom），图片本体不经过 settings——自定义图
+        // （off / dawn / sea / custom），图片本体不经过 settings——自定义图
         // 写在应用私有目录 media/page-background.jpg，随备份一起打包（备份就是
         // 用来保存个性化数据的），所以这里只负责把选择解析成可渲染的 URL。
         // 内置图按主题各一张，切主题时无需重读文件。
